@@ -4,7 +4,7 @@
 
 | Website | Method | Target Data | Frequency |
 |---|---|---|---|
-| **Forex Factory** | Playwright (JS) | Economic Calendar, impact levels, actual/forecast | ทุก 30 นาที |
+| **Forex Factory** | Playwright (JS) | Economic Calendar, impact levels, actual/forecast | ทุก 1-3 นาที |
 | **Investing.com** | httpx + BS4 | News articles, Technical Summary | ทุก 1 ชม. |
 | **TradingView** | httpx + BS4 | Ideas/analysis posts per pair | ทุก 2 ชม. |
 | **BabyPips** | httpx + BS4 | Market analysis, educational | ทุก 2 ชม. |
