@@ -66,6 +66,19 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(minute=0),
         "options": {"queue": "pipeline"},
     },
+    # ===== Phase 3: Indicators & Price =====
+    # ราคาเรียลไทม์ — ทุก 1 นาที
+    "refresh-price-cache": {
+        "task": "app.tasks.indicator_tasks.refresh_price_cache",
+        "schedule": 60.0,
+        "options": {"queue": "price"},
+    },
+    # คำนวณอินดิเคเตอร์ทุกคู่ — ทุก 5 นาที
+    "compute-all-indicators": {
+        "task": "app.tasks.indicator_tasks.compute_all_indicators",
+        "schedule": 300.0,
+        "options": {"queue": "indicators"},
+    },
 }
 
 celery_app.autodiscover_tasks(["app.tasks"])
