@@ -40,17 +40,22 @@ def create_app() -> FastAPI:
         redoc_url="/api/redoc" if settings.DEBUG else None,
     )
 
-    # Middleware (order: last added = first executed)
+    # Middleware (order: last added = outermost = first executed)
+    # 1. Inner: ErrorHandler → SecurityHeaders → RateLimit
+    app.add_middleware(ErrorHandlerMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(RateLimitMiddleware, requests_per_minute=120, burst=20)
+    # 2. Outermost: CORS must be last so it handles OPTIONS preflight first
+    cors_origins = settings.cors_origins_list
+    if settings.DEBUG:
+        cors_origins = ["*"]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins_list,
-        allow_credentials=True,
+        allow_origins=cors_origins,
+        allow_credentials=not settings.DEBUG,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
-    app.add_middleware(RateLimitMiddleware, requests_per_minute=120, burst=20)
-    app.add_middleware(SecurityHeadersMiddleware)
-    app.add_middleware(ErrorHandlerMiddleware)
 
     app.include_router(api_router)
 

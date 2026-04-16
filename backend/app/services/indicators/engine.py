@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from app.config import get_settings
@@ -24,6 +24,12 @@ class IndicatorEngine:
         pair: str,
         timeframe: str = "1h",
     ) -> Dict[str, Any]:
+        # Check indicator cache first (15 min TTL)
+        cached = await self._get_cached_snapshot(pair, timeframe)
+        if cached and "latest_price" in cached:
+            logger.info(f"[engine] Cache hit: {pair} {timeframe}")
+            return cached
+
         candles = await self._price_manager.get_candles(pair, timeframe)
         if not candles:
             logger.warning(f"[engine] No candles for {pair} {timeframe}")
@@ -57,7 +63,7 @@ class IndicatorEngine:
         result = {
             "pair": pair,
             "timeframe": timeframe,
-            "calculated_at": datetime.utcnow().isoformat(),
+            "calculated_at": datetime.now(tz=timezone.utc).isoformat(),
             "candle_count": len(candles),
             "latest_price": float(candles[-1]["close"]),
             **builtin,

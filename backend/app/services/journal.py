@@ -1,6 +1,6 @@
 """Trade Journal Service — CRUD + Win Rate + Accuracy"""
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, func, select
@@ -45,7 +45,7 @@ async def update_trade(db: AsyncSession, trade_id: int, data: Dict[str, Any]) ->
 
         if trade.status != "closed":
             trade.status = "closed"
-            trade.closed_at = datetime.utcnow()
+            trade.closed_at = datetime.now(tz=timezone.utc)
 
         # System accuracy
         if trade.system_direction:
@@ -226,7 +226,7 @@ async def get_overview(db: AsyncSession) -> Dict[str, Any]:
     closed = [t for t in all_trades if t.status == "closed"]
     open_trades = [t for t in all_trades if t.status == "open"]
 
-    today = datetime.utcnow().date()
+    today = datetime.now(tz=timezone.utc).date()
     today_trades = [t for t in closed if t.closed_at and t.closed_at.date() == today]
     today_pips = sum(t.actual_pips for t in today_trades if t.actual_pips) if today_trades else 0
 

@@ -1,7 +1,7 @@
 """Global error handler middleware"""
 import logging
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -26,7 +26,7 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
                     "error": "internal_server_error",
                     "message": "เกิดข้อผิดพลาดภายในระบบ",
                     "detail": str(exc) if request.app.extra.get("debug") else None,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                     "path": str(request.url.path),
                 },
             )

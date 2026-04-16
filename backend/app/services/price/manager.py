@@ -24,13 +24,24 @@ class PriceManager:
         timeframe: str = "1h",
         limit: int = 500,
     ) -> List[Dict[str, Any]]:
-        # Twelve Data (primary)
+        # 1. Try Redis cache first
+        cached = await self._get_cached_candles(pair, timeframe)
+        if cached and len(cached) >= min(limit, 50):
+            logger.info(f"[price] Cache hit: {pair} {timeframe} ({len(cached)} candles)")
+            return cached[:limit]
+
+        # 2. Twelve Data (primary)
         candles = await self._twelve.get_candles(pair, timeframe, limit)
         if candles:
             await self._cache_candles(pair, timeframe, candles)
             return candles
 
-        # yfinance (fallback)
+        # 3. Return stale cache if API failed
+        if cached:
+            logger.warning(f"[price] API failed, returning stale cache for {pair} {timeframe}")
+            return cached[:limit]
+
+        # 4. yfinance (last resort)
         logger.info(f"[price] Falling back to yfinance for {pair} {timeframe}")
         candles = await self._yfinance.get_candles(pair, timeframe, limit)
         if candles:
@@ -40,6 +51,12 @@ class PriceManager:
     async def get_realtime_prices(self) -> Dict[str, Any]:
         prices = {}
         for pair in TARGET_PAIRS:
+            # Try cache first (60s TTL)
+            cached = await self._get_cached_price(pair)
+            if cached:
+                prices[pair] = cached
+                continue
+
             price_data = await self._twelve.get_realtime_price(pair)
             if not price_data:
                 price_data = await self._yfinance.get_realtime_price(pair)
@@ -99,10 +116,23 @@ class PriceManager:
             import redis.asyncio as aioredis
 
             r = aioredis.from_url(self._settings.REDIS_URL, decode_responses=True)
-            await r.setex(f"price:{pair}", 60, json.dumps(data, default=str))
+            await r.setex(f"price:{pair}", 30, json.dumps(data, default=str))
             await r.aclose()
         except Exception:
             pass
+
+    async def _get_cached_price(self, pair: str) -> Optional[Dict]:
+        try:
+            import redis.asyncio as aioredis
+
+            r = aioredis.from_url(self._settings.REDIS_URL, decode_responses=True)
+            data = await r.get(f"price:{pair}")
+            await r.aclose()
+            if data:
+                return json.loads(data)
+        except Exception:
+            pass
+        return None
 
     async def close(self) -> None:
         await self._twelve.close()

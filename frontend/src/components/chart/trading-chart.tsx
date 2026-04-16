@@ -68,13 +68,15 @@ export function TradingChart({ candles, pair, emaData, bbData, height = 400 }: T
         wickDownColor: "#ef4444",
       });
 
-      const candleChartData = candles.map((c) => ({
-        time: (new Date(c.open_time).getTime() / 1000) as import("lightweight-charts").UTCTimestamp,
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-      }));
+      const candleChartData = candles
+        .map((c) => ({
+          time: (new Date(c.open_time).getTime() / 1000) as import("lightweight-charts").UTCTimestamp,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+        }))
+        .sort((a, b) => (a.time as number) - (b.time as number));
 
       candleSeries.setData(candleChartData);
 
@@ -89,11 +91,13 @@ export function TradingChart({ candles, pair, emaData, bbData, height = 400 }: T
       });
 
       volumeSeries.setData(
-        candles.map((c) => ({
-          time: (new Date(c.open_time).getTime() / 1000) as import("lightweight-charts").UTCTimestamp,
-          value: c.volume,
-          color: c.close >= c.open ? "rgba(34, 197, 94, 0.2)" : "rgba(239, 68, 68, 0.2)",
-        }))
+        candles
+          .map((c) => ({
+            time: (new Date(c.open_time).getTime() / 1000) as import("lightweight-charts").UTCTimestamp,
+            value: c.volume,
+            color: c.close >= c.open ? "rgba(34, 197, 94, 0.2)" : "rgba(239, 68, 68, 0.2)",
+          }))
+          .sort((a, b) => (a.time as number) - (b.time as number))
       );
 
       chart.timeScale().fitContent();

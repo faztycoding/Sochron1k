@@ -1,6 +1,6 @@
 """Self-Diagnosis — 18 checks across 5 categories"""
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ def run_all_diagnostics(
     if calc_at:
         try:
             t = datetime.fromisoformat(calc_at)
-            stale = datetime.utcnow() - t > timedelta(minutes=5)
+            stale = datetime.now(tz=timezone.utc) - t > timedelta(minutes=5)
             diags.append(_diag("is_price_data_stale", "error" if stale else "ok",
                 "ราคาเก่าเกิน 5 นาที" if stale else "ราคาอัพเดทแล้ว"))
         except Exception:

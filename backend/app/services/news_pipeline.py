@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from app.config import get_settings
@@ -21,7 +21,7 @@ class NewsPipeline:
         self._settings = get_settings()
 
     async def run_full_pipeline(self) -> Dict[str, Any]:
-        start_time = datetime.utcnow()
+        start_time = datetime.now(tz=timezone.utc)
 
         logger.info("[pipeline] Starting full news pipeline...")
 
@@ -47,7 +47,7 @@ class NewsPipeline:
         # Step 3: Save to DB (via Redis cache first for speed)
         saved_count = await self._cache_results(processed_items)
 
-        end_time = datetime.utcnow()
+        end_time = datetime.now(tz=timezone.utc)
         duration = (end_time - start_time).total_seconds()
 
         result = {
@@ -115,7 +115,7 @@ class NewsPipeline:
             "url": item.url,
             "raw_data": item.raw_data,
             "is_urgent": False,
-            "scraped_at": datetime.utcnow().isoformat(),
+            "scraped_at": datetime.now(tz=timezone.utc).isoformat(),
         }
 
     async def _cache_results(self, items: List[Dict[str, Any]]) -> int:

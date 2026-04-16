@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -118,7 +118,7 @@ class YFinanceFallback:
                 "pair": pair,
                 "price": float(info.last_price),
                 "previous_close": float(info.previous_close),
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         except Exception as e:
             logger.error(f"[yfinance] Realtime price error: {e}")

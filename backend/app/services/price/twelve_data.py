@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -28,6 +28,8 @@ TIMEFRAME_MAP = {
 
 class TwelveDataService:
     BASE_URL = "https://api.twelvedata.com"
+    _call_times: list = []
+    MAX_CALLS_PER_MIN = 50  # Crow 55 plan: stay under 55 limit
 
     def __init__(self):
         self._settings = get_settings()
@@ -38,6 +40,17 @@ class TwelveDataService:
             self._client = httpx.AsyncClient(timeout=30.0)
         return self._client
 
+    def _check_rate_limit(self) -> bool:
+        """Return True if we can make a call, False if rate limited."""
+        import time
+        now = time.time()
+        TwelveDataService._call_times = [t for t in TwelveDataService._call_times if t > now - 60]
+        if len(TwelveDataService._call_times) >= self.MAX_CALLS_PER_MIN:
+            logger.warning(f"[twelve_data] Rate limit: {len(TwelveDataService._call_times)}/{self.MAX_CALLS_PER_MIN} calls in last 60s")
+            return False
+        TwelveDataService._call_times.append(now)
+        return True
+
     async def get_candles(
         self,
         pair: str,
@@ -46,6 +59,9 @@ class TwelveDataService:
     ) -> List[Dict[str, Any]]:
         if not self._settings.TWELVE_DATA_API_KEY:
             logger.warning("[twelve_data] No API key — using yfinance fallback")
+            return []
+
+        if not self._check_rate_limit():
             return []
 
         symbol = PAIR_MAP.get(pair, pair)
@@ -95,6 +111,9 @@ class TwelveDataService:
         if not self._settings.TWELVE_DATA_API_KEY:
             return None
 
+        if not self._check_rate_limit():
+            return None
+
         symbol = PAIR_MAP.get(pair, pair)
         client = await self._get_client()
 
@@ -112,7 +131,7 @@ class TwelveDataService:
             return {
                 "pair": pair,
                 "price": float(data.get("price", 0)),
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         except Exception as e:
             logger.error(f"[twelve_data] Price error: {e}")
@@ -120,6 +139,9 @@ class TwelveDataService:
 
     async def get_quote(self, pair: str) -> Optional[Dict[str, Any]]:
         if not self._settings.TWELVE_DATA_API_KEY:
+            return None
+
+        if not self._check_rate_limit():
             return None
 
         symbol = PAIR_MAP.get(pair, pair)
@@ -146,7 +168,7 @@ class TwelveDataService:
                 "change": float(data.get("change", 0)),
                 "percent_change": float(data.get("percent_change", 0)),
                 "volume": float(data.get("volume", 0)),
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         except Exception as e:
             logger.error(f"[twelve_data] Quote error: {e}")

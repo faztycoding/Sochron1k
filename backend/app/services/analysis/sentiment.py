@@ -1,7 +1,7 @@
 """Layer 2: News Sentiment Filter"""
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ def score_news_sentiment(
     has_upcoming_high = False
     details = []
 
-    now = datetime.utcnow()
+    now = datetime.now(tz=timezone.utc)
 
     for item in relevant[:20]:
         sentiment = item.get("sentiment_score", 0.0)

@@ -1,6 +1,6 @@
 """5-Layer Analysis Pipeline + Confidence Scoring"""
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ TRADING_SESSIONS = {
 
 
 def get_current_session() -> Dict[str, Any]:
-    now = datetime.utcnow()
+    now = datetime.now(tz=timezone.utc)
     hour = now.hour
 
     for session, (start, end) in TRADING_SESSIONS.items():

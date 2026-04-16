@@ -1,7 +1,7 @@
 """Analysis Brain — Full 5-layer pipeline orchestrator"""
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from app.config import get_settings
@@ -144,7 +144,7 @@ class AnalysisBrain:
                 "currency_strength": indicators.get("currency_strength"),
             },
             "analysis_duration": round(duration, 2),
-            "analyzed_at": datetime.utcnow().isoformat(),
+            "analyzed_at": datetime.now(tz=timezone.utc).isoformat(),
         }
 
         # Override if kill switch active

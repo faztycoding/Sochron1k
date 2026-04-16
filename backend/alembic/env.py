@@ -1,4 +1,5 @@
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -14,6 +15,10 @@ from app.models.db.diagnostic import SystemDiagnostic  # noqa: F401
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+db_url = os.environ.get("DATABASE_URL")
+if db_url:
+    config.set_main_option("sqlalchemy.url", db_url)
 
 target_metadata = Base.metadata
 

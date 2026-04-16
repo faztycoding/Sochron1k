@@ -57,15 +57,16 @@ export default function DashboardPage() {
       if (newsRes.status === "fulfilled") setNews(newsRes.value.items || []);
       if (strengthRes.status === "fulfilled") setStrength(strengthRes.value);
 
-      // Analysis — heavier, run after quick data
-      const analysisRes = await Promise.allSettled(
-        PAIRS.map((p) => api.analysis.run(p))
-      );
+      // Analysis — run sequentially to avoid API rate limits
       const newAnalyses: Record<string, AnalysisResult | null> = {};
-      PAIRS.forEach((pair, i) => {
-        newAnalyses[pair] = analysisRes[i].status === "fulfilled" ? analysisRes[i].value : null;
-      });
-      setAnalyses(newAnalyses);
+      for (const p of PAIRS) {
+        try {
+          newAnalyses[p] = await api.analysis.run(p);
+        } catch {
+          newAnalyses[p] = null;
+        }
+        setAnalyses({ ...newAnalyses });
+      }
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "โหลดข้อมูลล้มเหลว");
     }
