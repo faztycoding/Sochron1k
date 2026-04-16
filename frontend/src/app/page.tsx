@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Activity, BarChart3, Newspaper, TrendingUp, ChevronRight } from "lucide-react";
+import { Activity, BarChart3, BookOpen, Calculator, Newspaper, Trophy, TrendingUp, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 import { api } from "@/lib/api";
@@ -106,13 +106,23 @@ export default function DashboardPage() {
             <p className="text-xs sm:text-sm text-text-secondary">ระบบวิเคราะห์ Forex อัจฉริยะ</p>
           </div>
         </div>
-        <Link
-          href="/analysis"
-          className="flex items-center gap-1 text-sm text-primary-400 hover:text-primary-300 transition-colors"
-        >
-          วิเคราะห์
-          <ChevronRight className="w-4 h-4" />
-        </Link>
+        <nav className="flex items-center gap-1 sm:gap-2">
+          {[
+            { href: "/analysis", icon: TrendingUp, label: "วิเคราะห์" },
+            { href: "/calculator", icon: Calculator, label: "คำนวณ" },
+            { href: "/journal", icon: BookOpen, label: "บันทึก" },
+            { href: "/stats", icon: Trophy, label: "สถิติ" },
+          ].map((nav) => (
+            <Link
+              key={nav.href}
+              href={nav.href}
+              className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm text-text-secondary hover:text-primary-400 hover:bg-bg-surface transition-all"
+            >
+              <nav.icon className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{nav.label}</span>
+            </Link>
+          ))}
+        </nav>
       </div>
 
       {/* Session */}
