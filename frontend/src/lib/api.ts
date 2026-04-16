@@ -58,6 +58,7 @@ export interface PriceData {
   day_high?: number;
   day_low?: number;
   timestamp: string;
+  source?: string;
 }
 
 export interface QuoteData {
