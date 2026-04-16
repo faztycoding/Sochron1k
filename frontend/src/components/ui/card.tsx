@@ -8,10 +8,10 @@ export function Card({ className, variant = "default", ...props }: CardProps) {
   return (
     <div
       className={cn(
-        "rounded-2xl p-5 transition-all duration-200",
-        variant === "default" && "bg-bg-card border border-border",
+        "rounded-2xl p-5 transition-all duration-300",
+        variant === "default" && "bg-bg-card border border-border hover:border-border-bright",
         variant === "glass" && "glass-card",
-        variant === "elevated" && "bg-bg-elevated border border-border-bright",
+        variant === "elevated" && "bg-bg-elevated border border-border-bright shadow-lg shadow-primary-900/10",
         className
       )}
       {...props}

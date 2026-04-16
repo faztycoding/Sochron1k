@@ -11,19 +11,40 @@ import { NewsFeed } from "@/components/dashboard/news-feed";
 import { SignalPanel } from "@/components/dashboard/signal-panel";
 import { CurrencyStrengthBar } from "@/components/dashboard/currency-strength";
 import { SessionInfoBar } from "@/components/dashboard/session-info";
+import { PriceCardSkeleton } from "@/components/ui/skeleton";
+import { AnimatedNumber } from "@/components/ui/animated-number";
 
 const PAIRS = ["EUR/USD", "USD/JPY", "EUR/JPY", "GBP/USD", "AUD/USD"];
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
-function StatCard({ icon: Icon, label, value, accent }: { icon: React.ElementType; label: string; value: string; accent?: string }) {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  accent,
+  numeric,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string | number;
+  accent?: string;
+  numeric?: boolean;
+}) {
   return (
-    <div className="flex items-center gap-3 rounded-xl bg-bg-surface/80 backdrop-blur p-4 border border-border/30 hover:border-primary-500/30 transition-colors">
-      <div className="p-2 rounded-lg bg-primary-600/20">
-        <Icon className="w-5 h-5 text-primary-400" />
+    <div className="card-hover flex items-center gap-3 rounded-xl bg-bg-surface/80 backdrop-blur p-4 border border-border/30 hover:border-primary-500/40 group relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-primary-500/0 to-accent-500/0 group-hover:from-primary-500/5 group-hover:to-accent-500/5 transition-colors" />
+      <div className="p-2 rounded-lg bg-primary-600/20 group-hover:bg-primary-600/30 transition-colors relative">
+        <Icon className="w-5 h-5 text-primary-400 group-hover:text-primary-300 transition-colors" />
       </div>
-      <div>
+      <div className="relative">
         <p className="text-xs text-text-muted">{label}</p>
-        <p className={`text-lg font-semibold font-mono ${accent || ""}`}>{value}</p>
+        <p className={`text-lg font-semibold font-mono ${accent || ""}`}>
+          {numeric && typeof value === "number" ? (
+            <AnimatedNumber value={value} decimals={0} flashOnChange={false} />
+          ) : (
+            value
+          )}
+        </p>
       </div>
     </div>
   );
@@ -161,29 +182,51 @@ export default function DashboardPage() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <StatCard icon={TrendingUp} label="สัญญาณวันนี้" value={String(signalCount)} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6 stagger-children">
+        <StatCard icon={TrendingUp} label="สัญญาณวันนี้" value={signalCount} numeric accent={signalCount > 0 ? "text-buy" : ""} />
         <StatCard icon={Activity} label="Win Rate" value="—" />
-        <StatCard icon={Newspaper} label="ข่าวล่าสุด" value={String(news.length)} />
-        <StatCard icon={BarChart3} label="เทรดทั้งหมด" value="0" />
+        <StatCard icon={Newspaper} label="ข่าวล่าสุด" value={news.length} numeric />
+        <StatCard icon={BarChart3} label="เทรดทั้งหมด" value={0} numeric />
       </div>
 
       {/* Price Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
-        {PAIRS.map((pair) => (
-          <PriceCard
-            key={pair}
-            pair={pair}
-            price={prices[pair]}
-            analysis={analyses[pair]}
-            performance={performance[pair]}
-            flash={flashes[pair]}
-          />
-        ))}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-text-secondary flex items-center gap-2">
+            <span className="w-1 h-4 rounded-full bg-gradient-to-b from-primary-400 to-accent-400" />
+            ราคาเรียลไทม์
+            <span className="text-[10px] text-text-muted font-normal">อัพเดททุกวิผ่าน WebSocket</span>
+          </h2>
+          <span className="text-[11px] text-text-muted">
+            {Object.keys(prices).length}/{PAIRS.length} คู่
+          </span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 stagger-children">
+          {PAIRS.map((pair) =>
+            prices[pair] || performance[pair] ? (
+              <PriceCard
+                key={pair}
+                pair={pair}
+                price={prices[pair]}
+                analysis={analyses[pair]}
+                performance={performance[pair]}
+                flash={flashes[pair]}
+              />
+            ) : (
+              <PriceCardSkeleton key={pair} />
+            )
+          )}
+        </div>
       </div>
 
       {/* Bottom grid: Signals + News + Strength */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="mb-3">
+        <h2 className="text-sm font-semibold text-text-secondary flex items-center gap-2 mb-3">
+          <span className="w-1 h-4 rounded-full bg-gradient-to-b from-accent-400 to-primary-400" />
+          ข้อมูลตลาด
+        </h2>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 stagger-children">
         <div className="lg:col-span-1">
           <SignalPanel analyses={analyses} news={news} />
         </div>

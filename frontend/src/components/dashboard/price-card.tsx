@@ -3,6 +3,7 @@
 import { ArrowDown, ArrowUp, Minus, TrendingUp, TrendingDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardValue } from "@/components/ui/card";
+import { AnimatedNumber } from "@/components/ui/animated-number";
 import type { PriceData, AnalysisResult, PairPerformance } from "@/lib/api";
 
 interface PriceCardProps {
@@ -56,10 +57,10 @@ export function PriceCard({ pair, price, analysis, performance, flash }: PriceCa
   const positionPct = Math.max(0, Math.min(100, ((currentPrice - dayLow) / rangeSpan) * 100));
 
   return (
-    <Card className="hover:border-primary-500/50 group relative overflow-hidden">
+    <Card className={`card-hover hover:border-primary-500/50 group relative overflow-hidden ${flash === "up" ? "flash-up" : flash === "down" ? "flash-down" : ""}`}>
       {/* Subtle gradient background based on direction */}
       <div
-        className="absolute inset-0 opacity-5 pointer-events-none"
+        className="absolute inset-0 opacity-5 pointer-events-none transition-opacity duration-500 group-hover:opacity-10"
         style={{
           background: isUp
             ? "linear-gradient(135deg, #22c55e 0%, transparent 60%)"
@@ -71,7 +72,7 @@ export function PriceCard({ pair, price, analysis, performance, flash }: PriceCa
 
       <CardHeader>
         <div className="flex items-center gap-2">
-          <CardTitle>{pair}</CardTitle>
+          <CardTitle className="group-hover:text-primary-300 transition-colors">{pair}</CardTitle>
           {/* Live dot */}
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute h-full w-full rounded-full bg-emerald-400 opacity-60" />
@@ -110,7 +111,11 @@ export function PriceCard({ pair, price, analysis, performance, flash }: PriceCa
                     : "text-accent-400"
           }`}
         >
-          {currentPrice ? currentPrice.toFixed(decimals) : "—"}
+          {currentPrice ? (
+            <AnimatedNumber value={currentPrice} decimals={decimals} flashOnChange={false} duration={400} />
+          ) : (
+            "—"
+          )}
         </CardValue>
         {perf1d && (
           <div className={`flex items-center gap-1 text-sm font-mono ${isUp ? "text-emerald-400" : isDown ? "text-red-400" : "text-text-muted"}`}>

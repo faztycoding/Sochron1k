@@ -16,6 +16,7 @@ import {
   type NewsSortBy,
 } from "@/lib/news-utils";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const PAIRS = ["EUR/USD", "USD/JPY", "EUR/JPY", "GBP/USD", "AUD/USD"];
@@ -137,14 +138,15 @@ export default function NewsPage() {
                 อัพเดทล่าสุด {formatRelativeTime(lastUpdated.toISOString())}
               </span>
             )}
-            <button
+            <Button
               onClick={refreshNews}
-              disabled={refreshing}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
+              loading={refreshing}
+              shine
+              size="md"
             >
-              <RefreshCw className={cn("w-4 h-4", refreshing && "animate-spin")} />
+              {!refreshing && <RefreshCw className="w-4 h-4" />}
               <span className="hidden sm:inline">{refreshing ? "กำลังดึงข่าวใหม่..." : "ดึงข่าวใหม่"}</span>
-            </button>
+            </Button>
           </div>
         </div>
       </div>
