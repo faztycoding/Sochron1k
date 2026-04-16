@@ -112,8 +112,7 @@ class TradeResponse(BaseModel):
     closed_at: Optional[datetime]
     user_notes: Optional[str]
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class TradeListResponse(BaseModel):
