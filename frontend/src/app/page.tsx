@@ -1,104 +1,161 @@
-import { Activity, BarChart3, Newspaper, TrendingUp } from "lucide-react";
+"use client";
 
-const pairs = ["EUR/USD", "USD/JPY", "EUR/JPY"];
+import { useCallback, useEffect, useState } from "react";
+import { Activity, BarChart3, Newspaper, TrendingUp, ChevronRight } from "lucide-react";
+import Link from "next/link";
 
-function PairCard({ pair }: { pair: string }) {
-  return (
-    <div className="rounded-2xl bg-bg-card border border-primary-800/30 p-6 hover:border-primary-500/50 transition-all">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold">{pair}</h3>
-        <span className="text-xs px-2 py-1 rounded-full bg-primary-900/50 text-primary-300">
-          รอข้อมูล
-        </span>
-      </div>
-      <div className="text-3xl font-bold text-accent-400">—</div>
-      <p className="text-sm text-text-secondary mt-2">ราคาจะแสดงใน Phase 3</p>
-    </div>
-  );
-}
+import { api } from "@/lib/api";
+import type { PriceData, AnalysisResult, NewsItem, CurrencyStrength, SessionInfo } from "@/lib/api";
 
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: string;
-}) {
+import { PriceCard } from "@/components/dashboard/price-card";
+import { NewsFeed } from "@/components/dashboard/news-feed";
+import { SignalPanel } from "@/components/dashboard/signal-panel";
+import { CurrencyStrengthBar } from "@/components/dashboard/currency-strength";
+import { SessionInfoBar } from "@/components/dashboard/session-info";
+
+const PAIRS = ["EUR/USD", "USD/JPY", "EUR/JPY"];
+
+function StatCard({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
   return (
     <div className="flex items-center gap-3 rounded-xl bg-bg-surface p-4">
       <div className="p-2 rounded-lg bg-primary-600/20">
         <Icon className="w-5 h-5 text-primary-400" />
       </div>
       <div>
-        <p className="text-sm text-text-secondary">{label}</p>
+        <p className="text-xs text-text-muted">{label}</p>
         <p className="text-lg font-semibold">{value}</p>
       </div>
     </div>
   );
 }
 
-export default function HomePage() {
+export default function DashboardPage() {
+  const [prices, setPrices] = useState<Record<string, PriceData>>({});
+  const [analyses, setAnalyses] = useState<Record<string, AnalysisResult | null>>({});
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [strength, setStrength] = useState<CurrencyStrength | null>(null);
+  const [session, setSession] = useState<SessionInfo | null>(null);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoadError(null);
+      const [priceRes, sessionRes] = await Promise.allSettled([
+        api.prices.realtime(),
+        api.analysis.session(),
+      ]);
+
+      if (priceRes.status === "fulfilled") setPrices(priceRes.value.prices);
+      if (sessionRes.status === "fulfilled") setSession(sessionRes.value);
+
+      const [newsRes, strengthRes] = await Promise.allSettled([
+        api.news.list(10),
+        api.indicators.strength(),
+      ]);
+
+      if (newsRes.status === "fulfilled") setNews(newsRes.value.items || []);
+      if (strengthRes.status === "fulfilled") setStrength(strengthRes.value);
+
+      // Analysis — heavier, run after quick data
+      const analysisRes = await Promise.allSettled(
+        PAIRS.map((p) => api.analysis.run(p))
+      );
+      const newAnalyses: Record<string, AnalysisResult | null> = {};
+      PAIRS.forEach((pair, i) => {
+        newAnalyses[pair] = analysisRes[i].status === "fulfilled" ? analysisRes[i].value : null;
+      });
+      setAnalyses(newAnalyses);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "โหลดข้อมูลล้มเหลว");
+    }
+  }, []);
+
+  const refreshNews = async () => {
+    setNewsLoading(true);
+    try {
+      await api.news.refresh();
+      const res = await api.news.list(10);
+      setNews(res.items || []);
+    } catch {
+      // silent
+    }
+    setNewsLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(loadData, 60_000);
+    return () => clearInterval(interval);
+  }, [loadData]);
+
+  const signalCount = Object.values(analyses).filter(
+    (a) => a && a.direction !== "NO_TRADE" && a.confidence >= 0.5
+  ).length;
+
   return (
-    <main className="min-h-screen p-6 max-w-7xl mx-auto">
+    <main className="min-h-screen p-4 sm:p-6 max-w-7xl mx-auto animate-fade-in">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-bold text-xl">
-          S
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-bold text-lg sm:text-xl">
+            S
+          </div>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold gradient-text">Sochron1k</h1>
+            <p className="text-xs sm:text-sm text-text-secondary">ระบบวิเคราะห์ Forex อัจฉริยะ</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-accent-400 bg-clip-text text-transparent">
-            Sochron1k
-          </h1>
-          <p className="text-sm text-text-secondary">
-            ระบบวิเคราะห์ Forex อัจฉริยะ
-          </p>
-        </div>
+        <Link
+          href="/analysis"
+          className="flex items-center gap-1 text-sm text-primary-400 hover:text-primary-300 transition-colors"
+        >
+          วิเคราะห์
+          <ChevronRight className="w-4 h-4" />
+        </Link>
       </div>
 
+      {/* Session */}
+      <div className="mb-5">
+        <SessionInfoBar session={session} />
+      </div>
+
+      {loadError && (
+        <div className="mb-4 p-3 rounded-xl bg-danger-dim/20 border border-danger/30 text-sm text-danger">
+          {loadError} — ข้อมูลจะอัพเดทอัตโนมัติ
+        </div>
+      )}
+
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <StatCard icon={TrendingUp} label="สัญญาณวันนี้" value="—" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <StatCard icon={TrendingUp} label="สัญญาณวันนี้" value={String(signalCount)} />
         <StatCard icon={Activity} label="Win Rate" value="—" />
-        <StatCard icon={Newspaper} label="ข่าวล่าสุด" value="—" />
+        <StatCard icon={Newspaper} label="ข่าวล่าสุด" value={String(news.length)} />
         <StatCard icon={BarChart3} label="เทรดทั้งหมด" value="0" />
       </div>
 
-      {/* Pair Cards */}
-      <h2 className="text-lg font-semibold mb-4 text-text-secondary">
-        คู่สกุลเงินที่ติดตาม
-      </h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        {pairs.map((pair) => (
-          <PairCard key={pair} pair={pair} />
+      {/* Price Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        {PAIRS.map((pair) => (
+          <PriceCard
+            key={pair}
+            pair={pair}
+            price={prices[pair]}
+            analysis={analyses[pair]}
+          />
         ))}
       </div>
 
-      {/* Status */}
-      <div className="rounded-2xl bg-bg-card border border-primary-800/30 p-6">
-        <h2 className="text-lg font-semibold mb-3">สถานะระบบ</h2>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-text-secondary">API Backend</span>
-            <span className="text-success">● ออนไลน์</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-text-secondary">ฐานข้อมูล</span>
-            <span className="text-warning">● รอเชื่อมต่อ</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-text-secondary">Web Scraper</span>
-            <span className="text-text-muted">● Phase 2</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-text-secondary">AI Engine</span>
-            <span className="text-text-muted">● Phase 2</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-text-secondary">Indicators</span>
-            <span className="text-text-muted">● Phase 3</span>
-          </div>
+      {/* Bottom grid: Signals + News + Strength */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-1">
+          <SignalPanel analyses={analyses} />
+        </div>
+        <div className="lg:col-span-1">
+          <NewsFeed items={news} onRefresh={refreshNews} loading={newsLoading} />
+        </div>
+        <div className="lg:col-span-1">
+          <CurrencyStrengthBar data={strength} />
         </div>
       </div>
     </main>
