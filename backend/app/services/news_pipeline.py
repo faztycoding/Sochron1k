@@ -29,17 +29,32 @@ class NewsPipeline:
         scraped_items, scraper_status = await self._scraper_manager.scrape_all()
         logger.info(f"[pipeline] Step 1 done: {len(scraped_items)} items scraped")
 
-        # Step 2: AI analysis + translation
+        # Step 2: AI analysis + translation (throttled to avoid rate limits)
         processed_items = []
         urgent_items = []
 
+        # Deduplicate by title+source to avoid re-processing
+        seen: set = set()
+        unique_items = []
         for item in scraped_items:
+            key = f"{item.source}:{item.title[:100]}"
+            if key not in seen:
+                seen.add(key)
+                unique_items.append(item)
+
+        logger.info(f"[pipeline] Processing {len(unique_items)} unique items (deduped from {len(scraped_items)})")
+
+        for idx, item in enumerate(unique_items):
             try:
                 processed = await self._process_item(item)
                 processed_items.append(processed)
 
                 if processed.get("is_urgent"):
                     urgent_items.append(processed)
+
+                # Throttle: 100ms between items (10 req/sec max)
+                if idx < len(unique_items) - 1:
+                    await asyncio.sleep(0.1)
             except Exception as e:
                 logger.error(f"[pipeline] Process error for '{item.title[:50]}': {e}")
                 processed_items.append(self._item_to_dict(item))
@@ -82,17 +97,30 @@ class NewsPipeline:
 
         result["sentiment_score"] = analysis.get("sentiment_score", 0.0)
         result["impact_level"] = analysis.get("impact_level", item.impact_level)
+        result["impact_score"] = analysis.get("impact_score", 1)
+        result["category"] = analysis.get("category", "sentiment")
+        result["sentiment"] = analysis.get("sentiment", {})
+        result["expected_volatility_pips"] = analysis.get("expected_volatility_pips", 0)
+        result["time_horizon"] = analysis.get("time_horizon", "short")
+        result["surprise_factor"] = analysis.get("surprise_factor", 0.0)
+        result["actionability"] = analysis.get("actionability", "watch")
+        result["key_takeaway"] = analysis.get("key_takeaway", "")
         result["summary_original"] = analysis.get("summary", item.content[:300])
         result["is_urgent"] = analysis.get("is_urgent", False)
         result["ai_analysis"] = analysis
 
-        # Claude translation
+        # Claude translation (title + summary + takeaway)
         title_th, summary_th = await self._claude.translate_title_and_summary(
             item.title,
             analysis.get("summary", item.content[:300]),
         )
         result["title_th"] = title_th
         result["summary_th"] = summary_th
+
+        # Also translate the key takeaway
+        takeaway = analysis.get("key_takeaway", "")
+        if takeaway:
+            result["key_takeaway_th"] = await self._claude.translate_to_thai(takeaway)
 
         if analysis.get("relevant_pairs"):
             result["pair"] = analysis["relevant_pairs"][0]

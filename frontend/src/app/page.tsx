@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, BarChart3, BookOpen, Calculator, Newspaper, Trophy, TrendingUp, ChevronRight } from "lucide-react";
-import Link from "next/link";
+import { Activity, BarChart3, Newspaper, TrendingUp } from "lucide-react";
 
 import { api } from "@/lib/api";
 import type { PriceData, AnalysisResult, NewsItem, CurrencyStrength, SessionInfo, PairPerformance } from "@/lib/api";
@@ -149,37 +148,7 @@ export default function DashboardPage() {
   ).length;
 
   return (
-    <main className="min-h-screen p-4 sm:p-6 max-w-7xl mx-auto animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-bold text-lg sm:text-xl">
-            S
-          </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold gradient-text">Sochron1k</h1>
-            <p className="text-xs sm:text-sm text-text-secondary">ระบบวิเคราะห์ Forex อัจฉริยะ</p>
-          </div>
-        </div>
-        <nav className="flex items-center gap-1 sm:gap-2">
-          {[
-            { href: "/analysis", icon: TrendingUp, label: "วิเคราะห์" },
-            { href: "/calculator", icon: Calculator, label: "คำนวณ" },
-            { href: "/journal", icon: BookOpen, label: "บันทึก" },
-            { href: "/stats", icon: Trophy, label: "สถิติ" },
-          ].map((nav) => (
-            <Link
-              key={nav.href}
-              href={nav.href}
-              className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm text-text-secondary hover:text-primary-400 hover:bg-bg-surface transition-all"
-            >
-              <nav.icon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{nav.label}</span>
-            </Link>
-          ))}
-        </nav>
-      </div>
-
+    <main className="min-h-screen px-4 sm:px-6 py-4 max-w-7xl mx-auto animate-fade-in">
       {/* Session */}
       <div className="mb-5">
         <SessionInfoBar session={session} />

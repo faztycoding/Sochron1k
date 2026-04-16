@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Navbar } from "@/components/layout/navbar";
 
 export const metadata: Metadata = {
   title: "Sochron1k — ระบบวิเคราะห์ Forex อัจฉริยะ",
-  description: "วิเคราะห์ EUR/USD, USD/JPY, EUR/JPY ด้วย AI และ Technical Indicators",
+  description: "วิเคราะห์ EUR/USD, USD/JPY, EUR/JPY, GBP/USD, AUD/USD ด้วย AI + Technical Indicators + ข่าวเรียลไทม์",
 };
 
 export default function RootLayout({
@@ -19,7 +20,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="antialiased min-h-screen">{children}</body>
+      <body className="antialiased min-h-screen">
+        <Navbar />
+        {children}
+      </body>
     </html>
   );
 }

@@ -227,15 +227,30 @@ export interface NewsListResponse {
 }
 
 export interface NewsItem {
-  id: number;
+  id?: number;
   source: string;
   currency: string;
   pair?: string;
   title_original: string;
   title_th?: string;
+  summary_original?: string;
   summary_th?: string;
-  impact_level: string;
+  content?: string;
+  url?: string;
+  impact_level: "high" | "medium" | "low" | string;
+  impact_score?: number; // 1-5
+  category?: "central_bank" | "economic_data" | "geopolitical" | "corporate" | "commodity" | "sentiment" | "technical" | string;
+  sentiment?: Record<string, "bullish" | "bearish" | "neutral" | string>;
   sentiment_score?: number;
+  key_numbers?: { actual?: string; forecast?: string; previous?: string };
+  expected_volatility_pips?: number;
+  time_horizon?: "instant" | "short" | "medium" | "long" | string;
+  surprise_factor?: number;
+  actionability?: "tradable" | "watch" | "ignore" | string;
+  key_takeaway?: string;
+  key_takeaway_th?: string;
+  is_urgent?: boolean;
   event_time?: string;
   scraped_at: string;
+  raw_data?: Record<string, unknown>;
 }

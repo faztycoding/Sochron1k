@@ -6,36 +6,52 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-GEMINI_SCAN_PROMPT = """You are a professional Forex analyst. Analyze the following scraped news data.
+GEMINI_SCAN_PROMPT = """You are a world-class Forex news analyst (Bloomberg/Reuters-level). Analyze this news for professional traders.
 
-Target pairs: EUR/USD, USD/JPY, EUR/JPY
+Target pairs: EUR/USD, USD/JPY, EUR/JPY, GBP/USD, AUD/USD
+Target currencies: EUR, USD, JPY, GBP, AUD
 
-Extract and return a JSON object with these fields:
+RATING CRITERIA (world-class standard):
+- impact_score (1-5): 1=background noise, 2=minor, 3=moderate, 4=high-impact, 5=market-moving critical event
+- category: "central_bank" | "economic_data" | "geopolitical" | "corporate" | "commodity" | "sentiment" | "technical"
+- expected_volatility_pips: estimated pip movement on major pair (e.g. 30 for 30 pips, 100 for 100 pips)
+- time_horizon: "instant" (minutes) | "short" (hours) | "medium" (days) | "long" (weeks)
+- surprise_factor (0-1): 0=expected, 1=huge surprise vs forecast
+- actionability: "tradable" | "watch" | "ignore" — can a trader act on this?
+
+Return ONLY valid JSON (no markdown, no code fences):
 {{
   "relevant_pairs": ["EUR/USD"],
   "impact_level": "high|medium|low",
+  "impact_score": 1-5,
+  "category": "central_bank|economic_data|geopolitical|corporate|commodity|sentiment|technical",
   "sentiment": {{
     "EUR": "bullish|bearish|neutral",
     "USD": "bullish|bearish|neutral",
-    "JPY": "bullish|bearish|neutral"
+    "JPY": "bullish|bearish|neutral",
+    "GBP": "bullish|bearish|neutral",
+    "AUD": "bullish|bearish|neutral"
   }},
-  "sentiment_score": -1.0 to +1.0 (negative=bearish, positive=bullish for the primary pair),
+  "sentiment_score": -1.0 to +1.0,
   "key_numbers": {{
     "actual": "",
     "forecast": "",
     "previous": ""
   }},
+  "expected_volatility_pips": 0-200,
+  "time_horizon": "instant|short|medium|long",
+  "surprise_factor": 0.0-1.0,
+  "actionability": "tradable|watch|ignore",
   "summary": "2-3 sentences on market impact in English",
+  "key_takeaway": "One-sentence trading implication in English",
   "is_urgent": true|false,
-  "confidence": 0.0 to 1.0
+  "confidence": 0.0-1.0
 }}
 
 Source: {source}
 Title: {title}
 Content: {content}
-Raw data: {raw_data}
-
-Respond ONLY with valid JSON. No markdown, no code fences."""
+Raw data: {raw_data}"""
 
 
 class GeminiService:
@@ -71,7 +87,7 @@ class GeminiService:
         try:
             client = self._get_client()
             response = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model="gemini-2.5-flash",
                 contents=prompt,
             )
 
@@ -97,10 +113,20 @@ class GeminiService:
         return {
             "relevant_pairs": [],
             "impact_level": "low",
-            "sentiment": {"EUR": "neutral", "USD": "neutral", "JPY": "neutral"},
+            "impact_score": 1,
+            "category": "sentiment",
+            "sentiment": {
+                "EUR": "neutral", "USD": "neutral", "JPY": "neutral",
+                "GBP": "neutral", "AUD": "neutral",
+            },
             "sentiment_score": 0.0,
             "key_numbers": {"actual": "", "forecast": "", "previous": ""},
+            "expected_volatility_pips": 0,
+            "time_horizon": "short",
+            "surprise_factor": 0.0,
+            "actionability": "watch",
             "summary": f"[Mock] Analysis pending for: {title[:100]}",
+            "key_takeaway": "Analysis pending",
             "is_urgent": False,
             "confidence": 0.0,
         }

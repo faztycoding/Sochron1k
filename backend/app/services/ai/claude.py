@@ -5,15 +5,19 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-CLAUDE_TRANSLATE_PROMPT = """แปลข้อความต่อไปนี้เป็นภาษาไทย สำหรับเทรดเดอร์ Forex:
-- ใช้ศัพท์เทคนิคที่เทรดเดอร์ไทยคุ้นเคย
-- เก็บตัวเลขและชื่อเฉพาะไว้ตามเดิม
-- กระชับ เข้าใจง่าย
+CLAUDE_TRANSLATE_PROMPT = """คุณเป็นนักแปลข่าว Forex มืออาชีพ แปลข้อความต่อไปนี้เป็นภาษาไทย:
+
+กฎ:
+- ใช้ศัพท์เทคนิคที่เทรดเดอร์ไทยคุ้นเคย (เช่น อัตราดอกเบี้ย, ดัชนี, เงินเฟ้อ, GDP)
+- เก็บตัวเลข เปอร์เซ็นต์ และชื่อเฉพาะ (Fed, BOJ, ECB, NFP) ไว้ตามเดิม
+- ใช้คำว่า 'ดอลลาร์' แทน USD, 'ยูโร' แทน EUR เมื่อเป็นกลางข้อความ
+- กระชับ เข้าใจง่าย เป็นธรรมชาติ
 - ห้ามเพิ่มข้อความที่ไม่มีในต้นฉบับ
+- ห้ามใส่คำอธิบายหรือคำนำเพิ่มเติม
 
 ข้อความ: {text}
 
-ตอบเป็นภาษาไทยเท่านั้น ไม่ต้องอธิบายเพิ่มเติม"""
+แปลเป็นภาษาไทยเท่านั้น:"""
 
 
 class ClaudeService:
@@ -41,7 +45,7 @@ class ClaudeService:
         try:
             client = self._get_client()
             message = client.messages.create(
-                model="claude-3-5-haiku-20241022",
+                model="claude-haiku-4-5",
                 max_tokens=1024,
                 messages=[{"role": "user", "content": prompt}],
             )

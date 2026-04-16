@@ -1,9 +1,12 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
+import Link from "next/link";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { Newspaper, RefreshCw } from "lucide-react";
+import { Newspaper, RefreshCw, ArrowUpRight } from "lucide-react";
 import type { NewsItem } from "@/lib/api";
+import { NewsCard } from "@/components/news/news-card";
+import { NewsDetailDialog } from "@/components/news/news-detail-dialog";
 
 interface NewsFeedProps {
   items: NewsItem[];
@@ -11,86 +14,60 @@ interface NewsFeedProps {
   loading?: boolean;
 }
 
-const impactVariant = (level: string) => {
-  if (level === "high") return "danger" as const;
-  if (level === "medium") return "warning" as const;
-  return "neutral" as const;
-};
-
 export function NewsFeed({ items, onRefresh, loading }: NewsFeedProps) {
+  const [selected, setSelected] = useState<NewsItem | null>(null);
+
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <Newspaper className="w-4 h-4 text-primary-400" />
-          <CardTitle>ข่าวล่าสุด</CardTitle>
-        </div>
-        {onRefresh && (
-          <button
-            onClick={onRefresh}
-            disabled={loading}
-            className="p-1.5 rounded-lg hover:bg-bg-surface transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 text-text-muted ${loading ? "animate-spin" : ""}`} />
-          </button>
-        )}
-      </CardHeader>
-
-      <p className="text-[11px] text-text-muted -mt-1 mb-2">
-        ข่าวเศรษฐกิจที่ส่งผลต่อตลาด Forex โดยตรง
-      </p>
-
-      <div className="flex flex-col gap-2 max-h-80 overflow-y-auto">
-        {items.length === 0 && (
-          <div className="py-6 text-center">
-            <p className="text-sm text-text-muted">ยังไม่มีข่าว</p>
-            <p className="text-[11px] text-text-muted mt-1">กดปุ่ม ↻ เพื่อดึงข่าวล่าสุด</p>
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Newspaper className="w-4 h-4 text-primary-400" />
+            <CardTitle>ข่าวล่าสุด</CardTitle>
           </div>
-        )}
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className="flex items-start gap-3 p-3 rounded-xl bg-bg-surface/50 hover:bg-bg-surface transition-colors"
-          >
-            <div
-              className="w-1 self-stretch rounded-full flex-shrink-0"
-              style={{
-                backgroundColor:
-                  item.impact_level === "high"
-                    ? "var(--color-danger)"
-                    : item.impact_level === "medium"
-                      ? "var(--color-warning)"
-                      : "var(--color-border)",
-              }}
-            />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium leading-snug line-clamp-2">
-                {item.title_th || item.title_original}
-              </p>
-              <div className="flex items-center gap-2 mt-1.5">
-                <Badge variant={impactVariant(item.impact_level)}>
-                  {item.impact_level}
-                </Badge>
-                <span className="text-xs text-text-muted">{item.source}</span>
-                {item.sentiment_score !== undefined && item.sentiment_score !== null && (
-                  <span
-                    className={`text-xs ${
-                      item.sentiment_score > 0
-                        ? "text-buy"
-                        : item.sentiment_score < 0
-                          ? "text-sell"
-                          : "text-text-muted"
-                    }`}
-                  >
-                    {item.sentiment_score > 0 ? "+" : ""}
-                    {item.sentiment_score.toFixed(2)}
-                  </span>
-                )}
-              </div>
+          <div className="flex items-center gap-1">
+            <Link
+              href="/news"
+              className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-bg-surface text-[11px] text-primary-400 transition-colors"
+            >
+              ดูทั้งหมด
+              <ArrowUpRight className="w-3 h-3" />
+            </Link>
+            {onRefresh && (
+              <button
+                onClick={onRefresh}
+                disabled={loading}
+                className="p-1.5 rounded-lg hover:bg-bg-surface transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 text-text-muted ${loading ? "animate-spin" : ""}`} />
+              </button>
+            )}
+          </div>
+        </CardHeader>
+
+        <p className="text-[11px] text-text-muted -mt-1 mb-2">
+          ข่าวเศรษฐกิจที่ส่งผลต่อตลาด Forex • กดเพื่อดูรายละเอียด
+        </p>
+
+        <div className="flex flex-col gap-1.5 max-h-80 overflow-y-auto -mx-1 px-1">
+          {items.length === 0 && (
+            <div className="py-6 text-center">
+              <p className="text-sm text-text-muted">ยังไม่มีข่าว</p>
+              <p className="text-[11px] text-text-muted mt-1">กดปุ่ม ↻ เพื่อดึงข่าวล่าสุด</p>
             </div>
-          </div>
-        ))}
-      </div>
-    </Card>
+          )}
+          {items.slice(0, 8).map((item, i) => (
+            <NewsCard
+              key={`${item.source}-${i}`}
+              item={item}
+              variant="compact"
+              onClick={() => setSelected(item)}
+            />
+          ))}
+        </div>
+      </Card>
+
+      <NewsDetailDialog item={selected} open={!!selected} onClose={() => setSelected(null)} />
+    </>
   );
 }

@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, BarChart3, LineChart, RefreshCw, Shield, Zap } from "lucide-react";
+import { BarChart3, LineChart, RefreshCw, Shield, Zap } from "lucide-react";
 
 import { api } from "@/lib/api";
 import type { AnalysisResult, CandleData, IndicatorSnapshot } from "@/lib/api";
@@ -51,15 +50,10 @@ export default function AnalysisPage() {
   const conf = analysis?.confidence ?? 0;
 
   return (
-    <main className="min-h-screen p-4 sm:p-6 max-w-7xl mx-auto animate-fade-in">
+    <main className="min-h-screen px-4 sm:px-6 py-4 max-w-7xl mx-auto animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <Link href="/" className="p-2 rounded-lg hover:bg-bg-surface transition-colors">
-            <ArrowLeft className="w-5 h-5 text-text-muted" />
-          </Link>
-          <h1 className="text-xl font-bold gradient-text">วิเคราะห์เชิงลึก</h1>
-        </div>
+        <h1 className="text-xl font-bold gradient-text">วิเคราะห์เชิงลึก</h1>
         <div className="flex items-center gap-2">
           {/* Chart mode toggle */}
           <div className="flex gap-1 p-1 rounded-lg bg-bg-surface">
