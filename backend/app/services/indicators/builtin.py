@@ -36,7 +36,13 @@ def calc_rsi(closes: pd.Series, period: int = 14) -> Optional[float]:
     rs = gain / loss.replace(0, np.nan)
     rsi = 100 - (100 / (1 + rs))
     val = rsi.iloc[-1]
-    return float(val) if not np.isnan(val) else None
+    if np.isnan(val) or np.isinf(val):
+        if loss.iloc[-1] == 0 and gain.iloc[-1] > 0:
+            return 100.0
+        elif gain.iloc[-1] == 0 and loss.iloc[-1] > 0:
+            return 0.0
+        return None
+    return float(val)
 
 
 def calc_macd(
