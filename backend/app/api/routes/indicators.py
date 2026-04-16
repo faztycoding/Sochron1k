@@ -14,7 +14,7 @@ from app.models.schemas.indicators import (
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/indicators", tags=["อินดิเคเตอร์"])
 
-TARGET_PAIRS = ["EUR/USD", "USD/JPY", "EUR/JPY"]
+from app.config import TARGET_PAIRS
 VALID_TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d", "1w"]
 
 
@@ -85,7 +85,7 @@ async def get_currency_strength() -> Dict[str, Any]:
         for pair in TARGET_PAIRS:
             candles = await pm.get_candles(pair, "1h", 50)
             if candles:
-                pair_candles[pair] = candles
+                pair_candles[pair] = sorted(candles, key=lambda c: c.get("open_time", ""))
 
         strength = calc_currency_strength(pair_candles)
         return {

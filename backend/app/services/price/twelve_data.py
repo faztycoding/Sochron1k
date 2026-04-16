@@ -13,6 +13,8 @@ PAIR_MAP = {
     "EUR/USD": "EUR/USD",
     "USD/JPY": "USD/JPY",
     "EUR/JPY": "EUR/JPY",
+    "GBP/USD": "GBP/USD",
+    "AUD/USD": "AUD/USD",
 }
 
 TIMEFRAME_MAP = {
@@ -119,7 +121,7 @@ class TwelveDataService:
 
         try:
             response = await client.get(
-                f"{self.BASE_URL}/price",
+                f"{self.BASE_URL}/quote",
                 params={
                     "symbol": symbol,
                     "apikey": self._settings.TWELVE_DATA_API_KEY,
@@ -128,9 +130,30 @@ class TwelveDataService:
             response.raise_for_status()
             data = response.json()
 
+            price = float(data.get("close", 0)) or float(data.get("price", 0))
+            prev_close = float(data.get("previous_close", 0))
+            day_open = float(data.get("open", 0))
+            day_high = float(data.get("high", 0))
+            day_low = float(data.get("low", 0))
+
+            # Estimate bid/ask from price (Twelve Data quote doesn't have bid/ask for forex)
+            is_jpy = "JPY" in pair
+            spread_pips = 1.5 if is_jpy else 0.00015
+            bid = round(price - spread_pips / 2, 5 if not is_jpy else 3)
+            ask = round(price + spread_pips / 2, 5 if not is_jpy else 3)
+
             return {
                 "pair": pair,
-                "price": float(data.get("price", 0)),
+                "price": price,
+                "bid": bid,
+                "ask": ask,
+                "spread": round((ask - bid) * (100 if is_jpy else 10000), 1),
+                "previous_close": prev_close,
+                "change": float(data.get("change", 0)),
+                "percent_change": float(data.get("percent_change", 0)),
+                "day_open": day_open,
+                "day_high": day_high,
+                "day_low": day_low,
                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             }
         except Exception as e:

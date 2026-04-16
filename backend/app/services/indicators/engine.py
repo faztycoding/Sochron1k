@@ -3,14 +3,12 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from app.config import get_settings
+from app.config import get_settings, TARGET_PAIRS
 from app.services.indicators.builtin import compute_all_builtin
 from app.services.indicators.custom import compute_all_custom
 from app.services.price.manager import PriceManager
 
 logger = logging.getLogger(__name__)
-
-TARGET_PAIRS = ["EUR/USD", "USD/JPY", "EUR/JPY"]
 ANALYSIS_TIMEFRAMES = ["1h", "4h", "1d"]
 
 
@@ -30,10 +28,13 @@ class IndicatorEngine:
             logger.info(f"[engine] Cache hit: {pair} {timeframe}")
             return cached
 
-        candles = await self._price_manager.get_candles(pair, timeframe)
-        if not candles:
+        raw_candles = await self._price_manager.get_candles(pair, timeframe)
+        if not raw_candles:
             logger.warning(f"[engine] No candles for {pair} {timeframe}")
             return {"error": f"ไม่มีข้อมูลราคา {pair} {timeframe}"}
+
+        # Sort oldest→newest for indicator calculations
+        candles = sorted(raw_candles, key=lambda c: c.get("open_time", ""))
 
         # Built-in indicators
         builtin = compute_all_builtin(candles)
@@ -43,7 +44,7 @@ class IndicatorEngine:
         for p in TARGET_PAIRS:
             pc = await self._price_manager.get_candles(p, timeframe, 100)
             if pc:
-                all_pair_candles[p] = pc
+                all_pair_candles[p] = sorted(pc, key=lambda c: c.get("open_time", ""))
 
         dxy_closes = await self._get_dxy_closes()
         news_sentiments = await self._get_recent_sentiments(pair)
@@ -189,8 +190,9 @@ class IndicatorEngine:
                     "ema_50": cached.get("ema_50"),
                 }
             else:
-                candles = await self._price_manager.get_candles(pair, tf, 60)
-                if candles:
+                raw = await self._price_manager.get_candles(pair, tf, 60)
+                if raw:
+                    candles = sorted(raw, key=lambda c: c.get("open_time", ""))
                     builtin = compute_all_builtin(candles)
                     ema_data[tf] = {
                         "ema_9": builtin.get("ema_9"),

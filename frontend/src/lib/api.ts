@@ -16,6 +16,7 @@ export const api = {
     candles: (pair: string, tf = "1h", limit = 200) =>
       fetchAPI<CandlesResponse>(`/price/candles/${pair.replace("/", "-")}?timeframe=${tf}&limit=${limit}`),
     quote: (pair: string) => fetchAPI<QuoteData>(`/price/quote/${pair.replace("/", "-")}`),
+    performance: () => fetchAPI<PerformanceResponse>("/price/performance"),
   },
   indicators: {
     get: (pair: string, tf = "1h") =>
@@ -47,8 +48,16 @@ export interface PricesResponse {
 export interface PriceData {
   pair: string;
   price: number;
-  timestamp: string;
+  bid?: number;
+  ask?: number;
+  spread?: number;
   previous_close?: number;
+  change?: number;
+  percent_change?: number;
+  day_open?: number;
+  day_high?: number;
+  day_low?: number;
+  timestamp: string;
 }
 
 export interface QuoteData {
@@ -188,6 +197,27 @@ export interface SessionInfo {
   is_dead_zone: boolean;
   utc_hour: number;
   thai_hour: number;
+}
+
+export interface PerformanceResponse {
+  performance: Record<string, PairPerformance>;
+}
+
+export interface PairPerformance {
+  price: number;
+  day_high: number;
+  day_low: number;
+  day_open: number;
+  "1D": PeriodChange | null;
+  "3D": PeriodChange | null;
+  "1W": PeriodChange | null;
+  "1M": PeriodChange | null;
+}
+
+export interface PeriodChange {
+  pct: number;
+  pips: number;
+  from_price: number;
 }
 
 export interface NewsListResponse {

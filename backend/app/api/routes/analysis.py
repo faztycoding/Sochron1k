@@ -8,7 +8,7 @@ from app.models.schemas.analysis import AnalysisRequest
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analysis", tags=["วิเคราะห์"])
 
-TARGET_PAIRS = ["EUR/USD", "USD/JPY", "EUR/JPY"]
+from app.config import TARGET_PAIRS
 
 
 @router.post("/{pair}/run", summary="รันวิเคราะห์ 5-layer เต็มรูปแบบ")

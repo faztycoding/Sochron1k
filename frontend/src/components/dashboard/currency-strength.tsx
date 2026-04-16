@@ -26,7 +26,7 @@ export function CurrencyStrengthBar({ data }: CurrencyStrengthBarProps) {
   const currencies = Object.entries(data.currencies).sort((a, b) => b[1] - a[1]);
   const maxAbs = Math.max(...currencies.map(([, v]) => Math.abs(v)), 1);
 
-  const flagEmoji: Record<string, string> = { EUR: "🇪🇺", USD: "🇺🇸", JPY: "🇯🇵" };
+  const flagEmoji: Record<string, string> = { EUR: "🇪🇺", USD: "🇺🇸", JPY: "🇯🇵", GBP: "🇬🇧", AUD: "🇦🇺" };
 
   return (
     <Card>
@@ -36,6 +36,9 @@ export function CurrencyStrengthBar({ data }: CurrencyStrengthBarProps) {
           <CardTitle>ความแข็งแกร่งสกุลเงิน</CardTitle>
         </div>
       </CardHeader>
+      <p className="text-[11px] text-text-muted -mt-1 mb-2">
+        เปรียบเทียบแรงซื้อ-ขายใน 24 ชม. ยิ่งบวกมาก = สกุลเงินแข็งแกร่ง
+      </p>
 
       <div className="flex flex-col gap-3">
         {currencies.map(([currency, value]) => {

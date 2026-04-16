@@ -10,36 +10,44 @@ logger = logging.getLogger(__name__)
 def calc_currency_strength(
     pair_candles: Dict[str, List[Dict]],
 ) -> Dict[str, float]:
-    """คำนวณ Currency Strength Index จาก basket ของคู่เงิน"""
-    strength = {"EUR": 0.0, "USD": 0.0, "JPY": 0.0}
+    """คำนวณ Currency Strength Index จาก basket ของคู่เงิน (24h change)"""
+    strength = {"EUR": 0.0, "USD": 0.0, "JPY": 0.0, "GBP": 0.0, "AUD": 0.0}
+
+    # Pair → (base_currency, quote_currency)
+    pair_map = {
+        "EUR/USD": ("EUR", "USD"),
+        "USD/JPY": ("USD", "JPY"),
+        "EUR/JPY": ("EUR", "JPY"),
+        "GBP/USD": ("GBP", "USD"),
+        "AUD/USD": ("AUD", "USD"),
+    }
 
     for pair, candles in pair_candles.items():
-        if len(candles) < 2:
+        if len(candles) < 10:
+            continue
+
+        mapping = pair_map.get(pair)
+        if not mapping:
             continue
 
         latest = float(candles[-1]["close"])
-        prev = float(candles[-2]["close"])
+        # Use ~24h ago for stability (or earliest available)
+        lookback = min(24, len(candles) - 1)
+        prev = float(candles[-(lookback + 1)]["close"])
         if prev == 0:
             continue
 
         pct_change = ((latest - prev) / prev) * 100
 
-        # EUR/USD: EUR up → EUR strong, USD weak
-        if pair == "EUR/USD":
-            strength["EUR"] += pct_change
-            strength["USD"] -= pct_change
-        # USD/JPY: USD up → USD strong, JPY weak
-        elif pair == "USD/JPY":
-            strength["USD"] += pct_change
-            strength["JPY"] -= pct_change
-        # EUR/JPY: EUR up → EUR strong, JPY weak
-        elif pair == "EUR/JPY":
-            strength["EUR"] += pct_change
-            strength["JPY"] -= pct_change
+        base, quote = mapping
+        # Base up → base strong, quote weak
+        strength[base] += pct_change
+        strength[quote] -= pct_change
 
-    total = sum(abs(v) for v in strength.values())
-    if total > 0:
-        strength = {k: round(v / total * 100, 2) for k, v in strength.items()}
+    # Scale to readable range: raw pct * 50 for visual clarity (capped ±100)
+    max_raw = max(abs(v) for v in strength.values()) if any(strength.values()) else 1
+    scale = min(50 / max_raw, 100) if max_raw > 0 else 1
+    strength = {k: round(max(-100, min(100, v * scale)), 1) for k, v in strength.items()}
 
     return strength
 

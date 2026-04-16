@@ -2,14 +2,13 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from app.config import get_settings
+from app.config import get_settings, TARGET_PAIRS
 from app.services.price.twelve_data import TwelveDataService
 from app.services.price.yfinance_fallback import YFinanceFallback
 
 logger = logging.getLogger(__name__)
 
-TARGET_PAIRS = ["EUR/USD", "USD/JPY", "EUR/JPY"]
-TIMEFRAMES = ["1h", "4h", "1d"]
+TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"]
 
 
 class PriceManager:
@@ -24,8 +23,23 @@ class PriceManager:
         timeframe: str = "1h",
         limit: int = 500,
     ) -> List[Dict[str, Any]]:
-        # 1. Try Redis cache first
+        # 1. Try Redis cache first (check freshness)
         cached = await self._get_cached_candles(pair, timeframe)
+        if cached and len(cached) >= min(limit, 50):
+            # Verify cache is recent (not stale data from hours ago)
+            try:
+                from datetime import datetime, timezone, timedelta
+                latest = cached[0].get("open_time", "")
+                if latest:
+                    latest_dt = datetime.fromisoformat(latest.replace(" ", "T"))
+                    max_age = {"1m": 5, "5m": 15, "15m": 30, "1h": 120, "4h": 480, "1d": 2880}
+                    max_minutes = max_age.get(timeframe, 120)
+                    if (datetime.now(tz=timezone.utc).replace(tzinfo=None) - latest_dt) > timedelta(minutes=max_minutes):
+                        logger.warning(f"[price] Cache stale: {pair} {timeframe} latest={latest}")
+                        cached = None
+            except Exception:
+                pass
+
         if cached and len(cached) >= min(limit, 50):
             logger.info(f"[price] Cache hit: {pair} {timeframe} ({len(cached)} candles)")
             return cached[:limit]
@@ -78,6 +92,17 @@ class PriceManager:
                     result[pair][tf] = candles
         return result
 
+    def _cache_ttl(self, timeframe: str) -> int:
+        """Shorter TTL for shorter timeframes to keep data fresh."""
+        return {
+            "1m": 60,       # 1 min
+            "5m": 120,      # 2 min
+            "15m": 300,     # 5 min
+            "1h": 600,      # 10 min
+            "4h": 1800,     # 30 min
+            "1d": 3600,     # 1 hour
+        }.get(timeframe, 600)
+
     async def _cache_candles(
         self, pair: str, timeframe: str, candles: List[Dict]
     ) -> None:
@@ -88,7 +113,7 @@ class PriceManager:
             key = f"candles:{pair}:{timeframe}"
             await r.setex(
                 key,
-                1800,  # 30 min cache
+                self._cache_ttl(timeframe),
                 json.dumps(candles[-200:], default=str),
             )
             await r.aclose()
@@ -116,7 +141,7 @@ class PriceManager:
             import redis.asyncio as aioredis
 
             r = aioredis.from_url(self._settings.REDIS_URL, decode_responses=True)
-            await r.setex(f"price:{pair}", 30, json.dumps(data, default=str))
+            await r.setex(f"price:{pair}", 10, json.dumps(data, default=str))
             await r.aclose()
         except Exception:
             pass

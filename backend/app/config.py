@@ -39,3 +39,8 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+# Central list — update here to add/remove pairs globally
+TARGET_PAIRS = ["EUR/USD", "USD/JPY", "EUR/JPY", "GBP/USD", "AUD/USD"]
+TARGET_CURRENCIES = ["EUR", "USD", "JPY", "GBP", "AUD"]

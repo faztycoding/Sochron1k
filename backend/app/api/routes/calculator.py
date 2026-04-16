@@ -9,7 +9,7 @@ from app.services.calculator import calculate_position, auto_sl_tp
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/calculate", tags=["คำนวณ"])
 
-TARGET_PAIRS = ["EUR/USD", "USD/JPY", "EUR/JPY"]
+from app.config import TARGET_PAIRS
 
 
 @router.post("", summary="คำนวณ position size + SL/TP")

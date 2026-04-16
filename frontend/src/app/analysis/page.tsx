@@ -2,15 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, RefreshCw, Shield, Zap } from "lucide-react";
+import { ArrowLeft, BarChart3, LineChart, RefreshCw, Shield, Zap } from "lucide-react";
 
 import { api } from "@/lib/api";
 import type { AnalysisResult, CandleData, IndicatorSnapshot } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { TradingChart } from "@/components/chart/trading-chart";
+import { TradingViewWidget } from "@/components/chart/tradingview-widget";
+import { LivePriceBar } from "@/components/chart/live-price-bar";
 
-const PAIRS = ["EUR/USD", "USD/JPY", "EUR/JPY"];
+const PAIRS = ["EUR/USD", "USD/JPY", "EUR/JPY", "GBP/USD", "AUD/USD"];
 const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"];
 
 export default function AnalysisPage() {
@@ -20,19 +22,21 @@ export default function AnalysisPage() {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [indicators, setIndicators] = useState<IndicatorSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
+  const [chartMode, setChartMode] = useState<"pro" | "analysis">("pro");
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [candleRes, analysisRes, indRes] = await Promise.allSettled([
-        api.prices.candles(pair, timeframe),
-        api.analysis.run(pair, timeframe),
-        api.indicators.get(pair, timeframe),
-      ]);
+      // Load candles first (fast)
+      const candleRes = await api.prices.candles(pair, timeframe).catch(() => null);
+      if (candleRes) setCandles(candleRes.candles);
 
-      if (candleRes.status === "fulfilled") setCandles(candleRes.value.candles);
-      if (analysisRes.status === "fulfilled") setAnalysis(analysisRes.value);
-      if (indRes.status === "fulfilled") setIndicators(indRes.value);
+      // Then analysis + indicators sequentially
+      const analysisRes = await api.analysis.run(pair, timeframe).catch(() => null);
+      if (analysisRes) setAnalysis(analysisRes);
+
+      const indRes = await api.indicators.get(pair, timeframe).catch(() => null);
+      if (indRes) setIndicators(indRes);
     } catch {
       // handled gracefully
     }
@@ -49,25 +53,59 @@ export default function AnalysisPage() {
   return (
     <main className="min-h-screen p-4 sm:p-6 max-w-7xl mx-auto animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <Link href="/" className="p-2 rounded-lg hover:bg-bg-surface transition-colors">
             <ArrowLeft className="w-5 h-5 text-text-muted" />
           </Link>
           <h1 className="text-xl font-bold gradient-text">วิเคราะห์เชิงลึก</h1>
         </div>
-        <button
-          onClick={loadData}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          วิเคราะห์ใหม่
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Chart mode toggle */}
+          <div className="flex gap-1 p-1 rounded-lg bg-bg-surface">
+            <button
+              onClick={() => setChartMode("pro")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                chartMode === "pro"
+                  ? "bg-accent-500 text-white"
+                  : "text-text-muted hover:text-text-primary"
+              }`}
+              title="กราฟ Pro — ซูม ตีเส้น วาดได้"
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              Pro
+            </button>
+            <button
+              onClick={() => setChartMode("analysis")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                chartMode === "analysis"
+                  ? "bg-accent-500 text-white"
+                  : "text-text-muted hover:text-text-primary"
+              }`}
+              title="กราฟวิเคราะห์ — ข้อมูลจากระบบ"
+            >
+              <LineChart className="w-3.5 h-3.5" />
+              Analysis
+            </button>
+          </div>
+          <button
+            onClick={loadData}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            วิเคราะห์ใหม่
+          </button>
+        </div>
+      </div>
+
+      {/* Live Price Bar */}
+      <div className="mb-3">
+        <LivePriceBar pair={pair} />
       </div>
 
       {/* Pair + Timeframe selectors */}
-      <div className="flex flex-wrap gap-3 mb-5">
+      <div className="flex flex-wrap gap-3 mb-4">
         <div className="flex gap-1 p-1 rounded-xl bg-bg-surface">
           {PAIRS.map((p) => (
             <button
@@ -100,9 +138,13 @@ export default function AnalysisPage() {
         </div>
       </div>
 
-      {/* Chart */}
+      {/* Chart — Pro or Analysis */}
       <div className="mb-5">
-        <TradingChart candles={candles} pair={pair} height={450} />
+        {chartMode === "pro" ? (
+          <TradingViewWidget pair={pair} timeframe={timeframe} height={520} />
+        ) : (
+          <TradingChart candles={candles} pair={pair} height={450} />
+        )}
       </div>
 
       {/* Analysis panels */}

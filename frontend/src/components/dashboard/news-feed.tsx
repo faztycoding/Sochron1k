@@ -36,9 +36,16 @@ export function NewsFeed({ items, onRefresh, loading }: NewsFeedProps) {
         )}
       </CardHeader>
 
+      <p className="text-[11px] text-text-muted -mt-1 mb-2">
+        ข่าวเศรษฐกิจที่ส่งผลต่อตลาด Forex โดยตรง
+      </p>
+
       <div className="flex flex-col gap-2 max-h-80 overflow-y-auto">
         {items.length === 0 && (
-          <p className="text-sm text-text-muted py-4 text-center">ยังไม่มีข่าว</p>
+          <div className="py-6 text-center">
+            <p className="text-sm text-text-muted">ยังไม่มีข่าว</p>
+            <p className="text-[11px] text-text-muted mt-1">กดปุ่ม ↻ เพื่อดึงข่าวล่าสุด</p>
+          </div>
         )}
         {items.map((item) => (
           <div

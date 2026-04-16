@@ -20,7 +20,7 @@ from app.services.analysis.signal_generator import (
 
 logger = logging.getLogger(__name__)
 
-TARGET_PAIRS = ["EUR/USD", "USD/JPY", "EUR/JPY"]
+from app.config import TARGET_PAIRS
 
 
 class AnalysisBrain:

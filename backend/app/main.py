@@ -18,13 +18,45 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def _prefetch_candles():
+    """Background task: pre-fetch candles for all pairs/timeframes."""
+    import asyncio
+    from app.config import TARGET_PAIRS
+    from app.services.price.manager import PriceManager, TIMEFRAMES
+
+    await asyncio.sleep(3)  # wait for app to be ready
+    pm = PriceManager()
+    try:
+        for pair in TARGET_PAIRS:
+            for tf in TIMEFRAMES:
+                try:
+                    candles = await pm.get_candles(pair, tf, 200)
+                    logger.info(f"[prefetch] {pair} {tf}: {len(candles)} candles")
+                except Exception as e:
+                    logger.debug(f"[prefetch] {pair} {tf} failed: {e}")
+                await asyncio.sleep(1.5)  # respect rate limit
+    finally:
+        await pm.close()
+    logger.info("[prefetch] Done — all timeframes cached")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import asyncio
     # startup
     settings = get_settings()
     logger.info(f"Sochron1k API starting — env={settings.APP_ENV}")
+    prefetch_task = asyncio.create_task(_prefetch_candles())
+
+    # Start WebSocket price stream (0 credits)
+    from app.services.price.ws_stream import PriceStream
+    stream = PriceStream()
+    await stream.start()
+
     yield
     # shutdown
+    prefetch_task.cancel()
+    await stream.stop()
     logger.info("Sochron1k API shutting down")
 
 
