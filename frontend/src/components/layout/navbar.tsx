@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Newspaper, Calculator, TrendingUp, Activity } from "lucide-react";
+import { BarChart3, Newspaper, Calculator, TrendingUp, Activity, BookOpen, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -10,6 +10,8 @@ const NAV_ITEMS = [
   { href: "/analysis", label: "วิเคราะห์", icon: TrendingUp },
   { href: "/news", label: "ข่าว", icon: Newspaper },
   { href: "/calculator", label: "คำนวณ", icon: Calculator },
+  { href: "/journal", label: "บันทึก", icon: BookOpen },
+  { href: "/stats", label: "สถิติ", icon: Trophy },
 ];
 
 export function Navbar() {

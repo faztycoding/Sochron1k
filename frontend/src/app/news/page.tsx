@@ -18,9 +18,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { PAIRS, CURRENCIES } from "@/lib/constants";
 
-const PAIRS = ["EUR/USD", "USD/JPY", "EUR/JPY", "GBP/USD", "AUD/USD"];
-const CURRENCIES = ["EUR", "USD", "JPY", "GBP", "AUD"];
 const IMPACT_LEVELS = [
   { value: "high", label: "สูง", color: "text-red-400" },
   { value: "medium", label: "ปานกลาง", color: "text-amber-400" },

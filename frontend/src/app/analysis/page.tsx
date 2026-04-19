@@ -10,9 +10,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { TradingChart } from "@/components/chart/trading-chart";
 import { TradingViewWidget } from "@/components/chart/tradingview-widget";
 import { LivePriceBar } from "@/components/chart/live-price-bar";
-
-const PAIRS = ["EUR/USD", "USD/JPY", "EUR/JPY", "GBP/USD", "AUD/USD"];
-const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"];
+import { PAIRS, TIMEFRAMES } from "@/lib/constants";
 
 export default function AnalysisPage() {
   const [pair, setPair] = useState("EUR/USD");

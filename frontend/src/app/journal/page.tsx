@@ -8,8 +8,9 @@ import { tradeApi } from "@/lib/api-trade";
 import type { TradeItem } from "@/lib/api-trade";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PAIRS as ALL_PAIRS } from "@/lib/constants";
 
-const PAIRS = ["ทั้งหมด", "EUR/USD", "USD/JPY", "EUR/JPY"];
+const PAIRS = ["ทั้งหมด", ...ALL_PAIRS];
 const STATUSES = ["ทั้งหมด", "open", "closed"];
 
 export default function JournalPage() {

@@ -8,8 +8,7 @@ import { tradeApi } from "@/lib/api-trade";
 import type { CalculateResult, AutoSLTPResult } from "@/lib/api-trade";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
-const PAIRS = ["EUR/USD", "USD/JPY", "EUR/JPY"];
+import { PAIRS } from "@/lib/constants";
 
 export default function CalculatorPage() {
   const [pair, setPair] = useState("EUR/USD");

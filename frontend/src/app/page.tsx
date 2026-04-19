@@ -13,9 +13,8 @@ import { CurrencyStrengthBar } from "@/components/dashboard/currency-strength";
 import { SessionInfoBar } from "@/components/dashboard/session-info";
 import { PriceCardSkeleton } from "@/components/ui/skeleton";
 import { AnimatedNumber } from "@/components/ui/animated-number";
-
-const PAIRS = ["EUR/USD", "USD/JPY", "EUR/JPY", "GBP/USD", "AUD/USD"];
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+import { PAIRS, API_BASE } from "@/lib/constants";
+import { tradeApi, type OverviewStats } from "@/lib/api-trade";
 
 function StatCard({
   icon: Icon,
@@ -59,6 +58,7 @@ export default function DashboardPage() {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [strength, setStrength] = useState<CurrencyStrength | null>(null);
   const [session, setSession] = useState<SessionInfo | null>(null);
+  const [tradeStats, setTradeStats] = useState<OverviewStats | null>(null);
   const [newsLoading, setNewsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const sseRef = useRef<EventSource | null>(null);
@@ -66,34 +66,37 @@ export default function DashboardPage() {
   const loadData = useCallback(async () => {
     try {
       setLoadError(null);
-      const [priceRes, sessionRes, perfRes] = await Promise.allSettled([
-        api.prices.realtime(),
-        api.analysis.session(),
-        api.prices.performance(),
-      ]);
+      // Batch 1: core dashboard data (all parallel)
+      const [priceRes, sessionRes, perfRes, newsRes, strengthRes, tradeStatsRes] =
+        await Promise.allSettled([
+          api.prices.realtime(),
+          api.analysis.session(),
+          api.prices.performance(),
+          api.news.list(10),
+          api.indicators.strength(),
+          tradeApi.stats.overview(),
+        ]);
 
       if (priceRes.status === "fulfilled") setPrices(priceRes.value.prices);
       if (sessionRes.status === "fulfilled") setSession(sessionRes.value);
       if (perfRes.status === "fulfilled") setPerformance(perfRes.value.performance);
-
-      const [newsRes, strengthRes] = await Promise.allSettled([
-        api.news.list(10),
-        api.indicators.strength(),
-      ]);
-
       if (newsRes.status === "fulfilled") setNews(newsRes.value.items || []);
       if (strengthRes.status === "fulfilled") setStrength(strengthRes.value);
+      if (tradeStatsRes.status === "fulfilled") setTradeStats(tradeStatsRes.value);
 
-      // Analysis — run sequentially to avoid API rate limits
-      const newAnalyses: Record<string, AnalysisResult | null> = {};
-      for (const p of PAIRS) {
+      // Batch 2: analysis for all pairs IN PARALLEL (backend now caches + parallelizes)
+      const analysisPromises = PAIRS.map(async (p) => {
         try {
-          newAnalyses[p] = await api.analysis.run(p);
+          const result = await api.analysis.run(p);
+          return [p, result] as const;
         } catch {
-          newAnalyses[p] = null;
+          return [p, null] as const;
         }
-        setAnalyses({ ...newAnalyses });
-      }
+      });
+      const analysisResults = await Promise.all(analysisPromises);
+      const newAnalyses: Record<string, AnalysisResult | null> = {};
+      for (const [pair, result] of analysisResults) newAnalyses[pair] = result;
+      setAnalyses(newAnalyses);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "โหลดข้อมูลล้มเหลว");
     }
@@ -111,47 +114,61 @@ export default function DashboardPage() {
     setNewsLoading(false);
   };
 
-  // SSE real-time price stream
+  // SSE real-time price stream with exponential backoff reconnect
   useEffect(() => {
-    const sse = new EventSource(`${API_BASE}/price/stream`);
-    sseRef.current = sse;
+    let attempts = 0;
+    let reconnectTimer: NodeJS.Timeout | null = null;
+    let cancelled = false;
 
-    sse.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.prices) {
-          setPrices((prev) => {
-            const newFlashes: Record<string, "up" | "down" | null> = {};
-            for (const [pair, pData] of Object.entries(data.prices) as [string, PriceData][]) {
-              const oldPrice = prev[pair]?.price;
-              if (oldPrice && pData.price !== oldPrice) {
-                newFlashes[pair] = pData.price > oldPrice ? "up" : "down";
+    const connect = () => {
+      if (cancelled) return;
+      const sse = new EventSource(`${API_BASE}/price/stream`);
+      sseRef.current = sse;
+
+      sse.onopen = () => {
+        attempts = 0; // reset backoff on successful connection
+      };
+
+      sse.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.prices) {
+            setPrices((prev) => {
+              const newFlashes: Record<string, "up" | "down" | null> = {};
+              for (const [pair, pData] of Object.entries(data.prices) as [string, PriceData][]) {
+                const oldPrice = prev[pair]?.price;
+                if (oldPrice && pData.price !== oldPrice) {
+                  newFlashes[pair] = pData.price > oldPrice ? "up" : "down";
+                }
               }
-            }
-            if (Object.keys(newFlashes).length > 0) {
-              setFlashes(newFlashes);
-              setTimeout(() => setFlashes({}), 600);
-            }
-            return data.prices;
-          });
+              if (Object.keys(newFlashes).length > 0) {
+                setFlashes(newFlashes);
+                setTimeout(() => setFlashes({}), 600);
+              }
+              return data.prices;
+            });
+          }
+        } catch {
+          // parse error — skip
         }
-      } catch {
-        // parse error
-      }
+      };
+
+      sse.onerror = () => {
+        sse.close();
+        if (cancelled) return;
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s (max 30s)
+        const delay = Math.min(1000 * Math.pow(2, attempts), 30_000);
+        attempts += 1;
+        reconnectTimer = setTimeout(connect, delay);
+      };
     };
 
-    sse.onerror = () => {
-      sse.close();
-      // Reconnect after 5s
-      setTimeout(() => {
-        if (sseRef.current === sse) {
-          sseRef.current = null;
-        }
-      }, 5000);
-    };
+    connect();
 
     return () => {
-      sse.close();
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      sseRef.current?.close();
       sseRef.current = null;
     };
   }, []);
@@ -183,10 +200,36 @@ export default function DashboardPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6 stagger-children">
-        <StatCard icon={TrendingUp} label="สัญญาณวันนี้" value={signalCount} numeric accent={signalCount > 0 ? "text-buy" : ""} />
-        <StatCard icon={Activity} label="Win Rate" value="—" />
+        <StatCard
+          icon={TrendingUp}
+          label="สัญญาณวันนี้"
+          value={signalCount}
+          numeric
+          accent={signalCount > 0 ? "text-buy" : ""}
+        />
+        <StatCard
+          icon={Activity}
+          label="Win Rate"
+          value={
+            tradeStats && tradeStats.total_trades > 0
+              ? `${(tradeStats.win_rate * 100).toFixed(1)}%`
+              : "—"
+          }
+          accent={
+            tradeStats && tradeStats.win_rate >= 0.5
+              ? "text-emerald-400"
+              : tradeStats && tradeStats.win_rate > 0
+                ? "text-amber-400"
+                : ""
+          }
+        />
         <StatCard icon={Newspaper} label="ข่าวล่าสุด" value={news.length} numeric />
-        <StatCard icon={BarChart3} label="เทรดทั้งหมด" value={0} numeric />
+        <StatCard
+          icon={BarChart3}
+          label="เทรดทั้งหมด"
+          value={tradeStats?.total_trades ?? 0}
+          numeric
+        />
       </div>
 
       {/* Price Cards */}
