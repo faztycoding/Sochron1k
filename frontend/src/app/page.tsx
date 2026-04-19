@@ -132,21 +132,37 @@ export default function DashboardPage() {
       sse.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.prices) {
-            setPrices((prev) => {
-              const newFlashes: Record<string, "up" | "down" | null> = {};
-              for (const [pair, pData] of Object.entries(data.prices) as [string, PriceData][]) {
-                const oldPrice = prev[pair]?.price;
-                if (oldPrice && pData.price !== oldPrice) {
-                  newFlashes[pair] = pData.price > oldPrice ? "up" : "down";
+          if (!data.prices) return;
+
+          // Compute flashes BEFORE state updates (side-effect-free updater)
+          const flashMap: Record<string, "up" | "down" | null> = {};
+          setPrices((prev) => {
+            for (const [pair, pData] of Object.entries(data.prices) as [
+              string,
+              PriceData,
+            ][]) {
+              const oldPrice = prev[pair]?.price;
+              if (oldPrice && pData.price !== oldPrice) {
+                flashMap[pair] = pData.price > oldPrice ? "up" : "down";
+              }
+            }
+            // MERGE (don't replace) — keeps old pairs if frame is partial
+            // Prevents PriceCard ↔ Skeleton flicker when SSE frame drops a pair
+            return { ...prev, ...data.prices };
+          });
+
+          // Trigger flash OUTSIDE setPrices (no side effects in updater)
+          if (Object.keys(flashMap).length > 0) {
+            setFlashes((prev) => ({ ...prev, ...flashMap }));
+            setTimeout(() => {
+              setFlashes((prev) => {
+                const next = { ...prev };
+                for (const pair of Object.keys(flashMap)) {
+                  delete next[pair];
                 }
-              }
-              if (Object.keys(newFlashes).length > 0) {
-                setFlashes(newFlashes);
-                setTimeout(() => setFlashes({}), 600);
-              }
-              return data.prices;
-            });
+                return next;
+              });
+            }, 600);
           }
         } catch {
           // parse error — skip
@@ -245,8 +261,11 @@ export default function DashboardPage() {
           </span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 stagger-children">
-          {PAIRS.map((pair) =>
-            prices[pair] || performance[pair] ? (
+          {PAIRS.map((pair) => {
+            const hasData = Boolean(prices[pair] || performance[pair]);
+            // Always render PriceCard once data exists — never flip back to
+            // Skeleton (prevents flicker when SSE frame is briefly partial)
+            return hasData ? (
               <PriceCard
                 key={pair}
                 pair={pair}
@@ -257,8 +276,8 @@ export default function DashboardPage() {
               />
             ) : (
               <PriceCardSkeleton key={pair} />
-            )
-          )}
+            );
+          })}
         </div>
       </div>
 
