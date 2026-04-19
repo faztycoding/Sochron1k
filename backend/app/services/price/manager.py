@@ -94,9 +94,45 @@ class PriceManager:
             if not price_data:
                 price_data = await self._yfinance.get_realtime_price(pair)
             if price_data:
+                # Override change/percent_change with 24h rolling reference
+                # (matches TradingView/OANDA convention better than
+                # TwelveData's UTC-midnight previous_close)
+                await self._adjust_rolling_24h(pair, price_data)
                 prices[pair] = price_data
                 await self._cache_price(pair, price_data)
         return prices
+
+    async def _adjust_rolling_24h(
+        self, pair: str, price_data: Dict[str, Any]
+    ) -> None:
+        """Recompute change/percent_change using 24h rolling reference.
+
+        Uses 1h candles from 24 hours ago as the "previous" baseline.
+        This matches major forex platforms (TradingView, OANDA, Bloomberg)
+        better than Twelve Data's daily boundary which can be hours-old.
+        """
+        try:
+            candles_1h = await self._get_cached_candles(pair, "1h")
+            if not candles_1h or len(candles_1h) < 24:
+                return  # fall back to TwelveData values
+
+            # Sort oldest first, pick candle ~24 hours ago
+            candles_sorted = sorted(candles_1h, key=lambda c: c.get("open_time", ""))
+            if len(candles_sorted) < 25:
+                return
+            ref_close = float(candles_sorted[-25]["close"])
+            current = float(price_data.get("price", 0))
+            if ref_close <= 0 or current <= 0:
+                return
+
+            change = current - ref_close
+            pct = (change / ref_close) * 100
+            price_data["previous_close"] = ref_close
+            price_data["change"] = round(change, 5 if "JPY" not in pair else 3)
+            price_data["percent_change"] = round(pct, 4)
+            price_data["reference_type"] = "24h_rolling"
+        except Exception as e:
+            logger.debug(f"[price] Rolling 24h adjust error for {pair}: {e}")
 
     async def get_all_candles(self) -> Dict[str, Dict[str, List]]:
         result = {}

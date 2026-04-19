@@ -129,7 +129,30 @@ async def get_performance() -> Dict[str, Any]:
                 "day_open": candles_1d[-1]["open"] if candles_1d else current,
             }
 
-            periods = {"1D": 1, "3D": 3, "1W": 5, "1M": 22}
+            # 1D: use 24h rolling from hourly candles (matches TradingView)
+            # 3D/1W/1M: use daily candles as before
+            if len(candles_1h) >= 24:
+                old_1d = candles_1h[-24]["close"] if len(candles_1h) >= 24 else None
+                if old_1d:
+                    perf["1D"] = {
+                        "pct": pct_change(old_1d, current),
+                        "pips": pip_change(old_1d, current, pair),
+                        "from_price": old_1d,
+                    }
+                else:
+                    perf["1D"] = None
+            elif len(candles_1d) > 1:
+                old_price = candles_1d[-2]["close"]
+                perf["1D"] = {
+                    "pct": pct_change(old_price, current),
+                    "pips": pip_change(old_price, current, pair),
+                    "from_price": old_price,
+                }
+            else:
+                perf["1D"] = None
+
+            # Longer periods use daily candles
+            periods = {"3D": 3, "1W": 5, "1M": 22}
             for label, days_back in periods.items():
                 if len(candles_1d) > days_back:
                     old_price = candles_1d[-(days_back + 1)]["close"]

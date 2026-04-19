@@ -92,6 +92,10 @@ class PriceStream:
         url = f"wss://ws.twelvedata.com/v1/quotes/price?apikey={api_key}"
         symbols = ",".join(TARGET_PAIRS)
 
+        # Prime baseline prices (incl. previous_close) before WS messages arrive
+        # so first WebSocket update can compute percent_change immediately
+        await self._prime_baseline()
+
         async with websockets.connect(url, ping_interval=30) as ws:
             await ws.send(json.dumps({
                 "action": "subscribe",
@@ -110,7 +114,6 @@ class PriceStream:
                         pair = data.get("symbol", "")
                         price = float(data.get("price", 0))
                         if pair and price > 0:
-                            prev = self._prices.get(pair, {}).get("price")
                             is_jpy = "JPY" in pair
                             spread_pips = 1.5 if is_jpy else 0.00015
                             price_data = {
@@ -122,6 +125,25 @@ class PriceStream:
                                 "timestamp": datetime.now(tz=timezone.utc).isoformat(),
                                 "source": "websocket",
                             }
+                            # Preserve change/percent_change from REST baseline if available,
+                            # but recompute against stored previous_close for live updates
+                            prev_cached = self._prices.get(pair, {})
+                            ref_close = prev_cached.get("previous_close")
+                            if ref_close and ref_close > 0:
+                                change = price - ref_close
+                                pct = (change / ref_close) * 100
+                                price_data["previous_close"] = ref_close
+                                price_data["change"] = round(change, 3 if is_jpy else 5)
+                                price_data["percent_change"] = round(pct, 4)
+                                if prev_cached.get("reference_type"):
+                                    price_data["reference_type"] = prev_cached["reference_type"]
+                                if prev_cached.get("day_high"):
+                                    price_data["day_high"] = max(prev_cached["day_high"], price)
+                                if prev_cached.get("day_low"):
+                                    price_data["day_low"] = min(prev_cached["day_low"], price)
+                                if prev_cached.get("day_open"):
+                                    price_data["day_open"] = prev_cached["day_open"]
+
                             self._prices[pair] = price_data
                             await self._broadcast({"type": "price", "data": price_data})
 
@@ -132,6 +154,29 @@ class PriceStream:
 
                 except Exception as e:
                     logger.debug(f"[ws_stream] Parse error: {e}")
+
+    async def _prime_baseline(self) -> None:
+        """Fetch baseline prices (with previous_close + 24h-rolling) once.
+
+        Stores into self._prices so WebSocket messages can compute percent_change
+        immediately on first tick.
+        """
+        try:
+            from app.services.price.manager import PriceManager
+
+            pm = PriceManager()
+            try:
+                prices = await pm.get_realtime_prices()
+                for pair, pdata in prices.items():
+                    pdata["source"] = "rest"
+                    self._prices[pair] = pdata
+                logger.info(
+                    f"[ws_stream] Baseline primed for {len(prices)} pairs"
+                )
+            finally:
+                await pm.close()
+        except Exception as e:
+            logger.warning(f"[ws_stream] Baseline prime failed: {e}")
 
     async def _rest_poll(self) -> None:
         from app.services.price.manager import PriceManager
