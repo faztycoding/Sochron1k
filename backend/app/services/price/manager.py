@@ -2,6 +2,8 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+import redis.asyncio as aioredis
+
 from app.config import get_settings, TARGET_PAIRS
 from app.services.price.twelve_data import TwelveDataService
 from app.services.price.yfinance_fallback import YFinanceFallback
@@ -9,6 +11,23 @@ from app.services.price.yfinance_fallback import YFinanceFallback
 logger = logging.getLogger(__name__)
 
 TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"]
+
+# Module-level singleton — shared Redis pool across all PriceManager instances
+_redis_pool: Optional[aioredis.Redis] = None
+
+
+async def _get_redis() -> aioredis.Redis:
+    """Lazy-create a shared async Redis connection with connection pooling."""
+    global _redis_pool
+    if _redis_pool is None:
+        settings = get_settings()
+        _redis_pool = aioredis.from_url(
+            settings.REDIS_URL,
+            decode_responses=True,
+            max_connections=20,
+            socket_keepalive=True,
+        )
+    return _redis_pool
 
 
 class PriceManager:
@@ -107,16 +126,13 @@ class PriceManager:
         self, pair: str, timeframe: str, candles: List[Dict]
     ) -> None:
         try:
-            import redis.asyncio as aioredis
-
-            r = aioredis.from_url(self._settings.REDIS_URL, decode_responses=True)
+            r = await _get_redis()
             key = f"candles:{pair}:{timeframe}"
             await r.setex(
                 key,
                 self._cache_ttl(timeframe),
                 json.dumps(candles[-200:], default=str),
             )
-            await r.aclose()
         except Exception as e:
             logger.debug(f"[price] Cache write error: {e}")
 
@@ -124,12 +140,9 @@ class PriceManager:
         self, pair: str, timeframe: str
     ) -> Optional[List[Dict]]:
         try:
-            import redis.asyncio as aioredis
-
-            r = aioredis.from_url(self._settings.REDIS_URL, decode_responses=True)
+            r = await _get_redis()
             key = f"candles:{pair}:{timeframe}"
             data = await r.get(key)
-            await r.aclose()
             if data:
                 return json.loads(data)
         except Exception:
@@ -138,21 +151,15 @@ class PriceManager:
 
     async def _cache_price(self, pair: str, data: Dict) -> None:
         try:
-            import redis.asyncio as aioredis
-
-            r = aioredis.from_url(self._settings.REDIS_URL, decode_responses=True)
+            r = await _get_redis()
             await r.setex(f"price:{pair}", 10, json.dumps(data, default=str))
-            await r.aclose()
         except Exception:
             pass
 
     async def _get_cached_price(self, pair: str) -> Optional[Dict]:
         try:
-            import redis.asyncio as aioredis
-
-            r = aioredis.from_url(self._settings.REDIS_URL, decode_responses=True)
+            r = await _get_redis()
             data = await r.get(f"price:{pair}")
-            await r.aclose()
             if data:
                 return json.loads(data)
         except Exception:
@@ -160,4 +167,16 @@ class PriceManager:
         return None
 
     async def close(self) -> None:
+        """Close TwelveData client only — Redis pool is shared (don't close)."""
         await self._twelve.close()
+
+
+async def close_redis_pool() -> None:
+    """Call during app shutdown to close the shared Redis pool."""
+    global _redis_pool
+    if _redis_pool is not None:
+        try:
+            await _redis_pool.aclose()
+        except Exception:
+            pass
+        _redis_pool = None

@@ -57,6 +57,12 @@ async def lifespan(app: FastAPI):
     # shutdown
     prefetch_task.cancel()
     await stream.stop()
+    # Close shared Redis pool
+    try:
+        from app.services.price.manager import close_redis_pool
+        await close_redis_pool()
+    except Exception:
+        pass
     logger.info("Sochron1k API shutting down")
 
 

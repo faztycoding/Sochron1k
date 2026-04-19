@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -8,10 +9,41 @@ YFINANCE_SYMBOLS = {
     "EUR/USD": "EURUSD=X",
     "USD/JPY": "USDJPY=X",
     "EUR/JPY": "EURJPY=X",
+    "GBP/USD": "GBPUSD=X",
+    "AUD/USD": "AUDUSD=X",
     "DXY": "DX-Y.NYB",
     "VIX": "^VIX",
     "NIKKEI": "^N225",
 }
+
+# In-memory failure cache: {symbol: (failure_count, last_failure_timestamp)}
+# Prevents retrying known-broken tickers for FAILURE_COOLDOWN seconds
+_FAILURE_CACHE: Dict[str, tuple] = {}
+FAILURE_COOLDOWN = 600  # 10 minutes
+MAX_FAILURES_BEFORE_CACHE = 2
+
+
+def _is_symbol_blacklisted(symbol: str) -> bool:
+    """Check if symbol recently failed — skip to avoid wasted time."""
+    entry = _FAILURE_CACHE.get(symbol)
+    if not entry:
+        return False
+    failures, last_ts = entry
+    if failures >= MAX_FAILURES_BEFORE_CACHE:
+        if time.time() - last_ts < FAILURE_COOLDOWN:
+            return True
+        # Cooldown expired — reset
+        _FAILURE_CACHE.pop(symbol, None)
+    return False
+
+
+def _record_failure(symbol: str) -> None:
+    entry = _FAILURE_CACHE.get(symbol, (0, 0))
+    _FAILURE_CACHE[symbol] = (entry[0] + 1, time.time())
+
+
+def _record_success(symbol: str) -> None:
+    _FAILURE_CACHE.pop(symbol, None)
 
 INTERVAL_MAP = {
     "1m": "1m",
@@ -41,10 +73,16 @@ class YFinanceFallback:
         timeframe: str = "1h",
         limit: int = 500,
     ) -> List[Dict[str, Any]]:
+        symbol = YFINANCE_SYMBOLS.get(pair, pair.replace("/", "") + "=X")
+
+        # Skip if recently blacklisted (deleted/broken ticker)
+        if _is_symbol_blacklisted(symbol):
+            logger.debug(f"[yfinance] {symbol} blacklisted — skipping")
+            return []
+
         try:
             import yfinance as yf
 
-            symbol = YFINANCE_SYMBOLS.get(pair, pair.replace("/", "") + "=X")
             interval = INTERVAL_MAP.get(timeframe, "1h")
             period = PERIOD_MAP.get(timeframe, "730d")
 
@@ -53,6 +91,7 @@ class YFinanceFallback:
 
             if df.empty:
                 logger.warning(f"[yfinance] No data for {pair} {timeframe}")
+                _record_failure(symbol)
                 return []
 
             df = df.tail(limit)
@@ -73,6 +112,7 @@ class YFinanceFallback:
             if timeframe == "4h" and interval == "1h":
                 candles = self._resample_to_4h(candles)
 
+            _record_success(symbol)
             logger.info(f"[yfinance] {pair} {timeframe}: {len(candles)} candles")
             return candles
 
@@ -80,6 +120,7 @@ class YFinanceFallback:
             logger.error("[yfinance] yfinance not installed")
             return []
         except Exception as e:
+            _record_failure(symbol)
             logger.error(f"[yfinance] Error: {e}")
             return []
 

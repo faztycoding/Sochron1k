@@ -1,8 +1,15 @@
-"""Analysis Brain — Full 5-layer pipeline orchestrator"""
+"""Analysis Brain — Full 5-layer pipeline orchestrator
+
+Performance optimizations:
+- Parallel fetches (asyncio.gather) for indicators/news/market-data/pair-closes
+- Graceful degradation when market data unavailable (yfinance blacklist cache)
+- Redis cache for full analysis results (see analysis route)
+"""
+import asyncio
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from app.config import get_settings
 from app.services.analysis.correlation import check_boj_risk, check_correlations
@@ -37,7 +44,7 @@ class AnalysisBrain:
     ) -> Dict[str, Any]:
         start = time.time()
 
-        # Get indicator snapshot
+        # Get indicator snapshot (must be first — others depend on it)
         from app.services.indicators.engine import IndicatorEngine
         engine = IndicatorEngine()
         try:
@@ -50,20 +57,28 @@ class AnalysisBrain:
 
         price = indicators.get("latest_price", 0)
 
+        # === Parallel fetches: news + market_data + pair_closes ===
+        # These are independent — fetch concurrently (~6s → ~2s)
+        news_task = get_cached_news(self._settings.REDIS_URL, pair)
+        market_task = self._get_market_data()
+        closes_task = self._get_pair_closes(pair, timeframe)
+
+        news_items, market_data, pair_closes = await asyncio.gather(
+            news_task, market_task, closes_task,
+            return_exceptions=False,
+        )
+
         # Layer 1: Market Regime
         regime = detect_regime(indicators)
 
         # Layer 2: News Sentiment
-        news_items = await get_cached_news(self._settings.REDIS_URL, pair)
         news_result = score_news_sentiment(news_items, pair)
 
         # Layer 3: Technical Confluence
         direction = determine_direction(indicators, news_result.get("sentiment", "neutral"))
         technical = compute_technical_score(indicators, direction)
 
-        # Layer 4: Inter-market Correlation
-        market_data = await self._get_market_data()
-        pair_closes = await self._get_pair_closes(pair, timeframe)
+        # Layer 4: Inter-market Correlation (graceful if market_data empty)
         correlation = check_correlations(pair, pair_closes, market_data)
 
         # Layer 5: Risk Gate
@@ -163,18 +178,30 @@ class AnalysisBrain:
         return result
 
     async def analyze_all_pairs(self) -> Dict[str, Any]:
-        results = {}
-        for pair in TARGET_PAIRS:
-            results[pair] = await self.analyze(pair)
+        """Analyze all pairs IN PARALLEL — much faster than sequential."""
+        tasks = [self.analyze(pair) for pair in TARGET_PAIRS]
+        results_list = await asyncio.gather(*tasks, return_exceptions=True)
+        results: Dict[str, Any] = {}
+        for pair, result in zip(TARGET_PAIRS, results_list):
+            if isinstance(result, Exception):
+                logger.error(f"[brain] {pair} analysis failed: {result}")
+                results[pair] = {"error": str(result), "pair": pair}
+            else:
+                results[pair] = result
         return results
 
     async def _get_market_data(self) -> Dict[str, list]:
+        """Fetch DXY/VIX/NIKKEI in parallel. Gracefully degrades if any fail."""
         try:
             from app.services.price.yfinance_fallback import YFinanceFallback
             yf = YFinanceFallback()
-            data = {}
-            for symbol in ["DXY", "VIX", "NIKKEI"]:
-                candles = await yf.get_candles(symbol, "1d", 30)
+            symbols = ["DXY", "VIX", "NIKKEI"]
+            tasks = [yf.get_candles(s, "1d", 30) for s in symbols]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            data: Dict[str, list] = {}
+            for symbol, candles in zip(symbols, results):
+                if isinstance(candles, Exception) or not candles:
+                    continue
                 data[symbol] = [float(c["close"]) for c in candles]
             return data
         except Exception as e:
@@ -185,8 +212,10 @@ class AnalysisBrain:
         try:
             from app.services.price.manager import PriceManager
             pm = PriceManager()
-            candles = await pm.get_candles(pair, tf, 30)
-            await pm.close()
+            try:
+                candles = await pm.get_candles(pair, tf, 30)
+            finally:
+                await pm.close()
             return [float(c["close"]) for c in candles]
         except Exception:
             return []
