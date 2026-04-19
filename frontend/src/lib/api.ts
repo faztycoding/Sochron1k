@@ -226,11 +226,51 @@ export interface NewsListResponse {
   total: number;
 }
 
+export interface TradeSetup {
+  direction?: "buy" | "sell" | "avoid" | "wait";
+  pair?: string;
+  entry_type?: "market" | "limit" | "stop";
+  entry_zone?: string;
+  sl_pips?: number;
+  tp_pips?: number;
+  risk_reward?: number;
+  style?: "scalp" | "intraday" | "swing";
+  warning_minutes?: number;
+}
+
+export interface ReasoningChain {
+  step1_classification?: string;
+  step2_historical_precedent?: string;
+  step3_market_bias?: string;
+  step4_volatility_forecast?: string;
+  step5_trade_setup_logic?: string;
+  step6_self_eval?: string;
+}
+
+export interface SimilarEvent {
+  event: string;
+  date_approx?: string;
+  pair_impact?: string;
+  pips_moved?: number;
+  time_to_peak?: string;
+}
+
+export interface RiskMeter {
+  risk_score: number; // 0-100
+  opportunity_score: number; // 0-100
+  warning_active: boolean;
+  warning_minutes_left: number;
+  minutes_to_event?: number | null;
+  trade_freeze: boolean;
+  message_th: string;
+}
+
 export interface NewsItem {
   id?: number;
   source: string;
   currency: string;
   pair?: string;
+  relevant_pairs?: string[];
   title_original: string;
   title_th?: string;
   summary_original?: string;
@@ -239,7 +279,7 @@ export interface NewsItem {
   url?: string;
   impact_level: "high" | "medium" | "low" | string;
   impact_score?: number; // 1-5
-  category?: "central_bank" | "economic_data" | "geopolitical" | "corporate" | "commodity" | "sentiment" | "technical" | string;
+  category?: "central_bank" | "economic_data" | "geopolitical" | "corporate" | "commodity" | "sentiment" | "technical_blog" | string;
   sentiment?: Record<string, "bullish" | "bearish" | "neutral" | string>;
   sentiment_score?: number;
   key_numbers?: { actual?: string; forecast?: string; previous?: string };
@@ -247,10 +287,16 @@ export interface NewsItem {
   time_horizon?: "instant" | "short" | "medium" | "long" | string;
   surprise_factor?: number;
   actionability?: "tradable" | "watch" | "ignore" | string;
+  confidence?: number; // 0-1 (NEW)
   key_takeaway?: string;
   key_takeaway_th?: string;
   is_urgent?: boolean;
   event_time?: string;
   scraped_at: string;
   raw_data?: Record<string, unknown>;
+  // NEW (world-class fields)
+  reasoning?: ReasoningChain;
+  trade_setup?: TradeSetup;
+  similar_events?: SimilarEvent[];
+  risk_meter?: RiskMeter;
 }

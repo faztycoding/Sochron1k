@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, Clock, Flame, TrendingUp, TrendingDown, Minus, Target, BarChart3, Activity, AlertCircle, Info } from "lucide-react";
+import { ExternalLink, Clock, Flame, TrendingUp, TrendingDown, Minus, Target, BarChart3, Activity, AlertCircle } from "lucide-react";
 import type { NewsItem } from "@/lib/api";
 import {
   CATEGORY_META,
@@ -16,6 +16,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogBody } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { RiskMeterGauge } from "@/components/news/risk-meter-gauge";
+import { TradeSetupBox } from "@/components/news/trade-setup-box";
+import { ReasoningChain } from "@/components/news/reasoning-chain";
+import { SimilarEvents } from "@/components/news/similar-events";
 
 interface NewsDetailDialogProps {
   item: NewsItem | null;
@@ -109,6 +113,12 @@ export function NewsDetailDialog({ item, open, onClose }: NewsDetailDialogProps)
             </div>
           </div>
         )}
+
+        {/* NEW: Risk Meter + Countdown (critical — always first) */}
+        <RiskMeterGauge meter={item.risk_meter} />
+
+        {/* NEW: Trade Setup (Entry/SL/TP) */}
+        <TradeSetupBox setup={item.trade_setup} />
 
         {/* Summary */}
         {(item.summary_th || item.summary_original) && (
@@ -260,6 +270,12 @@ export function NewsDetailDialog({ item, open, onClose }: NewsDetailDialogProps)
             </div>
           </div>
         )}
+
+        {/* NEW: Similar past events */}
+        <SimilarEvents events={item.similar_events} />
+
+        {/* NEW: AI Reasoning Chain (collapsible) */}
+        <ReasoningChain reasoning={item.reasoning} confidence={item.confidence} />
 
         {/* Link to original */}
         {item.url && (
