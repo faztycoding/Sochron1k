@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
 
+    # News pipeline — cap AI calls per run (respect free tier quota)
+    # Gemini 2.5 Flash free tier = 20 requests/day
+    # Setting to 15 leaves 5 for embeddings + safety buffer
+    NEWS_MAX_ANALYSIS_PER_RUN: int = 15
+
     @property
     def cors_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]

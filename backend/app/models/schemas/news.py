@@ -31,6 +31,8 @@ class NewsListResponse(BaseModel):
 class NewsPipelineResult(BaseModel):
     success: bool
     scraped_total: int
+    filtered_total: int = 0  # NEW: items kept after pre-AI filter
+    deduped_total: int = 0   # NEW: items after semantic dedup
     processed_total: int
     urgent_count: int
     saved_count: int
@@ -38,6 +40,7 @@ class NewsPipelineResult(BaseModel):
     duration_seconds: float
     timestamp: str
     urgent_items: List[Dict[str, Any]] = []
+    stats: Dict[str, int] = Field(default_factory=dict)
 
 
 class NewsFilter(BaseModel):
