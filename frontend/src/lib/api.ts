@@ -59,6 +59,7 @@ export interface PriceData {
   day_low?: number;
   timestamp: string;
   source?: string;
+  reference_type?: string; // e.g. "24h_rolling"
 }
 
 export interface QuoteData {

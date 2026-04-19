@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { TradingChart } from "@/components/chart/trading-chart";
 import { TradingViewWidget } from "@/components/chart/tradingview-widget";
-import { LivePriceBar } from "@/components/chart/live-price-bar";
+import { PairQuoteCard } from "@/components/chart/pair-quote-card";
 import { PAIRS, TIMEFRAMES } from "@/lib/constants";
 
 export default function AnalysisPage() {
@@ -91,9 +91,9 @@ export default function AnalysisPage() {
         </div>
       </div>
 
-      {/* Live Price Bar */}
-      <div className="mb-3">
-        <LivePriceBar pair={pair} />
+      {/* Pair Quote Card — TradingView-style quote with performance grid */}
+      <div className="mb-4">
+        <PairQuoteCard pair={pair} />
       </div>
 
       {/* Pair + Timeframe selectors */}
