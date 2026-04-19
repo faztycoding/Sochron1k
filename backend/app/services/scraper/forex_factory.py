@@ -127,10 +127,17 @@ class ForexFactoryScraper(BaseScraper):
         )
 
     def _match_pair(self, currency: str) -> str:
+        """Map impacted currency → primary pair for alerts.
+
+        Returns the most-traded pair involving this currency.
+        Multi-pair impacts are handled by AI analysis (gemini sets relevant_pairs).
+        """
         pair_map = {
             "EUR": "EUR/USD",
-            "USD": "USD/JPY",
+            "USD": "EUR/USD",  # USD news → EUR/USD + USD/JPY etc (AI picks more)
             "JPY": "USD/JPY",
+            "GBP": "GBP/USD",
+            "AUD": "AUD/USD",
         }
         return pair_map.get(currency, "")
 

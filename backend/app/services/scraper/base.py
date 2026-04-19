@@ -66,7 +66,9 @@ def get_default_headers() -> Dict[str, str]:
         "User-Agent": get_random_ua(),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
+        # Don't advertise Brotli — httpx has no built-in brotli decoder.
+        # Without this, response.text returns raw compressed bytes → parse errors.
+        "Accept-Encoding": "gzip, deflate",
         "DNT": "1",
         "Connection": "keep-alive",
     }
