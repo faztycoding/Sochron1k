@@ -30,3 +30,8 @@ redis_data/
 # Logs
 *.log
 logs/
+
+# Celery runtime files
+celerybeat-schedule
+celerybeat.pid
+backend/celerybeat-schedule*

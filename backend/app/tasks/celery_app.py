@@ -82,3 +82,6 @@ celery_app.conf.beat_schedule = {
 }
 
 celery_app.autodiscover_tasks(["app.tasks"])
+
+# Explicitly import task modules to ensure registration
+from app.tasks import news_tasks, indicator_tasks  # noqa: E402, F401
