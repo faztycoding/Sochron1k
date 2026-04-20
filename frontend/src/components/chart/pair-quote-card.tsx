@@ -31,15 +31,25 @@ export function PairQuoteCard({ pair, onPriceUpdate }: PairQuoteCardProps) {
   const [connected, setConnected] = useState(false);
   const [performance, setPerformance] = useState<PairPerformance | null>(null);
   const [marketStatus, setMarketStatus] = useState<MarketStatus>("open");
+  const [ageSeconds, setAgeSeconds] = useState(0);
 
   const priceRef = useRef<PriceData | null>(null);
   const sseRef = useRef<EventSource | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastUpdateRef = useRef<number>(Date.now());
 
   const meta = PAIR_META[pair] || { flagLeft: "🏳️", flagRight: "🏳️", thai: pair };
   const isJPY = pair.includes("JPY");
   const decimals = isJPY ? 3 : 5;
+
+  // Data-age ticker (updates every second for staleness indicator)
+  useEffect(() => {
+    const t = setInterval(() => {
+      setAgeSeconds(Math.floor((Date.now() - lastUpdateRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(t);
+  }, []);
 
   // Fetch performance + session status (once per pair change)
   useEffect(() => {
@@ -96,6 +106,8 @@ export function PairQuoteCard({ pair, onPriceUpdate }: PairQuoteCardProps) {
 
             priceRef.current = newData;
             setPrice(newData);
+            lastUpdateRef.current = Date.now();
+            setAgeSeconds(0);
             onPriceUpdate?.(newData.price);
           }
         } catch {
@@ -200,7 +212,12 @@ export function PairQuoteCard({ pair, onPriceUpdate }: PairQuoteCardProps) {
             ) : (
               <WifiOff className="w-3 h-3 text-amber-400" />
             )}
-            <span>{price?.source === "websocket" ? "WebSocket" : "SSE"}</span>
+            <span>
+              {price?.source === "websocket" ? "WS" : "REST"}
+              <span className="ml-1 text-text-muted/60">
+                {ageSeconds === 0 ? "• now" : `• ${ageSeconds}s`}
+              </span>
+            </span>
           </div>
         </div>
       </div>

@@ -81,25 +81,52 @@ class PriceManager:
             await self._cache_candles(pair, timeframe, candles)
         return candles
 
-    async def get_realtime_prices(self) -> Dict[str, Any]:
-        prices = {}
-        for pair in TARGET_PAIRS:
-            # Try cache first (60s TTL)
-            cached = await self._get_cached_price(pair)
-            if cached:
-                prices[pair] = cached
-                continue
+    async def get_realtime_prices(
+        self, bypass_cache: bool = False
+    ) -> Dict[str, Any]:
+        """Fetch all pairs in 1 batch API call (stays under rate limit).
 
-            price_data = await self._twelve.get_realtime_price(pair)
-            if not price_data:
-                price_data = await self._yfinance.get_realtime_price(pair)
-            if price_data:
-                # Override change/percent_change with 24h rolling reference
-                # (matches TradingView/OANDA convention better than
-                # TwelveData's UTC-midnight previous_close)
-                await self._adjust_rolling_24h(pair, price_data)
-                prices[pair] = price_data
-                await self._cache_price(pair, price_data)
+        - bypass_cache=True forces fresh upstream fetch (used by REST poll).
+        - Uses TwelveData batch /quote (1 credit for all 5 pairs), then fills
+          missing pairs via cache or yfinance.
+        """
+        import asyncio as _asyncio
+
+        prices: Dict[str, Any] = {}
+        missing = list(TARGET_PAIRS)
+
+        # 1. Serve from cache if allowed
+        if not bypass_cache:
+            for pair in list(missing):
+                cached = await self._get_cached_price(pair)
+                if cached:
+                    prices[pair] = cached
+                    missing.remove(pair)
+
+        # 2. Batch fetch all missing from TwelveData
+        if missing:
+            batch = await self._twelve.get_realtime_prices_batch(missing)
+            still_missing = [p for p in missing if p not in batch]
+
+            # Run 24h adjust + cache writes in parallel
+            async def finalize(pair: str, data: Dict[str, Any]) -> tuple[str, Dict[str, Any]]:
+                await self._adjust_rolling_24h(pair, data)
+                await self._cache_price(pair, data)
+                return pair, data
+
+            if batch:
+                pairs_done = await _asyncio.gather(*[finalize(p, d) for p, d in batch.items()])
+                for pair, data in pairs_done:
+                    prices[pair] = data
+
+            # 3. yfinance fallback for any still-missing pairs
+            for pair in still_missing:
+                data = await self._yfinance.get_realtime_price(pair)
+                if data:
+                    await self._adjust_rolling_24h(pair, data)
+                    await self._cache_price(pair, data)
+                    prices[pair] = data
+
         return prices
 
     async def _adjust_rolling_24h(
@@ -188,7 +215,9 @@ class PriceManager:
     async def _cache_price(self, pair: str, data: Dict) -> None:
         try:
             r = await _get_redis()
-            await r.setex(f"price:{pair}", 10, json.dumps(data, default=str))
+            # Short TTL: poll updates every 6s, keep cache slightly longer
+            # so external /realtime endpoint always has data ready
+            await r.setex(f"price:{pair}", 8, json.dumps(data, default=str))
         except Exception:
             pass
 

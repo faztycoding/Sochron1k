@@ -31,7 +31,7 @@ TIMEFRAME_MAP = {
 class TwelveDataService:
     BASE_URL = "https://api.twelvedata.com"
     _call_times: list = []
-    MAX_CALLS_PER_MIN = 50  # Crow 55 plan: stay under 55 limit
+    MAX_CALLS_PER_MIN = 50  # Plan is 55/min — leave 5 credits headroom for other calls
 
     def __init__(self):
         self._settings = get_settings()
@@ -42,15 +42,23 @@ class TwelveDataService:
             self._client = httpx.AsyncClient(timeout=30.0)
         return self._client
 
-    def _check_rate_limit(self) -> bool:
-        """Return True if we can make a call, False if rate limited."""
+    def _check_rate_limit(self, credits: int = 1) -> bool:
+        """Return True if we have enough credits left, False if rate limited.
+
+        Twelve Data counts credits per SYMBOL, not per HTTP call. A batch
+        /quote with N symbols consumes N credits even though it's 1 HTTP call.
+        """
         import time
         now = time.time()
         TwelveDataService._call_times = [t for t in TwelveDataService._call_times if t > now - 60]
-        if len(TwelveDataService._call_times) >= self.MAX_CALLS_PER_MIN:
-            logger.warning(f"[twelve_data] Rate limit: {len(TwelveDataService._call_times)}/{self.MAX_CALLS_PER_MIN} calls in last 60s")
+        if len(TwelveDataService._call_times) + credits > self.MAX_CALLS_PER_MIN:
+            logger.warning(
+                f"[twelve_data] Rate limit hit: {len(TwelveDataService._call_times)}+{credits}"
+                f" would exceed {self.MAX_CALLS_PER_MIN}/min"
+            )
             return False
-        TwelveDataService._call_times.append(now)
+        for _ in range(credits):
+            TwelveDataService._call_times.append(now)
         return True
 
     async def get_candles(
@@ -109,56 +117,81 @@ class TwelveDataService:
             logger.error(f"[twelve_data] API error: {e}")
             return []
 
-    async def get_realtime_price(self, pair: str) -> Optional[Dict[str, Any]]:
-        if not self._settings.TWELVE_DATA_API_KEY:
-            return None
+    def _parse_quote_row(self, pair: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse a single TwelveData /quote row into our PriceData shape."""
+        price = float(data.get("close", 0) or 0) or float(data.get("price", 0) or 0)
+        prev_close = float(data.get("previous_close", 0) or 0)
+        day_open = float(data.get("open", 0) or 0)
+        day_high = float(data.get("high", 0) or 0)
+        day_low = float(data.get("low", 0) or 0)
 
-        if not self._check_rate_limit():
-            return None
+        is_jpy = "JPY" in pair
+        spread_pips = 1.5 if is_jpy else 0.00015
+        bid = round(price - spread_pips / 2, 5 if not is_jpy else 3)
+        ask = round(price + spread_pips / 2, 5 if not is_jpy else 3)
 
-        symbol = PAIR_MAP.get(pair, pair)
+        return {
+            "pair": pair,
+            "price": price,
+            "bid": bid,
+            "ask": ask,
+            "spread": round((ask - bid) * (100 if is_jpy else 10000), 1),
+            "previous_close": prev_close,
+            "change": float(data.get("change", 0) or 0),
+            "percent_change": float(data.get("percent_change", 0) or 0),
+            "day_open": day_open,
+            "day_high": day_high,
+            "day_low": day_low,
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        }
+
+    async def get_realtime_prices_batch(
+        self, pairs: List[str]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Batch-fetch all pairs in ONE API call.
+
+        TwelveData /quote accepts comma-separated symbols and returns a
+        dict-of-quotes — 1 API credit total instead of N. Critical for
+        staying under 50 calls/min rate limit while polling every ~2s.
+        """
+        if not self._settings.TWELVE_DATA_API_KEY or not pairs:
+            return {}
+        if not self._check_rate_limit(credits=len(pairs)):
+            return {}
+
+        symbols = ",".join(PAIR_MAP.get(p, p) for p in pairs)
         client = await self._get_client()
 
         try:
             response = await client.get(
                 f"{self.BASE_URL}/quote",
                 params={
-                    "symbol": symbol,
+                    "symbol": symbols,
                     "apikey": self._settings.TWELVE_DATA_API_KEY,
                 },
             )
             response.raise_for_status()
-            data = response.json()
+            raw = response.json()
 
-            price = float(data.get("close", 0)) or float(data.get("price", 0))
-            prev_close = float(data.get("previous_close", 0))
-            day_open = float(data.get("open", 0))
-            day_high = float(data.get("high", 0))
-            day_low = float(data.get("low", 0))
-
-            # Estimate bid/ask from price (Twelve Data quote doesn't have bid/ask for forex)
-            is_jpy = "JPY" in pair
-            spread_pips = 1.5 if is_jpy else 0.00015
-            bid = round(price - spread_pips / 2, 5 if not is_jpy else 3)
-            ask = round(price + spread_pips / 2, 5 if not is_jpy else 3)
-
-            return {
-                "pair": pair,
-                "price": price,
-                "bid": bid,
-                "ask": ask,
-                "spread": round((ask - bid) * (100 if is_jpy else 10000), 1),
-                "previous_close": prev_close,
-                "change": float(data.get("change", 0)),
-                "percent_change": float(data.get("percent_change", 0)),
-                "day_open": day_open,
-                "day_high": day_high,
-                "day_low": day_low,
-                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            }
+            # Single-symbol response is a flat dict; multi-symbol is dict-of-dicts
+            out: Dict[str, Dict[str, Any]] = {}
+            if len(pairs) == 1:
+                out[pairs[0]] = self._parse_quote_row(pairs[0], raw)
+            else:
+                for pair in pairs:
+                    symbol = PAIR_MAP.get(pair, pair)
+                    row = raw.get(symbol) or raw.get(pair)
+                    if row and isinstance(row, dict) and not row.get("code"):
+                        out[pair] = self._parse_quote_row(pair, row)
+            return out
         except Exception as e:
-            logger.error(f"[twelve_data] Price error: {e}")
-            return None
+            logger.error(f"[twelve_data] Batch quote error: {e}")
+            return {}
+
+    async def get_realtime_price(self, pair: str) -> Optional[Dict[str, Any]]:
+        """Single-pair convenience wrapper — prefer batch for N>1."""
+        result = await self.get_realtime_prices_batch([pair])
+        return result.get(pair)
 
     async def get_quote(self, pair: str) -> Optional[Dict[str, Any]]:
         if not self._settings.TWELVE_DATA_API_KEY:

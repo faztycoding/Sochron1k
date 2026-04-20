@@ -64,37 +64,42 @@ class PriceStream:
         logger.info("[ws_stream] Price stream stopped")
 
     async def _run_loop(self) -> None:
-        """Try WebSocket first, fallback to REST polling."""
+        """Run WebSocket + REST poll IN PARALLEL.
+
+        Free-tier Twelve Data only allows 1 symbol on WebSocket — other pairs
+        fail to subscribe but WS stays open. Without parallel REST poll, those
+        pairs would stuck at baseline forever. Parallel setup guarantees every
+        pair gets updates within <=REST_POLL_INTERVAL seconds.
+        """
         settings = get_settings()
         api_key = settings.TWELVE_DATA_API_KEY
 
-        while self._running:
-            # Try WebSocket
-            try:
-                await self._ws_connect(api_key)
-            except Exception as e:
-                logger.warning(f"[ws_stream] WebSocket failed: {e}")
+        # Prime baseline once so percent_change works from first tick
+        await self._prime_baseline()
 
-            if not self._running:
-                break
+        async def ws_task():
+            while self._running:
+                try:
+                    await self._ws_connect(api_key)
+                except Exception as e:
+                    logger.warning(f"[ws_stream] WebSocket err, reconnect in 10s: {e}")
+                    await asyncio.sleep(10)
 
-            # Fallback: REST poll every 3s (uses cache, minimal credits)
-            logger.info("[ws_stream] Falling back to REST polling")
-            try:
-                await self._rest_poll()
-            except Exception as e:
-                logger.error(f"[ws_stream] REST poll error: {e}")
-                await asyncio.sleep(5)
+        async def rest_task():
+            while self._running:
+                try:
+                    await self._rest_poll()
+                except Exception as e:
+                    logger.error(f"[ws_stream] REST poll err, retry in 5s: {e}")
+                    await asyncio.sleep(5)
+
+        await asyncio.gather(ws_task(), rest_task(), return_exceptions=True)
 
     async def _ws_connect(self, api_key: str) -> None:
         import websockets
 
         url = f"wss://ws.twelvedata.com/v1/quotes/price?apikey={api_key}"
         symbols = ",".join(TARGET_PAIRS)
-
-        # Prime baseline prices (incl. previous_close) before WS messages arrive
-        # so first WebSocket update can compute percent_change immediately
-        await self._prime_baseline()
 
         async with websockets.connect(url, ping_interval=30) as ws:
             await ws.send(json.dumps({
@@ -179,25 +184,44 @@ class PriceStream:
             logger.warning(f"[ws_stream] Baseline prime failed: {e}")
 
     async def _rest_poll(self) -> None:
+        """Poll REST every 6s for ALL pairs via batch API call.
+
+        Rate math: Twelve Data Crow-55 plan = 55 credits/min. Batch /quote
+        with 5 symbols = 5 credits. 5 × (60/6) = 50 credits/min (leaves
+        5 headroom for candle fetches, strength, etc.).
+
+        WebSocket provides sub-second updates for EUR/USD (free); this poll
+        keeps all other pairs fresh within 6 seconds.
+        """
         from app.services.price.manager import PriceManager
 
         pm = PriceManager()
         try:
             while self._running:
                 try:
-                    prices = await pm.get_realtime_prices()
-                    for pair, pdata in prices.items():
-                        prev = self._prices.get(pair, {}).get("price")
-                        pdata["source"] = "rest"
-                        self._prices[pair] = pdata
-                    # Broadcast all at once
-                    await self._broadcast({
-                        "type": "prices",
-                        "data": prices,
-                        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                    })
+                    # bypass_cache=True — always hit upstream for freshness
+                    prices = await pm.get_realtime_prices(bypass_cache=True)
+                    if prices:
+                        for pair, pdata in prices.items():
+                            pdata.setdefault("source", "rest")
+                            # Don't overwrite WebSocket's fresher EUR/USD price
+                            existing = self._prices.get(pair, {})
+                            if existing.get("source") == "websocket":
+                                # Keep WS price but refresh perf metadata
+                                existing["previous_close"] = pdata.get("previous_close", existing.get("previous_close"))
+                                existing["day_open"] = pdata.get("day_open", existing.get("day_open"))
+                                existing["day_high"] = max(pdata.get("day_high", 0), existing.get("day_high", 0))
+                                existing["day_low"] = min(pdata.get("day_low", 1e9), existing.get("day_low", 1e9))
+                            else:
+                                self._prices[pair] = pdata
+                        # Broadcast all at once
+                        await self._broadcast({
+                            "type": "prices",
+                            "data": self._prices,
+                            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                        })
                 except Exception as e:
                     logger.debug(f"[ws_stream] Poll error: {e}")
-                await asyncio.sleep(3)
+                await asyncio.sleep(6)
         finally:
             await pm.close()
