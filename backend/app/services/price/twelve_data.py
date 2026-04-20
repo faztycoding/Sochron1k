@@ -31,7 +31,7 @@ TIMEFRAME_MAP = {
 class TwelveDataService:
     BASE_URL = "https://api.twelvedata.com"
     _call_times: list = []
-    MAX_CALLS_PER_MIN = 50  # Plan is 55/min — leave 5 credits headroom for other calls
+    MAX_CALLS_PER_MIN = 54  # Plan is 55/min — leave 1 credit headroom
 
     def __init__(self):
         self._settings = get_settings()

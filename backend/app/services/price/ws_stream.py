@@ -184,44 +184,56 @@ class PriceStream:
             logger.warning(f"[ws_stream] Baseline prime failed: {e}")
 
     async def _rest_poll(self) -> None:
-        """Poll REST every 6s for ALL pairs via batch API call.
+        """Poll TwelveData batch /quote every 8s for ALL pairs.
 
-        Rate math: Twelve Data Crow-55 plan = 55 credits/min. Batch /quote
-        with 5 symbols = 5 credits. 5 × (60/6) = 50 credits/min (leaves
-        5 headroom for candle fetches, strength, etc.).
+        Rate math (Crow-55 plan, 55 credits/min budget):
+          - Batch /quote with 5 symbols = 5 credits per call
+          - Poll every 8s = 7.5 polls/min = ~38 credits/min for realtime
+          - Leaves ~17 credits/min for candle fetches (analysis page, prefetch)
 
-        WebSocket provides sub-second updates for EUR/USD (free); this poll
-        keeps all other pairs fresh within 6 seconds.
+        WebSocket gives sub-second EUR/USD updates for free; this poll
+        keeps the other 4 pairs fresh within ~8 seconds.
+
+        On rate-limit failure we DON'T call yfinance (broken on Yahoo's side)
+        — just skip the cycle and keep last broadcast prices.
         """
         from app.services.price.manager import PriceManager
 
         pm = PriceManager()
+        consecutive_empty = 0
         try:
             while self._running:
                 try:
-                    # bypass_cache=True — always hit upstream for freshness
                     prices = await pm.get_realtime_prices(bypass_cache=True)
-                    if prices:
-                        for pair, pdata in prices.items():
-                            pdata.setdefault("source", "rest")
-                            # Don't overwrite WebSocket's fresher EUR/USD price
-                            existing = self._prices.get(pair, {})
-                            if existing.get("source") == "websocket":
-                                # Keep WS price but refresh perf metadata
-                                existing["previous_close"] = pdata.get("previous_close", existing.get("previous_close"))
-                                existing["day_open"] = pdata.get("day_open", existing.get("day_open"))
-                                existing["day_high"] = max(pdata.get("day_high", 0), existing.get("day_high", 0))
-                                existing["day_low"] = min(pdata.get("day_low", 1e9), existing.get("day_low", 1e9))
-                            else:
-                                self._prices[pair] = pdata
-                        # Broadcast all at once
-                        await self._broadcast({
-                            "type": "prices",
-                            "data": self._prices,
-                            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                        })
+                    if not prices:
+                        consecutive_empty += 1
+                        if consecutive_empty == 1:
+                            logger.warning(
+                                "[ws_stream] REST poll returned empty (rate-limited?) — keeping last prices"
+                            )
+                        await asyncio.sleep(8)
+                        continue
+                    consecutive_empty = 0
+                    for pair, pdata in prices.items():
+                        pdata.setdefault("source", "rest")
+                        existing = self._prices.get(pair, {})
+                        if existing.get("source") == "websocket":
+                            # WS has fresher price — only refresh perf metadata
+                            existing["previous_close"] = pdata.get("previous_close", existing.get("previous_close"))
+                            existing["day_open"] = pdata.get("day_open", existing.get("day_open"))
+                            existing["day_high"] = max(pdata.get("day_high", 0), existing.get("day_high", 0))
+                            existing["day_low"] = min(pdata.get("day_low", 1e9), existing.get("day_low", 1e9))
+                            if pdata.get("reference_type"):
+                                existing["reference_type"] = pdata["reference_type"]
+                        else:
+                            self._prices[pair] = pdata
+                    await self._broadcast({
+                        "type": "prices",
+                        "data": self._prices,
+                        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+                    })
                 except Exception as e:
-                    logger.debug(f"[ws_stream] Poll error: {e}")
-                await asyncio.sleep(6)
+                    logger.warning(f"[ws_stream] Poll cycle error: {e}")
+                await asyncio.sleep(8)
         finally:
             await pm.close()

@@ -19,22 +19,33 @@ logger = logging.getLogger(__name__)
 
 
 async def _prefetch_candles():
-    """Background task: pre-fetch candles for all pairs/timeframes."""
+    """Background task: pre-fetch candles for all pairs/timeframes.
+
+    Rate-limit aware: waits 8s between calls so it consumes ~7 credits/min,
+    fitting inside the ~17 credits/min headroom left by the realtime poll.
+    Skips quickly if TwelveData is momentarily rate-limited — the manager
+    returns [] and we move on. Prefers higher timeframes first since they
+    feed the analysis page immediately.
+    """
     import asyncio
     from app.config import TARGET_PAIRS
-    from app.services.price.manager import PriceManager, TIMEFRAMES
+    from app.services.price.manager import PriceManager
 
-    await asyncio.sleep(3)  # wait for app to be ready
+    # Higher timeframes first — they're what analysis page hits first
+    ordered_tfs = ["1h", "4h", "1d", "15m", "5m", "1m"]
+
+    await asyncio.sleep(15)  # let realtime poll establish baseline first
     pm = PriceManager()
     try:
-        for pair in TARGET_PAIRS:
-            for tf in TIMEFRAMES:
+        for tf in ordered_tfs:
+            for pair in TARGET_PAIRS:
                 try:
                     candles = await pm.get_candles(pair, tf, 200)
-                    logger.info(f"[prefetch] {pair} {tf}: {len(candles)} candles")
+                    if candles:
+                        logger.info(f"[prefetch] {pair} {tf}: {len(candles)} candles")
                 except Exception as e:
                     logger.debug(f"[prefetch] {pair} {tf} failed: {e}")
-                await asyncio.sleep(1.5)  # respect rate limit
+                await asyncio.sleep(8)  # ~7 credits/min — leaves room for realtime poll
     finally:
         await pm.close()
     logger.info("[prefetch] Done — all timeframes cached")
