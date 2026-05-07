@@ -21,6 +21,10 @@ export const api = {
   indicators: {
     get: (pair: string, tf = "1h") =>
       fetchAPI<IndicatorSnapshot>(`/indicators/${pair.replace("/", "-")}?timeframe=${tf}`),
+    series: (pair: string, tf = "1h", limit = 200) =>
+      fetchAPI<IndicatorSeriesResponse>(
+        `/indicators/${pair.replace("/", "-")}/series?timeframe=${tf}&limit=${limit}`,
+      ),
     summary: (pair: string) =>
       fetchAPI<QuickSummary>(`/indicators/${pair.replace("/", "-")}/summary`),
     strength: () => fetchAPI<CurrencyStrength>("/indicators/strength/currencies"),
@@ -37,7 +41,76 @@ export const api = {
     list: (limit = 20) => fetchAPI<NewsListResponse>(`/news?limit=${limit}`),
     refresh: () => fetchAPI<unknown>("/news/refresh", { method: "POST" }),
   },
+  backtest: {
+    strategies: () => fetchAPI<StrategyMetadata[]>("/backtest/strategies"),
+    run: (pair: string, req: BacktestRequest) =>
+      fetchAPI<BacktestResponse>(`/backtest/${pair.replace("/", "-")}/run`, {
+        method: "POST",
+        body: JSON.stringify(req),
+      }),
+  },
 };
+
+export interface StrategyMetadata {
+  name: string;
+  display_name: string;
+  description: string;
+  default_params: Record<string, number>;
+}
+
+export interface BacktestRequest {
+  strategy: string;
+  timeframe?: string;
+  lookback?: number;
+  initial_balance?: number;
+  risk_percent?: number;
+  sl_atr_mult?: number;
+  tp_atr_mult?: number;
+  spread_pips?: number;
+  commission_pips?: number;
+  params?: Record<string, number>;
+}
+
+export interface BacktestTradeRow {
+  entry_time: string;
+  exit_time: string | null;
+  direction: "BUY" | "SELL";
+  entry_price: number;
+  exit_price: number | null;
+  sl_price: number;
+  tp_price: number;
+  lot_size: number;
+  pips: number | null;
+  pnl: number | null;
+  reason_in: string;
+  reason_out: string;
+}
+
+export interface BacktestResponse {
+  pair: string;
+  timeframe: string;
+  strategy: string;
+  params: Record<string, number>;
+  initial_balance: number;
+  final_balance: number;
+  total_return_pct: number;
+  total_trades: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+  avg_win_pips: number;
+  avg_loss_pips: number;
+  profit_factor: number;
+  max_drawdown_pct: number;
+  sharpe: number;
+  sortino: number;
+  total_pips: number;
+  equity_curve: { time: string; equity: number }[];
+  trades: BacktestTradeRow[];
+  start: string;
+  end: string;
+  candle_count: number;
+}
 
 // Types
 export interface PricesResponse {
@@ -91,6 +164,27 @@ export interface CandleData {
   low: number;
   close: number;
   volume: number;
+}
+
+export interface IndicatorSeriesResponse {
+  pair: string;
+  timeframe: string;
+  count: number;
+  candles: CandleData[];
+  ema_9: (number | null)[];
+  ema_21: (number | null)[];
+  ema_50: (number | null)[];
+  ema_200: (number | null)[];
+  sma_50: (number | null)[];
+  sma_200: (number | null)[];
+  bb_upper: (number | null)[];
+  bb_middle: (number | null)[];
+  bb_lower: (number | null)[];
+  rsi: (number | null)[];
+  macd_line: (number | null)[];
+  macd_signal: (number | null)[];
+  macd_hist: (number | null)[];
+  atr: (number | null)[];
 }
 
 export interface IndicatorSnapshot {

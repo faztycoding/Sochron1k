@@ -42,6 +42,41 @@ async def get_indicators(
         await engine.close()
 
 
+@router.get("/{pair}/series", summary="ชุดข้อมูลอินดิเคเตอร์ต่อแท่ง (สำหรับวาดกราฟ)")
+async def get_indicator_series(
+    pair: str,
+    timeframe: str = Query("1h"),
+    limit: int = Query(200, ge=30, le=1000),
+) -> Dict[str, Any]:
+    """คืน EMA/BB/RSI/MACD/ATR อันละ 1 ค่าต่อแท่งเทียน เพื่อใช้ overlay บนกราฟ"""
+    pair = pair.upper().replace("-", "/")
+    if pair not in TARGET_PAIRS:
+        raise HTTPException(status_code=400, detail=f"คู่เงินที่รองรับ: {TARGET_PAIRS}")
+    if timeframe not in VALID_TIMEFRAMES:
+        raise HTTPException(status_code=400, detail=f"Timeframe ที่รองรับ: {VALID_TIMEFRAMES}")
+
+    from app.services.price.manager import PriceManager
+    from app.services.indicators.series import compute_series
+
+    pm = PriceManager()
+    try:
+        raw = await pm.get_candles(pair, timeframe, limit)
+        if not raw:
+            raise HTTPException(status_code=404, detail=f"ไม่พบแท่งเทียน {pair} {timeframe}")
+        candles = sorted(raw, key=lambda c: c.get("open_time", ""))
+        series = compute_series(candles)
+        series["pair"] = pair
+        series["timeframe"] = timeframe
+        return series
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[indicators/series] Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await pm.close()
+
+
 @router.get("/{pair}/summary", summary="สรุปสัญญาณเร็วสำหรับคู่เงิน")
 async def get_quick_summary(pair: str) -> Dict[str, Any]:
     pair = pair.upper().replace("-", "/")

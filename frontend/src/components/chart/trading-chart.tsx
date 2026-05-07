@@ -3,15 +3,38 @@
 import { useEffect, useRef, useState } from "react";
 import type { CandleData } from "@/lib/api";
 
+export interface IndicatorSeriesData {
+  candles?: CandleData[];
+  ema_9?: (number | null)[];
+  ema_21?: (number | null)[];
+  ema_50?: (number | null)[];
+  ema_200?: (number | null)[];
+  bb_upper?: (number | null)[];
+  bb_middle?: (number | null)[];
+  bb_lower?: (number | null)[];
+}
+
+export interface IndicatorToggles {
+  ema?: boolean;   // shows EMA 9/21/50
+  bb?: boolean;    // shows Bollinger Bands
+}
+
 interface TradingChartProps {
   candles: CandleData[];
   pair: string;
-  emaData?: { ema_9?: number; ema_21?: number; ema_50?: number };
-  bbData?: { bb_upper?: number; bb_middle?: number; bb_lower?: number };
+  /** optional per-candle indicator series aligned to `candles` */
+  series?: IndicatorSeriesData | null;
+  toggles?: IndicatorToggles;
   height?: number;
 }
 
-export function TradingChart({ candles, pair, emaData, bbData, height = 400 }: TradingChartProps) {
+export function TradingChart({
+  candles,
+  pair,
+  series,
+  toggles,
+  height = 400,
+}: TradingChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof import("lightweight-charts").createChart> | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -100,6 +123,83 @@ export function TradingChart({ candles, pair, emaData, bbData, height = 400 }: T
           .sort((a, b) => (a.time as number) - (b.time as number))
       );
 
+      // ───────── Indicator overlays ─────────
+      // `series` has arrays aligned to `candles` (both sorted oldest→newest).
+      // We build overlay points by zipping values with candle timestamps.
+      const withSeries = (arr: (number | null)[] | undefined) => {
+        if (!arr || arr.length === 0) return [];
+        const out: { time: import("lightweight-charts").UTCTimestamp; value: number }[] = [];
+        const sortedCandles = [...candles].sort((a, b) => a.open_time.localeCompare(b.open_time));
+        const limit = Math.min(arr.length, sortedCandles.length);
+        for (let i = 0; i < limit; i++) {
+          const v = arr[i];
+          if (v == null || Number.isNaN(v)) continue;
+          out.push({
+            time: (new Date(sortedCandles[i].open_time).getTime() / 1000) as import("lightweight-charts").UTCTimestamp,
+            value: v,
+          });
+        }
+        return out;
+      };
+
+      if (series && toggles?.ema) {
+        const emaSpecs: { data?: (number | null)[]; color: string; title: string; width: 1 | 2 | 3 | 4 }[] = [
+          { data: series.ema_9, color: "#22d3ee", title: "EMA 9", width: 2 },
+          { data: series.ema_21, color: "#f59e0b", title: "EMA 21", width: 2 },
+          { data: series.ema_50, color: "#a855f7", title: "EMA 50", width: 2 },
+        ];
+        for (const spec of emaSpecs) {
+          const data = withSeries(spec.data);
+          if (data.length === 0) continue;
+          const line = chart.addLineSeries({
+            color: spec.color,
+            lineWidth: spec.width,
+            priceLineVisible: false,
+            lastValueVisible: true,
+            title: spec.title,
+          });
+          line.setData(data);
+        }
+      }
+
+      if (series && toggles?.bb) {
+        const bbUpper = withSeries(series.bb_upper);
+        const bbMid = withSeries(series.bb_middle);
+        const bbLower = withSeries(series.bb_lower);
+        if (bbUpper.length) {
+          const upper = chart.addLineSeries({
+            color: "rgba(148, 163, 184, 0.7)",
+            lineWidth: 1,
+            lineStyle: 2,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            title: "BB Upper",
+          });
+          upper.setData(bbUpper);
+        }
+        if (bbMid.length) {
+          const mid = chart.addLineSeries({
+            color: "rgba(148, 163, 184, 0.5)",
+            lineWidth: 1,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            title: "BB Mid",
+          });
+          mid.setData(bbMid);
+        }
+        if (bbLower.length) {
+          const lower = chart.addLineSeries({
+            color: "rgba(148, 163, 184, 0.7)",
+            lineWidth: 1,
+            lineStyle: 2,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            title: "BB Lower",
+          });
+          lower.setData(bbLower);
+        }
+      }
+
       chart.timeScale().fitContent();
 
       // Resize
@@ -124,7 +224,7 @@ export function TradingChart({ candles, pair, emaData, bbData, height = 400 }: T
         chartRef.current = null;
       }
     };
-  }, [candles, height]);
+  }, [candles, height, series, toggles?.ema, toggles?.bb]);
 
   return (
     <div className="relative rounded-xl overflow-hidden border border-border bg-bg-dark">

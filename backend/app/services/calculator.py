@@ -4,15 +4,52 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-PIP_VALUES = {
-    "EUR/USD": {"pip_size": 0.0001, "pip_value_per_lot": 10.0},
-    "USD/JPY": {"pip_size": 0.01, "pip_value_per_lot": 1000 / 150},
-    "EUR/JPY": {"pip_size": 0.01, "pip_value_per_lot": 1000 / 150},
+# Default FX rates — used when client doesn't supply fx_rate_to_usd.
+# In production the frontend should pull the live rate (/price/realtime for
+# USDJPY, plus a THB rate from a cached endpoint).
+DEFAULT_FX_TO_USD = {
+    "USD": 1.0,
+    "THB": 1.0 / 36.0,   # ~36 THB per USD (conservative; overridable)
+    "EUR": 1.08,
+    "GBP": 1.26,
+    "JPY": 1.0 / 150.0,
+}
+
+# pip_size is fixed per quote currency. pip_value_per_lot in USD depends on
+# the current USD/JPY rate for JPY-quoted pairs — caller can override.
+PIP_SIZES = {
+    "EUR/USD": 0.0001,
+    "GBP/USD": 0.0001,
+    "AUD/USD": 0.0001,
+    "USD/JPY": 0.01,
+    "EUR/JPY": 0.01,
+    "GBP/JPY": 0.01,
 }
 
 
-def get_pip_info(pair: str) -> Dict[str, float]:
-    return PIP_VALUES.get(pair, {"pip_size": 0.0001, "pip_value_per_lot": 10.0})
+def _pip_size(pair: str) -> float:
+    return PIP_SIZES.get(pair, 0.01 if "JPY" in pair else 0.0001)
+
+
+def _pip_value_per_lot_usd(pair: str, usd_jpy_rate: float = 150.0) -> float:
+    """USD value of 1 pip on 1 standard lot (100k units).
+
+    - USD-quoted pairs (EUR/USD, GBP/USD, AUD/USD): always exactly $10/pip
+    - JPY-quoted pairs: ¥1000 / current USDJPY rate
+    """
+    if pair.endswith("/USD"):
+        return 10.0
+    if pair.endswith("/JPY"):
+        return 1000.0 / max(usd_jpy_rate, 1.0)
+    # Fallback for unsupported pairs
+    return 10.0
+
+
+def get_pip_info(pair: str, usd_jpy_rate: float = 150.0) -> Dict[str, float]:
+    return {
+        "pip_size": _pip_size(pair),
+        "pip_value_per_lot": _pip_value_per_lot_usd(pair, usd_jpy_rate),
+    }
 
 
 def price_to_pips(pair: str, price_diff: float) -> float:
@@ -35,8 +72,16 @@ def calculate_position(
     tp_price: Optional[float] = None,
     sl_pips: Optional[float] = None,
     tp_pips: Optional[float] = None,
+    account_currency: str = "USD",
+    fx_rate_to_usd: Optional[float] = None,
+    usd_jpy_rate: float = 150.0,
 ) -> Dict[str, Any]:
-    info = get_pip_info(pair)
+    # Normalize currency/rate
+    ccy = account_currency.upper()
+    rate = fx_rate_to_usd if fx_rate_to_usd and fx_rate_to_usd > 0 else DEFAULT_FX_TO_USD.get(ccy, 1.0)
+    balance_usd = account_balance * rate
+
+    info = get_pip_info(pair, usd_jpy_rate)
     warnings: List[str] = []
 
     # Determine SL
@@ -75,14 +120,20 @@ def calculate_position(
         else:
             tp_price = entry_price - pips_to_price(pair, tp_pips_calc)
 
-    # Risk
-    risk_amount = account_balance * (risk_percent / 100)
+    # Risk — compute in USD (pip values are USD-denominated).
+    # Lot size uses the USD-equivalent balance so all currencies see equal risk.
+    risk_amount_usd = balance_usd * (risk_percent / 100)
     pip_value = info["pip_value_per_lot"]
-    lot_size = risk_amount / (sl_pips_calc * pip_value) if sl_pips_calc > 0 else 0.01
+    lot_size = risk_amount_usd / (sl_pips_calc * pip_value) if sl_pips_calc > 0 else 0.01
     lot_size = round(max(0.01, lot_size), 2)
 
-    # Potential profit
-    potential_profit = tp_pips_calc * pip_value * lot_size
+    # Potential profit in USD
+    potential_profit_usd = tp_pips_calc * pip_value * lot_size
+
+    # Convert back to account currency for display
+    # (rate is "1 ccy unit = X USD" → divide USD by rate to get ccy amount)
+    risk_amount_local = risk_amount_usd / rate if rate > 0 else risk_amount_usd
+    potential_profit_local = potential_profit_usd / rate if rate > 0 else potential_profit_usd
 
     # R:R
     risk_reward = round(tp_pips_calc / sl_pips_calc, 2) if sl_pips_calc > 0 else 0
@@ -96,8 +147,10 @@ def calculate_position(
         warnings.append("⚠️ SL กว้างมาก (>100 pips) — ทบทวน position size")
     if risk_reward < 1.5:
         warnings.append("⚠️ R:R ต่ำ (<1.5) — แนะนำ R:R >= 2.0")
-    if lot_size > 1.0 and account_balance < 10000:
+    if lot_size > 1.0 and balance_usd < 10000:
         warnings.append("⚠️ Lot size สูงเมื่อเทียบกับทุน — ระวัง margin call")
+    if balance_usd < 100:
+        warnings.append(f"⚠️ ทุน < $100 USD ({account_balance:.0f} {ccy}) — ใช้บัญชี Cent/Micro")
 
     return {
         "pair": pair,
@@ -108,11 +161,16 @@ def calculate_position(
         "sl_pips": round(sl_pips_calc, 1),
         "tp_pips": round(tp_pips_calc, 1),
         "lot_size": lot_size,
-        "risk_amount": round(risk_amount, 2),
-        "potential_profit": round(potential_profit, 2),
+        "risk_amount": round(risk_amount_usd, 2),
+        "potential_profit": round(potential_profit_usd, 2),
         "risk_reward": risk_reward,
         "pip_value": round(pip_value, 4),
         "warnings": warnings,
+        "account_currency": ccy,
+        "fx_rate_to_usd": round(rate, 6),
+        "risk_amount_local": round(risk_amount_local, 2),
+        "potential_profit_local": round(potential_profit_local, 2),
+        "balance_usd": round(balance_usd, 2),
     }
 
 

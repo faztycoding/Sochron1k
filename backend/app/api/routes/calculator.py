@@ -18,6 +18,20 @@ async def calculate(req: CalculateRequest) -> Dict[str, Any]:
     if pair not in TARGET_PAIRS:
         raise HTTPException(400, f"คู่เงินที่รองรับ: {TARGET_PAIRS}")
 
+    # Use live USD/JPY rate for JPY-pair pip value if available
+    usd_jpy_rate = 150.0
+    try:
+        from app.services.price.manager import PriceManager
+        pm = PriceManager()
+        try:
+            prices = await pm.get_realtime_prices()
+            if "USD/JPY" in prices and prices["USD/JPY"].get("price"):
+                usd_jpy_rate = float(prices["USD/JPY"]["price"])
+        finally:
+            await pm.close()
+    except Exception as e:
+        logger.debug(f"[calc] Could not fetch USDJPY rate, using default: {e}")
+
     return calculate_position(
         pair=pair,
         direction=req.direction,
@@ -28,6 +42,9 @@ async def calculate(req: CalculateRequest) -> Dict[str, Any]:
         tp_price=req.tp_price,
         sl_pips=req.sl_pips,
         tp_pips=req.tp_pips,
+        account_currency=req.account_currency,
+        fx_rate_to_usd=req.fx_rate_to_usd,
+        usd_jpy_rate=usd_jpy_rate,
     )
 
 

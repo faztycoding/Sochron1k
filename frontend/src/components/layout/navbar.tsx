@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, Newspaper, Calculator, TrendingUp, Activity, BookOpen, Trophy } from "lucide-react";
+import { BarChart3, Newspaper, Calculator, TrendingUp, Activity, BookOpen, Trophy, FlaskConical } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/", label: "แดชบอร์ด", icon: BarChart3 },
   { href: "/analysis", label: "วิเคราะห์", icon: TrendingUp },
   { href: "/news", label: "ข่าว", icon: Newspaper },
+  { href: "/backtest", label: "Backtest", icon: FlaskConical },
   { href: "/calculator", label: "คำนวณ", icon: Calculator },
   { href: "/journal", label: "บันทึก", icon: BookOpen },
   { href: "/stats", label: "สถิติ", icon: Trophy },

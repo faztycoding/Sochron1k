@@ -16,6 +16,15 @@ class CalculateRequest(BaseModel):
     tp_price: Optional[float] = None
     sl_pips: Optional[float] = None
     tp_pips: Optional[float] = None
+    # Currency support: USD is base; THB / EUR / GBP / JPY accepted.
+    # fx_rate_to_usd = 1 unit of account currency in USD.
+    # e.g. for THB: 0.028 (~36 THB per USD → rate is 1/36)
+    account_currency: str = Field("USD", pattern="^(USD|THB|EUR|GBP|JPY)$")
+    fx_rate_to_usd: Optional[float] = Field(
+        None,
+        gt=0,
+        description="1 หน่วยของ account_currency = ? USD (ปล่อยว่างให้ใช้ค่า default)",
+    )
 
 
 class CalculateResponse(BaseModel):
@@ -27,11 +36,17 @@ class CalculateResponse(BaseModel):
     sl_pips: float
     tp_pips: float
     lot_size: float
-    risk_amount: float
-    potential_profit: float
+    risk_amount: float             # in USD
+    potential_profit: float        # in USD
     risk_reward: float
     pip_value: float
     warnings: List[str] = []
+    # New — account-currency display fields
+    account_currency: str = "USD"
+    fx_rate_to_usd: float = 1.0
+    risk_amount_local: float = 0.0          # risk in account currency
+    potential_profit_local: float = 0.0     # profit in account currency
+    balance_usd: float = 0.0                # what the USD-equivalent account sees
 
 
 class AutoSLTPRequest(BaseModel):

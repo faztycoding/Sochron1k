@@ -42,9 +42,9 @@ class PriceManager:
         timeframe: str = "1h",
         limit: int = 500,
     ) -> List[Dict[str, Any]]:
-        # 1. Try Redis cache first (check freshness)
+        # 1. Try Redis cache first (check freshness + sufficient history)
         cached = await self._get_cached_candles(pair, timeframe)
-        if cached and len(cached) >= min(limit, 50):
+        if cached:
             # Verify cache is recent (not stale data from hours ago)
             try:
                 from datetime import datetime, timezone, timedelta
@@ -59,8 +59,10 @@ class PriceManager:
             except Exception:
                 pass
 
-        if cached and len(cached) >= min(limit, 50):
-            logger.info(f"[price] Cache hit: {pair} {timeframe} ({len(cached)} candles)")
+        # Only use cache if it has AT LEAST what the caller requested. Otherwise
+        # fall through to the API (caller asked for more history than we saved).
+        if cached and len(cached) >= limit:
+            logger.info(f"[price] Cache hit: {pair} {timeframe} ({len(cached)} candles, wanted {limit})")
             return cached[:limit]
 
         # 2. Twelve Data (primary)
@@ -191,10 +193,12 @@ class PriceManager:
         try:
             r = await _get_redis()
             key = f"candles:{pair}:{timeframe}"
+            # Cache up to 1000 candles so backtest has enough history;
+            # clients that need less just slice cached[:limit] on read.
             await r.setex(
                 key,
                 self._cache_ttl(timeframe),
-                json.dumps(candles[-200:], default=str),
+                json.dumps(candles[-1000:], default=str),
             )
         except Exception as e:
             logger.debug(f"[price] Cache write error: {e}")

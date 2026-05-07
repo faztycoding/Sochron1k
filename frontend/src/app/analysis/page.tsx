@@ -1,32 +1,49 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { BarChart3, LineChart, RefreshCw, Shield, Zap } from "lucide-react";
+import { Activity, BarChart3, LineChart, RefreshCw, Shield, TrendingUp, Waves, Zap } from "lucide-react";
 
 import { api } from "@/lib/api";
-import type { AnalysisResult, CandleData, IndicatorSnapshot } from "@/lib/api";
+import type { AnalysisResult, CandleData, IndicatorSeriesResponse, IndicatorSnapshot } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { TradingChart } from "@/components/chart/trading-chart";
+import { OscillatorPane } from "@/components/chart/oscillator-pane";
 import { TradingViewWidget } from "@/components/chart/tradingview-widget";
 import { PairQuoteCard } from "@/components/chart/pair-quote-card";
 import { PAIRS, TIMEFRAMES } from "@/lib/constants";
+
+type OverlayKey = "ema" | "bb" | "rsi" | "macd";
 
 export default function AnalysisPage() {
   const [pair, setPair] = useState("EUR/USD");
   const [timeframe, setTimeframe] = useState("1h");
   const [candles, setCandles] = useState<CandleData[]>([]);
+  const [series, setSeries] = useState<IndicatorSeriesResponse | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [indicators, setIndicators] = useState<IndicatorSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [chartMode, setChartMode] = useState<"pro" | "analysis">("pro");
+  const [overlays, setOverlays] = useState<Record<OverlayKey, boolean>>({
+    ema: true,
+    bb: false,
+    rsi: true,
+    macd: false,
+  });
+
+  const toggleOverlay = (key: OverlayKey) =>
+    setOverlays((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // Load candles first (fast)
-      const candleRes = await api.prices.candles(pair, timeframe).catch(() => null);
-      if (candleRes) setCandles(candleRes.candles);
+      // Parallel: candles + indicator series (both cheap)
+      const [candleRes, seriesRes] = await Promise.allSettled([
+        api.prices.candles(pair, timeframe),
+        api.indicators.series(pair, timeframe, 200),
+      ]);
+      if (candleRes.status === "fulfilled") setCandles(candleRes.value.candles);
+      if (seriesRes.status === "fulfilled") setSeries(seriesRes.value);
 
       // Then analysis + indicators sequentially
       const analysisRes = await api.analysis.run(pair, timeframe).catch(() => null);
@@ -135,7 +152,63 @@ export default function AnalysisPage() {
         {chartMode === "pro" ? (
           <TradingViewWidget pair={pair} timeframe={timeframe} height={520} />
         ) : (
-          <TradingChart candles={candles} pair={pair} height={450} />
+          <div className="flex flex-col gap-3">
+            {/* Indicator toggle bar */}
+            <div className="flex flex-wrap gap-2">
+              <OverlayToggle
+                active={overlays.ema}
+                onClick={() => toggleOverlay("ema")}
+                icon={<TrendingUp className="w-3.5 h-3.5" />}
+                label="EMA 9/21/50"
+              />
+              <OverlayToggle
+                active={overlays.bb}
+                onClick={() => toggleOverlay("bb")}
+                icon={<Waves className="w-3.5 h-3.5" />}
+                label="Bollinger Bands"
+              />
+              <OverlayToggle
+                active={overlays.rsi}
+                onClick={() => toggleOverlay("rsi")}
+                icon={<Activity className="w-3.5 h-3.5" />}
+                label="RSI"
+              />
+              <OverlayToggle
+                active={overlays.macd}
+                onClick={() => toggleOverlay("macd")}
+                icon={<LineChart className="w-3.5 h-3.5" />}
+                label="MACD"
+              />
+            </div>
+
+            <TradingChart
+              candles={candles}
+              pair={pair}
+              series={series}
+              toggles={{ ema: overlays.ema, bb: overlays.bb }}
+              height={450}
+            />
+
+            {overlays.rsi && series && (
+              <OscillatorPane
+                candles={candles}
+                rsi={series.rsi}
+                type="rsi"
+                height={140}
+              />
+            )}
+
+            {overlays.macd && series && (
+              <OscillatorPane
+                candles={candles}
+                macdLine={series.macd_line}
+                macdSignal={series.macd_signal}
+                macdHist={series.macd_hist}
+                type="macd"
+                height={140}
+              />
+            )}
+          </div>
         )}
       </div>
 
@@ -320,5 +393,31 @@ export default function AnalysisPage() {
         </Card>
       </div>
     </main>
+  );
+}
+
+function OverlayToggle({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+        active
+          ? "bg-primary-600/25 text-primary-300 border border-primary-500/40"
+          : "bg-bg-surface text-text-muted hover:text-text-primary hover:bg-bg-elevated border border-transparent"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }

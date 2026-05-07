@@ -5,15 +5,24 @@ import Link from "next/link";
 import { ArrowLeft, Calculator, Sparkles, AlertTriangle } from "lucide-react";
 
 import { tradeApi } from "@/lib/api-trade";
-import type { CalculateResult, AutoSLTPResult } from "@/lib/api-trade";
+import type { CalculateResult, AutoSLTPResult, AccountCurrency } from "@/lib/api-trade";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PAIRS } from "@/lib/constants";
 
+const CURRENCIES: { code: AccountCurrency; symbol: string; label: string }[] = [
+  { code: "THB", symbol: "฿", label: "บาท" },
+  { code: "USD", symbol: "$", label: "ดอลลาร์" },
+  { code: "EUR", symbol: "€", label: "ยูโร" },
+  { code: "GBP", symbol: "£", label: "ปอนด์" },
+  { code: "JPY", symbol: "¥", label: "เยน" },
+];
+
 export default function CalculatorPage() {
   const [pair, setPair] = useState("EUR/USD");
   const [direction, setDirection] = useState<"BUY" | "SELL">("BUY");
-  const [balance, setBalance] = useState("1000");
+  const [currency, setCurrency] = useState<AccountCurrency>("THB");
+  const [balance, setBalance] = useState("30000");
   const [riskPct, setRiskPct] = useState("2");
   const [entryPrice, setEntryPrice] = useState("");
   const [slPrice, setSlPrice] = useState("");
@@ -22,6 +31,8 @@ export default function CalculatorPage() {
   const [autoResult, setAutoResult] = useState<AutoSLTPResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const currencySymbol = CURRENCIES.find((c) => c.code === currency)?.symbol ?? "$";
 
   const handleCalculate = async () => {
     if (!entryPrice) { setError("กรุณาใส่ราคา Entry"); return; }
@@ -36,6 +47,7 @@ export default function CalculatorPage() {
         entry_price: parseFloat(entryPrice),
         sl_price: slPrice ? parseFloat(slPrice) : undefined,
         tp_price: tpPrice ? parseFloat(tpPrice) : undefined,
+        account_currency: currency,
       });
       setResult(res);
       setAutoResult(null);
@@ -130,10 +142,32 @@ export default function CalculatorPage() {
               </div>
             </div>
 
+            {/* Currency */}
+            <div>
+              <label className="text-xs text-text-muted mb-1 block">สกุลเงินบัญชี</label>
+              <div className="grid grid-cols-5 gap-1 p-1 rounded-xl bg-bg-surface">
+                {CURRENCIES.map((c) => (
+                  <button
+                    key={c.code}
+                    onClick={() => setCurrency(c.code)}
+                    className={`py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      currency === c.code
+                        ? "bg-primary-600 text-white"
+                        : "text-text-secondary hover:bg-bg-elevated"
+                    }`}
+                  >
+                    {c.symbol} {c.code}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Balance + Risk */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-text-muted mb-1 block">ทุน ($)</label>
+                <label className="text-xs text-text-muted mb-1 block">
+                  ทุน ({currencySymbol} {currency})
+                </label>
                 <input
                   type="number"
                   value={balance}
@@ -264,8 +298,6 @@ export default function CalculatorPage() {
                   ["SL", fmt(result.sl_price), `${result.sl_pips} pips`],
                   ["TP", fmt(result.tp_price), `${result.tp_pips} pips`],
                   ["Lot Size", String(result.lot_size), "lots"],
-                  ["ความเสี่ยง", `$${result.risk_amount}`, ""],
-                  ["กำไรเป้า", `$${result.potential_profit}`, ""],
                 ].map(([label, value, sub]) => (
                   <div key={label} className="p-3 rounded-xl bg-bg-surface">
                     <span className="text-text-muted block text-xs">{label}</span>
@@ -274,6 +306,39 @@ export default function CalculatorPage() {
                   </div>
                 ))}
               </div>
+
+              {/* Risk / Profit in account currency */}
+              <div className="grid grid-cols-2 gap-2 text-sm mt-1">
+                <div className="p-3 rounded-xl bg-sell/10 border border-sell/20">
+                  <span className="text-sell/80 block text-xs">ความเสี่ยงต่อเทรด</span>
+                  <span className="font-mono font-semibold text-sell">
+                    {currencySymbol}{result.risk_amount_local.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </span>
+                  {result.account_currency !== "USD" && (
+                    <span className="text-[10px] text-text-muted ml-1">
+                      (${result.risk_amount.toFixed(2)})
+                    </span>
+                  )}
+                </div>
+                <div className="p-3 rounded-xl bg-buy/10 border border-buy/20">
+                  <span className="text-buy/80 block text-xs">กำไรเป้า</span>
+                  <span className="font-mono font-semibold text-buy">
+                    {currencySymbol}{result.potential_profit_local.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </span>
+                  {result.account_currency !== "USD" && (
+                    <span className="text-[10px] text-text-muted ml-1">
+                      (${result.potential_profit.toFixed(2)})
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {result.account_currency !== "USD" && (
+                <div className="text-[10px] text-text-muted text-center">
+                  ทุน {currencySymbol}{parseFloat(balance).toLocaleString()} ≈ ${result.balance_usd.toFixed(2)} USD
+                  {" · "}อัตราแลก 1 {result.account_currency} = ${result.fx_rate_to_usd.toFixed(4)}
+                </div>
+              )}
 
               {result.warnings.length > 0 && (
                 <div className="flex flex-col gap-1.5 mt-2">

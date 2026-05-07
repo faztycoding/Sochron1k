@@ -21,12 +21,20 @@ export interface CalculateResult {
   sl_pips: number;
   tp_pips: number;
   lot_size: number;
-  risk_amount: number;
-  potential_profit: number;
+  risk_amount: number;           // USD
+  potential_profit: number;      // USD
   risk_reward: number;
   pip_value: number;
   warnings: string[];
+  // Account currency display fields (NEW)
+  account_currency: string;
+  fx_rate_to_usd: number;
+  risk_amount_local: number;
+  potential_profit_local: number;
+  balance_usd: number;
 }
+
+export type AccountCurrency = "USD" | "THB" | "EUR" | "GBP" | "JPY";
 
 export interface AutoSLTPResult {
   pair: string;
@@ -117,6 +125,8 @@ export const tradeApi = {
     tp_price?: number;
     sl_pips?: number;
     tp_pips?: number;
+    account_currency?: AccountCurrency;
+    fx_rate_to_usd?: number;
   }) => fetchAPI<CalculateResult>("/calculate", { method: "POST", body: JSON.stringify(data) }),
 
   autoSL: (data: { pair: string; direction: string; entry_price: number; timeframe?: string }) =>
