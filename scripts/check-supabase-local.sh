@@ -23,5 +23,6 @@ npm exec supabase -- db reset --local --no-seed --network-id sochron1k_supabase_
 npm exec supabase -- db lint --local --schema public --level warning --fail-on error --network-id sochron1k_supabase_local
 npm exec supabase -- db advisors --local --type all --level info --fail-on error --network-id sochron1k_supabase_local
 npm exec supabase -- test db --local supabase/tests --network-id sochron1k_supabase_local
+"${SOCHRON_PYTHON:-.venv/bin/python}" scripts/check-supabase-rls-mutation.py
 
 printf 'PASS SCN-002 local migration, lint, advisors, and pgTAP verification on Node.js %s\n' "$expected_node"

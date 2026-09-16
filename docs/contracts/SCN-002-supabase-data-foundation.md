@@ -8,7 +8,7 @@
 | Version | 1.0 |
 | Owner | Project owner; technical implementer not yet named |
 | Parent project | Sochron1k |
-| Current state | Local migration, lint, advisors and 16 pgTAP checks pass; full data/auth acceptance remains partial and remote deployment is not authorized |
+| Current state | Local migration, lint, advisors and 272 pgTAP checks pass, including every-table SQL role isolation; full data/Auth acceptance remains partial and remote deployment is not authorized |
 | Done scope | Reproducible local schema, owner isolation, and database tests; hosted deployment is a separate state |
 | Risk tier | High assurance |
 | Evidence base | Blueprint v1.1 section 15, architecture and risk register at revision `f4e3437` |
@@ -45,6 +45,8 @@ Given a clean compatible local Supabase stack, when migrations are applied from 
 
 Given two authenticated owners and an anonymous request, when each reads synchronized history, then each owner sees only their own rows, anonymous access returns no rows or permission denied, and authenticated clients cannot insert, update, or delete operational records directly.
 
+The database fixture must populate all 17 in-scope tables for both owners and prove the fixture is nonempty before switching roles. Check exact visible owner sets for both owners, an authenticated owner with no rows, and a missing subject. Attempt anonymous reads and insert/update/delete as each browser role on every table, requiring permission denial. Test helpers must be transaction-local and security-invoker; all fixtures roll back. A transaction-local mutation that changes one SELECT policy to allow all owners must make the verifier fail, and the restored policy must pass again. These checks prove the SQL role boundary, not HTTP JWT verification or application Auth wiring.
+
 ### AC-03 Evidence integrity
 
 Given a decision, broker event, or risk event, when it is stored, then monetary values are exact numeric values in the recorded account currency, external identifiers remain lossless, UTC event and received times are present, and constraints reject impossible time ordering or malformed states.
@@ -70,15 +72,17 @@ Given repository and generated configuration scans, then no project reference, d
 | Acceptance | Verifier required before implementation is complete | Current result |
 | --- | --- | --- |
 | AC-01 | `supabase db reset --local` from a clean local stack plus schema assertions | PASS locally: initial migration applies from zero and 17-table/RLS assertions pass on PostgreSQL 17.6 |
-| AC-02 | pgTAP anonymous, same-owner, cross-owner, and write-denial fixtures | PARTIAL, not PASS - all-table grant checks and two-owner accounts fixtures pass; every-table row fixtures and API/Auth integration remain |
+| AC-02 | pgTAP anonymous, same-owner, cross-owner, and write-denial fixtures | PASS at the local SQL role boundary: nonempty two-owner fixtures on all 17 tables, missing/empty owner reads, anonymous reads, and insert/update/delete denial. A permissive-policy mutation is detected. HTTP JWT verification and API/Auth integration remain unverified |
 | AC-03 | pgTAP constraint and type assertions with invalid fixtures | PARTIAL, not PASS - account numeric/Demo and AI cost/currency positive/negative fixtures pass; remaining integrity/immutability cases are unverified |
 | AC-04 | Schema review and architecture fitness check for forbidden authority | PARTIAL, not PASS - static checks deny privileged functions and browser writes; application integration does not exist |
-| AC-05 | Pinned CLI reset, lint, advisors, and `supabase test db` | PASS locally: reset, lint, advisors (INFO unused indexes, no errors), 16 pgTAP checks; NOTESTS failure corrected with read-only fixture mount |
+| AC-05 | Pinned CLI reset, lint, advisors, and `supabase test db` | PASS locally: reset, lint, advisors (INFO unused indexes, no errors), 272 pgTAP checks plus mutation/restoration verification; NOTESTS failure corrected with read-only fixture mount |
 | AC-06 | Repository secret scan plus CLI link-status inspection | PARTIAL, not PASS - repository scan passes and no local project reference exists; no hosted environment has been inspected |
 
 No row can change to `PASS` without the exact source revision, CLI and database versions, environment identity, expected and observed result, and retained verifier output.
 
 Local candidate evidence (17 September 2026 Asia/Bangkok): base `55723ab` plus the saved setup diff; CLI 2.117.0, PostgreSQL 17.6, Docker 29.5.2 arm64. Command: `SOCHRON_ALLOW_LOCAL_DB_RESET=sochron1k bash scripts/with-local-docker.sh npx -y -p node@24.21.0 npm run check:db:local`. Retained output: `output/verification/scn-002-local.log`. Exact saved candidate is rechecked before delivery. Startup/cleanup and known limits are in [the local database runbook](../operations/local-supabase.md).
+
+The expanded owner-isolation verifier and coverage are recorded in [SCN-002 owner-isolation evidence](../verification/SCN-002-owner-isolation.md). This supersedes the earlier account-only fixture scope, not the remaining integrity or application-integration limitations.
 
 ## Authorization
 
