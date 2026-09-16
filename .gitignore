@@ -43,6 +43,7 @@ logs/
 # Local QA intermediates
 tmp/
 output/
+.playwright-cli/
 .DS_Store
 .env
 .venv/

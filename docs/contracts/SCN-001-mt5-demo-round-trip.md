@@ -5,13 +5,13 @@
 | Field | Value |
 | --- | --- |
 | ID | SCN-001 |
-| Version | 1.0 |
+| Version | 1.1 |
 | Owner | Project owner; technical implementer not yet named |
 | Parent project | Sochron1k |
 | Current state | Local safety core implemented and under verification; BLOCKED for a real Demo send pending the MT5 adapter, owner inputs, credentials, and explicit target authorization |
 | Done scope | Implementation verified first, then Demo operation verified as a separate gate |
 | Risk tier | High assurance |
-| Evidence base | Blueprint v1.1 and repository base revision `776859c` |
+| Evidence base | Blueprint v1.1 and repository base revisions `776859c`, `e9a1972` |
 
 ## Goal and user outcome
 
@@ -19,7 +19,7 @@ Prove the first end-to-end execution slice: read XAU/USD Demo market and contrac
 
 ## Current behavior
 
-The repository contains a pinned Python runtime contract, FastAPI health boundary, Pydantic execution schemas, deterministic risk sizing, SQLite WAL command journal, isolated executor simulator, and targeted pytest/Hypothesis checks. The web application, worker, Supabase schema, MQL5 EA, real MT5 adapter, deployment manifests, and target-host evidence are not implemented. No Demo operation has been attempted or authorized by this contract alone.
+The repository contains a pinned Python runtime contract, FastAPI health boundary, Pydantic execution schemas, deterministic risk sizing, SQLite WAL command journal, isolated executor simulator, targeted pytest/Hypothesis checks, and a responsive local monitoring console. The worker, Supabase schema, MQL5 EA, real MT5 adapter, deployment manifests, and target-host evidence are not implemented. No Demo operation has been attempted or authorized by this contract alone.
 
 ## Scope
 
@@ -32,6 +32,7 @@ The repository contains a pinned Python runtime contract, FastAPI health boundar
 - Reconcile order, deal, and position identifiers from MT5.
 - Complete one owner-authorized Demo open and close only after local acceptance evidence passes.
 - Produce an audit view or machine-readable report for the complete round trip.
+- Keep the local web console visibly Demo-only, non-operational, and truthful about unavailable MT5 and market data until the applicable gates pass.
 
 ## Exclusions
 
@@ -110,6 +111,10 @@ Given the owner-authorized Demo position, when it is closed, then MT5 confirms t
 
 Given repository, log, evidence, and client-bundle scans, then no credential is exposed and no first-release code path can select or send to a live account.
 
+### AC-09 Safe local console
+
+Given the local API is online, offline, or still loading, when the monitoring console is rendered at desktop or mobile width, then Demo-only and Auto Trading off remain visible, unconfirmed MT5 and market values are not invented, unavailable sections are not interactive, and health retry cannot submit an execution command.
+
 ## Required verification
 
 | Acceptance | Verifier required before implementation is complete | Current result |
@@ -121,7 +126,8 @@ Given repository, log, evidence, and client-bundle scans, then no credential is 
 | AC-05 | Adapter integration test for fill, partial fill, and rejected-SL events | PARTIAL, not PASS - simulator identifier, duplicate-deal, partial-fill, and rejected-SL fixtures pass; MT5 event ordering remains unverified |
 | AC-06 | Process restart test with persisted pending, unknown, position, and halt fixtures | PARTIAL, not PASS - durable UNKNOWN recovery and persistent halt fixtures pass; process-kill and actual executor recovery remain unverified |
 | AC-07 | Owner-authorized MT5 Demo round trip and identifier/account reconciliation | BLOCKED - account details and authorization absent |
-| AC-08 | Secret scan, client-bundle inspection, and live-account denial test | PARTIAL, not PASS - source secret scan and API live-mode denial pass; no client bundle or MT5 executor exists to inspect |
+| AC-08 | Secret scan, client-bundle inspection, and live-account denial test | PARTIAL, not PASS - source and built client-bundle secret scans plus API live-mode denial pass; no MT5 executor exists to inspect |
+| AC-09 | Component tests plus desktop and mobile browser inspection for safe state and unavailable controls | PARTIAL, not PASS - component tests and local Firefox inspection pass; committed cross-browser regression and authenticated backend integration remain |
 
 No row can change to `PASS` without a named command or procedure, source revision, environment identity, expected result, observed result, and retained evidence reference.
 

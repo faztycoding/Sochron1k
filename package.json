@@ -1,0 +1,18 @@
+{
+  "name": "sochron1k",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "npm@11.19.0",
+  "engines": {
+    "node": "24.21.0"
+  },
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @sochron1k/web",
+    "check:web": "bash scripts/check-web.sh",
+    "test:web": "npm run test --workspace @sochron1k/web",
+    "typecheck": "npm run typecheck --workspace @sochron1k/web"
+  }
+}

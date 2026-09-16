@@ -32,7 +32,7 @@ The current project risk tier is **High assurance**. Demo-only operation reduces
 - `Agentic_Software_Engineering_Handbook_v3.docx` defines the project delivery and assurance process, version 3.0 dated 16 September 2026.
 - [Project profile](docs/product.md) records the adopted scope, risk tier, unknowns, and decision authority.
 - [Architecture](docs/architecture.md) records system boundaries, data ownership, and failure behavior.
-- [SCN-001 Task Contract](docs/contracts/SCN-001-mt5-demo-round-trip.md) defines the first vertical slice.
+- [SCN-001 Task Contract](docs/contracts/SCN-001-mt5-demo-round-trip.md) defines the first vertical slice, including the safe local console acceptance boundary.
 - [Risk register](docs/risks/risk-register.md) tracks material project risks and required evidence.
 - [Agent skills](docs/tooling/agent-skills.md) records the installed skills, source revisions, task routing, and verification limits.
 
@@ -42,6 +42,7 @@ The current project risk tier is **High assurance**. Demo-only operation reduces
 bash scripts/check-project-baseline.sh
 python3 scripts/check-agent-skills.py
 bash scripts/check-scn-001-local.sh
+npx -y -p node@24.21.0 npm run check:web
 ```
 
 Only commands that have been run successfully in this repository should be added to this section or to `AGENTS.md`.
@@ -57,6 +58,14 @@ bash scripts/check-scn-001-local.sh
 ```
 
 The API health endpoint always reports Demo mode and currently reports `execution_ready=false`. No real MT5 adapter or broker credential is present.
+
+Run the responsive monitoring console with the pinned Node.js release:
+
+```bash
+npx -y -p node@24.21.0 npm run dev --workspace @sochron1k/web
+```
+
+The console is deliberately monitoring-only. It shows the local API state, fixed risk policy, command lifecycle, and outstanding release gates without inventing broker values or exposing an order-entry control.
 
 ## Current next action
 
