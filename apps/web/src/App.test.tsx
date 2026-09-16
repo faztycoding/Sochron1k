@@ -10,8 +10,8 @@ describe("Sochron1k safety console", () => {
   });
 
   it("keeps Demo and Auto Trading off visible when API is healthy", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (path) =>
+      path === "/api/auth/config" ? new Response(JSON.stringify({ enabled: false })) : new Response(
         JSON.stringify({
           status: "ok",
           service: "sochron1k-api",
@@ -38,11 +38,11 @@ describe("Sochron1k safety console", () => {
   });
 
   it("shows a truthful disconnected state and permits a safe health retry", async () => {
-    const request = vi
-      .spyOn(globalThis, "fetch")
-      .mockRejectedValueOnce(new Error("offline"))
-      .mockResolvedValueOnce(
-        new Response(
+    let healthCalls = 0;
+    const request = vi.spyOn(globalThis, "fetch").mockImplementation(async (path) => {
+      if (path === "/api/auth/config") return new Response(JSON.stringify({ enabled: false }));
+      if (healthCalls++ === 0) throw new Error("offline");
+      return new Response(
           JSON.stringify({
             status: "ok",
             service: "sochron1k-api",
@@ -52,13 +52,13 @@ describe("Sochron1k safety console", () => {
             execution_ready: false,
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
-        ),
-      );
+        );
+    });
 
     render(<App />);
     await waitFor(() => expect(screen.getByText("เชื่อมต่อไม่ได้")).toBeVisible());
     fireEvent.click(screen.getByRole("button", { name: "ตรวจอีกครั้ง" }));
     await waitFor(() => expect(screen.getByText("ออนไลน์ · v0.1.0")).toBeVisible());
-    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls.filter(([path]) => path === "/api/health")).toHaveLength(2);
   });
 });

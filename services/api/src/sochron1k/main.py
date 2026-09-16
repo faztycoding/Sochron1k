@@ -21,6 +21,12 @@ class HealthResponse(BaseModel):
     execution_ready: bool
 
 
+class PublicAuthConfig(BaseModel):
+    enabled: bool
+    supabase_url: str | None = None
+    public_key: str | None = None
+
+
 def create_app(
     bridge_settings: BridgeSettings | None = None,
     owner_auth_settings: OwnerAuthSettings | None = None,
@@ -34,9 +40,19 @@ def create_app(
     @app.middleware("http")
     async def bridge_no_cache(request: Request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith(("/bridge/", "/owner/")):
+        if request.url.path.startswith(("/bridge/", "/owner/", "/auth/")):
             response.headers["Cache-Control"] = "no-store"
         return response
+
+    @app.get("/auth/config", response_model_exclude_none=True)
+    def auth_config() -> PublicAuthConfig:
+        if owner_auth_settings is None:
+            return PublicAuthConfig(enabled=False)
+        return PublicAuthConfig(
+            enabled=True,
+            supabase_url=owner_auth_settings.supabase_url,
+            public_key=owner_auth_settings.public_key.get_secret_value(),
+        )
 
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:

@@ -86,6 +86,29 @@ def bearer(value=None):
 
 
 @pytest.mark.anyio
+async def test_ac07_public_config_is_narrow(settings):
+    for config in (None, settings):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=create_app(owner_auth_settings=config)),
+            base_url="http://fixture",
+        ) as client:
+            response = await client.get("/auth/config")
+            assert response.status_code == 200
+            assert response.headers["cache-control"] == "no-store"
+            expected = (
+                {"enabled": False}
+                if config is None
+                else {
+                    "enabled": True,
+                    "supabase_url": ORIGIN,
+                    "public_key": settings.public_key.get_secret_value(),
+                }
+            )
+            assert response.json() == expected
+            assert str(OWNER) not in response.text
+
+
+@pytest.mark.anyio
 async def test_ac01_disabled():
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=create_app()), base_url="http://fixture"

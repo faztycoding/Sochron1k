@@ -125,6 +125,32 @@ h1 { margin: 0; font-size: clamp(24px, 3vw, 36px); line-height: 1.15; letter-spa
 
 .mobile-nav { display: none; }
 
+.owner-panel { margin-top: 18px; }
+.owner-panel .status-chip { white-space: nowrap; flex-shrink: 0; }
+.panel-heading .owner-subtitle { margin-top: 8px; font: inherit; color: var(--muted); font-size: 14px; }
+.owner-login { display: grid; grid-template-columns: 1fr 1fr auto; gap: 16px; margin-top: 22px; align-items: end; }
+.owner-login label { display: grid; gap: 7px; color: var(--muted); font-size: 14px; }
+.owner-login input { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; background: var(--surface-deep); color: var(--text); font: inherit; }
+.owner-login input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.gold-button { min-height: 44px; border: 0; border-radius: 6px; background: var(--gold); color: var(--canvas); padding: 10px 18px; font-weight: 600; cursor: pointer; }
+button:disabled { cursor: wait; opacity: 0.6; }
+.owner-hint { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.owner-login .owner-hint { grid-column: 1 / -1; margin: 0; }
+.owner-empty { margin-top: 22px; border-left: 2px solid var(--gold); padding-left: 16px; }
+.owner-empty p { color: var(--muted); max-width: 65ch; line-height: 1.6; }
+.owner-message, .quote-state { color: var(--amber); }
+.quote-state.is-fresh { color: var(--green); }
+.broker-identity { overflow-wrap: anywhere; font-size: 14px; }
+.account-values { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding: 18px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.account-values dt { color: var(--muted); font-size: 13px; }
+.account-values dd { margin: 8px 0 0; font: 600 22px "Inter", sans-serif; overflow-wrap: anywhere; }
+.observation-times { display: grid; gap: 6px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .owner-login { grid-template-columns: 1fr; }
+  .account-values { grid-template-columns: 1fr 1fr; }
+  .account-values dd { font-size: 19px; }
+}
+
 @media (max-width: 900px) {
   .app-shell { display: block; }
   .side-rail { display: none; }

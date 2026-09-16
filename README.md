@@ -118,13 +118,15 @@ The dedicated local Colima runtime and its wrapper are documented in [the runtim
 
 The [owner-authenticated API](docs/operations/owner-authentication.md) now verifies
 Supabase identity and active sessions, with local sign-in/logout and owner-isolation
-evidence. Browser login/logout and private telemetry display remain the next UI
-integration step. The Auth verifier above requires the local Supabase stack and
+evidence. Browser login/logout and private telemetry display are implemented with
+component tests; the configured real-browser Auth flow is the next integration
+gate. The Auth verifier above requires the local Supabase stack and
 both committed migrations; it uses only disposable synthetic users.
 
 The [read-only telemetry ingress](docs/operations/local-mt5-bridge.md) now has
 authenticated API and real-loopback HTTP evidence; it defaults to disabled without
-private local configuration. It is not yet wired to an EA or the web console.
+private local configuration. The owner web console now consumes its private view;
+no actual EA connection is verified yet.
 The [read-only EA source](mt5/ea/README.md) is prepared as an uncompiled checkpoint.
 Compile/verify it against SCN-004, verify actual Demo data, then complete
 the remaining SCN-001 execution and recovery work. A real Demo round trip still

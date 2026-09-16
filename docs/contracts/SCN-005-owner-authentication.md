@@ -1,6 +1,6 @@
 # SCN-005 Owner authentication and telemetry access
 
-Version 1.0; High assurance; extends SCN-002 and SCN-004. The full goal is still a
+Version 1.1; High assurance; extends SCN-002 and SCN-004. The full goal is still a
 usable Demo application. This slice establishes real Supabase authentication and
 owner authorization before browser login/data integration. It does not complete
 the full UI, authorize deployment or permit trading.
@@ -39,6 +39,28 @@ the full UI, authorize deployment or permit trading.
   telemetry without embedding privileged keys or fabricating broker truth. This
   criterion remains pending until browser integration and browser tests exist.
 
+### AC-07 browser implementation requirements (before implementation)
+
+- Fetch public Auth configuration from the same-origin API; expose only enabled
+  state, Supabase origin and a validated publishable/legacy-anon key, never the
+  configured owner UUID, executor token or privileged key. Disabled/outage states
+  explain what is missing and must not present a working login.
+- Use the pinned official Supabase SDK for password sign-in, refresh notifications
+  and local-session logout. Keep credentials/tokens out of logs, URLs and browser
+  persistent storage. Reload requires sign-in again; server-side session authority
+  remains the API's online checks. No browser metadata authorizes private reads.
+- Poll owner telemetry serially, with cancellation and a bounded deadline. Discard
+  old in-flight results on token change, logout or unmount. Clear private data on
+  authorization/network/shape errors. Logout hides data immediately; failed remote
+  revocation is explicit and retryable, never reported as successful logout.
+- Validate displayed telemetry, preserve decimal strings and UTC timestamps, and
+  display Bangkok time separately. Never label a quote fresh beyond five seconds
+  using API age plus locally elapsed time, even during a stalled refresh.
+- Component regression tests cover disabled/config failure, login errors, denied
+  owner, malformed telemetry, stale data, logout races and retryable logout failure.
+  Browser inspection covers desktop/mobile, keyboard labels and default-off state.
+  Real browser-to-Supabase integration remains a distinct gate if not exercised.
+
 ## Implementation boundary
 
 Use the existing HTTPX dependency for online Auth verification and an authenticated
@@ -58,10 +80,15 @@ closed. Migrations are local-only until separately approved for a hosted project
 API and session-lookup migration implemented with local verification. AC-01 through
 AC-05 have Python/ASGI and local database evidence; AC-06 has real local Supabase
 password sign-in, foreign-user denial, logout revocation and cleanup evidence.
-AC-07 remains PENDING: no browser login/logout integration yet. See the
+AC-07 is PARTIAL: React login/logout, runtime public configuration, owner telemetry
+display and component regressions are implemented. Default-disabled desktop/mobile
+browser inspection passes; configured browser-to-Supabase sign-in/logout and refresh
+remain a separate unrun integration gate. See the
 [verification record](../verification/SCN-005-owner-authentication.md) for exact
 commands and limits. No real owner account or hosted Supabase project is selected.
 Local synthetic fixtures do not establish hosted configuration, browser safety,
 MT5 connectivity or Demo release readiness. Pending UI integration is not a reason
 to bypass API authorization. SCN-001 execution/recovery and actual terminal gates
 remain required before any Demo order or unattended operation.
+
+The UI increment is recorded in [browser evidence](../verification/SCN-005-browser-owner-ui.md).

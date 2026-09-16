@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { OwnerPanel } from "./OwnerPanel";
 
 type Health = {
   status: "ok";
@@ -45,6 +46,7 @@ function StateDot({ tone }: { tone: "good" | "warn" | "bad" }) {
 }
 
 export function App() {
+  const [ownerConnection, setOwnerConnection] = useState("รอเข้าสู่ระบบเจ้าของ");
   const [connection, setConnection] = useState<ConnectionState>({ kind: "loading" });
 
   const checkHealth = useCallback(async () => {
@@ -128,6 +130,8 @@ export function App() {
           </div>
         </section>
 
+        <OwnerPanel onConnectionChange={setOwnerConnection} />
+
         <section className="status-grid" aria-label="สถานะระบบ">
           <article className="panel panel--primary">
             <div className="panel-heading">
@@ -155,11 +159,11 @@ export function App() {
               </div>
               <div>
                 <dt><StateDot tone="warn" />MT5 executor</dt>
-                <dd>ยังไม่เชื่อมต่อ</dd>
+                <dd>{ownerConnection}</dd>
               </div>
               <div>
                 <dt><StateDot tone="warn" />Market feed</dt>
-                <dd>ไม่มีข้อมูลสด</dd>
+                <dd>ตรวจที่ส่วนบัญชี Demo</dd>
               </div>
               <div>
                 <dt><StateDot tone="good" />Execution policy</dt>
@@ -192,7 +196,7 @@ export function App() {
               <p>Command lifecycle</p>
               <h2>ทุกคำสั่งต้องมีหลักฐานก่อนส่ง</h2>
             </div>
-            <span className="status-chip">ไม่มีคำสั่งค้าง</span>
+            <span className="status-chip">ยังไม่เชื่อมประวัติคำสั่ง</span>
           </div>
           <ol className="lifecycle">
             {lifecycle.map(([title, detail], index) => (
@@ -224,14 +228,14 @@ export function App() {
             <div className="panel-heading">
               <div>
                 <p>Broker truth</p>
-                <h2>บัญชีและราคา</h2>
+                <h2>หลักฐานการป้องกันสถานะ</h2>
               </div>
               <span className="status-chip status-chip--muted">รอ preflight</span>
             </div>
             <div className="empty-state">
               <div className="empty-glyph" aria-hidden="true">◎</div>
-              <strong>ยังไม่มี MT5 Demo identity</strong>
-              <p>Equity, Bid/Ask, contract specification และ broker-side SL จะแสดงเมื่อ executor ยืนยันแล้ว</p>
+              <strong>ยังไม่ยืนยัน broker-side SL</strong>
+              <p>ข้อมูลบัญชีและราคาอยู่ในส่วนบัญชี Demo ด้านบน การอ่านราคาได้ไม่ใช่หลักฐานว่าเปิดสถานะหรือมี SL แล้ว</p>
             </div>
           </article>
         </section>

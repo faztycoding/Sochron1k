@@ -3,8 +3,9 @@
 SCN-005 adds `GET /owner/session` and `GET /owner/telemetry`. Both require exactly
 one `Authorization: Bearer <Supabase user access token>` header. They do not accept
 passwords, query-string tokens, executor tokens or client-supplied ownership.
-They cannot send trades or enable Auto Trading. The React login integration is
-still pending; this runbook documents the API boundary, not a finished login UI.
+They cannot send trades or enable Auto Trading. The React account panel now uses
+these owner-authorized reads; real configured browser-to-Supabase integration is
+still awaiting its separate verifier, not established by component tests.
 
 ## Configuration
 
@@ -21,6 +22,20 @@ Do not use service_role/secret keys, put tokens in command arguments, commit pri
 configuration, or send passwords in chat. Private file errors fail startup with a
 redacted message. Changing the selected owner requires an operator configuration
 change and API restart; user-editable metadata cannot select or impersonate the owner.
+
+`GET /auth/config` publishes only enabled state, Supabase origin and the validated
+public key (no owner UUID or executor token), with no-store caching. The browser
+loads this runtime configuration through `/api/auth/config`, so no Vite Auth keys
+are embedded at build time. After configuration/restart, reload the console and
+use the owner email/password form; the password goes directly to Supabase Auth.
+The SDK keeps tokens in memory only and refreshes them while the page is active.
+Reload requires a new login. It does not itself revoke the previous server session.
+Logout uses local-session scope. If revocation fails, data is immediately hidden
+and the UI offers an explicit retry rather than falsely claiming logout succeeded.
+
+The SDK performs a temporary random localStorage capability probe when its module
+loads. This probe is not session storage; no credentials exist at that point and
+the probe removes its key. Client/session lifecycle tests assert no storage writes.
 
 Apply the committed session-validation migration to the local test database before
 enabling reads. Hosted migrations and an actual owner account are not provisioned
@@ -45,6 +60,12 @@ observation can remain present while status is stale/rejected: clients must show
 that status and must not treat the retained quote as current. Disabled and awaiting
 snapshot states do not fabricate account values. The status always reports
 `execution_ready=false` and `auto_trading_enabled=false`.
+
+The UI serially refreshes telemetry one second after the previous request settles,
+with a six-second total fetch deadline. Authorization failures stop that polling
+until a token change/relogin; transient failures hide values and retry. The display
+adds locally elapsed request time to the reported quote age conservatively and
+marks it stale beyond five seconds even if another refresh is still pending.
 
 ## Local verifier
 
