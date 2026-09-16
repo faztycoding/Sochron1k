@@ -155,6 +155,11 @@ class BridgeStatus(StrictModel):
     execution_ready: Literal[False] = False
 
 
+class TelemetryView(StrictModel):
+    status: BridgeStatus
+    observation: Observation | None
+
+
 class FrameReceipt(StrictModel):
     accepted: Literal[True] = True
     duplicate: bool
@@ -252,34 +257,41 @@ class TelemetryBridge:
 
     def status(self) -> BridgeStatus:
         with self._lock:
-            if self.settings is None:
-                return BridgeStatus(state="disabled")
-            if self._rejected:
-                return BridgeStatus(state="rejected")
-            observation = self._observation
-            if observation is None:
-                return BridgeStatus(state="awaiting_snapshot")
-            now = self._utc_now()
-            elapsed = max(0.0, self._monotonic() - self._received_monotonic)
-            received = observation.received_time_utc
-            frame = observation.frame
-            heartbeat_age = max(
-                (now - frame.observed_at).total_seconds(),
-                (received - frame.observed_at).total_seconds() + elapsed,
-            )
-            price_age = max(
-                (now - observation.event_time_utc).total_seconds(),
-                (received - observation.event_time_utc).total_seconds() + elapsed,
-                0.0,
-            )
-            heartbeat_fresh = (
-                frame.terminal_connected and now >= received and heartbeat_age <= MAX_AGE_SECONDS
-            )
-            price_fresh = heartbeat_fresh and price_age <= MAX_AGE_SECONDS
-            return BridgeStatus(
-                state="connected" if heartbeat_fresh and price_fresh else "stale",
-                heartbeat_fresh=heartbeat_fresh,
-                price_fresh=price_fresh,
-                heartbeat_age_seconds=round(heartbeat_age, 3),
-                price_age_seconds=round(price_age, 3),
-            )
+            return self._status_locked()
+
+    def view(self) -> TelemetryView:
+        with self._lock:
+            return TelemetryView(status=self._status_locked(), observation=self._observation)
+
+    def _status_locked(self) -> BridgeStatus:
+        if self.settings is None:
+            return BridgeStatus(state="disabled")
+        if self._rejected:
+            return BridgeStatus(state="rejected")
+        observation = self._observation
+        if observation is None:
+            return BridgeStatus(state="awaiting_snapshot")
+        now = self._utc_now()
+        elapsed = max(0.0, self._monotonic() - self._received_monotonic)
+        received = observation.received_time_utc
+        frame = observation.frame
+        heartbeat_age = max(
+            (now - frame.observed_at).total_seconds(),
+            (received - frame.observed_at).total_seconds() + elapsed,
+        )
+        price_age = max(
+            (now - observation.event_time_utc).total_seconds(),
+            (received - observation.event_time_utc).total_seconds() + elapsed,
+            0.0,
+        )
+        heartbeat_fresh = (
+            frame.terminal_connected and now >= received and heartbeat_age <= MAX_AGE_SECONDS
+        )
+        price_fresh = heartbeat_fresh and price_age <= MAX_AGE_SECONDS
+        return BridgeStatus(
+            state="connected" if heartbeat_fresh and price_fresh else "stale",
+            heartbeat_fresh=heartbeat_fresh,
+            price_fresh=price_fresh,
+            heartbeat_age_seconds=round(heartbeat_age, 3),
+            price_age_seconds=round(price_age, 3),
+        )

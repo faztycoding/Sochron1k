@@ -7,6 +7,8 @@ from pydantic import BaseModel
 
 from . import __version__
 from .bridge_api import router as bridge_router
+from .owner_api import router as owner_router
+from .owner_auth import OwnerAuthSettings, OwnerVerifier, load_owner_auth_settings
 from .telemetry import BridgeSettings, TelemetryBridge, load_bridge_settings
 
 
@@ -19,15 +21,20 @@ class HealthResponse(BaseModel):
     execution_ready: bool
 
 
-def create_app(bridge_settings: BridgeSettings | None = None) -> FastAPI:
+def create_app(
+    bridge_settings: BridgeSettings | None = None,
+    owner_auth_settings: OwnerAuthSettings | None = None,
+) -> FastAPI:
     app = FastAPI(title="Sochron1k API", version=__version__)
     app.state.telemetry_bridge = TelemetryBridge(bridge_settings)
+    app.state.owner_verifier = OwnerVerifier(owner_auth_settings)
     app.include_router(bridge_router)
+    app.include_router(owner_router)
 
     @app.middleware("http")
     async def bridge_no_cache(request: Request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith("/bridge/"):
+        if request.url.path.startswith(("/bridge/", "/owner/")):
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -45,4 +52,4 @@ def create_app(bridge_settings: BridgeSettings | None = None) -> FastAPI:
     return app
 
 
-app = create_app(load_bridge_settings())
+app = create_app(load_bridge_settings(), load_owner_auth_settings())

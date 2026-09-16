@@ -53,6 +53,7 @@ def main() -> None:
                 "TRADING_MODE": "live",
                 "AUTO_TRADING_ENABLED": "true",
             }
+            environment.pop("SOCHRON_OWNER_AUTH_CONFIG_FILE", None)
             process = subprocess.Popen(
                 [
                     sys.executable,

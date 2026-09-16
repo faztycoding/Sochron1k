@@ -9,9 +9,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import ASGITransport, AsyncClient, MockTransport, Response
 from pydantic import SecretStr
 from sochron1k.main import create_app
+from sochron1k.owner_auth import OwnerAuthSettings, OwnerVerifier
 from sochron1k.telemetry import (
     MAX_FRAME_BYTES,
     BridgeDenied,
@@ -121,6 +122,57 @@ async def test_ac01_default_disabled_and_private_routes_denied():
         for path in ("challenge", "snapshot"):
             assert (await client.get(f"/bridge/v1/{path}")).status_code == 503
         assert (await client.post("/bridge/v1/snapshot", json={})).status_code == 503
+
+
+def test_scn005_ac04_atomic_view_retains_explicit_stale_and_rejected_state(bridge, payload, clock):
+    assert bridge.view().observation is None
+    bridge.accept(TelemetryFrame.model_validate(payload))
+    fresh = bridge.view()
+    assert fresh.status.state == "connected"
+    assert fresh.observation.frame.sequence == 1
+    clock.advance(6)
+    stale = bridge.view()
+    assert stale.status.state == "stale"
+    assert stale.observation == fresh.observation
+    bridge.reject()
+    rejected = bridge.view()
+    assert rejected.status.state == "rejected"
+    assert rejected.observation == fresh.observation
+    assert not rejected.status.price_fresh
+    assert not rejected.status.execution_ready
+
+
+@pytest.mark.anyio
+async def test_scn005_ac04_separate_owner_and_bridge_tokens(bridge, payload, settings, auth):
+    from test_owner_auth import ORIGIN, OWNER, bearer
+
+    owner_settings = OwnerAuthSettings(
+        supabase_url=ORIGIN, owner_id=OWNER, public_key=SecretStr("sb_publishable_" + "fixture" * 4)
+    )
+
+    def upstream(request):
+        if request.url.path == "/auth/v1/user":
+            return Response(
+                200, json={"id": str(OWNER), "role": "authenticated", "is_anonymous": False}
+            )
+        return Response(200, json=True)
+
+    app = create_app(settings, owner_settings)
+    app.state.telemetry_bridge = bridge
+    app.state.owner_verifier = OwnerVerifier(
+        owner_settings, transport=MockTransport(upstream), now=lambda: 1000
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://fixture") as client:
+        assert (await client.get("/owner/telemetry", headers=auth)).status_code == 401
+        assert (await client.get("/bridge/v1/snapshot", headers=bearer())).status_code == 401
+        assert (
+            await client.post("/bridge/v1/snapshot", headers=auth, json=payload)
+        ).status_code == 200
+        response = await client.get("/owner/telemetry", headers=bearer())
+        assert response.status_code == 200
+        assert response.json()["status"]["state"] == "connected"
+        assert response.json()["observation"]["frame"]["identity"] == payload["identity"]
+        assert response.headers["cache-control"] == "no-store"
 
 
 @pytest.mark.anyio

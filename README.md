@@ -45,6 +45,7 @@ bash scripts/check-scn-001-local.sh
 .venv/bin/python scripts/check-bridge-local.py
 .venv/bin/python scripts/check-mt5-source.py
 .venv/bin/python scripts/check-mt5-fixture.py
+bash scripts/with-local-docker.sh npx -y -p node@24.21.0 .venv/bin/python scripts/check-owner-auth-local.py
 npx -y -p node@24.21.0 npm run check:web
 npx -y -p node@24.21.0 npm run check:db:static
 npx -y -p node@24.21.0 npm run check:compose:static
@@ -114,6 +115,12 @@ This is local implementation evidence only. It is not VPS deployment, MT5 compat
 The dedicated local Colima runtime and its wrapper are documented in [the runtime runbook](docs/operations/local-runtime.md). Local arm64 container verification now passes; the web proxy has a separate loopback ingress network while the API stays internal. Each verifier run preserves its own named volume and evidence without stopping a developer stack.
 
 ## Current next action
+
+The [owner-authenticated API](docs/operations/owner-authentication.md) now verifies
+Supabase identity and active sessions, with local sign-in/logout and owner-isolation
+evidence. Browser login/logout and private telemetry display remain the next UI
+integration step. The Auth verifier above requires the local Supabase stack and
+both committed migrations; it uses only disposable synthetic users.
 
 The [read-only telemetry ingress](docs/operations/local-mt5-bridge.md) now has
 authenticated API and real-loopback HTTP evidence; it defaults to disabled without
