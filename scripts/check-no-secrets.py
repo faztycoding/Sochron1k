@@ -15,6 +15,7 @@ TEXT_SUFFIXES = {
     ".json",
     ".md",
     ".mq5",
+    ".mqh",
     ".py",
     ".sh",
     ".sql",

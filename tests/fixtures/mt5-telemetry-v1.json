@@ -1,0 +1,37 @@
+{
+  "protocol": "sochron.telemetry.v1",
+  "source": "mt5-ea-sampled",
+  "boot_id": "11111111-2222-4333-8444-555555555555",
+  "sequence": 1,
+  "identity": {
+    "executor_id": "synthetic-ea",
+    "account_ref": "123456789",
+    "server": "Synthetic-Demo",
+    "currency": "USD",
+    "margin_mode": "retail_hedging",
+    "symbol": "XAUUSD.fixture"
+  },
+  "trade_mode": "demo",
+  "terminal_build": 1,
+  "terminal_connected": true,
+  "account_trade_allowed": false,
+  "observed_at": "2026-09-17T00:00:00Z",
+  "tick_time_server_msc": 1789610400000,
+  "broker_utc_offset_seconds": 7200,
+  "equity": "1000.0000000000",
+  "balance": "1000.0000000000",
+  "free_margin": "1000.0000000000",
+  "bid": "2500.0000000000",
+  "ask": "2500.2000000000",
+  "contract": {
+    "symbol": "XAUUSD.fixture",
+    "digits": 2,
+    "tick_size": "0.0100000000",
+    "volume_min": "0.0100000000",
+    "volume_max": "100.0000000000",
+    "volume_step": "0.0100000000",
+    "stops_level_points": 10,
+    "freeze_level_points": 0,
+    "filling_modes": ["fok", "ioc"]
+  }
+}

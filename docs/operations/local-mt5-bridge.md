@@ -1,7 +1,8 @@
 # Local read-only MT5 bridge
 
-Status: API ingress implemented and locally verified; EA and actual MT5 integration
-remain unimplemented/unverified. This is not a Demo-ready or unattended release.
+Status: API ingress implemented and locally verified; read-only EA source is now
+prepared but uncompiled. Actual MT5 integration remains unverified. This is not a
+Demo-ready or unattended release. See the [EA checkpoint and compile procedure](../../mt5/ea/README.md).
 The bridge follows SCN-004 and ADR-004. Never put the credential in a browser,
 Vite environment, command-line argument, screenshot, chat, fixture or Git file.
 
@@ -50,7 +51,7 @@ format/length, not randomness; secure generation remains a provisioning requirem
 Required configuration fields:
 
 - `identity.executor_id`: chosen local executor identifier.
-- `identity.account_ref`: exact Demo account reference agreed with the EA.
+- `identity.account_ref`: exact base-10 Demo login string emitted by the EA, no alias.
 - `identity.server`, `identity.currency`, `identity.symbol`: exact terminal values.
 - `identity.margin_mode`: `retail_netting`, `retail_hedging` or `exchange`.
 - `broker_utc_offset_seconds`: independently verified offset for the broker tick

@@ -48,6 +48,30 @@ There are no order, close, cancel, halt-release or strategy-promotion endpoints.
 - AC-08: Telemetry cannot enable execution. Existing health always reports
   `auto_trading_enabled=false` and `execution_ready=false`; trade routes are absent.
 
+### EA source preparation (does not replace AC-07)
+
+- EA-01: Off by default; no timer/network activity until explicitly enabled with
+  a complete local identity. Deny non-Demo/changed account or symbol before every
+  outbound observation. No order/close/cancel APIs, trading-library or DLL imports.
+- EA-02: Read the scoped token only from a fixed terminal-local file, never an EA
+  input, URL or log. Destination is the fixed local API; no configurable external
+  destination. Never print credentials, account identity, prices or response bodies.
+- EA-03: Read real terminal/account/symbol/tick properties, preserve raw tick time,
+  serialize decimals and UTC observation consistently with `TelemetryFrame`, and
+  label sampling explicitly. Never replace a stale tick with an invented timestamp.
+- EA-04: Obtain the current API challenge; validate bounded response shape and
+  positive safe-integer sequence. Parse receipts, not just HTTP success. After a
+  transport/receipt failure discard the sample and refresh the challenge on a
+  later timer; no order or fill state is inferred. Identity failure latches until
+  explicit EA reinitialization; disconnection sends nothing.
+- EA-05: One network request per one-second timer, 500 ms requested timeout,
+  bounded retry backoff. This dedicated observer is not an execution/risk EA;
+  actual worst-case blocking duration remains part of AC-07, not a source claim.
+- EA-06: Supply a terminal-side pure protocol self-test and Python API acceptance
+  of a synthetic golden wire fixture. Static source checks can establish only
+  the reviewed include graph/absence of forbidden APIs, not compilation or runtime
+  enforcement. Retain explicit NOT RUN status for the MQL self-test until executed.
+
 ## Evidence and current state
 
 AC-01 through AC-06 and AC-08 have local Python/HTTP evidence: 51 targeted tests
@@ -57,14 +81,23 @@ tests. Candidate base `7f6db02` plus pending source hashes is identified by the
 HTTP verifier; rerun on the saved revision before delivery. Retained clean-revision
 reports belong under `output/verification/` and are not broker evidence.
 
-AC-07 is BLOCKED on the selected MT5 host,
+EA source preparation now exists under `mt5/ea`: an opt-in read-only observer,
+shared protocol helpers and a terminal self-test. Fifteen Python tests cover the
+static guard (including forbidden-operation mutations) and synthetic golden
+fixture/API compatibility. The full local Python suite has 93 tests. Source and
+fixture verifier reports explicitly exclude MQL compilation/runtime evidence.
+
+AC-07 is still BLOCKED on the selected MT5 host,
 terminal/compiler and Demo identity. No MT5 installation was found by filename
 inspection of `/Applications` and the user's `Applications` directory on
 2026-09-17; this is not an exhaustive inventory of every Wine prefix.
+Spotlight filename lookup also returned no terminal/compiler match. MQL source
+compilation and the 24-case terminal self-test are NOT RUN. See
+[`mt5/ea/README.md`](../../mt5/ea/README.md) for the pending verification procedure.
 
 ## Required next integrations
 
-1. Implement and compile the sampled-data EA against this wire contract.
+1. Compile and verify the sampled-data EA source against this wire contract.
 2. Verify the broker's tick timestamp offset and contract on the authorized Demo
    terminal, including server DST changes. Clock synchronization is required.
 3. Add authenticated owner access and bind the UI to confirmed observations.

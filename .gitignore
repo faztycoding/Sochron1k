@@ -34,6 +34,8 @@ logs/
 # MT5 generated artifacts
 *.ex5
 *.set
+*.token
+SochronTelemetrySelfTest.json
 
 # Editors and operating systems
 .DS_Store
