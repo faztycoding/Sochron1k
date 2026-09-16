@@ -141,13 +141,13 @@ button:disabled { cursor: wait; opacity: 0.6; }
 .owner-message, .quote-state { color: var(--amber); }
 .quote-state.is-fresh { color: var(--green); }
 .broker-identity { overflow-wrap: anywhere; font-size: 14px; }
-.account-values { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding: 18px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.account-values { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: 16px; padding: 18px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .account-values dt { color: var(--muted); font-size: 13px; }
-.account-values dd { margin: 8px 0 0; font: 600 22px "Inter", sans-serif; overflow-wrap: anywhere; }
+.account-values > div { min-width: 0; }
+.account-values dd { margin: 8px 0 0; font: 600 22px "Inter", sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; overflow-x: auto; }
 .observation-times { display: grid; gap: 6px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 @media (max-width: 600px) {
   .owner-login { grid-template-columns: 1fr; }
-  .account-values { grid-template-columns: 1fr 1fr; }
   .account-values dd { font-size: 19px; }
 }
 

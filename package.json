@@ -20,6 +20,7 @@
     "typecheck": "npm run typecheck --workspace @sochron1k/web"
   },
   "devDependencies": {
+    "playwright": "1.63.0",
     "supabase": "2.117.0"
   }
 }

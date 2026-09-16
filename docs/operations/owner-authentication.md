@@ -4,8 +4,8 @@ SCN-005 adds `GET /owner/session` and `GET /owner/telemetry`. Both require exact
 one `Authorization: Bearer <Supabase user access token>` header. They do not accept
 passwords, query-string tokens, executor tokens or client-supplied ownership.
 They cannot send trades or enable Auto Trading. The React account panel now uses
-these owner-authorized reads; real configured browser-to-Supabase integration is
-still awaiting its separate verifier, not established by component tests.
+these owner-authorized reads. The isolated production-build browser verifier now
+exercises real local Supabase Auth/RPC and FastAPI, separately from component mocks.
 
 ## Configuration
 
@@ -85,3 +85,38 @@ cleanup failure explicitly. No real owner account or MT5 account is touched.
 
 Stop the local stack before the repository secret scan; generated local runtime
 keys must not be mistaken for committed configuration or exempted from scanning.
+
+### Real browser integration
+
+The same local-stack prerequisites apply. Install only the pinned headless browser
+runtime once (no system Chrome installation or user profile modification):
+
+```bash
+env -u DEBUG npx -y -p node@24.21.0 npm exec playwright -- install chromium --only-shell --no-remove
+env -u DEBUG bash scripts/with-local-docker.sh npx -y -p node@24.21.0 node scripts/check-owner-browser.mjs
+```
+
+The verifier refuses DEBUG/PWDEBUG/NODE_OPTIONS, verifies loopback container ports,
+rebuilds the production web artifact, starts its own ephemeral API/web ports and
+uses an isolated Chromium context with only two permitted loopback origins. It
+never stops the developer's UI/API. Two generated Auth users and private mode-0600
+configs are removed afterward; deletion is confirmed by an admin GET returning 404.
+An ambiguous user-creation response reports cleanup UNKNOWN, not PASS; it is not
+automatically retried and requires reconciliation in the guarded local project.
+The stack itself remains running until the operator stops it using the local runbook.
+
+Checks cover owner/foreign login, private telemetry, empty local/session storage,
+cookies and IndexedDB, mobile value readability, stale quote/recovery, real SDK
+refresh exchange with new-token API reads, logout revocation of a still-unexpired
+token, and loss of memory session on reload. Refresh advances the browser clock
+only; it does not prove real-duration expiry, background-tab behavior or burn-in.
+The telemetry producer sends the explicit synthetic golden fixture, never a broker
+command. No actual owner or MT5 configuration is provisioned by this verifier.
+
+Redacted results and synthetic desktop/mobile screenshots are written into a unique
+`output/playwright/scn005-*` directory. Results record source hashes, Git revision
+and dirty state, production build hash, browser/runtime versions and local container
+image IDs. Passwords/tokens stay in process memory or private temporary configs;
+no traces, request dumps or console logs are captured. The plain Playwright library
+is used for a repeatable regression command, not the CLI's credential-bearing
+arguments or an additional test framework. Failures report only a bounded stage.

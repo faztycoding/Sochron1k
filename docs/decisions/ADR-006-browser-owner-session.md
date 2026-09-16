@@ -58,3 +58,27 @@ Official sources: [password sign-in](https://supabase.com/docs/reference/javascr
 [Auth events](https://supabase.com/docs/reference/javascript/auth-onauthstatechange),
 [local logout scope](https://supabase.com/docs/reference/javascript/auth-signout),
 [npm security](https://supabase.com/docs/guides/security/npm-security).
+
+## Browser integration verifier admission
+
+Dev-only `playwright@1.63.0` is exactly pinned with `playwright-core@1.63.0` and
+registry integrity hashes; installed with ignore-scripts and minimum release age
+seven days. Use its matching Chromium headless shell (revision 1243,
+153.0.8010.12), not an assumed system Chrome path. No new production dependency,
+test framework, hosted browser service or global browser installation is added.
+This reproducible local verifier uses generated credentials inside one Node process
+and deliberately does not record traces or credential-bearing CLI commands.
+
+Mobile review found that exact decimal strings wrapped across lines in the original
+two-column account grid. Preserve the existing palette/type and exact values; use
+content-sized columns (minimum 14rem, capped by available width), left-aligned
+tabular digits and cell-local horizontal scrolling for unusually long decimals.
+At 390px the fixture values each fit one line, without truncation or precision loss.
+This is a readability fix, not a new visual system or changed account calculation.
+
+Refresh verification follows [Playwright clock control](https://playwright.dev/docs/clock).
+The browser clock advances while the Auth server clock remains real; the SDK can
+refresh twice before restoration. Acceptance requires that a real successful refresh
+response issued the token actually used in a successful private read, not that the
+first token in the rotation chain must be the final one. Logout must still revoke
+that observed token before its real expiry. This is not hour-long expiry evidence.

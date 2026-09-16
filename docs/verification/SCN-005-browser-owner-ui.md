@@ -48,12 +48,80 @@ now explicit fixture setup before recording session lifecycle writes; the no-wri
 assertion for client creation/sign-in/logout remains unchanged. SDK source confirms
 the probe deletes its key and does not contain credentials.
 
-AC-07 is PARTIAL, not PASS: real browser-to-Supabase sign-in, token refresh, logout,
+At this initial checkpoint AC-07 was PARTIAL: real browser-to-Supabase sign-in, token refresh, logout,
 owner denial and browser telemetry integration are not yet verified together.
 The previously verified real local API/Auth boundary is not substituted for that
 browser gate. No actual owner has been provisioned and no real MT5 telemetry was
 received. Graph, signal, statistics and execution/recovery work remain incomplete.
 
-Next safe work: a reproducible isolated browser verifier using generated local
-Auth users, the real API, and explicitly synthetic telemetry; then actual MT5
-integration when owner inputs and target authorization are available.
+## Real-browser integration increment, 2026-09-17
+
+Candidate based on `fbf28e6d5514c08b0e15d62e9c16a55cfbff10f8`; source hashes and dirty
+state are recorded rather than attributing new code to that base revision.
+`scripts/check-owner-browser.mjs` rebuilds the production artifact and runs it in
+Playwright 1.63.0 / Chromium headless 153.0.8010.12 against isolated real FastAPI
+and the project-scoped real Supabase Auth/RPC. Node 24.21.0, Python 3.14.7,
+Supabase CLI 2.117.0; container image IDs and production artifact SHA-256 are retained.
+
+Command:
+
+```bash
+env -u DEBUG bash scripts/with-local-docker.sh npx -y -p node@24.21.0 node scripts/check-owner-browser.mjs
+```
+
+PASS: owner login/private account display; denial of a foreign authenticated user
+with forged owner metadata; no localStorage/sessionStorage/cookies/IndexedDB left
+by the session; desktop/mobile layout; price fresh-to-stale-to-fresh transitions;
+real SDK refresh HTTP exchange followed by private reads using an issued new token;
+logout revoking that still-unexpired token; reload losing the memory session.
+Cleanup PASS includes deleting only the two generated users and confirming each
+is absent, closing own child processes and removing own private temporary directory.
+No existing developer process or account was stopped or changed.
+
+Candidate result and synthetic screenshots:
+`output/playwright/scn005-1afa1fa4-69fb-4e43-8f3c-3ea8fa0e823c/`.
+Production artifact digest:
+`081375df91e8e844be3a0c6a417b01a8673353a2319923515cd71037619c04f8`.
+Verifier digest:
+`c2a694ce54b1a857562052c5856a27a55483ff78d33c8e767776f44b1eead6ac`.
+Artifacts are local and ignored by Git; they are not a public deployment.
+
+Visual inspection found wrapped decimal strings at 390px. The CSS now adapts the
+number of columns while retaining all digits; a DOM-range/width assertion verifies
+four fixture values each occupy one line without overflowing their cells. Desktop
+and mobile synthetic screenshots were inspected. No rounding or calculation changed.
+The frontend-design skill guided this content-first adjustment within the existing
+Charcoal Gold design. React review found no component change needed for refresh.
+
+Development failures retained: DEBUG guard refused the inherited debug environment;
+system Chrome was absent, so the pinned matching headless runtime is used. The
+initial refresh assertion waited for only the first refreshed token, but the
+accelerated browser clock caused two genuine refresh exchanges. Instrumentation
+proved private reads used neither the original nor first refreshed token. The
+verifier now checks the actually used token against successful real refresh
+responses, then proves its revocation; no application Auth assertion was removed.
+The observed failed runs that created fixtures reported cleanup PASS. The verifier
+also reports cleanup UNKNOWN if user creation has an ambiguous outcome, rather
+than retrying it or falsely asserting that every created user was removed.
+
+The Playwright/Supabase skills informed isolated fixture lifecycle and exact-runtime
+verification. A plain Node regression script avoids CLI password arguments, traces,
+network logs and an additional test framework. Refresh uses a 59-minute browser
+clock jump with the server clock unchanged; this is not real-duration expiry,
+background-tab, multi-browser or unattended-operation evidence.
+
+`npm run check:web` on pinned Node passes 26 tests, typecheck, build and client scan.
+`bash scripts/check-scn-001-local.sh` passes Ruff, 153 tests and the source secret
+scan after stopping the local Supabase stack (volumes preserved). Baseline, skill
+integrity and `git diff --check` pass. Production-only signature audit verifies
+14 registry signatures and 13 attestations.
+`npm audit` finds zero vulnerabilities. Whole-tree signature audit still fails on
+the registry's `whatwg-url@17.1.1` attestation 404; it remains an unresolved
+supply-chain verification limit, not a PASS or accepted release exception.
+
+AC-07 local integration is verified; actual owner provisioning, hosted Supabase,
+MT5 connectivity/EA compilation, execution and recovery gates remain unverified.
+Graph, signal and statistics features remain incomplete. No Demo-ready release,
+deployment or broker operation is claimed. Next safe work is completing the remaining
+application features and executor contracts; actual terminal work still requires
+owner inputs and exact target authorization.

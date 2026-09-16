@@ -46,6 +46,7 @@ bash scripts/check-scn-001-local.sh
 .venv/bin/python scripts/check-mt5-source.py
 .venv/bin/python scripts/check-mt5-fixture.py
 bash scripts/with-local-docker.sh npx -y -p node@24.21.0 .venv/bin/python scripts/check-owner-auth-local.py
+env -u DEBUG bash scripts/with-local-docker.sh npx -y -p node@24.21.0 node scripts/check-owner-browser.mjs
 npx -y -p node@24.21.0 npm run check:web
 npx -y -p node@24.21.0 npm run check:db:static
 npx -y -p node@24.21.0 npm run check:compose:static
@@ -119,9 +120,11 @@ The dedicated local Colima runtime and its wrapper are documented in [the runtim
 The [owner-authenticated API](docs/operations/owner-authentication.md) now verifies
 Supabase identity and active sessions, with local sign-in/logout and owner-isolation
 evidence. Browser login/logout and private telemetry display are implemented with
-component tests; the configured real-browser Auth flow is the next integration
-gate. The Auth verifier above requires the local Supabase stack and
-both committed migrations; it uses only disposable synthetic users.
+component tests and a production-build browser verifier against real local Auth/API.
+The Auth verifiers above require the local Supabase stack and both committed
+migrations; they use only disposable synthetic users. The browser verifier also
+needs the pinned Chromium headless runtime; see the owner-authentication runbook.
+This is local fixture evidence, not actual MT5 connectivity or Demo release readiness.
 
 The [read-only telemetry ingress](docs/operations/local-mt5-bridge.md) now has
 authenticated API and real-loopback HTTP evidence; it defaults to disabled without

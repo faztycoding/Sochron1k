@@ -1,6 +1,6 @@
 # SCN-005 Owner authentication and telemetry access
 
-Version 1.1; High assurance; extends SCN-002 and SCN-004. The full goal is still a
+Version 1.2; High assurance; extends SCN-002 and SCN-004. The full goal is still a
 usable Demo application. This slice establishes real Supabase authentication and
 owner authorization before browser login/data integration. It does not complete
 the full UI, authorize deployment or permit trading.
@@ -37,7 +37,8 @@ the full UI, authorize deployment or permit trading.
   tests pass. Evidence identifies source revision, runtimes, fixture and boundary.
 - AC-07: The actual React UI offers login/logout and displays owner-authorized
   telemetry without embedding privileged keys or fabricating broker truth. This
-  criterion remains pending until browser integration and browser tests exist.
+  criterion requires browser integration and browser tests; component mocks alone
+  do not establish it.
 
 ### AC-07 browser implementation requirements (before implementation)
 
@@ -61,6 +62,27 @@ the full UI, authorize deployment or permit trading.
   Browser inspection covers desktop/mobile, keyboard labels and default-off state.
   Real browser-to-Supabase integration remains a distinct gate if not exercised.
 
+### Browser integration verifier acceptance (before implementation)
+
+The reproducible local verifier must use real browser UI controls, the production
+web build, real FastAPI and real loopback Supabase Auth/RPC. Generate isolated owner
+and foreign-user fixtures; clean up only created IDs and child processes. Never
+put passwords/tokens in command arguments, traces, screenshots, network logs or
+result artifacts. Capture only redacted results and synthetic account displays.
+
+Verify owner sign-in, foreign-owner denial, logout and still-unexpired-token
+revocation, no persisted browser credentials, memory-session loss on reload,
+fresh-to-stale telemetry and desktop/mobile layout. Token refresh must be exercised
+through the SDK with real refresh-token exchange; distinguish accelerated browser
+clock evidence from real-duration expiry. Any missing check remains explicit.
+No hosted project, real owner account, MT5 account or existing developer process
+may be changed by this verifier. Synthetic telemetry is not broker evidence.
+
+Mobile readability: at 390px, fixture account/quote decimals stay on one line and
+fit their cells without page overflow. Preserve the complete decimal strings;
+adapt column count, not precision. Exceptional longer values may scroll within
+their value cell, never wrap into a misleading second number or widen the page.
+
 ## Implementation boundary
 
 Use the existing HTTPX dependency for online Auth verification and an authenticated
@@ -80,15 +102,17 @@ closed. Migrations are local-only until separately approved for a hosted project
 API and session-lookup migration implemented with local verification. AC-01 through
 AC-05 have Python/ASGI and local database evidence; AC-06 has real local Supabase
 password sign-in, foreign-user denial, logout revocation and cleanup evidence.
-AC-07 is PARTIAL: React login/logout, runtime public configuration, owner telemetry
-display and component regressions are implemented. Default-disabled desktop/mobile
-browser inspection passes; configured browser-to-Supabase sign-in/logout and refresh
-remain a separate unrun integration gate. See the
+AC-07 has local browser integration evidence: React login/logout, runtime public
+configuration, owner telemetry display and component regressions are implemented.
+The production build in pinned Chromium passes real loopback Supabase/API sign-in,
+foreign-user denial, token refresh, logout revocation, reload, stale-state and mobile
+readability checks. Refresh uses an accelerated browser clock, not a real-duration
+expiry/burn-in test. Synthetic prices are not MT5 connectivity evidence. See the
 [verification record](../verification/SCN-005-owner-authentication.md) for exact
 commands and limits. No real owner account or hosted Supabase project is selected.
-Local synthetic fixtures do not establish hosted configuration, browser safety,
-MT5 connectivity or Demo release readiness. Pending UI integration is not a reason
-to bypass API authorization. SCN-001 execution/recovery and actual terminal gates
+Local synthetic fixtures do not establish hosted configuration, all-browser safety,
+MT5 connectivity or Demo release readiness. UI integration does not bypass API
+authorization. SCN-001 execution/recovery and actual terminal gates
 remain required before any Demo order or unattended operation.
 
 The UI increment is recorded in [browser evidence](../verification/SCN-005-browser-owner-ui.md).
