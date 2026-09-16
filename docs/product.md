@@ -106,7 +106,7 @@ Initial retention is 30 days for raw ticks on the VPS and 14-30 days for diagnos
 - Docker Compose and a reverse proxy for the VPS application services.
 - pytest and Playwright for risk-driven verification.
 
-Exact runtime and dependency versions are not yet selected. They must be pinned and recorded before implementation claims reproducibility.
+Python 3.14.7, Node.js 24.21.0 and dependency lockfiles are now pinned; see [ADR-002](decisions/ADR-002-pinned-runtime-toolchain.md) and the local runtime runbook. This does not establish an MT5 terminal build, target-host compatibility or release reproducibility for unimplemented components.
 
 ## Budget and delivery frame
 

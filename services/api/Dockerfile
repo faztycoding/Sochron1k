@@ -7,6 +7,8 @@ ENV UV_NO_CACHE=1 \
 WORKDIR /app
 
 RUN pip install --no-cache-dir uv==0.12.15
+RUN python -c "from importlib.metadata import version; assert version('uv') == '0.12.15'" \
+    && uv --version
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project

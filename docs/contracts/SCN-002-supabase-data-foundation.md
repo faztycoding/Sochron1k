@@ -8,7 +8,7 @@
 | Version | 1.0 |
 | Owner | Project owner; technical implementer not yet named |
 | Parent project | Sochron1k |
-| Current state | Static implementation complete; database execution is BLOCKED until a Docker-compatible runtime is available; remote deployment is not authorized |
+| Current state | Local migration, lint, advisors and 16 pgTAP checks pass; full data/auth acceptance remains partial and remote deployment is not authorized |
 | Done scope | Reproducible local schema, owner isolation, and database tests; hosted deployment is a separate state |
 | Risk tier | High assurance |
 | Evidence base | Blueprint v1.1 section 15, architecture and risk register at revision `f4e3437` |
@@ -49,6 +49,8 @@ Given two authenticated owners and an anonymous request, when each reads synchro
 
 Given a decision, broker event, or risk event, when it is stored, then monetary values are exact numeric values in the recorded account currency, external identifiers remain lossless, UTC event and received times are present, and constraints reject impossible time ordering or malformed states.
 
+AI cost and currency must be either both absent or both present with a nonnegative cost and uppercase three-letter currency. Fresh migration execution and positive/negative fixtures must verify the format and pairing constraints coexist. The initial migration has never been deployed remotely; repair its colliding constraint name before its first successful local application, preserving both checks.
+
 ### AC-04 Execution boundary preservation
 
 Given Supabase is unavailable or contains stale data, when execution state is evaluated, then local journal and MT5 remain authoritative and the schema exposes no function, trigger, or browser grant that can send an order, release a halt, promote a strategy, or rewrite broker truth.
@@ -56,6 +58,8 @@ Given Supabase is unavailable or contains stale data, when execution state is ev
 ### AC-05 Database verification
 
 Given the local container runtime and pinned Supabase CLI, when the database reset, lint, advisor, and pgTAP procedures run, then migrations apply from zero and the positive and negative authorization tests pass on the exact candidate revision.
+
+Local startup must use a dedicated bridge with loopback-only port bindings, and verification must check effective bindings. Refuse a non-Unix Docker endpoint, a linked hosted project, or a same-named container from another working directory. Database reset requires explicit `SOCHRON_ALLOW_LOCAL_DB_RESET=sochron1k` acknowledgement and targets only this project's disposable local database. A zero-test run is not a pass. On Colima, mount only `supabase/tests` read-only for the CLI's pg_prove fixture bind mount; do not mount the home directory or credentials.
 
 ### AC-06 Secret and remote-action denial
 
@@ -65,14 +69,16 @@ Given repository and generated configuration scans, then no project reference, d
 
 | Acceptance | Verifier required before implementation is complete | Current result |
 | --- | --- | --- |
-| AC-01 | `supabase db reset --local` from a clean local stack plus schema assertions | PARTIAL, not PASS - the migration parses and static table/RLS counts pass; reset is blocked without a container runtime |
-| AC-02 | pgTAP anonymous, same-owner, cross-owner, and write-denial fixtures | PARTIAL, not PASS - fixtures are committed but have not run against Postgres |
-| AC-03 | pgTAP constraint and type assertions with invalid fixtures | PARTIAL, not PASS - exact numeric, UTC timestamp, Demo-only, state, and time-order constraints parse; database behavior is unverified |
+| AC-01 | `supabase db reset --local` from a clean local stack plus schema assertions | PASS locally: initial migration applies from zero and 17-table/RLS assertions pass on PostgreSQL 17.6 |
+| AC-02 | pgTAP anonymous, same-owner, cross-owner, and write-denial fixtures | PARTIAL, not PASS - all-table grant checks and two-owner accounts fixtures pass; every-table row fixtures and API/Auth integration remain |
+| AC-03 | pgTAP constraint and type assertions with invalid fixtures | PARTIAL, not PASS - account numeric/Demo and AI cost/currency positive/negative fixtures pass; remaining integrity/immutability cases are unverified |
 | AC-04 | Schema review and architecture fitness check for forbidden authority | PARTIAL, not PASS - static checks deny privileged functions and browser writes; application integration does not exist |
-| AC-05 | Pinned CLI reset, lint, advisors, and `supabase test db` | BLOCKED until a Docker-compatible runtime is available |
+| AC-05 | Pinned CLI reset, lint, advisors, and `supabase test db` | PASS locally: reset, lint, advisors (INFO unused indexes, no errors), 16 pgTAP checks; NOTESTS failure corrected with read-only fixture mount |
 | AC-06 | Repository secret scan plus CLI link-status inspection | PARTIAL, not PASS - repository scan passes and no local project reference exists; no hosted environment has been inspected |
 
 No row can change to `PASS` without the exact source revision, CLI and database versions, environment identity, expected and observed result, and retained verifier output.
+
+Local candidate evidence (17 September 2026 Asia/Bangkok): base `55723ab` plus the saved setup diff; CLI 2.117.0, PostgreSQL 17.6, Docker 29.5.2 arm64. Command: `SOCHRON_ALLOW_LOCAL_DB_RESET=sochron1k bash scripts/with-local-docker.sh npx -y -p node@24.21.0 npm run check:db:local`. Retained output: `output/verification/scn-002-local.log`. Exact saved candidate is rechecked before delivery. Startup/cleanup and known limits are in [the local database runbook](../operations/local-supabase.md).
 
 ## Authorization
 

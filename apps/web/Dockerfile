@@ -2,6 +2,9 @@ FROM node:24.21.0-bookworm-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4
 
 WORKDIR /workspace
 
+RUN test "$(node --version)" = "v24.21.0" && node --version \
+    && test "$(npm --version)" = "11.19.0" && npm --version
+
 COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/package.json
 RUN npm ci --workspace @sochron1k/web --include-workspace-root=false

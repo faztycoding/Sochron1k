@@ -45,6 +45,7 @@ bash scripts/check-scn-001-local.sh
 npx -y -p node@24.21.0 npm run check:web
 npx -y -p node@24.21.0 npm run check:db:static
 npx -y -p node@24.21.0 npm run check:compose:static
+bash scripts/with-local-docker.sh npx -y -p node@24.21.0 npm run check:compose:local
 ```
 
 Only commands that have been run successfully in this repository should be added to this section or to `AGENTS.md`.
@@ -82,11 +83,12 @@ npx -y -p node@24.21.0 npm run check:db:static
 Full database verification requires a running Docker-compatible engine. Start the local stack, then reset and test it:
 
 ```bash
-npx -y -p node@24.21.0 npm exec supabase -- start
-npx -y -p node@24.21.0 npm run check:db:local
+bash scripts/with-local-docker.sh npx -y -p node@24.21.0 bash scripts/supabase-local.sh start
+SOCHRON_ALLOW_LOCAL_DB_RESET=sochron1k bash scripts/with-local-docker.sh npx -y -p node@24.21.0 npm run check:db:local
+bash scripts/with-local-docker.sh npx -y -p node@24.21.0 bash scripts/supabase-local.sh stop
 ```
 
-`check:db:local` intentionally resets only the local Supabase database before lint, advisors, and pgTAP. It does not link or push to a hosted project.
+`check:db:local` resets the disposable local database before lint, advisors, and pgTAP; the acknowledgement explicitly permits loss of its local contents. Do not set it for a developer database containing valuable data. Startup uses a loopback-only network and suppresses generated keys; stop preserves volumes. See [local database operations](docs/operations/local-supabase.md) for prerequisites, security, and evidence limits. No hosted project is linked or pushed.
 
 ## Local container topology
 
@@ -105,6 +107,8 @@ npx -y -p node@24.21.0 npm run check:compose:local
 ```
 
 This is local implementation evidence only. It is not VPS deployment, MT5 compatibility, recovery proof, or Demo readiness.
+
+The dedicated local Colima runtime and its wrapper are documented in [the runtime runbook](docs/operations/local-runtime.md). Local arm64 container verification now passes; the web proxy has a separate loopback ingress network while the API stays internal. Each verifier run preserves its own named volume and evidence without stopping a developer stack.
 
 ## Current next action
 

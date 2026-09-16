@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 
-select plan(12);
+select plan(16);
 
 select is(
   (
@@ -123,15 +123,17 @@ select is(
   'authenticated clients have no direct write grant'
 );
 
-select results_eq(
-  $$
-    select data_type || ':' || numeric_precision || ':' || numeric_scale
+-- Compare typed JSON values: pgTAP's record/text-array comparison on this
+-- Postgres image has an indeterminate collation. Keep the exact expected tuple.
+select is(
+  (
+    select jsonb_build_array(data_type, numeric_precision, numeric_scale)
     from information_schema.columns
     where table_schema = 'public'
       and table_name = 'accounts'
       and column_name = 'initial_equity'
-  $$,
-  array['numeric:20:8']::text[],
+  ),
+  '["numeric", 20, 8]'::jsonb,
   'money uses an exact numeric type'
 );
 
@@ -162,17 +164,17 @@ values
 set local role authenticated;
 set local request.jwt.claim.sub = '10000000-0000-0000-0000-000000000001';
 
-select results_eq(
-  'select account_ref from public.accounts order by account_ref',
-  array['DEMO-A']::text[],
+select is(
+  (select jsonb_agg(account_ref order by account_ref) from public.accounts),
+  '["DEMO-A"]'::jsonb,
   'owner one reads only owner one history'
 );
 
 set local request.jwt.claim.sub = '20000000-0000-0000-0000-000000000002';
 
-select results_eq(
-  'select account_ref from public.accounts order by account_ref',
-  array['DEMO-B']::text[],
+select is(
+  (select jsonb_agg(account_ref order by account_ref) from public.accounts),
+  '["DEMO-B"]'::jsonb,
   'owner two reads only owner two history'
 );
 
@@ -190,5 +192,52 @@ select throws_ok(
 );
 
 reset role;
+
+select lives_ok(
+  $$
+    insert into public.ai_runs (
+      owner_id, source, source_revision, model, requested_at, cost, cost_currency,
+      output_schema, state
+    ) values
+      ('10000000-0000-0000-0000-000000000001', 'fixture', 'v1', 'simulator',
+       now(), null, null, 'v1', 'requested'),
+      ('10000000-0000-0000-0000-000000000001', 'fixture', 'v1', 'simulator',
+       now(), 0.01, 'USD', 'v1', 'requested')
+  $$,
+  'AI cost/currency accepts absent and valid paired values'
+);
+
+select throws_ok(
+  $$
+    insert into public.ai_runs (
+      owner_id, source, source_revision, model, requested_at, cost, cost_currency,
+      output_schema, state
+    ) values ('10000000-0000-0000-0000-000000000001', 'fixture', 'v1', 'simulator',
+              now(), 0.01, 'usd', 'v1', 'requested')
+  $$,
+  '23514', null, 'AI cost rejects malformed currency'
+);
+
+select throws_ok(
+  $$
+    insert into public.ai_runs (
+      owner_id, source, source_revision, model, requested_at, cost, cost_currency,
+      output_schema, state
+    ) values ('10000000-0000-0000-0000-000000000001', 'fixture', 'v1', 'simulator',
+              now(), 0.01, null, 'v1', 'requested')
+  $$,
+  '23514', null, 'AI cost requires currency when amount is present'
+);
+
+select throws_ok(
+  $$
+    insert into public.ai_runs (
+      owner_id, source, source_revision, model, requested_at, cost, cost_currency,
+      output_schema, state
+    ) values ('10000000-0000-0000-0000-000000000001', 'fixture', 'v1', 'simulator',
+              now(), null, 'USD', 'v1', 'requested')
+  $$,
+  '23514', null, 'AI currency requires cost when currency is present'
+);
 select * from finish();
 rollback;

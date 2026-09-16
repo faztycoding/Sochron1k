@@ -13,9 +13,15 @@ if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
   exit 2
 fi
 
-npm exec supabase -- db reset --local --no-seed
-npm exec supabase -- db lint --local --schema public --level warning --fail-on error
-npm exec supabase -- db advisors --local --type all --level info --fail-on error
-npm exec supabase -- test db --local supabase/tests
+bash scripts/supabase-local.sh guard
+if [[ "${SOCHRON_ALLOW_LOCAL_DB_RESET:-}" != sochron1k ]]; then
+  printf 'BLOCKED reset destroys the disposable local sochron1k database; set SOCHRON_ALLOW_LOCAL_DB_RESET=sochron1k only for that target\n' >&2
+  exit 2
+fi
+
+npm exec supabase -- db reset --local --no-seed --network-id sochron1k_supabase_local
+npm exec supabase -- db lint --local --schema public --level warning --fail-on error --network-id sochron1k_supabase_local
+npm exec supabase -- db advisors --local --type all --level info --fail-on error --network-id sochron1k_supabase_local
+npm exec supabase -- test db --local supabase/tests --network-id sochron1k_supabase_local
 
 printf 'PASS SCN-002 local migration, lint, advisors, and pgTAP verification on Node.js %s\n' "$expected_node"

@@ -24,7 +24,10 @@ ruby -ryaml -e '
   raise "trading mode must be demo" unless api.fetch("environment").fetch("TRADING_MODE") == "demo"
   raise "auto trading must be false" unless api.fetch("environment").fetch("AUTO_TRADING_ENABLED") == "false"
   raise "application network must be internal" unless config.fetch("networks").fetch("app_internal").fetch("internal") == true
-  raise "journal volume must be explicit" unless config.fetch("volumes").fetch("journal_data").fetch("name") == "sochron1k_journal_data"
+  raise "api must join only internal network" unless api.fetch("networks") == ["app_internal"]
+  raise "web must join internal and ingress networks" unless web.fetch("networks").sort == %w[app_internal web_ingress]
+  raise "ingress must permit port publishing" unless config.fetch("networks").fetch("web_ingress").fetch("driver") == "bridge" && !config.fetch("networks").fetch("web_ingress")["internal"]
+  raise "journal volume must be explicit" unless config.fetch("volumes").fetch("journal_data").fetch("name") == "${SOCHRON_JOURNAL_VOLUME:-sochron1k_journal_data}"
   puts "PASS Compose YAML structure and safety assertions"
 '
 

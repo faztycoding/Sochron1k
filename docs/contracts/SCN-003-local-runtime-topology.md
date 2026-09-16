@@ -8,7 +8,7 @@
 | Version | 1.0 |
 | Owner | Project owner; technical implementer not yet named |
 | Parent project | Sochron1k |
-| Current state | Static implementation complete; image build and runtime checks are BLOCKED until a Docker-compatible engine is available |
+| Current state | Local arm64 build/runtime checks passed; MT5, VPS and unattended Demo remain outside this gate |
 | Done scope | Reproducible local API/web topology with secure defaults; MT5 and VPS readiness remain separate gates |
 | Risk tier | High assurance |
 | Evidence base | Blueprint v1.1 sections 05 and 19-23, architecture and risk register at revision `a23bd58` |
@@ -44,6 +44,8 @@ Given the candidate revision and a compatible container engine, when both images
 
 Given the rendered Compose configuration, then both services run as non-root with read-only root filesystems, all capabilities dropped, `no-new-privileges` enabled, and only the web port is published to loopback.
 
+Runtime inspection must confirm the effective port mapping, not only the requested host configuration. The API joins only the internal network. Only the web proxy joins a second bridge for loopback publication; its outbound connectivity is not claimed to be blocked (ADR-003).
+
 ### AC-03 Demo lock
 
 Given hostile local environment values including live mode or auto trading enabled, when the stack starts, then the container configuration and API response remain Demo-only, auto trading remains off, and execution readiness remains false.
@@ -60,20 +62,24 @@ Given an API restart, when the container is recreated, then the named journal vo
 
 Given a Docker-compatible engine, when the verifier renders configuration, builds images, starts the stack, runs health assertions, restarts the API, and shuts down cleanly, then the exact outputs and image identities are retained for the candidate revision.
 
+The verifier must own a unique Compose project, image tags, loopback port and journal volume. It must refuse a non-local Docker endpoint, preserve existing developer stacks, and verify a marker written by the API user survives container recreation. It must verify the proxied health endpoint again after recreation and retain redacted results. Cleanup may stop only the verifier's own project and must preserve its journal volume.
+
 ## Required verification
 
 | Acceptance | Verifier required before implementation is complete | Current result |
 | --- | --- | --- |
-| AC-01 | No-cache multi-platform-compatible image builds and in-container version checks | PARTIAL, not PASS - upstream tags and multi-platform digests are pinned and clean locked Python/Node dependency installs pass outside Docker; no image has built locally |
-| AC-02 | Rendered Compose assertions plus runtime user/capability/read-only checks | PARTIAL, not PASS - YAML safety assertions pass; runtime inspection is blocked |
-| AC-03 | API negative tests plus rendered environment assertions | PARTIAL, not PASS - hostile Demo/live environment tests and static Compose assertions pass; container response is unverified |
-| AC-04 | Loopback HTTP smoke checks for `/` and `/api/health` | NOT RUN - blocked without a container runtime |
-| AC-05 | Named-volume identity before and after API recreation | NOT RUN - blocked without a container runtime |
-| AC-06 | End-to-end local runtime verifier | BLOCKED until a Docker-compatible engine is available |
+| AC-01 | No-cache multi-platform-compatible image builds and in-container version checks | PASS on local arm64: digest-pinned builds and frozen dependency installs; Python 3.14.7 and nginx 1.30.5 checked in running images. amd64 execution NOT RUN |
+| AC-02 | Rendered Compose assertions plus runtime user/capability/read-only checks | PASS locally, including effective loopback port mapping and API-only internal membership |
+| AC-03 | API negative tests plus rendered environment assertions | PASS locally: hostile inherited live/auto values do not change rendered configuration or container health |
+| AC-04 | Loopback HTTP smoke checks for `/` and `/api/health` | PASS locally before and after API replacement |
+| AC-05 | Named-volume identity before and after API recreation | PASS locally: API-user marker survives replacement on the invocation-owned volume; broker/journal recovery is not implied |
+| AC-06 | End-to-end local runtime verifier | PASS locally, with invocation-owned cleanup and retained evidence |
+
+Initial passing run: `output/compose/sochron-verify-aeb3e6843bd4/result.json`, 2026-09-16 21:24 UTC (17 September Asia/Bangkok), base `55723ab` plus recorded dirty input hashes. Verifier: `bash scripts/with-local-docker.sh npx -y -p node@24.21.0 npm run check:compose:local`; engine 29.5.2 arm64, Compose 5.5.1. Re-run on the saved candidate before delivery; these results do not grant VPS or Demo execution readiness.
 
 ## Authorization
 
-Creating local Dockerfiles, Compose configuration, static checks, and dry-run scripts is authorized. Installing or licensing a desktop container engine, deploying to a VPS, publishing images, changing firewall/DNS, or operating MT5 requires separate authorization and evidence.
+The owner's continuing setup request covers a user-scoped local Colima/Docker runtime and local verification. The selected runtime uses a dedicated profile without host home-directory mounts or changes to the active Docker context. Deploying to a VPS, publishing images, changing firewall/DNS, paid resources, and operating MT5 retain their separate authorization requirements.
 
 ## Recovery
 

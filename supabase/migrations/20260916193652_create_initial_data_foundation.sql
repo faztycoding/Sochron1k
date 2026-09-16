@@ -350,7 +350,7 @@ create table public.ai_runs (
   constraint ai_runs_time_check check (
     created_at >= requested_at and (completed_at is null or completed_at >= requested_at)
   ),
-  constraint ai_runs_cost_currency_check check ((cost is null) = (cost_currency is null))
+  constraint ai_runs_cost_currency_pair_check check ((cost is null) = (cost_currency is null))
 );
 
 create table public.evaluations (
