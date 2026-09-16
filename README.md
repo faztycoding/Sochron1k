@@ -42,6 +42,7 @@ The current project risk tier is **High assurance**. Demo-only operation reduces
 bash scripts/check-project-baseline.sh
 python3 scripts/check-agent-skills.py
 bash scripts/check-scn-001-local.sh
+.venv/bin/python scripts/check-bridge-local.py
 npx -y -p node@24.21.0 npm run check:web
 npx -y -p node@24.21.0 npm run check:db:static
 npx -y -p node@24.21.0 npm run check:compose:static
@@ -112,4 +113,9 @@ The dedicated local Colima runtime and its wrapper are documented in [the runtim
 
 ## Current next action
 
-Complete the remaining local SCN-001 adapter and recovery work, then prepare the MT5 EA/bridge and dry-run evidence. A real Demo round trip still requires the owner inputs and explicit target authorization listed in the task contract.
+The [read-only telemetry ingress](docs/operations/local-mt5-bridge.md) now has
+authenticated API and real-loopback HTTP evidence; it defaults to disabled without
+private local configuration. It is not yet wired to an EA or the web console.
+Implement/compile the EA against SCN-004, verify actual Demo data, then complete
+the remaining SCN-001 execution and recovery work. A real Demo round trip still
+requires owner inputs and explicit target authorization listed in the task contract.

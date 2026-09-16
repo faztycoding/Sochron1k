@@ -19,7 +19,7 @@ Prove the first end-to-end execution slice: read XAU/USD Demo market and contrac
 
 ## Current behavior
 
-The repository contains a pinned Python runtime contract, FastAPI health boundary, Pydantic execution schemas, deterministic risk sizing, SQLite WAL command journal, isolated executor simulator, targeted pytest/Hypothesis checks, a responsive local monitoring console, a Supabase schema with local pgTAP checks, and an API/web container topology with local arm64 runtime evidence. The worker, MQL5 EA, real MT5 adapter, and target-host evidence are not implemented. No Demo operation has been attempted or authorized by this contract alone.
+The repository contains a pinned Python runtime contract, FastAPI health boundary, Pydantic execution schemas, deterministic risk sizing, SQLite WAL command journal, isolated executor simulator, targeted pytest/Hypothesis checks, a responsive local monitoring console, a Supabase schema with local pgTAP checks, and an API/web container topology with local arm64 runtime evidence. SCN-004 adds disabled-by-default, authenticated read-only telemetry ingress with local Python/HTTP evidence. The worker, MQL5 EA, real MT5 producer/execution adapter, and target-host evidence are not implemented. No Demo operation has been attempted or authorized by this contract alone.
 
 ## Scope
 
