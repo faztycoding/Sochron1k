@@ -11,6 +11,8 @@
   ],
   "scripts": {
     "build": "npm run build --workspace @sochron1k/web",
+    "check:compose:local": "bash scripts/check-compose-local.sh",
+    "check:compose:static": "bash scripts/check-compose-static.sh",
     "check:db:local": "bash scripts/check-supabase-local.sh",
     "check:db:static": "bash scripts/check-supabase-static.sh",
     "check:web": "bash scripts/check-web.sh",

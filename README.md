@@ -44,6 +44,7 @@ python3 scripts/check-agent-skills.py
 bash scripts/check-scn-001-local.sh
 npx -y -p node@24.21.0 npm run check:web
 npx -y -p node@24.21.0 npm run check:db:static
+npx -y -p node@24.21.0 npm run check:compose:static
 ```
 
 Only commands that have been run successfully in this repository should be added to this section or to `AGENTS.md`.
@@ -86,6 +87,24 @@ npx -y -p node@24.21.0 npm run check:db:local
 ```
 
 `check:db:local` intentionally resets only the local Supabase database before lint, advisors, and pgTAP. It does not link or push to a hosted project.
+
+## Local container topology
+
+`compose.yaml` builds the API and web console from pinned, digest-locked Python, Node.js, and nginx images. Both containers run non-root with read-only filesystems, dropped capabilities, and no privilege escalation. Only the web proxy binds to loopback; the API remains internal. Auto Trading is hard-disabled and no MT5 or worker container is implied.
+
+Static verification does not need Docker:
+
+```bash
+npx -y -p node@24.21.0 npm run check:compose:static
+```
+
+The full verifier performs no-cache builds, starts the local stack, checks hardening and health through the proxy, recreates the API, confirms the journal volume identity, and shuts the containers down without deleting that volume:
+
+```bash
+npx -y -p node@24.21.0 npm run check:compose:local
+```
+
+This is local implementation evidence only. It is not VPS deployment, MT5 compatibility, recovery proof, or Demo readiness.
 
 ## Current next action
 

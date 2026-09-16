@@ -1,0 +1,76 @@
+name: sochron1k
+
+services:
+  api:
+    image: sochron1k-api:local
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    environment:
+      APP_ENV: local-container
+      APP_TIMEZONE: Asia/Bangkok
+      AUTO_TRADING_ENABLED: "false"
+      TRADING_MODE: demo
+    user: "10001:10001"
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    volumes:
+      - journal_data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json, urllib.request;
+          body=json.load(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2));
+          assert body == {'status':'ok','service':'sochron1k-api','version':'0.1.0','trading_mode':'demo','auto_trading_enabled':False,'execution_ready':False}
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    stop_grace_period: 20s
+    networks:
+      - app_internal
+
+  web:
+    image: sochron1k-web:local
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    user: "101:101"
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    ports:
+      - "127.0.0.1:${SOCHRON_WEB_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+    stop_grace_period: 10s
+    networks:
+      - app_internal
+
+networks:
+  app_internal:
+    internal: true
+
+volumes:
+  journal_data:
+    name: sochron1k_journal_data

@@ -83,6 +83,7 @@ python3 scripts/check-agent-skills.py
 bash scripts/check-scn-001-local.sh
 npx -y -p node@24.21.0 npm run check:web
 npx -y -p node@24.21.0 npm run check:db:static
+npx -y -p node@24.21.0 npm run check:compose:static
 ```
 
 Add build, lint, type-check, test, migration, and deployment commands only after they exist and have run successfully in this repository.
