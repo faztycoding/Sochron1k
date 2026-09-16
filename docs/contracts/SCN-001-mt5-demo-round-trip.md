@@ -8,7 +8,7 @@
 | Version | 1.0 |
 | Owner | Project owner; technical implementer not yet named |
 | Parent project | Sochron1k |
-| Current state | READY for local contracts and simulator; BLOCKED for a real Demo send pending owner inputs and credentials |
+| Current state | Local safety core implemented and under verification; BLOCKED for a real Demo send pending the MT5 adapter, owner inputs, credentials, and explicit target authorization |
 | Done scope | Implementation verified first, then Demo operation verified as a separate gate |
 | Risk tier | High assurance |
 | Evidence base | Blueprint v1.1 and repository base revision `776859c` |
@@ -19,7 +19,7 @@ Prove the first end-to-end execution slice: read XAU/USD Demo market and contrac
 
 ## Current behavior
 
-No application, MT5 EA, runtime configuration, simulator, schema, or test harness exists in the repository. The blueprint and the project baseline documents are the only available implementation inputs. No Demo operation has been attempted or authorized by this contract alone.
+The repository contains a pinned Python runtime contract, FastAPI health boundary, Pydantic execution schemas, deterministic risk sizing, SQLite WAL command journal, isolated executor simulator, and targeted pytest/Hypothesis checks. The web application, worker, Supabase schema, MQL5 EA, real MT5 adapter, deployment manifests, and target-host evidence are not implemented. No Demo operation has been attempted or authorized by this contract alone.
 
 ## Scope
 
@@ -114,14 +114,14 @@ Given repository, log, evidence, and client-bundle scans, then no credential is 
 
 | Acceptance | Verifier required before implementation is complete | Current result |
 | --- | --- | --- |
-| AC-01 | Adapter contract tests for accepted Demo and denied live/mismatch fixtures | UNKNOWN - verifier not implemented |
-| AC-02 | Unit and property tests for currency, tick size, step rounding, caps, and minimum-volume rejection | UNKNOWN - verifier not implemented |
-| AC-03 | Integration test with concurrent duplicate submissions and journal ordering | UNKNOWN - verifier not implemented |
-| AC-04 | Fault test that accepts then drops the response, followed by reconciliation | UNKNOWN - verifier not implemented |
-| AC-05 | Adapter integration test for fill, partial fill, and rejected-SL events | UNKNOWN - verifier not implemented |
-| AC-06 | Process restart test with persisted pending, unknown, position, and halt fixtures | UNKNOWN - verifier not implemented |
+| AC-01 | Adapter contract tests for accepted Demo and denied live/mismatch fixtures | PARTIAL, not PASS - local simulator fixtures cover Demo/live/mismatch/stale/expiry; actual MT5 preflight remains unverified |
+| AC-02 | Unit and property tests for currency, tick size, step rounding, caps, and minimum-volume rejection | PARTIAL, not PASS - Decimal budget and volume-grid tests pass; broker OrderCalcProfit, conversion, tick alignment, and actual margin remain unverified |
+| AC-03 | Integration test with concurrent duplicate submissions and journal ordering | PARTIAL, not PASS - SQLite concurrent duplicate, changed-payload, and journal-failure fixtures pass; process-level and MT5 boundary evidence remains |
+| AC-04 | Fault test that accepts then drops the response, followed by reconciliation | PARTIAL, not PASS - isolated accept-then-timeout reconciliation passes without resend; actual bridge interruption remains unverified |
+| AC-05 | Adapter integration test for fill, partial fill, and rejected-SL events | PARTIAL, not PASS - simulator identifier, duplicate-deal, partial-fill, and rejected-SL fixtures pass; MT5 event ordering remains unverified |
+| AC-06 | Process restart test with persisted pending, unknown, position, and halt fixtures | PARTIAL, not PASS - durable UNKNOWN recovery and persistent halt fixtures pass; process-kill and actual executor recovery remain unverified |
 | AC-07 | Owner-authorized MT5 Demo round trip and identifier/account reconciliation | BLOCKED - account details and authorization absent |
-| AC-08 | Secret scan, client-bundle inspection, and live-account denial test | UNKNOWN - implementation absent |
+| AC-08 | Secret scan, client-bundle inspection, and live-account denial test | PARTIAL, not PASS - source secret scan and API live-mode denial pass; no client bundle or MT5 executor exists to inspect |
 
 No row can change to `PASS` without a named command or procedure, source revision, environment identity, expected result, observed result, and retained evidence reference.
 
