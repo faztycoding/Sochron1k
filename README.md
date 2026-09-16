@@ -43,6 +43,7 @@ bash scripts/check-project-baseline.sh
 python3 scripts/check-agent-skills.py
 bash scripts/check-scn-001-local.sh
 npx -y -p node@24.21.0 npm run check:web
+npx -y -p node@24.21.0 npm run check:db:static
 ```
 
 Only commands that have been run successfully in this repository should be added to this section or to `AGENTS.md`.
@@ -66,6 +67,25 @@ npx -y -p node@24.21.0 npm run dev --workspace @sochron1k/web
 ```
 
 The console is deliberately monitoring-only. It shows the local API state, fixed risk policy, command lifecycle, and outstanding release gates without inventing broker values or exposing an order-entry control.
+
+## Local Supabase foundation
+
+The pinned Supabase CLI, local configuration, initial migration, and pgTAP authorization tests are committed. The browser role is read-only and owner-scoped; anonymous access and browser writes are denied. No hosted project is linked and no remote database has been changed.
+
+Static verification does not need Docker:
+
+```bash
+npx -y -p node@24.21.0 npm run check:db:static
+```
+
+Full database verification requires a running Docker-compatible engine. Start the local stack, then reset and test it:
+
+```bash
+npx -y -p node@24.21.0 npm exec supabase -- start
+npx -y -p node@24.21.0 npm run check:db:local
+```
+
+`check:db:local` intentionally resets only the local Supabase database before lint, advisors, and pgTAP. It does not link or push to a hosted project.
 
 ## Current next action
 

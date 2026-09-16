@@ -11,8 +11,13 @@
   ],
   "scripts": {
     "build": "npm run build --workspace @sochron1k/web",
+    "check:db:local": "bash scripts/check-supabase-local.sh",
+    "check:db:static": "bash scripts/check-supabase-static.sh",
     "check:web": "bash scripts/check-web.sh",
     "test:web": "npm run test --workspace @sochron1k/web",
     "typecheck": "npm run typecheck --workspace @sochron1k/web"
+  },
+  "devDependencies": {
+    "supabase": "2.117.0"
   }
 }
