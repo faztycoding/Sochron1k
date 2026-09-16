@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sochron1k VPS Operations"
+  short_description: "Demo VPS deployment, observation and recovery"
+  default_prompt: "Use $sochron-vps-operations to prepare and verify the current Sochron1k deployment or recovery task."

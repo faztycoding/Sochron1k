@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "verified_on": "2026-09-17",
+  "scope": "15 Sochron1k development skills; installation integrity, not application acceptance",
+  "hash_algorithm": "SHA-256 over sorted relative POSIX path + NUL + binary file SHA-256; excludes __pycache__, .DS_Store, .pytest_cache",
+  "skills": [
+    {
+      "name": "fastapi",
+      "tree_sha256": "8ccecc2e0c3e98c9da5f7495666a63568c876eb3ac2c375bb1dd24b5eca8a95e",
+      "file_count": 7,
+      "source_repository": "fastapi/fastapi",
+      "source_revision": "50113da16fec53b66b80d75e80a89296de4fa5a5",
+      "source_path": "fastapi/.agents/skills/fastapi"
+    },
+    {
+      "name": "frontend-design",
+      "tree_sha256": "d43ace63d22e3502ab5c53b63138dafd0431ed5fd2fa63320285c8167ab27de6",
+      "file_count": 2,
+      "source_repository": "anthropics/skills",
+      "source_revision": "34040c9c568585f6929bedeaad110ad08f079624",
+      "source_path": "skills/frontend-design"
+    },
+    {
+      "name": "gh-fix-ci",
+      "tree_sha256": "7a978956a9f9842ead2bf9dfd98dcde1f35fda7cfe365534ffe0027b83828710",
+      "file_count": 6,
+      "source_repository": "openai/skills",
+      "source_revision": "49f948faa9258a0c61caceaf225e179651397431",
+      "source_path": "skills/.curated/gh-fix-ci"
+    },
+    {
+      "name": "jupyter-notebook",
+      "tree_sha256": "6665498ab74a5043a809f80337b6e7c0323792f07fe54a733f95ca7397efc05a",
+      "file_count": 12,
+      "source_repository": "openai/skills",
+      "source_revision": "49f948faa9258a0c61caceaf225e179651397431",
+      "source_path": "skills/.curated/jupyter-notebook"
+    },
+    {
+      "name": "playwright",
+      "tree_sha256": "ac89e7f90ceefef75f8abfc555fccb4e77ca684ec3044c224e7d92e6f1a6edfc",
+      "file_count": 9,
+      "source_repository": "openai/skills",
+      "source_revision": "49f948faa9258a0c61caceaf225e179651397431",
+      "source_path": "skills/.curated/playwright"
+    },
+    {
+      "name": "security-best-practices",
+      "tree_sha256": "933332c0f2cb95adaa2eb2a464b8c923b59531d62352b33b27855d4d283ab649",
+      "file_count": 13,
+      "source_repository": "openai/skills",
+      "source_revision": "49f948faa9258a0c61caceaf225e179651397431",
+      "source_path": "skills/.curated/security-best-practices"
+    },
+    {
+      "name": "security-threat-model",
+      "tree_sha256": "15f10244f53ac207f33a33ae6a6440854a911b56fab6d8d883e81206546d8f0e",
+      "file_count": 5,
+      "source_repository": "openai/skills",
+      "source_revision": "49f948faa9258a0c61caceaf225e179651397431",
+      "source_path": "skills/.curated/security-threat-model"
+    },
+    {
+      "name": "sochron-mt5-execution",
+      "tree_sha256": "2b3db719af5e32b3cd314a86147d6113e117490d999245711db8c873f0fa031a",
+      "file_count": 2,
+      "version": "1.0.0",
+      "local_source": "tooling/skills/sochron-mt5-execution"
+    },
+    {
+      "name": "sochron-research-validation",
+      "tree_sha256": "71851e9885b1cae4af5b8c7848526f3bff9e28f5ed17242ecd4a7e54a91ea45b",
+      "file_count": 2,
+      "version": "1.0.0",
+      "local_source": "tooling/skills/sochron-research-validation"
+    },
+    {
+      "name": "sochron-risk-recovery",
+      "tree_sha256": "01918bed73093ae5db42fde3431bc7b2f461bd33b2ae4c854b0d2527e7066c3d",
+      "file_count": 2,
+      "version": "1.0.0",
+      "local_source": "tooling/skills/sochron-risk-recovery"
+    },
+    {
+      "name": "sochron-vps-operations",
+      "tree_sha256": "4993e123f91681f581374f08613d344ccb43e5c50356a61627983c3b97a78472",
+      "file_count": 2,
+      "version": "1.0.0",
+      "local_source": "tooling/skills/sochron-vps-operations"
+    },
+    {
+      "name": "supabase",
+      "tree_sha256": "587f3495366300709a0f8e300ac94ece42a874d2f731167a88daa714e55dff1b",
+      "file_count": 4,
+      "source_repository": "supabase/agent-skills",
+      "source_revision": "8331f910845103c08d51f6ca1d86ebb7d1f745e3",
+      "source_path": "skills/supabase"
+    },
+    {
+      "name": "supabase-postgres-best-practices",
+      "tree_sha256": "d91704aad316b865a244ff5f1c98d5cec9756eb53d80e2b6c71d8470575224a3",
+      "file_count": 36,
+      "source_repository": "supabase/agent-skills",
+      "source_revision": "8331f910845103c08d51f6ca1d86ebb7d1f745e3",
+      "source_path": "skills/supabase-postgres-best-practices"
+    },
+    {
+      "name": "vercel-react-best-practices",
+      "tree_sha256": "bb6e0b8c9463da1d8712a88d2903ae4c915f1a5037bc2bf22fd59a0adccf8f11",
+      "file_count": 76,
+      "source_repository": "vercel-labs/agent-skills",
+      "source_revision": "063bee94c3f4df8453406c830b0a7df0f2860278",
+      "source_path": "skills/react-best-practices"
+    },
+    {
+      "name": "web-design-guidelines",
+      "tree_sha256": "b6849640846e0e39a09629c4cebfd25529b67a1174eb4d3d86f49783094669f9",
+      "file_count": 1,
+      "source_repository": "vercel-labs/agent-skills",
+      "source_revision": "063bee94c3f4df8453406c830b0a7df0f2860278",
+      "source_path": "skills/web-design-guidelines"
+    }
+  ]
+}

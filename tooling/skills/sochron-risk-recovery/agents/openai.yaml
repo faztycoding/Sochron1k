@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sochron1k Risk and Recovery"
+  short_description: "Risk budgets, durable journal and crash recovery"
+  default_prompt: "Use $sochron-risk-recovery to implement and verify the affected Sochron1k risk and recovery invariants."

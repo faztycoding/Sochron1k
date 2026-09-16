@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sochron1k MT5 Execution"
+  short_description: "Demo execution, broker events and reconciliation"
+  default_prompt: "Use $sochron-mt5-execution to implement the current Sochron1k execution contract with simulator and broker evidence kept distinct."

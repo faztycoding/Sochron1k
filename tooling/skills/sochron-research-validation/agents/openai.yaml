@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sochron1k Research Validation"
+  short_description: "Reproducible backtests and time-correct evidence"
+  default_prompt: "Use $sochron-research-validation to evaluate the current strategy candidate against the Sochron1k blueprint."
