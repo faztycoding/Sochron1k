@@ -83,6 +83,14 @@ awaiting compilation and actual terminal verification. See
 [SCN-006](docs/contracts/SCN-006-market-chart.md) and the
 [chart configuration runbook](docs/operations/local-mt5-bridge.md#native-chart-channel-scn-006).
 
+Optional [durable closed-bar history (SCN-007)](docs/contracts/SCN-007-durable-bar-history.md)
+now records validated native bars before chart acknowledgment and retains validation
+baselines across API restarts. History reads are owner-authenticated and paginated
+against an archive-scoped receipt watermark. It requires an explicitly configured
+private local directory; unset means monitoring-only. The UI still shows the live
+monitoring window, not a historical-data browser. This is not raw-tick capture,
+Supabase history synchronization, a complete backtest dataset or Demo release evidence.
+
 ## Local Supabase foundation
 
 The pinned Supabase CLI, local configuration, initial migration, and pgTAP authorization tests are committed. The browser role is read-only and owner-scoped; anonymous access and browser writes are denied. No hosted project is linked and no remote database has been changed.

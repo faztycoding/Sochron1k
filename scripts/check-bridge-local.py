@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SCN-004/006 loopback HTTP; synthetic telemetry and bars, no MT5 connection."""
+"""SCN-004/006/007 loopback HTTP and local history; no MT5 connection."""
 
 from __future__ import annotations
 
@@ -9,10 +9,12 @@ import os
 import platform
 import secrets
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
 import time
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -63,6 +65,7 @@ def main() -> None:
                 "PYTHONPATH": str(ROOT / "services/api/src"),
                 "SOCHRON_BRIDGE_CONFIG_FILE": str(private),
                 "SOCHRON_CHART_CONFIG_FILE": str(chart_private),
+                "SOCHRON_CHART_HISTORY_DIR": str(Path(directory).resolve()),
                 "TRADING_MODE": "live",
                 "AUTO_TRADING_ENABLED": "true",
             }
@@ -205,6 +208,20 @@ def main() -> None:
                         "/bridge/v1/chart/snapshot", headers=auth, json=chart_packet
                     )
                     require(chart_received.status_code == 200, "native bars not accepted")
+                    with closing(
+                        sqlite3.connect(
+                            (Path(directory) / "bars.sqlite3").as_uri() + "?mode=ro", uri=True
+                        )
+                    ) as durable:
+                        require(
+                            durable.execute("SELECT COUNT(*) FROM closed_bars").fetchone()[0]
+                            == 239,
+                            "HTTP acknowledged before closed bars were durable",
+                        )
+                        require(
+                            durable.execute("SELECT COUNT(*) FROM receipts").fetchone()[0] == 1,
+                            "receipt missing after acknowledgment",
+                        )
                     require(
                         client.post(
                             "/bridge/v1/chart/snapshot", headers=auth, json=chart_packet
@@ -219,6 +236,10 @@ def main() -> None:
                     require(
                         client.get("/owner/chart/M1", headers=auth).status_code == 503,
                         "executor credential bypassed disabled owner auth",
+                    )
+                    require(
+                        client.get("/owner/history/M1", headers=auth).status_code == 503,
+                        "executor credential bypassed history owner authorization",
                     )
                     chart_packet["sequence"] = 2
                     chart_packet["bars"][0]["close"] = "2500.30"
@@ -262,6 +283,27 @@ def main() -> None:
                     process.kill()
                     process.wait(timeout=5)
 
+            # Reopen only this verifier's private archive after the API has stopped.
+            with closing(
+                sqlite3.connect((Path(directory) / "bars.sqlite3").as_uri() + "?mode=ro", uri=True)
+            ) as durable:
+                require(
+                    durable.execute("PRAGMA quick_check").fetchone()[0] == "ok",
+                    "history integrity check failed",
+                )
+                require(
+                    durable.execute("SELECT COUNT(*) FROM closed_bars").fetchone()[0] == 239,
+                    "history lost after API shutdown",
+                )
+                require(
+                    durable.execute("SELECT COUNT(*) FROM receipts").fetchone()[0] == 1,
+                    "duplicate or rejected packet changed durable receipts",
+                )
+                require(
+                    durable.execute("SELECT COUNT(*) FROM latest_frames").fetchone()[0] == 1,
+                    "validation baseline missing",
+                )
+
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True))
     files = [
@@ -271,13 +313,15 @@ def main() -> None:
         "services/api/src/sochron1k/main.py",
         "services/api/src/sochron1k/chart.py",
         "services/api/src/sochron1k/chart_api.py",
+        "services/api/src/sochron1k/bar_history.py",
+        "tests/test_bar_history.py",
         "tests/test_chart.py",
         "tests/test_telemetry_bridge.py",
     ]
     print(
         json.dumps(
             {
-                "contracts": ["SCN-004", "SCN-006 API ingress"],
+                "contracts": ["SCN-004", "SCN-006 API ingress", "SCN-007 local persistence"],
                 "result": "PASS",
                 "source_revision": revision,
                 "dirty": dirty,
@@ -290,7 +334,7 @@ def main() -> None:
                 },
                 "limits": (
                     "No MT5/EA/compiler/broker operation, browser Auth, "
-                    "persistence or deployment evidence"
+                    "power-loss durability, Supabase history sync or deployment evidence"
                 ),
             },
             indent=2,
@@ -303,5 +347,7 @@ if __name__ == "__main__":
         main()
     except Exception:
         # Do not dump HTTP requests, private config or their containing exceptions.
-        print("FAIL SCN-004/006 loopback verifier; no broker operation attempted", file=sys.stderr)
+        print(
+            "FAIL SCN-004/006/007 loopback verifier; no broker operation attempted", file=sys.stderr
+        )
         raise SystemExit(1) from None

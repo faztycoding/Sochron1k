@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from itertools import pairwise
 from pathlib import Path
-from typing import Literal, Self
+from typing import TYPE_CHECKING, Literal, Self
 from uuid import UUID
 
 from pydantic import AwareDatetime, Field, StrictInt, field_validator, model_validator
@@ -26,6 +26,9 @@ from .telemetry import (
     FrameReceipt,
     TelemetryBridge,
 )
+
+if TYPE_CHECKING:
+    from .bar_history import BarHistory
 
 MAX_CHART_BYTES = 131_072
 MAX_CHART_AGE_SECONDS = 15
@@ -174,14 +177,18 @@ class ChartStore:
         *,
         utc_now: Callable[[], datetime] = lambda: datetime.now(UTC),
         monotonic: Callable[[], float] = time.monotonic,
+        history: BarHistory | None = None,
     ) -> None:
         self.bridge = bridge
         self.settings = settings
         self._now, self._monotonic = utc_now, monotonic
         self._lock = threading.Lock()
+        self.history = history
+        self._history_failed = False
         self._sequence = 0
         self._fingerprint: str | None = None
-        self._frames: dict[str, ChartFrame] = {}
+        # Restored frames constrain validation only, never initialize live views.
+        self._frames: dict[str, ChartFrame] = history.latest_frames() if history else {}
         self._views: dict[str, ChartObservation] = {}
         self._received_mono: dict[str, float] = {}
         self._rejected: set[str] = set()
@@ -198,11 +205,24 @@ class ChartStore:
         with self._lock:
             self._rejected.update(PERIODS)
 
+    def fail_history(self) -> None:
+        with self._lock:
+            self._history_failed = True
+            self._rejected.update(PERIODS)
+
     def accept(self, frame: ChartFrame) -> FrameReceipt:
+        from .bar_history import HistoryUnavailable
+
         fingerprint = hashlib.sha256(frame.model_dump_json().encode()).hexdigest()
         with self._lock:
             try:
+                if self._history_failed:
+                    raise HistoryUnavailable()
                 return self._accept(frame, fingerprint)
+            except HistoryUnavailable:
+                self._history_failed = True
+                self._rejected.update(PERIODS)
+                raise
             except BridgeDenied:
                 self._rejected.update(PERIODS)
                 raise
@@ -293,7 +313,7 @@ class ChartStore:
             for left, right in pairwise(bars)
             if right.time_server_s - left.time_server_s > period
         )
-        self._views[frame.timeframe] = ChartObservation(
+        observation = ChartObservation(
             identity=frame.identity,
             timeframe=frame.timeframe,
             price_basis=frame.price_basis,
@@ -307,6 +327,9 @@ class ChartStore:
             bars=bars,
             gaps=gaps,
         )
+        if self.history is not None:
+            self.history.record(frame, observation)
+        self._views[frame.timeframe] = observation
         self._frames[frame.timeframe] = frame
         self._received_mono[frame.timeframe] = self._monotonic()
         self._sequence, self._fingerprint = frame.sequence, fingerprint

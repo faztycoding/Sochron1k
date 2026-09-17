@@ -114,7 +114,7 @@ Do not send the account password in chat. Account reference and credential must 
 configured locally through the approved secret channel.
 
 Still required: compiled EA, actual read-only round trip, real owner configuration,
-persistent bars/ticks/history, execution fencing, command/SL/reconciliation and
+actual persistent capture/synchronization and raw ticks, execution fencing, command/SL/reconciliation and
 recovery gates, one separately authorized Demo open/close, alerts/restore and
 target-host burn-in. Local ingress success does not satisfy those gates.
 
@@ -145,7 +145,7 @@ Do not substitute Bangkok time or guess dates; historical windows crossing an
 unverified daylight-saving transition are rejected. Missing config keeps charts
 disabled; invalid config fails startup without printing private input. The files
 are read at startup. Restarting clears the disposable chart cache and boot fence,
-not durable research history. A corrected closed bar fails closed: investigate
+not the optional SCN-007 durable archive described below. A corrected closed bar fails closed: investigate
 the source/time mapping and authorize resynchronization before restarting/reseeding.
 Do not automatically reset a rejection to hide a broker correction.
 
@@ -153,9 +153,71 @@ The UI preserves decimal strings and includes a keyboard-accessible bar selector
 forming-bar color, UTC/Bangkok labels, and explicit gaps/stale/rejected states.
 Numerical canvas limitations fall back to exact text values. Gaps use a single
 whitespace marker with their actual missing-interval counts alongside; spacing is
-not proportional to elapsed wall time. This is not raw-tick capture, durable M1
-storage, a strategy input, a market-session calendar or execution evidence.
+not proportional to elapsed wall time. The chart cache itself is not raw-tick capture,
+durable M1 storage, a strategy input, a market-session calendar or execution evidence.
 
 Run the existing HTTP and browser verifiers above (browser command in README) to
 exercise this channel locally. Tests create their own private config and clean it
 up. Actual owner/broker configurations and all terminal gates remain outstanding.
+
+## Durable native-bar history (SCN-007)
+
+The API can commit closed native bars to a separate local SQLite capture spool.
+Set `SOCHRON_CHART_HISTORY_DIR` in the API environment to an **existing, canonical
+absolute directory** owned by the API user with mode `0700`. Do not use a shared,
+network-mounted or symlinked directory. The API creates only `bars.sqlite3` and
+SQLite sidecars inside it; the database must remain owner-only (`0600`). Bridge
+and chart private configurations must already be valid. Missing history setting
+means explicitly disabled capture. Invalid path/permissions/configuration,
+incompatible schema or detected corruption stops startup with a redacted error.
+No directory, credentials, account connection or deployment is provisioned for you.
+
+Keep the single API process topology. Multiple independently running API workers
+are not supported by the chart boot/monitoring contract. Never copy or modify a
+running archive with ordinary file-copy tools; consistent backup/restore tooling
+and target-host restore evidence remain outstanding. Preserve the old archive
+before any reviewed migration. Changing identity or broker-offset validity interval
+against an existing archive is refused; do not delete/reseed it to hide corrections.
+
+Every accepted chart first commits a unique receipt, new closed bars and its latest
+validation projection in one WAL/FULL transaction. The forming row is excluded from
+closed history. Repeated bars keep their original exact decimal representation and
+first-receipt provenance. API restart reloads validation constraints, **not** a live
+chart or fresh feed; a new boot and fresh telemetry/chart are still required.
+The full forming-bar observation history is not retained.
+
+`GET /owner/history/{M1|M5|M15|H1}` uses the same live owner/session verification as
+other private reads; executor credentials cannot substitute. `limit` is 1–240
+(default 240). First read returns `archive_id` and `through_receipt`. For subsequent
+pages send both values unchanged and set `after_server_s` to the last returned raw
+broker bar timestamp. Later captures are excluded from that watermark, including
+bars that only subsequently became closed. A different archive ID or future
+watermark is rejected. UTC times, source-observation time, first API-received time,
+decimal prices, contract/basis/build and explicit unclassified gaps are preserved.
+`confirmed_by_server_s` records the later native bar that established closure,
+not an assertion that the earlier bar was already known at its scheduled close.
+Gaps at a page boundary are included. There is no mutation or public history route.
+
+`first_received_at` is the capture-processing time before its transaction commits,
+not an exact commit timestamp, candle-close timestamp or proof of when a strategy
+knew a value. `first_receipt` identifies the committed evidence ordering. A future
+strategy must reference an already committed archive/watermark and record its own
+decision availability; never backdate availability to an old bar's event time.
+History here is not an approved point-in-time research dataset.
+
+Database pages are capped at 128 MiB, with `warning_70` and `warning_85` in history
+responses. Sidecars/filesystem overhead are outside that page quota. This is not a
+target filesystem capacity monitor or an external alert. SQLite lock wait is
+100ms; actual I/O/fsync duration is not hard-bounded. Blocking chart processing runs
+in the existing application threadpool, not the async event loop. Local storage
+failure returns `503 HISTORY_UNAVAILABLE`, publishes no new chart, and latches
+chart rejection until reviewed restart. Quotes may continue; execution stays off.
+There is no automatic pruning, correction overwrite, rejection reset or sync retry.
+
+Local verification uses `tests/test_bar_history.py` and
+`.venv/bin/python scripts/check-bridge-local.py`, including actual HTTP acknowledgment
+followed by independent committed-data inspection and reopening after API shutdown.
+The directory and synthetic database created by that verifier are temporary and
+cleaned up; developer servers and actual archives are not touched. Supabase M1 sync,
+raw-tick Parquet, history UI, backup/restore, retention and MT5/target-host evidence
+remain separate required work before a complete Demo release.

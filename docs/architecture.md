@@ -85,6 +85,13 @@ Signals and zones record both `formed_at` and `confirmed_at`, the strategy versi
 - AI output cannot change deterministic risk or execution rules.
 - Historical decision snapshots are immutable; corrections create a new revision.
 
+SCN-007's optional local native-bar spool is separate from the command journal.
+It retains immutable closed bars and capture receipts before chart acknowledgment;
+latest frames are replaceable validation projections only. History reads are
+owner-authenticated and tied to a stable archive/receipt watermark. It is not
+Parquet raw-tick capture, synchronized Supabase history or strategy decision evidence;
+see [ADR-008](decisions/ADR-008-local-native-bar-history.md).
+
 ## Failure behavior
 
 | Failure | Required behavior |

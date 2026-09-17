@@ -66,6 +66,8 @@ Single API process and one Demo identity as SCN-004. A bounded in-memory chart c
 is disposable monitoring state, not raw-tick storage, durable research history or
 execution recovery. Raw ticks, Supabase M1 history, indicators, signals and strategy
 parity remain separate required product work; this increment does not replace them.
+SCN-007 adds an optional local durable closed-bar capture spool and restores only
+validation baselines on restart. The monitoring views/freshness still start empty.
 Never silently accept a broker correction to an already closed bar in this cache:
 reject, retain prior observation as rejected, and require reviewed resynchronization.
 
