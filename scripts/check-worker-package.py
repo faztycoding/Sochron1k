@@ -56,6 +56,54 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def exercise_startup(python, directory):
+    from dataclasses import asdict
+
+    import conftest as fixtures
+
+    observed = fixtures.observed_at.__wrapped__()
+    data = {
+        name: getattr(fixtures, name).__wrapped__(observed).model_dump(mode="json")
+        for name in ("account", "market", "intent")
+    }
+    data.update(
+        {
+            name: getattr(fixtures, name).__wrapped__().model_dump(mode="json")
+            for name in ("contract", "risk")
+        }
+    )
+    data.update(policy=asdict(fixtures.policy.__wrapped__()), now=observed.isoformat())
+    path = directory / "startup-fixture.json"
+    path.touch(mode=0o600)
+    path.write_text(json.dumps(data))
+    probe = run(
+        [str(python), "-I", str(ROOT / "tests/fixtures/execution_startup_probe.py"), str(path)],
+        cwd=directory,
+        env={"PATH": os.defpath},
+    )
+    require(not probe.stderr, "installed startup probe stderr")
+    result = json.loads(probe.stdout)
+    require(
+        result
+        == dict(
+            result="PASS",
+            scope="installed-simulator",
+            sends=1,
+            attempts=1,
+            deals=1,
+            halts_preserved=True,
+            execution_ready=False,
+            auto_trading_enabled=False,
+        ),
+        "installed startup admission",
+    )
+    check(
+        "installed execution startup, missing baseline, UNKNOWN recovery, "
+        "generation and halt denial"
+    )
+    return result
+
+
 def exercise_recovery(command, python, directory, sync_config, wheel_hash, invoke_sync):
     from decimal import Decimal
 
@@ -644,6 +692,7 @@ print(json.dumps(values))
             "fresh non-editable environment, exact production dependencies, no source/dev imports"
         )
         recovery = exercise(environment / "bin/sochron-sync", python, directory, digest(wheel))
+        startup = exercise_startup(python, directory)
     return dict(
         result="PASS",
         revision=run(["git", "rev-parse", "HEAD"]).stdout.strip(),
@@ -655,6 +704,7 @@ print(json.dumps(values))
         build={n: locked[n] for n in build_names},
         checks=CHECKS,
         recovery_rehearsal=recovery,
+        startup_rehearsal=startup,
         artifact_sha256={p.name: digest(p) for p in (wheel, sdist, requirements)},
         input_sha256={
             str(p.relative_to(ROOT)): digest(p)
@@ -667,6 +717,7 @@ print(json.dumps(values))
                 ROOT / "tests/test_chart.py",
                 ROOT / "tests/conftest.py",
                 ROOT / "tests/fixtures/recovery_query_probe.py",
+                ROOT / "tests/fixtures/execution_startup_probe.py",
                 ROOT / "tests/test_native_source.py",
                 ROOT / "tests/test_bar_history.py",
                 ROOT / "tests/test_telemetry_bridge.py",

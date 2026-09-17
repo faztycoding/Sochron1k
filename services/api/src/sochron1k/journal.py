@@ -4,7 +4,7 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from pathlib import Path
 
 from .models import BrokerSnapshot, CommandIntent, CommandState, RiskState
@@ -16,6 +16,16 @@ class IdempotencyConflict(RuntimeError):
 
 class ExposureConflict(RuntimeError):
     pass
+
+
+class RiskStateConflict(RuntimeError):
+    def __init__(self):
+        super().__init__("RISK_STATE_CHANGED")
+
+
+class BrokerEvidenceConflict(RuntimeError):
+    def __init__(self):
+        super().__init__("BROKER_EVIDENCE_CONFLICT")
 
 
 @dataclass(frozen=True)
@@ -118,7 +128,12 @@ class Journal:
         return datetime.now(UTC).isoformat()
 
     def reserve(
-        self, intent: CommandIntent, volume: Decimal, reserved_loss: Decimal
+        self,
+        intent: CommandIntent,
+        volume: Decimal,
+        reserved_loss: Decimal,
+        *,
+        expected_risk: RiskState | None = None,
     ) -> Reservation:
         fingerprint = intent.canonical_fingerprint()
         payload = json.dumps(intent.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
@@ -126,6 +141,8 @@ class Journal:
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
+            if expected_risk is not None:
+                self._check_risk(connection, expected_risk)
             existing = connection.execute(
                 """
                 SELECT command_id, fingerprint, state, volume
@@ -147,8 +164,8 @@ class Journal:
                     duplicate=True,
                 )
             if connection.execute(
-                "SELECT 1 FROM exposure_slots WHERE account_ref=? AND experiment_id=?",
-                (intent.account_ref, intent.experiment_id),
+                "SELECT 1 FROM exposure_slots WHERE account_ref=?",
+                (intent.account_ref,),
             ).fetchone():
                 raise ExposureConflict(
                     "one logical exposure already occupies this account and experiment"
@@ -208,10 +225,14 @@ class Journal:
         finally:
             connection.close()
 
-    def begin_dispatch(self, command_id: str, attempt_id: str) -> None:
+    def begin_dispatch(
+        self, command_id: str, attempt_id: str, *, expected_risk: RiskState | None = None
+    ) -> None:
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
+            if expected_risk is not None:
+                self._check_risk(connection, expected_risk)
             row = connection.execute(
                 "SELECT state FROM commands WHERE command_id=?", (command_id,)
             ).fetchone()
@@ -282,6 +303,7 @@ class Journal:
             connection.close()
 
     def apply_broker_snapshot(self, snapshot: BrokerSnapshot) -> CommandState:
+        snapshot = BrokerSnapshot.model_validate(snapshot.model_dump())
         if snapshot.terminal_state is CommandState.REJECTED:
             target = CommandState.REJECTED
         elif snapshot.filled_volume == 0:
@@ -296,10 +318,11 @@ class Journal:
         try:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
-                "SELECT state FROM commands WHERE command_id=?", (snapshot.command_id,)
+                "SELECT * FROM commands WHERE command_id=?", (snapshot.command_id,)
             ).fetchone()
             if row is None:
                 raise KeyError(snapshot.command_id)
+            self._validate_broker_evidence(connection, row, snapshot)
             if snapshot.order_ticket:
                 connection.execute(
                     """
@@ -355,6 +378,122 @@ class Journal:
         finally:
             connection.close()
 
+    @staticmethod
+    def _validate_broker_evidence(db, row, snapshot):
+        def require(condition):
+            if not condition:
+                raise BrokerEvidenceConflict()
+
+        require(snapshot.terminal_state in {None, CommandState.REJECTED})
+        numbers = [
+            snapshot.requested_volume,
+            snapshot.filled_volume,
+            snapshot.remaining_volume,
+            *(d.volume for d in snapshot.deals),
+            *(d.price for d in snapshot.deals),
+        ]
+        require(
+            all(
+                n.is_finite()
+                and len(n.as_tuple().digits) <= 80
+                and -100 <= n.as_tuple().exponent <= 100
+                for n in numbers
+            )
+        )
+        require(snapshot.requested_volume == Decimal(row["volume"]))
+        with localcontext() as context:
+            context.prec = 512
+            require(snapshot.filled_volume + snapshot.remaining_volume == snapshot.requested_volume)
+            require(sum((d.volume for d in snapshot.deals), Decimal(0)) == snapshot.filled_volume)
+        require(bool(snapshot.order_ticket) and len(snapshot.order_ticket) <= 128)
+        require(len(snapshot.deals) <= 1000)
+        require(len({d.deal_ticket for d in snapshot.deals}) == len(snapshot.deals))
+        require(all(d.deal_ticket and len(d.deal_ticket) <= 128 for d in snapshot.deals))
+        require(not snapshot.filled_volume or bool(snapshot.position_id))
+        require(snapshot.position_id is None or 0 < len(snapshot.position_id) <= 128)
+        require(not snapshot.stop_loss_confirmed or snapshot.filled_volume > 0)
+        require(snapshot.terminal_state is None or snapshot.filled_volume == 0)
+        require(row["state"] not in {"closed", "cancelled", "expired"})
+        require(row["state"] != "rejected" or snapshot.terminal_state is CommandState.REJECTED)
+        require(
+            db.execute(
+                "SELECT 1 FROM dispatch_attempts WHERE command_id=?", (snapshot.command_id,)
+            ).fetchone()
+            is not None
+        )
+        existing = db.execute(
+            "SELECT * FROM broker_orders WHERE command_id=? OR order_ticket=?",
+            (snapshot.command_id, snapshot.order_ticket),
+        ).fetchall()
+        for order in existing:
+            require(
+                order["command_id"] == snapshot.command_id
+                and order["order_ticket"] == snapshot.order_ticket
+                and Decimal(order["requested_volume"]) == snapshot.requested_volume
+                and Decimal(order["filled_volume"]) <= snapshot.filled_volume
+                and (order["position_id"] is None or order["position_id"] == snapshot.position_id)
+            )
+        deals = {d.deal_ticket: d for d in snapshot.deals}
+        for previous in db.execute(
+            "SELECT * FROM broker_deals WHERE command_id=?", (snapshot.command_id,)
+        ):
+            require(previous["deal_ticket"] in deals)
+            current = deals[previous["deal_ticket"]]
+            require(
+                Decimal(previous["volume"]) == current.volume
+                and Decimal(previous["price"]) == current.price
+            )
+        for ticket in deals:
+            previous = db.execute(
+                "SELECT command_id FROM broker_deals WHERE deal_ticket=?", (ticket,)
+            ).fetchone()
+            require(previous is None or previous[0] == snapshot.command_id)
+
+    @staticmethod
+    def _risk_row(row):
+        if row is None:
+            return None
+        return RiskState(
+            account_ref=row["account_ref"],
+            experiment_id=row["experiment_id"],
+            bangkok_day=row["bangkok_day"],
+            daily_baseline=Decimal(row["daily_baseline"]),
+            experiment_baseline=Decimal(row["experiment_baseline"]),
+            daily_halt=bool(row["daily_halt"]),
+            total_halt=bool(row["total_halt"]),
+            updated_at=row["updated_at"],
+        )
+
+    @classmethod
+    def _check_risk(cls, db, expected):
+        current = cls._risk_row(
+            db.execute(
+                "SELECT * FROM risk_state WHERE account_ref=? AND experiment_id=?",
+                (expected.account_ref, expected.experiment_id),
+            ).fetchone()
+        )
+        if current != expected or current.daily_halt or current.total_halt:
+            raise RiskStateConflict()
+
+    def startup_state(self, account_ref, experiment_id):
+        with self._connect() as db:
+            db.execute("BEGIN")
+            risk = self._risk_row(
+                db.execute(
+                    "SELECT * FROM risk_state WHERE account_ref=? AND experiment_id=?",
+                    (account_ref, experiment_id),
+                ).fetchone()
+            )
+            active = [
+                dict(row)
+                for row in db.execute(
+                    "SELECT * FROM commands WHERE state NOT IN "
+                    "('closed','rejected','expired','cancelled') LIMIT 1001"
+                )
+            ]
+            exposure = [dict(row) for row in db.execute("SELECT * FROM exposure_slots LIMIT 1001")]
+            return risk, active, exposure
+
     def command(self, command_id: str) -> sqlite3.Row:
         with self._connect() as connection:
             row = connection.execute(
@@ -400,18 +539,7 @@ class Journal:
                 "SELECT * FROM risk_state WHERE account_ref=? AND experiment_id=?",
                 (account_ref, experiment_id),
             ).fetchone()
-        if row is None:
-            return None
-        return RiskState(
-            account_ref=row["account_ref"],
-            experiment_id=row["experiment_id"],
-            bangkok_day=row["bangkok_day"],
-            daily_baseline=Decimal(row["daily_baseline"]),
-            experiment_baseline=Decimal(row["experiment_baseline"]),
-            daily_halt=bool(row["daily_halt"]),
-            total_halt=bool(row["total_halt"]),
-            updated_at=row["updated_at"],
-        )
+        return self._risk_row(row)
 
     def unresolved_command_ids(self) -> list[str]:
         terminal = (

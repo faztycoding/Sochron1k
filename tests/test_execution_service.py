@@ -13,6 +13,23 @@ from sochron1k.simulator import SimulatorAdapter, SimulatorBehavior
 
 
 def submit(service, *, policy, account, contract, market, intent, risk, observed_at):
+    # Explicit fixture-only initial experiment provisioning; never a production fallback.
+    if service.journal.risk_state(intent.account_ref, intent.experiment_id) is None:
+        service.journal.save_risk_state(
+            RiskState(
+                account_ref=intent.account_ref,
+                experiment_id=intent.experiment_id,
+                bangkok_day=observed_at.date(),
+                daily_baseline=risk.daily_baseline,
+                experiment_baseline=risk.experiment_baseline,
+                updated_at=observed_at,
+            )
+        )
+    service.adapter.account = account
+    service.adapter.symbol = contract.symbol
+    service.startup(
+        policy=policy, experiment_id=intent.experiment_id, executor_id="simulator", now=observed_at
+    )
     return service.submit(
         policy=policy,
         account=account,

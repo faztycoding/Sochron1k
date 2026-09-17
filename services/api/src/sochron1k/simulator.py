@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
+from uuid import uuid4
 
-from .models import BrokerDeal, BrokerSnapshot, CommandIntent, CommandState
+from .executor import ExecutorInventory
+from .models import AccountSnapshot, BrokerDeal, BrokerSnapshot, CommandIntent, CommandState
 
 
 class SimulatorBehavior(StrEnum):
@@ -18,11 +20,33 @@ class SimulatorBehavior(StrEnum):
 @dataclass
 class SimulatorAdapter:
     behavior: SimulatorBehavior = SimulatorBehavior.FILL
+    account: AccountSnapshot | None = None
+    symbol: str = ""
 
     def __post_init__(self) -> None:
         self.send_count = 0
         self._snapshots: dict[str, BrokerSnapshot] = {}
         self.query_available = True
+        self.generation = uuid4().hex
+        self.executor_id = "simulator"
+        self.complete = True
+        self.foreign_orders = 0
+        self.foreign_positions = 0
+
+    def inventory(self) -> ExecutorInventory:
+        if not self.query_available or self.account is None:
+            raise ConnectionError("simulator inventory is unavailable or unconfigured")
+        return ExecutorInventory(
+            executor_id=self.executor_id,
+            generation=self.generation,
+            account=self.account,
+            symbol=self.symbol,
+            observed_at=self.account.checked_at,
+            complete=self.complete,
+            foreign_orders=self.foreign_orders,
+            foreign_positions=self.foreign_positions,
+            snapshots=tuple(self._snapshots.values()),
+        )
 
     def send(self, intent: CommandIntent, volume: Decimal, attempt_id: str) -> BrokerSnapshot:
         del attempt_id
