@@ -64,11 +64,11 @@ def main() -> None:
     output = sql(mutated)
     failures = re.findall(r"^not ok .*", output, re.MULTILINE)
     assert len(failures) == 4 and all("audit_events" in line for line in failures), failures
-    assert "1..256" in output
+    assert "1..271" in output
     assert sql(policy_query) == before, "Transaction failed to restore original policy"
     restored = sql(source)
     assert not re.search(r"^not ok ", restored, re.MULTILINE), "Restored fixture failed"
-    assert len(re.findall(r"^ok \d+ -", restored, re.MULTILINE)) == 256
+    assert len(re.findall(r"^ok \d+ -", restored, re.MULTILINE)) == 271
     assert sql(policy_query) == before
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT))
@@ -77,7 +77,7 @@ def main() -> None:
     print(f"Fixture SHA256: {hashlib.sha256(source.encode()).hexdigest()}")
     print(
         "PASS mutation: 4 audit_events isolation failures detected; "
-        "policy restored; 256 checks pass"
+        "policy restored; 271 checks pass"
     )
 
 

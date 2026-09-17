@@ -2,14 +2,14 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(256);
+select plan(271);
 
 create function pg_temp.fixture_tables() returns text[]
 language sql immutable security invoker as $$
   select array[
     'account_cash_flows', 'accounts', 'ai_runs', 'audit_events', 'bars',
     'commands', 'deals', 'equity_snapshots', 'evaluations', 'experiments',
-    'feature_snapshots', 'news_items', 'orders', 'positions', 'risk_events',
+    'feature_snapshots', 'native_bar_archives', 'news_items', 'orders', 'positions', 'risk_events',
     'signals', 'strategy_versions'
   ]::text[];
 $$;
@@ -41,6 +41,10 @@ begin
     '10000000-0000-0000-0000-000000000001'::uuid,
     '20000000-0000-0000-0000-000000000002'::uuid
   ] loop
+    insert into public.native_bar_archives(owner_id,archive_id,binding) values (
+      fixture_owner,'80000000-0000-4000-8000-000000000001',
+      '{"identity":{"executor_id":"fixture","account_ref":"fixture-account","server":"Synthetic-Demo", "currency":"USD", "margin_mode":"retail_hedging","symbol":"XAUUSD.fixture"},"offset":0,"chart":{"offset_valid_from_server_s":1700000000,"offset_valid_until_server_s":2000000000}}'
+    );
     insert into public.strategy_versions
       (owner_id, version_id, code_hash, status, data_cutoff)
     values (fixture_owner, 'fixture-v1', repeat('a', 64), 'candidate', now())

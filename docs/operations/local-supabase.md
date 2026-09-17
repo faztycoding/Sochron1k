@@ -27,11 +27,33 @@ Before a reset, inspect the target and ensure no valuable local data exists. The
 SOCHRON_ALLOW_LOCAL_DB_RESET=sochron1k bash scripts/with-local-docker.sh npx -y -p node@24.21.0 npm run check:db:local
 ```
 
-The command resets only the local project, reapplies migrations without seed data, runs public-schema lint, runs all advisors with errors blocking, and executes pgTAP fixtures inside a rolled-back transaction. INFO-level unused-index findings are expected for a fresh empty database; retained indexes support foreign keys and planned access patterns. This is not workload-based index validation.
+The command resets only the local project, reapplies migrations without seed data,
+runs public/private-schema lint, runs all advisors with errors blocking, and
+executes pgTAP fixtures inside rolled-back transactions. It also runs owner-policy
+mutation detection and native-receiver forward-migration/concurrency checks.
+INFO-level unused-index findings are expected for a fresh empty database; retained
+indexes support foreign keys and planned access patterns. This is not workload-based
+index validation.
+
+`scripts/check-native-sync-concurrency.py` creates a random `scn008_verify_...`
+database inside the guarded local Postgres container and drops only that database
+after the test. It never resets the primary local database or accepts a hosted URL.
+The Auth tables/function are minimal scaffolding in this isolated check; full local
+Supabase role behavior is covered by pgTAP, not by that scaffold. Independent SQL
+sessions must demonstrably overlap at a database lock before the test can pass.
 
 ## Findings and evidence limits
 
 - Initial migration failed because the implicit currency-format constraint name collided with the explicit cost/currency-pair constraint. Rename the pair constraint before first successful deployment; both rules remain enforced. No remote migration history was rewritten.
 - The initial pgTAP text-array comparison failed inside its record-comparison helper with indeterminate collation. Typed JSON equality now checks the exact same complete tuple/list, without dropping a value or owner-isolation assertion.
-- The fixture suite contains 272 checks: the original 16 schema/grant/account/cost checks plus 256 all-table access checks. Both owners have synthetic rows in all 17 tables. Exact owner sets, empty-owner/missing-subject reads, anonymous reads, and browser insert/update/delete denial are exercised. The local verifier additionally injects a permissive SELECT policy inside a rolled-back transaction, requires four isolation failures, and reruns 256 checks after confirming policy restoration. It does not prove HTTP JWT validation, application Auth integration, all data constraints, or immutable decision evidence. See [coverage and evidence](../verification/SCN-002-owner-isolation.md).
+- The current suite contains **380 checks**: 16 baseline, 271 all-table access,
+  14 session and 79 native-receiver checks. Both owners have synthetic rows in all
+  18 public tables. Exact owner sets, empty-owner/missing-subject reads, anonymous
+  reads, and browser insert/update/delete denial are exercised. The mutation test
+  requires four isolation failures from a deliberately permissive audit policy,
+  restores it via rollback and reruns all 271 access checks. Native checks include
+  exact decimals, atomic conflicts, immutable captures and actual backend TRUNCATE
+  denial. They do not prove HTTP JWT validation, worker synchronization, all data
+  constraints or actual broker evidence. See [initial isolation evidence](../verification/SCN-002-owner-isolation.md)
+  and [native receiver evidence](../verification/SCN-008-native-m1-receiver.md).
 - SCN-001 MT5 gates, recovery, worker synchronization and unattended Demo remain incomplete.

@@ -59,5 +59,27 @@ if [[ -e supabase/.temp/project-ref ]]; then
   exit 1
 fi
 
+native_migration="supabase/migrations/20260917050541_native_m1_receiver.sql"
+# Source tripwires only; check:db:local supplies role and concurrency evidence.
+for requirement in \
+  'FORCE ROW LEVEL SECURITY;' \
+  'CREATE UNIQUE INDEX bars_native_capture_key' \
+  'CREATE TRIGGER native_bar_guard' \
+  'CREATE TRIGGER native_archive_guard' \
+  'NATIVE_BAR_CONFLICT' \
+  'NATIVE_ARCHIVE_CONFLICT' \
+  'REVOKE ALL ON TABLE public.bars FROM service_role;' \
+  'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.bars TO service_role;' \
+  'GRANT INSERT, SELECT ON TABLE "public"."native_bar_archives" TO "service_role";'; do
+  if ! rg --fixed-strings --quiet "$requirement" "$native_migration"; then
+    printf 'FAIL missing native receiver source guard: %s\n' "$requirement" >&2
+    exit 1
+  fi
+done
+if rg --ignore-case --quiet 'security definer' "$native_migration"; then
+  printf 'FAIL native receiver adds a privileged definer function\n' >&2
+  exit 1
+fi
+
 python3 scripts/check-no-secrets.py
-printf 'PASS SCN-002 static Supabase guards on CLI %s and Node.js %s\n' "$expected_cli" "$expected_node"
+printf 'PASS SCN-002/008 static Supabase guards on CLI %s and Node.js %s\n' "$expected_cli" "$expected_node"

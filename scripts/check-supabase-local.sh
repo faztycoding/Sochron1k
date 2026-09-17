@@ -20,9 +20,10 @@ if [[ "${SOCHRON_ALLOW_LOCAL_DB_RESET:-}" != sochron1k ]]; then
 fi
 
 npm exec supabase -- db reset --local --no-seed --network-id sochron1k_supabase_local
-npm exec supabase -- db lint --local --schema public --level warning --fail-on error --network-id sochron1k_supabase_local
+npm exec supabase -- db lint --local --schema public,sochron_private --level warning --fail-on error --network-id sochron1k_supabase_local
 npm exec supabase -- db advisors --local --type all --level info --fail-on error --network-id sochron1k_supabase_local
 npm exec supabase -- test db --local supabase/tests --network-id sochron1k_supabase_local
 "${SOCHRON_PYTHON:-.venv/bin/python}" scripts/check-supabase-rls-mutation.py
+"${SOCHRON_PYTHON:-.venv/bin/python}" scripts/check-native-sync-concurrency.py
 
-printf 'PASS SCN-002 local migration, lint, advisors, and pgTAP verification on Node.js %s\n' "$expected_node"
+printf 'PASS local migration, lint, advisors, pgTAP, RLS mutation and native concurrency verification on Node.js %s\n' "$expected_node"
