@@ -4,8 +4,10 @@
 
 Optional backend worker, not enabled by default or included in Compose. AC-03/04
 have source/journal evidence; AC-05 now has config/HTTP/runner tests against fake
-HTTP and real loopback sockets/processes. AC-06 actual local Supabase/PostgREST
-end-to-end evidence is still pending. Hosted setup, destination credentials,
+HTTP and real loopback sockets/processes. AC-06 now has
+[actual local Supabase/Auth/PostgREST evidence](../verification/SCN-008-local-sync.md),
+including process termination after commit and read-back without a second send.
+Hosted setup, destination credentials,
 target deployment and full Demo gates are NOT READY. No MT5/execution operation
 exists in this worker. Starting it does not enable Auto Trading.
 
@@ -133,8 +135,8 @@ SQLite main file is not a verified backup.
 
 ## Outstanding delivery
 
-Next: real local Supabase RPC/roles, high-precision replay and crash integration
-(AC-06), then complete operator/packaging gates (AC-07). Still required from the
+Next: complete operator/packaging and recovery gates (AC-07). Local AC-06 testing
+does not establish installed-service or target-host behavior. Still required from the
 owner: chosen Supabase project/owner, broker Demo server/account specifications,
 MT5 host/build, and deployment/domain/alert/budget decisions. Credentials go only
 through the approved private secret channel. No paid/cloud/broker action is implied.

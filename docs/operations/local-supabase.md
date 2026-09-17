@@ -42,6 +42,35 @@ The Auth tables/function are minimal scaffolding in this isolated check; full lo
 Supabase role behavior is covered by pgTAP, not by that scaffold. Independent SQL
 sessions must demonstrably overlap at a database lock before the test can pass.
 
+## Worker HTTP/crash integration (no reset)
+
+With the guarded stack already running and all committed migrations applied:
+
+```bash
+bash scripts/with-local-docker.sh npx -y -p node@24.21.0 .venv/bin/python scripts/check-native-sync-local.py
+```
+
+This verified command uses actual local Auth, PostgREST and the worker CLI. It
+creates random synthetic users, private temporary archives/journals and a loopback
+fault proxy. It verifies exact values, two-owner isolation, denied anonymous and
+browser RPCs, lost responses, hard process termination, late older bars, unsafe
+config and persistent conflict quarantine. It never targets hosted Supabase,
+resets the database or changes schema/grants. Results and candidate hashes are
+written to ignored `output/native-sync-local/result.json`; failures replace PASS
+with a redacted FAIL record. See [AC-06 evidence](../verification/SCN-008-local-sync.md).
+
+Cleanup first confirms each generated user's UUID/email and scopes deletion to
+those owners and generated archives. Because native rows are deliberately
+immutable even for service-role calls, a separate local postgres transaction uses
+`SET LOCAL session_replication_role=replica` only while removing those synthetic
+rows. It does not change trigger definitions or application privileges. This is
+test housekeeping, not an operator repair/retention procedure. Fixture sessions
+are signed out before Auth users are deleted. A cleanup failure fails the check;
+inspect the failed stage and establish exact fixture ownership before any manual
+cleanup; never reset a database to hide failure.
+Stop afterward using the wrapper above, preserving volumes and removing generated
+key files before the repository secret scan. Temporary fixture data is regenerable.
+
 ## Findings and evidence limits
 
 - Initial migration failed because the implicit currency-format constraint name collided with the explicit cost/currency-pair constraint. Rename the pair constraint before first successful deployment; both rules remain enforced. No remote migration history was rewritten.
@@ -56,4 +85,5 @@ sessions must demonstrably overlap at a database lock before the test can pass.
   denial. They do not prove HTTP JWT validation, worker synchronization, all data
   constraints or actual broker evidence. See [initial isolation evidence](../verification/SCN-002-owner-isolation.md)
   and [native receiver evidence](../verification/SCN-008-native-m1-receiver.md).
-- SCN-001 MT5 gates, recovery, worker synchronization and unattended Demo remain incomplete.
+- SCN-008 now has real local worker synchronization evidence as described above.
+  SCN-001 actual MT5 gates, target recovery, hosted sync and unattended Demo remain incomplete.

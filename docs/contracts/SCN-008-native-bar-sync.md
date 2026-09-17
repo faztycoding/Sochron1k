@@ -74,13 +74,43 @@ AC-04 now has local journal/one-step driver and process-crash evidence; see
 [journal verification](../verification/SCN-008-sync-journal.md).
 AC-05 now has private config, bounded HTTP transport and explicit runner evidence;
 see [transport verification](../verification/SCN-008-sync-transport.md).
-AC-06 real Supabase end-to-end evidence remains NOT RUN. AC-07 has an initial
+AC-06 now has real local Supabase/Auth/PostgREST, hard process-crash and owner-role
+evidence; see [local integration verification](../verification/SCN-008-local-sync.md).
+AC-07 has an initial
 [operator runbook](../operations/native-m1-sync.md), but complete operator delivery,
 packaging and target recovery gates remain incomplete. The worker is not enabled
 or deployed; strategy dataset approval and full Demo acceptance are not claimed.
-Next is actual local Supabase HTTP/role/recovery integration.
+Next is operator packaging and recovery delivery, not hosted enablement.
 
 ## Availability and recovery semantics
+
+### AC-06 real local verifier detail (before implementation)
+
+Use only the guarded `sochron1k` local Docker project and exact loopback origin
+127.0.0.1:54321, with existing applied migrations. No hosted link, remote Docker
+socket, database reset, new grant or schema change. Capture CLI status privately;
+never print generated keys. Create invocation-owned random Auth users and temporary
+private source/worker/key files. Use actual worker CLI and HTTP transport, real
+Auth JWTs, PostgREST RPCs and independent SQL/owner REST read-back as the oracles.
+
+Prove exact large decimal/tick provenance, first availability retained on replay,
+two-owner visibility plus anon/foreign write/RPC denial, later older capture,
+changed-payload quarantine, committed-but-lost response and process termination
+before acknowledgment persistence. A loopback fault proxy may forward only the two
+fixed RPCs to the guarded local origin and suppress one committed response; it
+must never emulate a database success. Count actual writes/rows and restart using
+the same bound journal. Keep failures redacted and tie results to source hashes,
+runtime image identities and fixture scope.
+
+Clean up only the invocation's UUID-scoped fixture rows and Auth users. Native
+immutability must first deny service-role deletion. Cleanup may use a separate
+local postgres transaction with session-local replica mode to bypass deletion
+triggers solely for those generated owner/archive pairs; no trigger definition,
+global setting or application grant is changed. Verify UUID ownership, remove bars
+before archives, restore normal session semantics by transaction/connection end,
+then revoke fixture sessions and delete only generated users. Never apply this
+cleanup procedure to operator data. Retain failure/evidence status and report any
+incomplete cleanup rather than resetting the database.
 
 ### AC-05 transport/config/runner detail (before implementation)
 

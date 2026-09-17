@@ -3,7 +3,9 @@
 2026-09-17. Receiving boundary implemented locally under SCN-008, Demo only;
 read-only source, durable worker journal and one-step driver implemented locally.
 Private config, bounded HTTP transport and explicit runner implemented locally.
-Real Supabase end-to-end HTTP evidence and deployment packaging remain outstanding.
+Real local Supabase end-to-end HTTP evidence is retained under
+[AC-06 verification](../verification/SCN-008-local-sync.md). Deployment packaging,
+hosted integration and target recovery remain outstanding.
 
 ## Decision
 
@@ -66,7 +68,8 @@ UNKNOWN remains eligible for read-back at that limit, but not another send. The
 runner additionally exits after five unresolved steps and uses bounded backoff.
 There is no automatic reset/repair or background restart. This favors explicit
 operator review over indefinitely hammering an unavailable/misconfigured target.
-The full operator and local PostgREST acceptance still needs AC-06/07 evidence.
+Local PostgREST acceptance now has AC-06 evidence. Complete operator delivery
+and target-host recovery still need AC-07 evidence.
 
 ## Alternatives and consequences
 

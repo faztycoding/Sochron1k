@@ -99,11 +99,13 @@ archive/binding and exports closed M1 rows in receipt/time order. It performs no
 network operation and does not persist or acknowledge a synchronization cursor.
 A separate private SQLite sync journal and one-step driver now persist exact
 intent/UNKNOWN before send and advance the cursor only after independent read-back.
-Local process-crash recovery is verified with a synthetic durable destination,
-not real PostgREST. Private config, bounded HTTP RPC transport and a serial explicit
-operator runner now exist, disabled without configuration. Neither API startup nor
-Compose starts the worker. Real Supabase HTTP/role integration, deployment packaging
-and full target recovery remain outstanding;
+Local process-crash recovery is verified with synthetic source data and both a
+durable test destination and actual local Auth/PostgREST. Private config, bounded
+HTTP RPC transport and a serial explicit operator runner now exist, disabled
+without configuration. Neither API startup nor
+Compose starts the worker. Local Supabase HTTP/role integration has
+[AC-06 evidence](verification/SCN-008-local-sync.md); deployment packaging,
+hosted integration and full target recovery remain outstanding;
 see [ADR-009](decisions/ADR-009-native-m1-sync-boundary.md).
 
 ## Failure behavior

@@ -1,5 +1,8 @@
 # SCN-008 AC-05 private transport and runner
 
+Historical AC-05 evidence below is unchanged in scope. Subsequent actual local
+Supabase HTTP/role/crash results are recorded in [AC-06 evidence](SCN-008-local-sync.md).
+
 2026-09-17. Base `33afc944835eccb844056ec4da7dd49fb5e47b93`; candidate dirty
 during verification. Python 3.14.7, SQLite 3.53.1, HTTPX 0.28.1, pytest 9.1.1,
 Ruff 0.16.8 on macOS 26.6.2 arm64. No new dependency or schema migration.
