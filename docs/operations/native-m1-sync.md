@@ -193,6 +193,9 @@ SQLite main file is not a verified backup.
 
 Next: complete consistent backup/restore and recovery gates (AC-07). R-015 has
 [local fixed-runtime evidence](../verification/SCN-003-fixed-sqlite.md), not target approval.
+SCN-009's [individual SQLite snapshot engine](sqlite-snapshots.md) now has local
+verification; multi-store domain validation and operator backup/restore commands
+are still pending. Do not use an individual snapshot as worker recovery admission.
 Local AC-06 testing
 does not establish installed-service or target-host behavior. Still required from the
 owner: chosen Supabase project/owner, broker Demo server/account specifications,

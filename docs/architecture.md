@@ -114,6 +114,13 @@ Fixed SQLite source/linkage and affected Linux tests now have
 and full target recovery remain outstanding;
 see [ADR-009](decisions/ADR-009-native-m1-sync-boundary.md).
 
+SCN-009 adds an internal WAL-aware SQLite snapshot/isolated-copy library with no
+service, endpoint, scheduler or execution authority. Individual snapshots preserve
+committed database bytes and carry integrity metadata; they are not a consistent
+multi-store recovery set. Domain validation and operator delivery remain pending.
+See [ADR-013](decisions/ADR-013-private-sqlite-snapshots.md) and
+[engine evidence](verification/SCN-009-sqlite-snapshots.md).
+
 ## Failure behavior
 
 | Failure | Required behavior |
