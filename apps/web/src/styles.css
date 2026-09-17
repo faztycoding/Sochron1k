@@ -18,6 +18,32 @@
 }
 
 .chart-panel { margin-top: 18px; min-width: 0; scroll-margin-top: 20px; }
+.history-panel { margin-top: 18px; min-width: 0; scroll-margin-top: 20px; }
+.history-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.history-toolbar p { color: var(--muted); font-size: 13px; margin: 0; }
+.history-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.history-actions button { min-height: 44px; }
+.history-panel button:disabled { cursor: not-allowed; }
+.history-snapshot { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; margin: 14px 0; }
+.history-snapshot summary { cursor: pointer; }
+.history-table-scroll { max-height: 28rem; overflow: auto; border-block: 1px solid var(--line); }
+.history-table-scroll:focus-visible, .history-snapshot summary:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+.history-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.history-caption { text-align: left; color: var(--muted); padding: 10px; }
+.history-table thead th { position: sticky; top: 0; background: var(--surface-deep); color: var(--muted); z-index: 1; }
+.history-table th, .history-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: right; font-weight: 400; }
+.history-table th:first-child { text-align: left; }
+.history-table td { font-family: "Inter", sans-serif; }
+.history-table button { background: transparent; border: 0; padding: 6px 0; min-height: 44px; color: var(--text); cursor: pointer; }
+.history-table .is-selected { background: var(--surface-deep); }
+.history-table .is-selected th { box-shadow: inset 2px 0 var(--gold); }
+.history-table button[aria-pressed="true"] { color: var(--gold-soft); }
+.history-provenance { margin-top: 20px; border-left: 2px solid var(--gold); padding-left: 16px; }
+.history-provenance h3 { font-size: 15px; margin: 0 0 12px; }
+.history-provenance dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; font-size: 12px; }
+.history-provenance dt { color: var(--muted); }
+.history-provenance dd { margin: 4px 0 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+@media (max-width: 620px) { .history-provenance dl { grid-template-columns: 1fr; } }
 .nav-item { text-decoration: none; }
 .chart-heading { flex-wrap: wrap; }
 .timeframe-controls { display: flex; gap: 4px; }

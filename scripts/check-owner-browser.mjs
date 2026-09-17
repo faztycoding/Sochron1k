@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// SCN-005/006: real browser/Auth/API/chart, synthetic data, no broker operations.
+// SCN-005/006/007: real browser/Auth/API/chart/history, synthetic data, no broker operations.
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { mkdtemp, mkdir, readdir, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, readFile, realpath, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,8 +60,9 @@ async function run() {
   const buildSha256 = buildHash.digest("hex");
   const output = join(root, "output/playwright", `scn005-${randomUUID()}`);
   await mkdir(output, { recursive: true });
-  const temporary = await mkdtemp(join(tmpdir(), "sochron-browser-"));
+  const temporary = await realpath(await mkdtemp(join(tmpdir(), "sochron-browser-")));
   const users = [];
+  const issuedTokens = []; // Memory only; revoke generated sessions before deleting test users.
   let api;
   let web;
   let browser;
@@ -107,16 +108,17 @@ async function run() {
     await writeFile(bridgePath, JSON.stringify({ identity: template.identity, token: bridgeToken,
       broker_utc_offset_seconds: 0 }), { mode: 0o600, flag: "wx" });
     // Bind port 0 in the child and keep that exact socket open: no port-selection race.
-    api = spawn(join(root, ".venv/bin/python"), ["-c", [
+    const launchApi = (bindPort = 0) => spawn(join(root, ".venv/bin/python"), ["-c", [
       "import json,socket,uvicorn",
-      "sock=socket.socket();sock.bind(('127.0.0.1',0));sock.listen(128)",
+      `sock=socket.socket();sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);sock.bind(('127.0.0.1',${bindPort}));sock.listen(128)`,
       "print(json.dumps({'port':sock.getsockname()[1]}),flush=True)",
       "uvicorn.run('sochron1k.main:app',fd=sock.fileno(),access_log=False,log_level='critical')",
     ].join("\n")], { cwd: root, stdio: ["ignore", "pipe", "ignore"], env: {
       ...process.env, PYTHONPATH: join(root, "services/api/src"),
       SOCHRON_OWNER_AUTH_CONFIG_FILE: authPath, SOCHRON_BRIDGE_CONFIG_FILE: bridgePath,
-      SOCHRON_CHART_CONFIG_FILE: chartPath,
+      SOCHRON_CHART_CONFIG_FILE: chartPath, SOCHRON_CHART_HISTORY_DIR: temporary,
     } });
+    api = launchApi();
     const port = await new Promise((done, reject) => {
       let text = "";
       const timer = setTimeout(() => reject(new Error("API startup deadline")), 10000);
@@ -197,6 +199,7 @@ async function run() {
     const equity = panel.getByText(template.equity, { exact: true });
     const connected = panel.getByText("เชื่อมต่อแล้ว", { exact: true });
     const chart = page.locator("#market-chart");
+    const history = page.locator("#bar-history");
     async function login(user) {
       await page.getByLabel("อีเมลเจ้าของ").fill(user.email);
       await page.getByLabel("รหัสผ่าน", { exact: true }).fill(user.password);
@@ -208,6 +211,7 @@ async function run() {
       const token = (await response.json()).access_token;
       assert.equal(typeof token, "string");
       assert.equal(token.split(".").length, 3);
+      issuedTokens.push(token);
       return token;
     }
     async function logout() {
@@ -215,12 +219,14 @@ async function run() {
       await page.getByText("ออกจากระบบแล้ว", { exact: true }).waitFor();
       assert.equal(await equity.count(), 0);
       assert.equal(await chart.locator("canvas").count(), 0);
+      assert.equal(await history.locator("tbody tr").count(), 0);
     }
     stage = "foreign user denial";
     const foreignToken = await login(users[1]);
     await page.getByText("บัญชีนี้ไม่มีสิทธิ์เจ้าของระบบ", { exact: true }).waitFor();
     assert.equal(await equity.count(), 0);
     assert.equal((await http(`${apiOrigin}/owner/chart/M5`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
+    assert.equal((await http(`${apiOrigin}/owner/history/M5`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     await logout(); checks.push(stage);
 
     stage = "owner login and private telemetry";
@@ -257,6 +263,56 @@ async function run() {
     assert.equal((await http(`${webOrigin}/lightweight-charts-LICENSE.txt`)).status, 200);
     checks.push(stage);
 
+    stage = "durable history exact values, pinned paging and keyboard timeframes";
+    await history.locator("tbody tr").first().waitFor();
+    assert.equal(await history.locator("tbody tr").count(), 20);
+    const historyRequests = [];
+    page.on("request", request => { if (request.url().includes("/api/owner/history/")) historyRequests.push(new URL(request.url())); });
+    async function historyAction(action) {
+      const response = page.waitForResponse(response => response.url().includes("/api/owner/history/") && response.status() === 200);
+      await action();
+      const data = await (await response).json();
+      await history.getByText(`ชุดข้อมูลถึง receipt ${data.through_receipt} · ไม่มีการเพิ่มแท่งใหม่ระหว่างเปลี่ยนหน้า`, { exact: true }).waitFor();
+      if (data.bars.length) await history.getByRole("button", { name: `ดูหลักฐาน ${data.bars[0].open_time_utc}`, exact: true }).waitFor();
+      return data;
+    }
+    const initialHistory = await historyAction(() => history.getByRole("button", { name: "อ่านชุดล่าสุด", exact: true }).click());
+    assert.equal(initialHistory.bars.length, 20);
+    assert.deepEqual(await history.locator("tbody tr").first().locator("td").allTextContents(),
+      [initialHistory.bars[0].open, initialHistory.bars[0].high, initialHistory.bars[0].low, initialHistory.bars[0].close, String(initialHistory.bars[0].tick_volume)]);
+    const secondPage = await historyAction(() => history.getByRole("button", { name: "หน้าถัดไป", exact: true }).click());
+    assert.equal(secondPage.archive_id, initialHistory.archive_id);
+    assert.equal(secondPage.through_receipt, initialHistory.through_receipt);
+    assert(secondPage.bars[0].time_server_s > initialHistory.bars.at(-1).time_server_s);
+    assert.equal(historyRequests.at(-1).searchParams.get("through_receipt"), String(initialHistory.through_receipt));
+    assert.equal(historyRequests.at(-1).searchParams.get("archive_id"), initialHistory.archive_id);
+    const previousPage = await historyAction(() => history.getByRole("button", { name: "หน้าก่อน", exact: true }).click());
+    assert.deepEqual(previousPage.bars, initialHistory.bars);
+    let endPage = previousPage;
+    for (let index = 0; index < 6 && endPage.bars.length === 20; index++) {
+      endPage = await historyAction(() => history.getByRole("button", { name: "หน้าถัดไป", exact: true }).click());
+      assert.equal(endPage.through_receipt, initialHistory.through_receipt);
+    }
+    assert(endPage.bars.length < 20 && endPage.gaps.length === 1);
+    assert(await history.getByText("ข้อมูลขาด 1 ช่วง — ยังไม่ทราบสาเหตุ", { exact: true }).isVisible());
+    for (const timeframe of ["M1", "M15", "H1", "M5"]) {
+      const button = history.getByRole("button", { name: timeframe, exact: true });
+      const data = await historyAction(async () => { await button.focus(); await page.keyboard.press("Enter"); });
+      assert.equal(data.timeframe, timeframe); assert.equal(await button.getAttribute("aria-pressed"), "true");
+      assert.equal(historyRequests.at(-1).searchParams.has("through_receipt"), false);
+    }
+    checks.push(stage);
+
+    stage = "history network failure clears rows and deliberate retry recovers";
+    await page.route("**/api/owner/history/**", route => route.abort());
+    await history.getByRole("button", { name: "หน้าถัดไป", exact: true }).click();
+    await history.getByRole("alert").waitFor();
+    assert.equal(await history.locator("tbody tr").count(), 0);
+    await page.unroute("**/api/owner/history/**");
+    await historyAction(() => history.getByRole("button", { name: "ลองอ่านหน้าเดิมอีกครั้ง", exact: true }).click());
+    assert.equal(await history.locator("tbody tr").count(), 20);
+    checks.push(stage);
+
     stage = "no persistent browser session";
     assert.deepEqual(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length })),
       { local: 0, session: 0 });
@@ -265,6 +321,7 @@ async function run() {
     checks.push(stage);
     stage = "desktop and mobile layout";
     await page.screenshot({ path: join(output, "desktop-synthetic.png"), fullPage: true });
+    await history.screenshot({ path: join(output, "history-desktop-synthetic.png") });
     await page.setViewportSize({ width: 390, height: 844 });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     assert(await panel.locator(".account-values dd").evaluateAll(values => values.length === 4 && values.every(value => {
@@ -273,6 +330,14 @@ async function run() {
     })));
     assert(await chart.locator(".chart-values dd").evaluateAll(values => values.length === 4 && values.every(value => value.scrollWidth <= value.clientWidth)));
     await page.screenshot({ path: join(output, "mobile-synthetic.png"), fullPage: true });
+    assert(await history.locator(".history-table-scroll").evaluate(element => element.scrollWidth > element.clientWidth));
+    await history.screenshot({ path: join(output, "history-mobile-synthetic.png") });
+    stage = "320px page containment and keyboard table scrolling";
+    await page.setViewportSize({ width: 320, height: 740 });
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await history.getByRole("region", { name: "ตารางประวัติแท่งปิด", exact: true }).focus();
+    await page.keyboard.press("ArrowRight");
+    await page.waitForFunction(() => document.querySelector("#bar-history .history-table-scroll").scrollLeft > 0);
     await page.setViewportSize({ width: 1440, height: 1000 });
     checks.push(stage);
 
@@ -342,6 +407,7 @@ async function run() {
     assert(claims.exp > Date.now() / 1000);
     assert.equal((await http(`${apiOrigin}/owner/session`, { headers: { Authorization: `Bearer ${freshToken}` } })).status, 401);
     assert.equal((await http(`${apiOrigin}/owner/chart/M5`, { headers: { Authorization: `Bearer ${freshToken}` } })).status, 401);
+    assert.equal((await http(`${apiOrigin}/owner/history/M5`, { headers: { Authorization: `Bearer ${freshToken}` } })).status, 401);
     checks.push(stage);
 
     stage = "reload loses memory session";
@@ -352,6 +418,27 @@ async function run() {
     assert.equal(await page.getByRole("button", { name: "ออกจากระบบ", exact: true }).count(), 0);
     assert.equal(pageErrors, 0); assert(!pumpFailure);
     checks.push(stage);
+
+    stage = "history survives API restart without a live snapshot";
+    pumping = false; await pump;
+    await stopChild(api);
+    api = launchApi(port);
+    for (let attempt = 0; ; attempt++) {
+      assert(attempt < 40 && api.exitCode === null);
+      try { if ((await http(`${apiOrigin}/health`)).ok) break; } catch { /* bounded restart */ }
+      await delay(100);
+    }
+    const restartedToken = await login(users[0]);
+    await panel.getByText("รอข้อมูลจาก MT5", { exact: true }).waitFor();
+    await history.locator("tbody tr").first().waitFor();
+    assert.equal(await equity.count(), 0);
+    assert.equal(await chart.locator("canvas").count(), 0);
+    const restored = await http(`${apiOrigin}/owner/history/M5?limit=20&archive_id=${initialHistory.archive_id}&through_receipt=${initialHistory.through_receipt}`,
+      { headers: { Authorization: `Bearer ${restartedToken}` } });
+    assert.equal(restored.status, 200);
+    assert.deepEqual((await restored.json()).bars, initialHistory.bars);
+    await logout(); assert.equal(pageErrors, 0);
+    checks.push(stage);
   } catch { failureStage = stage; }
   finally {
     pumping = false;
@@ -360,6 +447,13 @@ async function run() {
     try { if (web) await new Promise((done, reject) => web.httpServer.close(error => error ? reject(error) : done())); }
     catch { cleanupOK = false; }
     try { await stopChild(api); } catch { cleanupOK = false; }
+    for (const token of issuedTokens) {
+      try {
+        const response = await http(`${origin}/auth/v1/logout?scope=global`, { method: "POST",
+          headers: { apikey: local.ANON_KEY, Authorization: `Bearer ${token}` } });
+        if (![204, 401, 403, 404].includes(response.status)) cleanupOK = false;
+      } catch { cleanupOK = false; }
+    }
     for (const user of users) {
       try {
         const response = await http(`${origin}/auth/v1/admin/users/${user.id}`, { method: "DELETE", headers: admin });
@@ -375,6 +469,8 @@ async function run() {
     "supabase/config.toml", "supabase/migrations/20260916224038_owner_session_validation.sql", "apps/web/src/OwnerPanel.tsx",
     "apps/web/src/styles.css",
     "apps/web/src/chart-api.ts", "apps/web/src/ChartPanel.tsx", "apps/web/src/CandleCanvas.tsx",
+    "apps/web/src/history-api.ts", "apps/web/src/HistoryPanel.tsx", "apps/web/src/history-api.test.ts",
+    "apps/web/src/HistoryPanel.test.tsx", "apps/web/src/test/history-fixture.ts", "services/api/src/sochron1k/bar_history.py",
     "services/api/src/sochron1k/chart.py", "services/api/src/sochron1k/chart_api.py",
     "apps/web/src/owner-api.ts", "apps/web/src/owner-auth.ts", "services/api/src/sochron1k/main.py",
     "services/api/src/sochron1k/owner_auth.py", "services/api/src/sochron1k/telemetry.py", "tests/fixtures/mt5-telemetry-v1.json"];

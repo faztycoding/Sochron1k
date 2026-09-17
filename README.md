@@ -87,8 +87,10 @@ Optional [durable closed-bar history (SCN-007)](docs/contracts/SCN-007-durable-b
 now records validated native bars before chart acknowledgment and retains validation
 baselines across API restarts. History reads are owner-authenticated and paginated
 against an archive-scoped receipt watermark. It requires an explicitly configured
-private local directory; unset means monitoring-only. The UI still shows the live
-monitoring window, not a historical-data browser. This is not raw-tick capture,
+private local directory; unset means monitoring-only. Below the live chart, the
+owner history workspace shows exact closed-bar values, receipt provenance and
+gaps in 20-row pages. It can read the archive after API restart without a live
+snapshot; only an explicit refresh advances the page set's watermark. This is not raw-tick capture,
 Supabase history synchronization, a complete backtest dataset or Demo release evidence.
 
 ## Local Supabase foundation

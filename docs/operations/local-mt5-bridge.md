@@ -198,6 +198,24 @@ decimal prices, contract/basis/build and explicit unclassified gaps are preserve
 not an assertion that the earlier bar was already known at its scheduled close.
 Gaps at a page boundary are included. There is no mutation or public history route.
 
+In the app, use **ประวัติแท่งปิด** below the live chart. Choose M1/M5/M15/H1,
+then **หน้าถัดไป** or **หน้าก่อน** for 20-row pages in oldest-to-newest order.
+The archive and receipt watermark stay fixed until **อ่านชุดล่าสุด** (or a new
+account/session/timeframe scope). That action starts at the oldest retained row
+of a newly captured page set; it does not jump to the newest candle. Select a
+row's opening time to inspect UTC/Bangkok receive times, closure evidence, build,
+price basis, tick size and spread. The table scrolls on small screens. This is a
+historical ledger, not a live-price or trade-performance view.
+
+History requires an authenticated owner but not a fresh quote. After API restart,
+the owner can read closed bars while telemetry/chart views remain empty. Logout,
+token/account/timeframe changes or failed owner authorization clear private rows.
+Read failures hide the old page; use **ลองอ่านหน้าเดิมอีกครั้ง** to retry its
+fixed snapshot or **อ่านชุดล่าสุด** if the archive changed. Authorization denial
+requires signing in again. There is no timer-based history refresh or browser
+persistence. A disabled archive is reported explicitly, never filled with demo
+sample prices in the actual app.
+
 `first_received_at` is the capture-processing time before its transaction commits,
 not an exact commit timestamp, candle-close timestamp or proof of when a strategy
 knew a value. `first_receipt` identifies the committed evidence ordering. A future
@@ -219,5 +237,9 @@ Local verification uses `tests/test_bar_history.py` and
 followed by independent committed-data inspection and reopening after API shutdown.
 The directory and synthetic database created by that verifier are temporary and
 cleaned up; developer servers and actual archives are not touched. Supabase M1 sync,
-raw-tick Parquet, history UI, backup/restore, retention and MT5/target-host evidence
+raw-tick Parquet, backup/restore, retention and MT5/target-host evidence
 remain separate required work before a complete Demo release.
+The browser history verifier is `scripts/check-owner-browser.mjs`; it runs a
+production build with real loopback Auth/API, temporary SQLite and synthetic bars,
+including an API-process restart with no resumed market feed. Its local evidence
+does not substitute for the outstanding MT5/target gates.

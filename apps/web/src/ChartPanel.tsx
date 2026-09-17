@@ -104,6 +104,7 @@ export function ChartPanel({ token, identity }: { token: string | null; identity
       </div>
     </> : null}
     <p className="owner-hint">กราฟสำหรับติดตามข้อมูล ไม่ยืนยันความพร้อมส่งคำสั่ง · Auto Trading ปิด</p>
+    <p className="chart-attribution"><a href="#bar-history">ดูประวัติแท่งปิดที่บันทึกไว้</a></p>
     <p className="chart-attribution">กราฟโดย <a href="https://www.tradingview.com/" target="_blank" rel="noreferrer">TradingView Lightweight Charts™</a> · <a href="/chart-notice.txt">ลิขสิทธิ์และใบอนุญาต</a></p>
   </section>;
 }

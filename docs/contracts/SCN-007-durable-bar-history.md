@@ -51,6 +51,45 @@ bar replay or profitability is inferred from these monitoring windows.
   Retain exact revision/environment evidence. Actual MT5, sync worker, target-host
   backup/restore/retention, raw ticks and full Demo release remain separate gates.
 
+### AC-08 owner history workspace (recorded before UI implementation)
+
+Expose closed-bar history below the existing live chart, not as live prices or
+trade results. Keep blueprint Charcoal Gold (`#0d1117`, `#171d25`, `#303946`,
+`#d6b46a`, `#39c98a`, `#f0646b`), Sarabun text and Inter/tabular numbers. Use one
+left-aligned ledger with a bounded scrollable table and selected-bar provenance,
+not another chart or repeated metric cards. Desktop aligns timeframe and page
+controls; mobile wraps controls and scrolls only the data table horizontally.
+
+Allow M1/M5/M15/H1, previous/next pages of 20 closed bars and an explicit action
+to read a new snapshot. Subsequent pages pin both archive ID and receipt watermark;
+never refresh the watermark silently or accumulate full pages in memory. Validate
+response identity, timeframe, archive/watermark, UTC mapping, closure evidence,
+receipt provenance, exact decimal OHLC/tick grid, quota state and explicit gaps,
+including page boundaries. Reject malformed, oversized, unauthorized or mismatched
+data; hide prior values on failures and offer a deliberate retry/new-snapshot path.
+Keep historical precision even when canvas-number precision is insufficient.
+
+Require a verified owner session, not a currently fresh market feed. Historical
+data can be read after API restart before new telemetry arrives. Token/identity/
+timeframe changes, logout and unmount abort requests and immediately clear private
+history/cursors; late responses cannot resurrect an old account or dataset. Reuse
+the owner's live authorization polling rather than introducing a second session
+authority or browser persistence. Reading history adds no broker/execution action.
+
+Show disabled, loading, empty, end-of-snapshot, error and unauthorized states;
+show 70%/85% storage warnings without claiming a filesystem-wide monitor. Preserve
+raw decimal strings and label UTC/Bangkok separately. Expose first-received time
+and later-bar closure evidence without backdating research availability. Verify
+runtime parser negatives, request races, keyboard/mobile layout, paging and logout
+through the production-build browser with real local Auth/API and synthetic bars.
+
+Design review: the product fixes colors/type; retain them. The history view's
+distinctive element is an auditable ledger with gold selected-row emphasis, not a
+generic hero or dashboard score. Keep operational controls disabled. Initial
+AC-08 status at planning: NOT RUN; backend evidence alone does not establish UI
+acceptance. The implemented workspace and subsequent UI/browser verification are
+recorded separately in [AC-08 evidence](../verification/SCN-007-history-workspace.md).
+
 ## Implementation plan and status
 
 Use a dedicated SQLite file, not the command journal. One configured Demo identity

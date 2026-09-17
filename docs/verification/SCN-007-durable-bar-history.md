@@ -1,5 +1,8 @@
 # SCN-007 local history verification
 
+This is the capture/API checkpoint. The subsequent owner history UI increment
+is recorded in [SCN-007 AC-08 workspace evidence](SCN-007-history-workspace.md).
+
 2026-09-17. Candidate based on `601dfdbac24fb78ee7935bfea03d36962467e4ee`, dirty
 during verification. macOS 26.6.2 arm64, Python 3.14.7, SQLite 3.53.1 and pinned
 Node 24.21.0. All market

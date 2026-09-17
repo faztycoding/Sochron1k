@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { OwnerPanel } from "./OwnerPanel";
 import type { OwnerAuth } from "./owner-auth";
 import { parseConfig, parseTelemetry, quoteIsFresh } from "./owner-api";
+import { disabledHistory, historyFixture } from "./test/history-fixture";
 
 const config = { enabled: true, supabase_url: "https://auth.fixture.invalid", public_key: "sb_publishable_" + "fixture".repeat(4) };
 const fixture = () => ({
@@ -13,7 +14,8 @@ const fixture = () => ({
       identity: { account_ref: "synthetic-account", server: "Synthetic-Demo", currency: "USD", symbol: "XAUUSD.fixture" } } },
 });
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
-function setup(privateResponse: () => Promise<Response> = async () => json(fixture())) {
+function setup(privateResponse: () => Promise<Response> = async () => json(fixture()),
+  historyResponse: () => Promise<Response> = async () => json(disabledHistory())) {
   let callback: (token: string | null) => void = () => {};
   const unsubscribe = vi.fn();
   const auth: OwnerAuth = {
@@ -24,7 +26,8 @@ function setup(privateResponse: () => Promise<Response> = async () => json(fixtu
   const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (path) =>
     String(path) === "/api/auth/config" ? json(config) : String(path).startsWith("/api/owner/chart/") ?
       json({ state: "disabled", feed_status: fixture().status, observation: null,
-        snapshot_age_seconds: null, latest_bar_age_seconds: null, execution_ready: false }) : privateResponse());
+        snapshot_age_seconds: null, latest_bar_age_seconds: null, execution_ready: false }) :
+      String(path).startsWith("/api/owner/history/") ? historyResponse() : privateResponse());
   const factory = vi.fn(async () => auth);
   const result = render(<OwnerPanel factory={factory} />);
   return { auth, fetch, factory, unsubscribe, emit: (value: string | null) => callback(value), ...result };
@@ -38,6 +41,18 @@ async function login() {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("SCN-005 owner UI", () => {
+  it("shows archived bars without telemetry and clears them when live authorization fails", async () => {
+    let authorized = true;
+    setup(async () => authorized ? json({ status: { ...fixture().status, state: "awaiting_snapshot", price_fresh: false,
+      heartbeat_fresh: false, price_age_seconds: null, heartbeat_age_seconds: null }, observation: null }) : json({}, 401),
+      async () => json(historyFixture()));
+    await login(); await screen.findByRole("table");
+    expect(screen.queryByText("1000.00")).not.toBeInTheDocument();
+    authorized = false;
+    await screen.findByRole("alert", {}, { timeout: 1800 });
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.queryByText("2500.10")).not.toBeInTheDocument();
+  });
   it("does not offer login when server configuration is disabled", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(json({ enabled: false }));
     const factory = vi.fn(); render(<OwnerPanel factory={factory} />);
