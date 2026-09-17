@@ -1,10 +1,12 @@
 #property strict
-#property version "0.10"
+#property version "0.11"
 #property description "Sochron1k read-only Demo observer; NOT an execution EA"
 
 #include "TelemetryProtocol.mqh"
 
 input bool EnableReadOnlyTelemetry=false;
+input bool EnableReadOnlyCharts=false;
+input int ChartBars=120;
 input long ExpectedLogin=0;
 input string ExpectedServer="";
 input string ExpectedCurrency="";
@@ -20,12 +22,31 @@ string sc_token="",sc_boot="",sc_state="";
 long sc_sequence=0;
 ulong sc_retry_after=0;
 bool sc_latched=false;
+int sc_requests_this_timer=0;
+string sc_chart_boot="",sc_chart_state="";
+long sc_chart_sequence=0;
+int sc_chart_index=0;
+ulong sc_chart_retry_after=0;
+bool sc_chart_due=false,sc_chart_latched=false;
 
 void ScState(const string state)
   {
    if(state==sc_state) return;
    sc_state=state;
    Print("Sochron read-only telemetry: ",state); // Static reason codes only.
+  }
+
+void ScChartState(const string state)
+  {
+   if(state==sc_chart_state) return;
+   sc_chart_state=state;
+   Print("Sochron read-only chart: ",state); // Static codes, never payloads or identity.
+  }
+
+void ScResetChartConnection()
+  {
+   sc_chart_boot=""; sc_chart_sequence=0; sc_chart_due=false;
+   // A validation/history latch survives reconnect; only explicit reinit releases it.
   }
 
 bool ScLoadToken()
@@ -96,7 +117,8 @@ bool ScConfigurationValid()
       StringLen(ExpectedSymbol)>0 && StringLen(ExpectedSymbol)<=32 &&
       StringLen(ExecutorId)>0 && StringLen(ExecutorId)<=128 &&
       ScMarginMode(ExpectedMarginMode)!="" && BrokerUtcOffsetSeconds>=-50400 &&
-      BrokerUtcOffsetSeconds<=50400 && BrokerUtcOffsetSeconds%60==0;
+      BrokerUtcOffsetSeconds<=50400 && BrokerUtcOffsetSeconds%60==0 &&
+      (!EnableReadOnlyCharts || (ChartBars>=2 && ChartBars<=240));
   }
 
 void ScAppendMode(string &modes,const string mode)
@@ -163,16 +185,20 @@ int ScRequest(const string method,const string path,const string body,string &re
   {
    response="";
    if(sc_latched || !ScIdentityMatches() || !TerminalInfoInteger(TERMINAL_CONNECTED)) return -1;
+   if(sc_requests_this_timer>=1)
+     { sc_latched=true; ScState("REQUEST_BUDGET_EXCEEDED_REINITIALIZE"); return -1; }
    char data[],result[];
    if(body!="")
      {
       int copied=StringToCharArray(body,data,0,WHOLE_ARRAY,CP_UTF8);
-      if(copied<1 || copied-1>16384) return -1;
+      int maximum=(method=="POST" && path=="/chart/snapshot") ? 131072 : 16384;
+      if(copied<1 || copied-1>maximum) return -1;
       ArrayResize(data,copied-1); // JSON body must NOT include the terminating NUL.
      }
    string headers="Authorization: Bearer "+sc_token+"\r\nContent-Type: application/json\r\n";
    string result_headers;
    ulong started=GetTickCount64();
+   sc_requests_this_timer++;
    int status=WebRequest(method,SC_API+path,headers,SC_TIMEOUT_MS,data,result,result_headers);
    headers="";
    if(GetTickCount64()-started>1000)
@@ -190,12 +216,105 @@ int ScRequest(const string method,const string path,const string body,string &re
 void ScReconnectLater()
   {
    sc_boot=""; sc_sequence=0;
+   ScResetChartConnection();
    sc_retry_after=GetTickCount64()+10000;
+  }
+
+bool ScReadChartPacket(const ENUM_TIMEFRAMES period,const string name,string &packet)
+  {
+   packet="";
+   ScSample before,after;
+   if(!ScReadSample(before)) return false;
+   long synced,available,last_before,basis,custom;
+   if(!SymbolInfoInteger(ExpectedSymbol,SYMBOL_CUSTOM,custom) || custom!=0 ||
+      !SymbolInfoInteger(ExpectedSymbol,SYMBOL_CHART_MODE,basis) ||
+      (basis!=SYMBOL_CHART_MODE_BID && basis!=SYMBOL_CHART_MODE_LAST) ||
+      !SeriesInfoInteger(ExpectedSymbol,period,SERIES_SYNCHRONIZED,synced) || synced!=1 ||
+      !SeriesInfoInteger(ExpectedSymbol,period,SERIES_BARS_COUNT,available) || available<ChartBars ||
+      !SeriesInfoInteger(ExpectedSymbol,period,SERIES_LASTBAR_DATE,last_before)) return false;
+   // Fixed non-series array: CopyRates places the oldest copied bar at index zero.
+   MqlRates rates[240];
+   int copied=CopyRates(ExpectedSymbol,period,0,ChartBars,rates);
+   if(copied!=ChartBars) return false;
+   long last_after,basis_after;
+   if(!SeriesInfoInteger(ExpectedSymbol,period,SERIES_SYNCHRONIZED,synced) || synced!=1 ||
+      !SeriesInfoInteger(ExpectedSymbol,period,SERIES_LASTBAR_DATE,last_after) ||
+      last_after!=last_before || last_after!=(long)rates[copied-1].time ||
+      !SymbolInfoInteger(ExpectedSymbol,SYMBOL_CHART_MODE,basis_after) || basis_after!=basis ||
+      !ScReadSample(after) || before.digits!=after.digits || before.tick_size!=after.tick_size ||
+      before.terminal_build!=after.terminal_build) return false;
+   // A clock/offset mismatch must not manufacture a future candle.
+   if(last_after>(long)TimeGMT()+BrokerUtcOffsetSeconds) return false;
+   return ScChartJson(after,sc_chart_boot,sc_chart_sequence,name,
+                      basis==SYMBOL_CHART_MODE_BID ? "bid" : "last",rates,copied,packet);
+  }
+
+void ScChartUnconfirmed(const int status,const string response)
+  {
+   if(status==409 && ScErrorIs(response,"BOOT_MISMATCH"))
+     { ScReconnectLater(); ScChartState("API_RESTART_RECONNECTING"); return; }
+   if(status>=400 && status<500 && status!=408 && status!=429)
+     {
+      sc_chart_latched=true;
+      ScResetChartConnection();
+      ScChartState("CHART_REJECTED_REVIEW_BEFORE_REINITIALIZE");
+      return;
+     }
+   ScResetChartConnection();
+   sc_chart_retry_after=GetTickCount64()+10000;
+   ScChartState("CHART_UNCONFIRMED_BACKOFF");
+  }
+
+void ScChartTimer()
+  {
+   sc_chart_due=false; // The next timer belongs to telemetry, including on failure.
+   string response;
+   if(sc_chart_boot=="")
+     {
+      string boot; long sequence;
+      int status=ScRequest("GET","/chart/challenge","",response);
+      if(sc_latched) return;
+      if(status!=200 || !ScChallenge(response,boot,sequence))
+        { ScChartUnconfirmed(status,response); return; }
+      if(boot!=sc_boot)
+        { ScReconnectLater(); ScChartState("API_RESTART_RECONNECTING"); return; }
+      sc_chart_boot=boot; sc_chart_sequence=sequence;
+      ScChartState("CHART_CHALLENGE_RECEIVED");
+      return;
+     }
+   ENUM_TIMEFRAMES periods[4]={PERIOD_M1,PERIOD_M5,PERIOD_M15,PERIOD_H1};
+   string names[4]={"M1","M5","M15","H1"};
+   int index=sc_chart_index;
+   sc_chart_index=(sc_chart_index+1)%4; // An unavailable timeframe cannot starve others.
+   string packet;
+   ulong started=GetTickCount64();
+   bool collected=ScReadChartPacket(periods[index],names[index],packet);
+   if(GetTickCount64()-started>250)
+     {
+      sc_chart_latched=true; ScResetChartConnection();
+      ScChartState("HISTORY_BUDGET_EXCEEDED_REVIEW_BEFORE_REINITIALIZE");
+      return; // After-the-fact detection, not a preemptive CopyRates deadline.
+     }
+   if(!ScIdentityMatches())
+     { sc_latched=true; ScState("IDENTITY_CHANGED_REINITIALIZE"); return; }
+   if(!collected) { ScChartState("SYNCHRONIZED_HISTORY_UNAVAILABLE"); return; }
+   int status=ScRequest("POST","/chart/snapshot",packet,response);
+   if(sc_latched) return;
+   if(status!=200 || !ScReceipt(response,sc_chart_sequence))
+     { ScChartUnconfirmed(status,response); return; }
+   if(sc_chart_sequence==SC_MAX_SEQUENCE)
+     { sc_chart_latched=true; ScChartState("CHART_SEQUENCE_EXHAUSTED_REINITIALIZE_API"); return; }
+   sc_chart_sequence++;
+   ScChartState("CHART_RECEIVED_NOT_TRADE_READY");
   }
 
 int OnInit()
   {
    sc_latched=false; sc_boot=""; sc_sequence=0; sc_retry_after=0; sc_token=""; sc_state="";
+   ScResetChartConnection(); sc_chart_index=0; sc_chart_retry_after=0;
+   sc_chart_latched=false; sc_chart_state="";
+   if(EnableReadOnlyCharts && !EnableReadOnlyTelemetry)
+     { ScState("CHART_REQUIRES_READ_ONLY_TELEMETRY"); return INIT_PARAMETERS_INCORRECT; }
    if(!EnableReadOnlyTelemetry) { ScState("DISABLED"); return INIT_SUCCEEDED; }
    if(MQLInfoInteger(MQL_TESTER)) { ScState("TESTER_NETWORK_UNSUPPORTED"); return INIT_FAILED; }
    if(!ScConfigurationValid() || !ScIdentityMatches())
@@ -210,13 +329,15 @@ void OnDeinit(const int reason)
   {
    EventKillTimer();
    sc_token=""; sc_boot=""; sc_sequence=0;
+   ScResetChartConnection();
   }
 
 void OnTimer()
   {
+   sc_requests_this_timer=0;
    if(!EnableReadOnlyTelemetry || sc_latched) return;
    if(!TerminalInfoInteger(TERMINAL_CONNECTED))
-     { sc_boot=""; sc_sequence=0; ScState("DISCONNECTED"); return; }
+     { sc_boot=""; sc_sequence=0; ScResetChartConnection(); ScState("DISCONNECTED"); return; }
    if(!ScIdentityMatches())
      { sc_latched=true; ScState("IDENTITY_CHANGED_REINITIALIZE"); return; }
    if(GetTickCount64()<sc_retry_after) return;
@@ -230,6 +351,9 @@ void OnTimer()
       else ScState("READ_ONLY_SAMPLING");
       return; // At most one WebRequest per timer.
      }
+   if(EnableReadOnlyCharts && !sc_chart_latched && sc_chart_due &&
+      GetTickCount64()>=sc_chart_retry_after)
+     { ScChartTimer(); return; } // This branch never also sends telemetry.
    ScSample sample;
    if(!ScReadSample(sample)) { ScState("OBSERVATION_UNAVAILABLE"); return; }
    string packet=ScSnapshotJson(sample,sc_boot,sc_sequence);
@@ -240,5 +364,6 @@ void OnTimer()
    if(sc_sequence==SC_MAX_SEQUENCE)
      { sc_latched=true; ScState("SEQUENCE_EXHAUSTED_REINITIALIZE_API"); return; }
    sc_sequence++;
+   sc_chart_due=EnableReadOnlyCharts && !sc_chart_latched;
    ScState("READ_ONLY_SAMPLE_RECEIVED_NOT_TRADE_READY");
   }

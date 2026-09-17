@@ -78,7 +78,8 @@ The console is deliberately monitoring-only. It shows the local API state, fixed
 The owner workspace includes a Lightweight Charts candlestick panel with M1/M5/M15/H1,
 exact OHLC inspection, forming/closed bars and explicit feed gaps/freshness. It stays
 empty until owner telemetry and native chart data are available. The chart API/UI
-have synthetic local evidence; the current EA does not yet export candles. See
+have synthetic local evidence; the EA candle producer is a source-only checkpoint
+awaiting compilation and actual terminal verification. See
 [SCN-006](docs/contracts/SCN-006-market-chart.md) and the
 [chart configuration runbook](docs/operations/local-mt5-bridge.md#native-chart-channel-scn-006).
 
@@ -138,7 +139,7 @@ authenticated API and real-loopback HTTP evidence; it defaults to disabled witho
 private local configuration. The owner web console now consumes its private view;
 no actual EA connection is verified yet.
 The [read-only EA source](mt5/ea/README.md) is prepared as an uncompiled checkpoint.
-Add the native CopyRates producer for SCN-006, compile/verify it against SCN-004/006,
+Compile/verify the native CopyRates producer against SCN-004/006,
 verify actual Demo data, then complete
 the remaining SCN-001 execution and recovery work. A real Demo round trip still
 requires owner inputs and explicit target authorization listed in the task contract.

@@ -1,0 +1,42 @@
+{
+  "protocol": "sochron.chart.v1",
+  "source": "mt5-copyrates",
+  "boot_id": "11111111-2222-4333-8444-555555555555",
+  "sequence": 1,
+  "identity": {
+    "executor_id": "synthetic-ea",
+    "account_ref": "123456789",
+    "server": "Synthetic-Demo",
+    "currency": "USD",
+    "margin_mode": "retail_hedging",
+    "symbol": "XAUUSD.fixture"
+  },
+  "trade_mode": "demo",
+  "terminal_build": 1,
+  "observed_at": "2026-09-17T00:00:00Z",
+  "broker_utc_offset_seconds": 7200,
+  "timeframe": "M5",
+  "price_basis": "bid",
+  "digits": 2,
+  "tick_size": "0.0100000000",
+  "bars": [
+    {
+      "time_server_s": 1789610100,
+      "open": "2500.00",
+      "high": "2501.00",
+      "low": "2499.00",
+      "close": "2500.50",
+      "tick_volume": 10,
+      "spread_points": 20
+    },
+    {
+      "time_server_s": 1789610400,
+      "open": "2500.00",
+      "high": "2501.00",
+      "low": "2499.00",
+      "close": "2500.25",
+      "tick_volume": 10,
+      "spread_points": 20
+    }
+  ]
+}

@@ -77,6 +77,41 @@ chart data while preserving the independent telemetry and execution safety gates
 
 ## Verification plan / current status
 
+### EA producer acceptance details (before implementation)
+
+Add a separate default-off `EnableReadOnlyCharts` input under the existing read-only
+observer, not an execution EA. Export 2–240 requested bars (default 120), oldest
+first, for fixed M1/M5/M15/H1. Refuse custom symbols and derive Bid/Last from the
+terminal property, never from an assumed XAU/USD convention. Use only synchronized
+history with sufficient available bars; verify synchronization and last-bar time
+before/after CopyRates, contract/identity before/after collection and identity again
+before upload. Do not initiate an unbounded history-download loop.
+
+Alternate a quote timer with a chart timer after a successful quote. One WebRequest
+per timer maximum; successful steady-state quote spacing is two timer periods,
+each timeframe eight periods (not a measured latency promise). Missing one timeframe
+must not starve the others. Chart challenge uses its own sequence but must agree
+with the telemetry boot. Restart/lost response discards read-only samples and
+reacquires challenge; this is not order retry policy. Chart 4xx validation/identity
+failures latch the chart channel for operator review; boot mismatch reconnects both
+channels. Transient unconfirmed responses use ten-second chart-only backoff.
+
+Keep telemetry at 16 KiB; chart POST alone may use 128 KiB. Verify numeric encoding
+without silent decimal rounding, tick-grid violations or unsafe scaled integers.
+Never mutate incoming MqlRates to manufacture valid data. Bound packet/response
+parsing. A history collection observed over 250ms halts chart collection; this is
+an after-the-fact detector, not a hard timeout guarantee. Actual blocking duration,
+cold history, terminal clock, rollover, account switch and interrupted network
+must be tested on the selected terminal. This observer cannot join a position-risk
+event loop without a separate transport design.
+
+Extend the pure MQL self-test with bar/price/timeframe/envelope negative cases and
+synthetic chart output. Python verifies a committed golden fixture/API compatibility
+and optionally compares a terminal-generated file, explicitly distinguishing that
+from actual compiler/self-test provenance. Source guards must continue denying
+trade calls, imports, credentials in inputs and non-test writes, including new
+default-off and pure-helper isolation mutation cases.
+
 ### Browser increment acceptance details (before implementation)
 
 Keep the existing Charcoal Gold tokens (#0d1117 canvas, #171d25 surface,
@@ -103,8 +138,9 @@ API schema, duplicate/concurrency/clock/gap/correction fixtures; ASGI denial and
 bounded-body tests; existing SCN-004/005 regression suites; live HTTP/browser chart
 integration; MQL compiler/self-test and actual Demo comparison separately.
 AC-01 through AC-05 now have local API/schema/concurrency/HTTP fixture evidence;
-actual CopyRates/terminal agreement remains unverified. AC-06 is NOT IMPLEMENTED
-for the EA chart producer and NOT RUN for compilation/terminal checks. AC-07 has
+actual CopyRates/terminal agreement remains unverified. AC-06 now has a default-off
+EA source checkpoint, golden chart fixture, source guard and API fixture evidence;
+MQL compilation, 50-case terminal self-test and actual terminal checks are NOT RUN. AC-07 has
 React component and real production-build browser/Auth/API evidence using synthetic
 bars on desktop/mobile, including timeframe selection, exact OHLC agreement,
 staleness, reconnect and logout/revocation. AC-08 is PARTIAL: source/artifact hashes

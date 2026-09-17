@@ -220,4 +220,84 @@ string ScSnapshotJson(const ScSample &s,const string boot,const long sequence)
       ",\"filling_modes\":"+s.filling_modes_json+"}}";
   }
 
+int ScChartSeconds(const string timeframe)
+  {
+   if(timeframe=="M1") return 60;
+   if(timeframe=="M5") return 300;
+   if(timeframe=="M15") return 900;
+   if(timeframe=="H1") return 3600;
+   return 0;
+  }
+
+bool ScErrorIs(const string text,const string code)
+  {
+   string keys[],values[]; int kinds[];
+   return ScFlatObject(text,keys,values,kinds) && ArraySize(keys)==1 &&
+      keys[0]=="detail" && kinds[0]==1 && values[0]==code;
+  }
+
+// Exact decimal encoding at broker digits; scaled arithmetic stays JSON-safe.
+// Refuse prices needing rounding rather than silently changing native OHLC.
+bool ScChartPrice(const double value,const int digits,const double tick_size)
+  {
+   if(digits<0 || digits>10 || !MathIsValidNumber(value) || value<=0 ||
+      !MathIsValidNumber(tick_size) || tick_size<=0) return false;
+   if(StringToDouble(DoubleToString(value,digits))!=value ||
+      StringToDouble(DoubleToString(tick_size,digits))!=tick_size) return false;
+   double scale=MathPow(10,digits);
+   double units=MathRound(value*scale),tick_units=MathRound(tick_size*scale);
+   if(!MathIsValidNumber(units) || !MathIsValidNumber(tick_units) ||
+      units<1 || units>SC_MAX_SEQUENCE || tick_units<1 || tick_units>SC_MAX_SEQUENCE) return false;
+   return (long)units%(long)tick_units==0;
+  }
+
+bool ScChartJson(const ScSample &s,const string boot,const long sequence,
+                 const string timeframe,const string price_basis,const MqlRates &rates[],
+                 const int count,string &packet)
+  {
+   packet="";
+   int seconds=ScChartSeconds(timeframe);
+   if(seconds==0 || (price_basis!="bid" && price_basis!="last") ||
+      !ScUuid(boot) || sequence<1 || sequence>SC_MAX_SEQUENCE || count<2 || count>240 ||
+      ArraySize(rates)<count || s.terminal_build<=0 || s.observed_at=="") return false;
+   long previous=0;
+   string bars="";
+   for(int i=0;i<count;i++)
+     {
+      long time=(long)rates[i].time;
+      if(time<=previous || time>4102444800 || time%seconds!=0 ||
+         rates[i].tick_volume<1 || rates[i].tick_volume>SC_MAX_SEQUENCE || rates[i].spread<0 ||
+         !ScChartPrice(rates[i].open,s.digits,s.tick_size) ||
+         !ScChartPrice(rates[i].high,s.digits,s.tick_size) ||
+         !ScChartPrice(rates[i].low,s.digits,s.tick_size) ||
+         !ScChartPrice(rates[i].close,s.digits,s.tick_size) ||
+         rates[i].low>MathMin(rates[i].open,rates[i].close) ||
+         rates[i].high<MathMax(rates[i].open,rates[i].close)) return false;
+      previous=time;
+      if(i>0) bars+=",";
+      bars+="{\"time_server_s\":"+IntegerToString(time)+
+         ",\"open\":"+ScQuote(DoubleToString(rates[i].open,s.digits))+
+         ",\"high\":"+ScQuote(DoubleToString(rates[i].high,s.digits))+
+         ",\"low\":"+ScQuote(DoubleToString(rates[i].low,s.digits))+
+         ",\"close\":"+ScQuote(DoubleToString(rates[i].close,s.digits))+
+         ",\"tick_volume\":"+IntegerToString(rates[i].tick_volume)+
+         ",\"spread_points\":"+IntegerToString(rates[i].spread)+"}";
+     }
+   packet="{\"protocol\":\"sochron.chart.v1\",\"source\":\"mt5-copyrates\","
+      "\"boot_id\":"+ScQuote(boot)+",\"sequence\":"+IntegerToString(sequence)+
+      ",\"identity\":{\"executor_id\":"+ScQuote(s.executor_id)+
+      ",\"account_ref\":"+ScQuote(s.account_ref)+",\"server\":"+ScQuote(s.server)+
+      ",\"currency\":"+ScQuote(s.currency)+",\"margin_mode\":"+ScQuote(s.margin_mode)+
+      ",\"symbol\":"+ScQuote(s.symbol)+"},\"trade_mode\":\"demo\","
+      "\"terminal_build\":"+IntegerToString(s.terminal_build)+
+      ",\"observed_at\":"+ScQuote(s.observed_at)+
+      ",\"broker_utc_offset_seconds\":"+IntegerToString(s.broker_utc_offset_seconds)+
+      ",\"timeframe\":"+ScQuote(timeframe)+",\"price_basis\":"+ScQuote(price_basis)+
+      ",\"digits\":"+IntegerToString(s.digits)+",\"tick_size\":"+ScDecimal(s.tick_size)+
+      ",\"bars\":["+bars+"]}";
+   // All user strings are ASCII-escaped by ScQuote, so this is also the byte count.
+   if(StringLen(packet)>131072) { packet=""; return false; }
+   return true;
+  }
+
 #endif

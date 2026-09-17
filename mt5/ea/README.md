@@ -8,7 +8,8 @@ terminal self-test result or actual Demo observation is claimed.
 
 ## Files and authority
 
-- `SochronTelemetry.mq5`: opt-in, sampled account/contract/quote observer.
+- `SochronTelemetry.mq5`: opt-in, sampled account/contract/quote observer, with a
+  separately default-off native candlestick producer (source version 0.11).
 - `TelemetryProtocol.mqh`: pure JSON encoder and bounded flat-response parser.
 - `SochronTelemetrySelfTest.mq5`: pure protocol tests and synthetic fixture output;
   it never reads an account or uses the network.
@@ -25,6 +26,7 @@ Verified with the pinned project Python environment:
 ```bash
 .venv/bin/python scripts/check-mt5-source.py
 .venv/bin/python scripts/check-mt5-fixture.py
+.venv/bin/python scripts/check-mt5-fixture.py --chart
 .venv/bin/pytest -q tests/test_mt5_source.py
 ```
 
@@ -50,14 +52,18 @@ This procedure has **NOT RUN** here. Do not relabel it passed from source checks
    resulting `.ex5` hashes/timestamps. A process exit code or an old `.ex5` alone
    is insufficient. Keep generated binaries untracked.
 4. Run only the pure `SochronTelemetrySelfTest` script first. It requires no token,
-   account access, WebRequest permission or trading operation. Retain its 24-case
+   account access, WebRequest permission or trading operation. Retain its 50-case
    result. On success it overwrites only its generated
-   `MQL5/Files/SochronTelemetrySelfTest.json` with synthetic data.
+   `MQL5/Files/SochronTelemetrySelfTest.json` and
+   `MQL5/Files/SochronChartSelfTest.json` with synthetic data.
 5. Compare that generated file to the API golden fixture, using the verifier's
    `--fixture` argument with its actual local path. This invocation is pending,
    not a verified command for this workstation. Require exact golden values,
    `input_is_committed_golden=false`, source/artifact identity and a fresh terminal
    self-test log together; file equality alone cannot attest provenance.
+   For the chart output add `--chart` as well as `--fixture` and its actual path.
+   Require both outputs from the same fresh successful script run; a partial output
+   or leftover file from an earlier run is not a passing self-test.
 
 ## Before actual read-only Demo operation
 
@@ -110,10 +116,59 @@ after-the-fact check and must be measured at AC-07. WebRequest is synchronous, s
 this observer must not be merged into the future position-risk loop without a
 reviewed transport design.
 
-The output is sampled, not every tick. It preserves the tick's original timestamp
+The quote output is sampled, not every tick. It preserves the tick's original timestamp
 even if unchanged for many timers; account values are finite observations, not
-risk approvals. No positions, orders, deals, SL confirmation, bars or history are
-invented or claimed by this version.
+risk approvals. No positions, orders, deals or SL confirmation are invented or
+claimed by this version. Optional chart snapshots are native monitoring windows,
+not complete tick capture or durable research history.
+
+## Optional native charts (SCN-006; source-only checkpoint)
+
+`EnableReadOnlyCharts=false` by default. It requires `EnableReadOnlyTelemetry=true`,
+the same private token/identity, and the API's independently verified chart offset
+interval. `ChartBars` defaults to 120 and accepts 2–240; it is a monitoring window,
+not permission to truncate required strategy history. Before enabling on an
+authorized Demo target, warm the selected symbol's M1/M5/M15/H1 history in MT5 and
+verify synchronization with at least the configured count. Unsynchronized or short
+history is skipped, not downloaded in a blocking retry loop or filled with invented
+bars. The owner API displays unavailable/stale timeframes explicitly.
+
+Each chart attempt checks Demo identity, symbol contract and native Bid/Last basis,
+rejects custom symbols, calls CopyRates once into a fixed array, and checks series
+synchronization/last-bar identity again. A rollover during collection is discarded.
+Prices must round-trip at the symbol digits and lie on an integer tick grid without
+exceeding the safe scaled-integer bound. Unsupported numeric precision is refused;
+native prices are not rounded to manufacture valid OHLC. API validation is independent.
+
+After a successful quote, the next timer can perform one chart challenge or one
+chart upload. The timeframe rotates M1/M5/M15/H1 even when one history is unavailable.
+In successful steady state the design is one quote every two timer periods and one
+window per timeframe every eight periods. This is **not measured latency evidence**.
+A per-timer request counter also rejects a second WebRequest. Quote bodies remain
+16 KiB; only `POST /chart/snapshot` gets the 128 KiB limit. Chart and quote challenge
+sequences are separate but must agree on API boot identity.
+
+Transport/unconfirmed chart responses back off ten seconds and reacquire the chart
+challenge, without replaying an old sample. Telemetry continues independently.
+Other chart 4xx responses (except transient 408/429 or recognized BOOT_MISMATCH)
+latch the chart channel for review. This includes corrections, changed basis,
+offset expiration and wrong identity/sequence. Reconnect does not release that
+latch. A boot mismatch discards both connections and reacquires the new API boot.
+Reinitializing the EA alone does not clear the API's immutable closed-bar cache;
+never restart/reseed the API automatically to hide a rejected correction.
+
+A history collection observed over 250ms halts the chart channel before uploading.
+CopyRates can still block inside MT5; the measured-duration check cannot interrupt
+that call. A WebRequest observed over one second still halts the whole observer.
+Cold-history, clock/DST, timer jitter, disconnection, account switching, lost replies
+and all timing limits require actual terminal testing. Keep this synchronous
+read-only observer separate from future position protection/execution handlers.
+
+Pending target tests: compile both sources with zero warnings; run all 50 pure
+cases; compare generated telemetry/chart fixtures; check live Demo OHLC against
+each of the four MT5 charts, Bid/Last, UTC mapping and forming-bar rollover; verify
+gap/correction rejection, independent backoff, rejected-channel latch persistence,
+one-request timer budget and worst-case timing. None has run on MT5 here.
 
 ## Evidence to retain for SCN-004 AC-07
 
@@ -133,4 +188,7 @@ Official reference semantics checked for this source:
 [TimeGMT](https://www.mql5.com/en/docs/dateandtime/timegmt),
 [StringToCharArray](https://www.mql5.com/en/docs/convert/stringtochararray),
 [EventSetTimer](https://www.mql5.com/en/docs/eventfunctions/eventsettimer).
+[CopyRates](https://www.mql5.com/en/docs/series/copyrates),
+[SeriesInfoInteger](https://www.mql5.com/en/docs/series/seriesinfointeger),
+[MqlRates](https://www.mql5.com/en/docs/constants/structures/mqlrates).
 Reference documentation does not substitute for build/runtime evidence.

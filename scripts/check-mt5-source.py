@@ -52,6 +52,10 @@ def findings(source: str, *, protocol: bool = False, self_test: bool = False) ->
             "AccountInfoDouble",
             "AccountInfoString",
             "SymbolInfoTick",
+            "CopyRates",
+            "SeriesInfoInteger",
+            "SymbolInfoInteger",
+            "SymbolInfoDouble",
         }
         if protocol or self_test
         else set()
@@ -63,6 +67,8 @@ def findings(source: str, *, protocol: bool = False, self_test: bool = False) ->
     if not protocol and not self_test:
         if not re.search(r"input\s+bool\s+EnableReadOnlyTelemetry\s*=\s*false\s*;", source):
             issues.append("observer must default off")
+        if not re.search(r"input\s+bool\s+EnableReadOnlyCharts\s*=\s*false\s*;", source):
+            issues.append("chart observer must default off")
         if re.search(r"input\s+\w+\s+\w*(?:token|password|secret)\w*", source, re.IGNORECASE):
             issues.append("credentials must not be EA inputs")
     return issues

@@ -32,3 +32,12 @@ the blueprint; no switch to a different charting stack is implied.
 Official references: [CopyRates](https://www.mql5.com/en/docs/series/copyrates),
 [MqlRates fields](https://www.mql5.com/en/docs/constants/structures/mqlrates),
 [series synchronization](https://www.mql5.com/en/docs/series/seriesinfointeger).
+
+EA source increment: keep native windows separately opt-in in the existing read-only
+observer. Alternate telemetry and one chart timeframe per timer, enforce a single
+request budget, and skip unavailable history. This deliberately requires warmed,
+synchronized terminal history; it does not introduce a synchronous download loop.
+History-duration and transport-duration latches are after-the-fact diagnostics, not
+hard deadlines or suitability for a future risk loop. Rejected chart data remains
+latched for review while independent telemetry may continue. Actual terminal build,
+50-case pure self-test, source-to-wire parity and timing evidence are still absent.

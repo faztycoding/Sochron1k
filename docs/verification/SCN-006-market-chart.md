@@ -88,12 +88,13 @@ fit, forming candles are gold, gaps are identified, and Auto Trading stays off.
 ## Acceptance and remaining full product work
 
 AC-01–05: locally verified API behaviors, **not** actual MT5 data agreement.
-AC-06: EA CopyRates producer still missing; compilation and terminal checks NOT RUN.
+AC-06: EA CopyRates producer now exists as the source checkpoint recorded below;
+compilation and terminal checks NOT RUN.
 AC-07: local browser implementation/integration verified with synthetic bars.
 AC-08: local revision/artifact evidence available; actual broker comparison NOT RUN.
 SCN-006 overall PARTIAL. Demo release NOT READY. Auto Trading remains disabled.
 
-Remaining: EA producer/compiler, actual Demo/timezone comparison, durable raw ticks
+Remaining: EA compiler/runtime verification, actual Demo/timezone comparison, durable raw ticks
 and M1 history, indicators/signals/strategy evaluation/statistics, execution/SL and
 recovery gates, authorized Demo round trip, target operations/alerts/restore/burn-in.
 Owner inputs still needed: broker/Demo server, MT5 host/OS/build, currency/capital,
@@ -104,3 +105,69 @@ or privileged keys in chat. These inputs do not prevent further local implementa
 References: [Lightweight Charts 5.2 documentation](https://tradingview.github.io/lightweight-charts/docs),
 [v5.2.1 notice](https://github.com/tradingview/lightweight-charts/blob/v5.2.1/NOTICE),
 [CopyRates](https://www.mql5.com/en/docs/series/copyrates).
+
+## EA native-bar source checkpoint — 2026-09-17
+
+Candidate based on `0537b11b09bfb0dbeef0ad04255b1653d0b5b10e`, dirty during
+verification; macOS arm64 and Python 3.14.7. This section supersedes only the
+previous missing-producer status, not its unpassed terminal/release gates.
+
+Changes: observer 0.11 adds a separately default-off CopyRates chart channel,
+fixed-size windows, synchronized-series/rollover checks, explicit Bid/Last basis,
+Demo identity checks before/after collection and before requests, and separate
+boot/sequence handling. Quote and chart requests alternate with a one-request
+timer guard. A validation rejection latches the chart channel for review; a
+transient unconfirmed response backs off without replaying the old sample.
+An observed history call over 250ms latches charts, but cannot interrupt CopyRates.
+No trade operation, API production change, UI change, dependency or DB migration
+is included. The `sochron-mt5-execution` skill informed identity checks, transport
+separation and the explicit distinction between source and terminal evidence.
+
+Verification on this candidate:
+
+- `bash scripts/check-scn-001-local.sh`: **PASS**, Ruff, **229 Python tests** and
+  a 145-text-file secret scan. This covers existing local risk/recovery/authorization
+  regressions, not actual executor behavior.
+- `.venv/bin/pytest -q tests/test_mt5_source.py`: **23 PASS**. Added cases cover
+  default-off mutation detection, forbidden terminal access in pure helpers,
+  golden decimal/time/provenance validation, body limits and ASGI chart ingestion.
+  The synthetic two-bar input becomes one closed and one forming bar; exact replay
+  is idempotent and a closed-bar correction rejects charts without disabling quotes.
+- `.venv/bin/ruff check scripts/check-mt5-source.py scripts/check-mt5-fixture.py tests/test_mt5_source.py`:
+  **PASS**.
+- `.venv/bin/python scripts/check-mt5-source.py`: **PASS, static patterns only**.
+  It is not a compiler, MQL interpreter, control-flow proof or security boundary.
+- `.venv/bin/python scripts/check-mt5-fixture.py` and the same command with
+  `--chart`: **PASS** against committed hand-authored golden inputs. Both report
+  `input_is_committed_golden=true`; neither claims an MT5-generated fixture.
+- `.venv/bin/python scripts/check-bridge-local.py`: **PASS**, synthetic telemetry
+  and 240-bar windows through a real loopback HTTP server. This confirms the
+  receiving boundary still works, not that the MQL producer executed.
+- `bash scripts/check-project-baseline.sh`, `python3 scripts/check-agent-skills.py`
+  and `git diff --check`: **PASS**. All pinned installed/repository skill copies
+  pass integrity checks; runtime integration is a different gate.
+
+Candidate SHA-256 identities:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `mt5/ea/SochronTelemetry.mq5` | `ff9b30728a3b08b000beeba19569f54ba786f0517244e27707e0175506a6e637` |
+| `mt5/ea/TelemetryProtocol.mqh` | `9ba311a783840bae27c2937e0e3223d0145075009fe56c029713c5e062b07118` |
+| `mt5/ea/SochronTelemetrySelfTest.mq5` | `452dddaf3534c847079da4b284c868581bd03ff6679275249105cf390f323a41` |
+| `tests/fixtures/mt5-chart-v1.json` | `5b5affb45f3f0a033aa76d31f90a40f47a8e59dfdbeff5d00288eefc087f708f` |
+
+Compiler discovery again found no matching MetaEditor/terminal executable in
+Spotlight's filename index or `/Applications` and the user's `Applications`
+directory. This is not an exhaustive search of custom/unindexed Wine prefixes.
+No target host/build has been selected. **MQL compilation, the 50-case pure MQL
+self-test, terminal-generated fixture comparison, actual Demo OHLC/clock agreement,
+rollover, account-switch and network/timing tests are all NOT RUN.** The 50 cases
+are source cases, not part of the 229 executed Python tests.
+
+Browser/Compose checks and dependency audits were not rerun for this source-only
+increment; the earlier chart browser evidence applies to the unchanged API/UI
+boundary, not the EA. The prior whole-tree signature failure remains unresolved.
+No MT5 login, broker operation, hosted write, deployment or Auto Trading enablement
+occurred. SCN-006 remains PARTIAL; the full Demo product is NOT READY. The selected
+host must follow the compile/self-test and read-only authorization procedure in
+[`mt5/ea/README.md`](../../mt5/ea/README.md) before terminal integration.

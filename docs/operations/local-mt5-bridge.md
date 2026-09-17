@@ -121,8 +121,10 @@ target-host burn-in. Local ingress success does not satisfy those gates.
 ## Native chart channel (SCN-006)
 
 The API and authenticated React chart support native M1/M5/M15/H1 windows, independently
-of sampled Bid/Ask telemetry. The current EA source does **not** produce these
-windows yet. Browser/API verification uses synthetic frames, not MT5 observations.
+of sampled Bid/Ask telemetry. The EA has a default-off CopyRates producer source
+checkpoint, but compilation and actual uploads are still **unverified**. Browser/API
+verification uses synthetic frames, not MT5 observations. See the EA README for
+history warm-up, timer scheduling and chart rejection/recovery procedures.
 
 Routes: executor-authenticated `GET /bridge/v1/chart/challenge` and
 `POST /bridge/v1/chart/snapshot`; owner-authenticated `GET /owner/chart/{timeframe}`.
