@@ -22,7 +22,7 @@ package = false
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers"
-pythonpath = ["services/api/src"]
+pythonpath = ["services/api/src", "services/worker/src"]
 testpaths = ["tests"]
 
 [tool.ruff]

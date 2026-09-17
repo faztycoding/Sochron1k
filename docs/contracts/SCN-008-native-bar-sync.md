@@ -68,12 +68,41 @@ dispatch outside this worker. No UI fake history or browser write grant.
 
 AC-01/02 now have local database evidence; see
 [receiver verification](../verification/SCN-008-native-m1-receiver.md).
-AC-03 through AC-07 remain NOT IMPLEMENTED / NOT RUN. A database-only checkpoint
-is not a working sync worker, deployment, strategy dataset approval or full Demo
-acceptance. The next implementation is the receipt-ordered source exporter and
-durable worker, not an assumption that database ACK means synchronization.
+AC-03 now has local read-only exporter evidence; see
+[source verification](../verification/SCN-008-native-source.md).
+AC-04 through AC-07 remain NOT IMPLEMENTED / NOT RUN. The receiver and source
+adapter are not yet a working sync worker, deployment, strategy dataset approval
+or full Demo acceptance. Next is the durable worker journal and private transport,
+not an assumption that database ACK means synchronization.
 
 ## Availability and recovery semantics
+
+### AC-03 source reader detail (before implementation)
+
+Create a worker-owned read-only source adapter, sharing existing domain validators
+but never constructing `BarHistory` (which can initialize a database). Require the
+explicit archive UUID, Demo identity, broker offset and chart validity interval;
+no bridge credential is needed. Use SQLite URI `mode=ro`, query-only/defensive
+settings and a short read transaction. Do not use `immutable=1` on a changing WAL
+archive, force a checkpoint, add indexes or repair the source from this reader.
+SQLite may maintain WAL shared-memory sidecars; application tables and the main
+database must not be created or changed by the reader.
+
+Check canonical private paths, ownership/mode/link count and stable directory/file
+identity before and after reads. Validate schema version/required table layouts,
+archive binding, payload digest, receipt linkage, exact decimal/grid values,
+closure/alignment/time bounds and UTC provenance. Reject invalid/oversized JSON,
+duplicate keys, unknown schema and swapped archives with redacted errors.
+
+Cursor `(0,0)` means start; any nonzero cursor must identify an existing closed M1
+row in this same archive. Use a single committed snapshot per bounded page, return
+only actual rows ordered by `(first_receipt,time_server_s)`, and advance the returned
+cursor only through included rows. Return immutable payload strings plus a UTC
+availability observed after reading those committed rows. This returned cursor is
+a candidate, never a persisted sync acknowledgement. A rollback of wall time
+relative to source receipt denies export. Bound query execution and payload size;
+test WAL visibility with an independent writer, uncommitted invisibility, later
+backfill, repeated/reopened reads, tampering, no-create/no-write and path changes.
 
 `received_at` is the original API capture-processing time before local commit.
 `available_at` for synchronized native rows is a conservatively observed time at

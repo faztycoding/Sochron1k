@@ -1,7 +1,8 @@
 # ADR-009 Native M1 archive synchronization boundary
 
 2026-09-17. Receiving boundary implemented locally under SCN-008, Demo only;
-worker design remains to be implemented and verified.
+read-only source adapter now implemented locally; durable worker state/transport
+remain to be implemented and verified.
 
 ## Decision
 
@@ -22,6 +23,14 @@ Its durable batch journal is separate from the command journal. It consumes sour
 rows in first-receipt/time order, journals before send and reconciles UNKNOWN
 results before retry. The server's receipt of a request alone never advances the
 local sync cursor; independent committed-data comparison does.
+
+The source adapter opens the existing SCN-007 database with `mode=ro`, never the
+initializing `BarHistory` constructor. Read transactions include binding/cursor
+validation and bounded receipt-ordered rows in one WAL snapshot. Availability is
+observed after fetching committed rows. Domain models are reused from the current
+API source package without importing its HTTP routes or startup entry point; a
+separate shared package is unnecessary for this boundary. Deployment packaging
+for the runnable worker remains future work, not implied by pytest's import paths.
 
 ## Alternatives and consequences
 

@@ -16,7 +16,7 @@ if [[ "$python_version" != 3.14.* ]]; then
   exit 1
 fi
 
-"$ruff_bin" check services/api/src tests scripts/check-no-secrets.py
+"$ruff_bin" check services/api/src services/worker/src tests scripts/check-no-secrets.py
 "$pytest_bin" -q
 "$python_bin" scripts/check-no-secrets.py
 

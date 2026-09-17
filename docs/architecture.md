@@ -92,6 +92,14 @@ owner-authenticated and tied to a stable archive/receipt watermark. It is not
 Parquet raw-tick capture, synchronized Supabase history or strategy decision evidence;
 see [ADR-008](decisions/ADR-008-local-native-bar-history.md).
 
+SCN-008 now has an immutable Supabase M1 receiver and a read-only worker source
+adapter under `services/worker/src/sochron_worker`. The adapter reuses the existing
+archive/domain validators (not API routes or the app entry point), pins the source
+archive/binding and exports closed M1 rows in receipt/time order. It performs no
+network operation and does not persist or acknowledge a synchronization cursor.
+The durable worker journal/transport and its full recovery evidence remain to be
+implemented; see [ADR-009](decisions/ADR-009-native-m1-sync-boundary.md).
+
 ## Failure behavior
 
 | Failure | Required behavior |
