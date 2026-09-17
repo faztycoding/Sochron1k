@@ -66,6 +66,28 @@ The verifier must own a unique Compose project, image tags, loopback port and jo
 
 ## Required verification
 
+### R-015 fixed SQLite admission (recorded before implementation)
+
+Replace Python's effective SQLite in both API and worker images with upstream
+3.53.4, retaining Python 3.14.7 and all Python dependency versions. Pin upstream
+archive SHA3-256, sqlite3.c SHA3-256, release source ID and compiler image digest.
+Verify bytes before extraction/compilation. Build in an isolated compiler stage;
+ship no compiler/source/archive in runtime. Preserve the existing slim base and
+record the custom library separately from Debian package metadata. No apt upgrade,
+new Python SQLite wrapper or monkeypatch of imports.
+
+Require Python version, sqlite_version(), sqlite_source_id(), actual Linux loaded
+library path and compiled-library hash to match the admitted artifact. Reject the
+previous image through this probe before claiming the new gate passes. Exercise
+real temporary WAL databases and existing API/worker concurrency, denial, crash,
+durable UNKNOWN and restart tests on the actual Linux library, not only macOS.
+Re-run no-cache API/web Compose and worker replacement checks. Record exact image
+and verifier identities. Passing tests alone cannot prove a rare upstream race
+fixed: source admission plus runtime linkage proves the intended fix is shipped.
+No target-host/amd64, backup, hosted or broker acceptance is inferred.
+Implemented local source/linkage, negative admission, both Compose workflows and
+affected Linux suites now PASS; see [R-015 evidence](../verification/SCN-003-fixed-sqlite.md).
+
 | Acceptance | Verifier required before implementation is complete | Current result |
 | --- | --- | --- |
 | AC-01 | No-cache multi-platform-compatible image builds and in-container version checks | PASS on local arm64: digest-pinned builds and frozen dependency installs; Python 3.14.7 and nginx 1.30.5 checked in running images. amd64 execution NOT RUN |

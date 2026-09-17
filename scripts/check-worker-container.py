@@ -102,6 +102,9 @@ def main():
         "tests/test_bar_history.py",
         "tests/test_owner_auth.py",
         "tests/test_telemetry_bridge.py",
+        "services/runtime/sqlite.lock.json",
+        "scripts/build-container-sqlite.py",
+        "scripts/check-container-sqlite.py",
     ]
     inputs += [
         str(p.relative_to(ROOT))
@@ -263,7 +266,20 @@ print(json.dumps(dict(python=platform.python_version(), sqlite=sqlite3.sqlite_ve
             "libsqlite3-0",
         )
         report["release_ready"] = False
-        report["sqlite_wal_reset_fix_verified"] = False
+        report["sqlite_admission"] = json.loads(
+            run(
+                *base,
+                "run",
+                "--rm",
+                "--no-deps",
+                "-T",
+                "--entrypoint",
+                "python",
+                "worker",
+                "/opt/sochron/check-sqlite.py",
+            )
+        )
+        report["sqlite_wal_reset_fix_verified"] = True
         check("installed wheel exact source bytes, pinned runtime and no build/dev tools")
 
         report["stage"] = "fixture"

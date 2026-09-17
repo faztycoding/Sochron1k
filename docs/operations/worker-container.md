@@ -1,15 +1,17 @@
 # Opt-in Linux sync worker
 
 SCN-008 AC-07; local preparation only. Full Demo and target release are NOT READY.
-R-015 requires admission of a SQLite runtime with a verified WAL-reset fix before
-deployment. The current image's Python 3.14.7 links Debian SQLite 3.40.1; passing
-functional tests does not clear that gate. No hosted/broker operation is authorized.
+The image now links pinned upstream SQLite 3.53.4 with source/linkage admission
+and affected Linux tests; see [R-015 evidence](../verification/SCN-003-fixed-sqlite.md).
+Target runtime admission remains required. No hosted/broker operation is authorized.
 
 ## Artifact and local verifier
 
 `services/worker/Dockerfile` builds the locked internal wheel and installs only
 production dependencies into `/opt/worker`. It uses the same digest-pinned Python
 base as the existing API. Build tools/source checkout are not copied to runtime.
+Both images add a verified SQLite shared library built in a separate digest-pinned
+compiler stage; see [ADR-012](../decisions/ADR-012-container-sqlite-runtime.md).
 `/opt/artifact/SHA256SUMS` records wheel and requirements hashes, not release approval.
 Record candidate image ID, source/input hashes and test report together; do not use
 the mutable `:local` tag or project version alone as an approved release identity.

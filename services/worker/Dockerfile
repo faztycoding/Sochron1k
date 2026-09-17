@@ -1,3 +1,9 @@
+FROM python:3.14.7-bookworm@sha256:ecac9e212daacda8a702eae372fceebc0ee36f5805abe087880367e8d061fa5b AS sqlite-builder
+WORKDIR /build
+COPY services/runtime/sqlite.lock.json ./
+COPY scripts/build-container-sqlite.py ./
+RUN python build-container-sqlite.py
+
 FROM python:3.14.7-slim-bookworm@sha256:9ab8d9c8514b44f90cf0029dd42fdd7e9e211e639c8b995304cc04568dee900f AS builder
 
 ENV UV_NO_CACHE=1 UV_PYTHON_DOWNLOADS=0 SOURCE_DATE_EPOCH=1580601600
@@ -16,6 +22,12 @@ RUN uv build --wheel --no-build-isolation --python /build/.venv/bin/python --out
     && cd /artifact && sha256sum *.whl requirements.txt > SHA256SUMS
 
 FROM python:3.14.7-slim-bookworm@sha256:9ab8d9c8514b44f90cf0029dd42fdd7e9e211e639c8b995304cc04568dee900f
+COPY --from=sqlite-builder /out/libsqlite3.so.0 /usr/local/lib/libsqlite3.so.0
+COPY --from=sqlite-builder /out/sqlite-build.json /opt/sochron/sqlite-build.json
+COPY services/runtime/sqlite.lock.json /opt/sochron/sqlite.lock.json
+COPY scripts/check-container-sqlite.py /opt/sochron/check-sqlite.py
+ENV LD_LIBRARY_PATH=/usr/local/lib
+RUN ldconfig && python /opt/sochron/check-sqlite.py
 ENV PATH="/opt/worker/bin:${PATH}" PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN groupadd --gid 10001 sochron \
     && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin sochron \

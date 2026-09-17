@@ -81,10 +81,11 @@ AC-07 has an
 and target recovery gates remain incomplete. An internal wheel
 and installed operator command now have [local artifact evidence](../verification/SCN-008-worker-package.md).
 Opt-in Linux container delivery has [local replacement evidence](../verification/SCN-008-worker-container.md);
-SQLite patch admission remains a release blocker (R-015).
+R-015 fixed SQLite admission now has [local arm64 evidence](../verification/SCN-003-fixed-sqlite.md);
+actual target admission remains required.
 The worker is not enabled
 or deployed; strategy dataset approval and full Demo acceptance are not claimed.
-Next is fixed-runtime admission and recovery delivery, not hosted enablement.
+Next is backup/restore delivery and target gates, not hosted enablement.
 
 ## Availability and recovery semantics
 

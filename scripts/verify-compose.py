@@ -61,6 +61,9 @@ def main() -> int:
         "uv.lock",
         "package-lock.json",
         "scripts/verify-compose.py",
+        "services/runtime/sqlite.lock.json",
+        "scripts/build-container-sqlite.py",
+        "scripts/check-container-sqlite.py",
     ]
     report = {
         "source_revision": run("git", "rev-parse", "HEAD"),
@@ -139,6 +142,16 @@ def main() -> int:
         report["images"] = images
         report["python"] = run(*compose, "exec", "-T", "api", "python", "--version")
         assert report["python"] == "Python 3.14.7"
+        report["sqlite_admission"] = json.loads(
+            run(
+                *compose,
+                "exec",
+                "-T",
+                "api",
+                "python",
+                "/opt/sochron/check-sqlite.py",
+            )
+        )
         report["nginx"] = run(*compose, "exec", "-T", "web", "sh", "-c", "nginx -v 2>&1")
         assert report["nginx"] == "nginx version: nginx/1.30.5"
         report["stage"] = "host-http"

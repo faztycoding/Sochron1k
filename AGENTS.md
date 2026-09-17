@@ -97,7 +97,11 @@ The worker package verifier requires uv 0.12.15 on PATH (or `SOCHRON_UV`) and
 environment without hosted/broker access.
 The container verifier requires the local Docker engine and project development
 environment; it uses only isolated synthetic containers. A passing functional
-report does not clear SQLite patch admission (R-015) or target release gates.
+report does not clear target release gates. The image verifiers now also require
+the fixed SQLite source/linkage probe.
+`.venv/bin/python scripts/check-container-python.py LOCAL_CANDIDATE_IMAGE` runs affected Python tests
+in a disposable candidate-derived Linux image; requires uv 0.12.15 (`SOCHRON_UV`
+may give its absolute path). It does not certify other platforms or targets.
 
 Add build, lint, type-check, test, migration, and deployment commands only after they exist and have run successfully in this repository.
 

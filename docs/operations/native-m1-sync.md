@@ -191,7 +191,8 @@ SQLite main file is not a verified backup.
 
 ## Outstanding delivery
 
-Next: admit a fixed SQLite runtime (R-015), then complete recovery gates (AC-07).
+Next: complete consistent backup/restore and recovery gates (AC-07). R-015 has
+[local fixed-runtime evidence](../verification/SCN-003-fixed-sqlite.md), not target approval.
 Local AC-06 testing
 does not establish installed-service or target-host behavior. Still required from the
 owner: chosen Supabase project/owner, broker Demo server/account specifications,
