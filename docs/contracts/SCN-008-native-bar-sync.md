@@ -70,12 +70,44 @@ AC-01/02 now have local database evidence; see
 [receiver verification](../verification/SCN-008-native-m1-receiver.md).
 AC-03 now has local read-only exporter evidence; see
 [source verification](../verification/SCN-008-native-source.md).
-AC-04 through AC-07 remain NOT IMPLEMENTED / NOT RUN. The receiver and source
-adapter are not yet a working sync worker, deployment, strategy dataset approval
-or full Demo acceptance. Next is the durable worker journal and private transport,
-not an assumption that database ACK means synchronization.
+AC-04 now has local journal/one-step driver and process-crash evidence; see
+[journal verification](../verification/SCN-008-sync-journal.md).
+AC-05 through AC-07 remain NOT IMPLEMENTED / NOT RUN. These library components
+are not yet a configured runnable sync service, deployment, strategy dataset
+approval or full Demo acceptance. Next is private transport/config and real local
+HTTP integration, not an assumption that database ACK means synchronization.
 
 ## Availability and recovery semantics
+
+### AC-04 journal/driver detail (before implementation)
+
+Use a separate explicitly initialized private directory, `sync.sqlite3` and a
+process-held nonblocking POSIX file lock. Normal reopening must not create missing
+state; partial initialization requires operator review. Pin source directory,
+archive UUID/binding, destination origin and owner UUID without credentials.
+Verify ownership/mode/link count/inodes, schema and batch fingerprints on reopen.
+Use WAL/FULL with bounded lock waits and a fixed 64 MiB main-database quota; never
+prune old evidence automatically. Report quota warnings without claiming a whole-
+filesystem bound or power-loss verification.
+
+Atomically append immutable exact batch intent before dispatch; keep at most one
+unverified batch. States are PREPARED, UNKNOWN, VERIFIED and QUARANTINED. Persist
+UNKNOWN plus attempt count before calling the destination. An ACK alone changes
+nothing. Read-back must match archive binding and every exact bar payload, with
+valid UTC availability no earlier than the original receipt and no later than the
+read observation. Existing matching rows may retain a different conservative
+availability, as specified by AC-01. Missing matching rows permit a later retry
+only after this reconciliation; contradictory/malformed state quarantines.
+
+Update VERIFIED and the source cursor in the same durable transaction. Retain the
+batch ledger and validate cursor-chain consistency on restart. Reject time rollback
+relative to journal observations, changed config, concurrent writers, corrupt state
+or storage failure before external dispatch. A one-step driver exposes no broker
+operation or background loop; real transport, retry scheduling and private config
+remain AC-05. Test actual temporary SQLite files, denied transitions, duplicate
+prepare, lost response, missing/partial/conflicting read-back, disk/lock failures,
+restart, and process exit after destination acceptance. Simulated transport is not
+AC-06 real PostgREST/HTTP evidence.
 
 ### AC-03 source reader detail (before implementation)
 

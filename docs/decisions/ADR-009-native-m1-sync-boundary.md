@@ -1,8 +1,8 @@
 # ADR-009 Native M1 archive synchronization boundary
 
 2026-09-17. Receiving boundary implemented locally under SCN-008, Demo only;
-read-only source adapter now implemented locally; durable worker state/transport
-remain to be implemented and verified.
+read-only source, durable worker journal and one-step driver implemented locally.
+Private transport/config and end-to-end HTTP evidence remain outstanding.
 
 ## Decision
 
@@ -31,6 +31,25 @@ observed after fetching committed rows. Domain models are reused from the curren
 API source package without importing its HTTP routes or startup entry point; a
 separate shared package is unnecessary for this boundary. Deployment packaging
 for the runnable worker remains future work, not implied by pytest's import paths.
+
+The worker journal uses a separately initialized private POSIX directory and
+`sync.sqlite3`, WAL/FULL, a process-held nonblocking `flock`, and one in-process
+step lock shared by drivers using the journal. Normal reopen never creates missing
+state. It pins source identity/path and destination owner/origin without storing
+credentials. Schema/immutable intents and the complete cursor chain are audited
+on startup; selected state and schema are checked during subsequent operations.
+At most one unverified batch exists. PREPARED becomes durable UNKNOWN before
+external send; independent read-back produces VERIFIED, retryable PREPARED if
+rows are absent, or persistent QUARANTINED on contradiction. Cursor and VERIFIED
+commit atomically. No API automatically releases quarantine or deletes evidence.
+
+The fixed 64 MiB journal page quota and warning states bound the main database,
+not WAL/SHM or filesystem use. Every verified batch remains in the ledger, so
+eventual capacity requires a reviewed retention/export procedure rather than
+silent deletion. The lock is advisory on the supported local POSIX filesystem;
+Windows worker operation and network filesystems are not established. This is
+separate from the Windows-or-Wine MT5 executor choice. Process termination tests
+are not power-loss, storage-controller, target-host restore or release evidence.
 
 ## Alternatives and consequences
 

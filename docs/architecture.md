@@ -97,8 +97,12 @@ adapter under `services/worker/src/sochron_worker`. The adapter reuses the exist
 archive/domain validators (not API routes or the app entry point), pins the source
 archive/binding and exports closed M1 rows in receipt/time order. It performs no
 network operation and does not persist or acknowledge a synchronization cursor.
-The durable worker journal/transport and its full recovery evidence remain to be
-implemented; see [ADR-009](decisions/ADR-009-native-m1-sync-boundary.md).
+A separate private SQLite sync journal and one-step driver now persist exact
+intent/UNKNOWN before send and advance the cursor only after independent read-back.
+Local process-crash recovery is verified with a synthetic durable destination,
+not real PostgREST. Private HTTP transport/config, scheduling, packaging and full
+end-to-end recovery remain to be implemented;
+see [ADR-009](decisions/ADR-009-native-m1-sync-boundary.md).
 
 ## Failure behavior
 
