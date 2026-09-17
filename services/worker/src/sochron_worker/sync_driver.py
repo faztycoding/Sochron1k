@@ -63,6 +63,32 @@ class SyncDriver:
             return self.journal.quarantine(pending.batch_id).state
         return self.journal.reconcile(pending.batch_id, snapshot).state
 
+    def _source_matches(self, pending: Pending) -> bool:
+        current = self.journal.source.read(pending.batch.after, limit=len(pending.batch.rows))
+        return current.next_cursor == pending.batch.next_cursor and canonical(
+            [json.loads(r.payload) for r in current.rows]
+        ) == canonical([json.loads(r.payload) for r in pending.batch.rows])
+
+    def reconcile_pending(self) -> str:
+        """One pending read-back only; never prepare, send, or release quarantine."""
+        if not self._lock.acquire(blocking=False):
+            raise JournalUnavailable()
+        try:
+            self._target()
+            pending = self.journal.status().pending
+            if pending is None:
+                return "NO_PENDING"
+            if pending.state == "QUARANTINED":
+                return pending.state
+            if not self._source_matches(pending):
+                return self.journal.quarantine(pending.batch_id).state
+            if pending.state == "PREPARED":
+                # A read must not manufacture an attempt to satisfy VERIFIED's invariant.
+                return "REVIEW_REQUIRED"
+            return self._reconcile(pending)
+        finally:
+            self._lock.release()
+
     def step(self) -> str:
         if not self._lock.acquire(blocking=False):
             raise JournalUnavailable()
@@ -78,10 +104,7 @@ class SyncDriver:
             if pending.state == "QUARANTINED":
                 return pending.state
             # Validate current source before any external effect, including after restart.
-            current = self.journal.source.read(pending.batch.after, limit=len(pending.batch.rows))
-            if current.next_cursor != pending.batch.next_cursor or canonical(
-                [json.loads(r.payload) for r in current.rows]
-            ) != canonical([json.loads(r.payload) for r in pending.batch.rows]):
+            if not self._source_matches(pending):
                 return self.journal.quarantine(pending.batch_id).state
             if pending.state == "UNKNOWN":
                 # Missing rows become PREPARED but do not send again in this same step.

@@ -69,7 +69,7 @@ Python interpreter, frontend, credentials or database state. It is not published
 to a package registry. Do not use version `0.1.0` alone as artifact identity.
 
 After private configuration is prepared under the authority above, substitute
-`/absolute/new/release/venv/bin/sochron-sync` for the source prefix in init/status/run
+`/absolute/new/release/venv/bin/sochron-sync` for the source prefix in init/status/run/reconcile
 commands below. Importing/installing does not initialize a journal. Start `run`
 only explicitly, stop with SIGINT/SIGTERM and inspect the exit/status. Do not add
 an automatic restart loop after retry exhaustion. Preserve the same source/state
@@ -128,6 +128,7 @@ command or environment. From the repository root:
 ```bash
 PYTHONPATH=services/api/src:services/worker/src .venv/bin/python -m sochron_worker init
 PYTHONPATH=services/api/src:services/worker/src .venv/bin/python -m sochron_worker status
+PYTHONPATH=services/api/src:services/worker/src .venv/bin/python -m sochron_worker reconcile
 PYTHONPATH=services/api/src:services/worker/src .venv/bin/python -m sochron_worker run --once
 PYTHONPATH=services/api/src:services/worker/src .venv/bin/python -m sochron_worker run
 ```
@@ -139,6 +140,19 @@ lock: stop an active worker before using them. A live `run` prints JSON status
 after each completed step, including cursor, pending state, attempts and journal
 quota warning. No account identity, key, payload or remote error body is printed.
 `IDLE` means no unsynced source rows, not a healthy broker or complete dataset.
+
+`reconcile` performs one pending-batch read-back only. It requires the existing
+private configuration/key and exclusive worker lock; stop the worker first.
+It can update the local journal but never stores remote rows, prepares another
+batch, increments send attempts or runs a retry loop. An UNKNOWN with exact
+read-back becomes VERIFIED; missing/partial rows become PREPARED, conflicts remain
+QUARANTINED and an unavailable destination leaves UNKNOWN. A PREPARED batch returns
+REVIEW_REQUIRED without attempting a send or inventing an attempt. A final UNKNOWN
+can still be read after the send budget is exhausted. Empty pending state returns
+NO_PENDING even if unsynchronized source rows exist: it does not audit all remote
+history or prove complete recovery. `--once` is not accepted for this command.
+Exit 0 is VERIFIED/NO_PENDING, 3 is unresolved/review, 2 is quarantine/error.
+All results keep execution and Auto Trading disabled.
 
 `run --once` performs one bounded driver step, which can send then read back, or
 only reconcile a previous UNKNOWN batch. A returned PREPARED state deliberately
@@ -171,8 +185,10 @@ evidence that rows were synchronized.
    `init` to clear a failure. Configuration/key changes take effect only after
    restart, not by hot reload.
 2. Inspect local status after the worker exits. UNKNOWN means the write may have
-   committed. Once destination access is restored, `run --once` independently
-   reads it before any resend. Do not infer completion from an HTTP ACK or cursor
+   committed. Once authorized destination access is restored, use `reconcile` to
+   independently read the pending batch without any send. If it returns PREPARED
+   or REVIEW_REQUIRED, inspect the evidence before choosing an authorized `run`.
+   Do not infer completion from an HTTP ACK or cursor
    alone when investigating external changes.
 3. On QUARANTINED, source/binding drift, corrupt/missing state or exhausted sends,
    stop and retain evidence. Compare the pinned archive and exact destination data

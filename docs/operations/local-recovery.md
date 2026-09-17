@@ -115,3 +115,22 @@ destination reconciliation, target-host and off-host restore, encryption/key cus
 retention policy execution, approved recovery objectives and release burn-in. No
 off-host copy, key management, hosted Supabase export or raw-tick recovery is supplied
 by these SQLite commands. Keep the existing Demo/Auto Trading gates closed.
+
+## Restored-service rehearsal and query-only follow-up
+
+The package verifier now reconstructs only its generated fixture runtime paths
+from an inspection bundle, preserving the exact original source binding. It
+explicitly restores WAL mode, supplies a new private sync lock after its fixture
+worker has exited, and runs installed `sochron-sync reconcile`. Independent SQL
+and the loopback receiver verify one original send, one retained attempt and the
+confirmed cursor. A separate installed-process query-only broker simulator checks
+unavailable/missing/exact replies and retained command risk/halts/exposure.
+This is not a supported owner activation procedure; do not copy those fixture
+operations into a running installation. Existing owner files are never overwritten.
+
+For an already admitted runtime under authorized destination access, the explicit
+`reconcile` command is the no-send pending read-back described in the
+[worker runbook](native-m1-sync.md). It does not activate inspection bundles,
+rebind source paths, release quarantine/halts or certify all destination history.
+Its NO_PENDING result must not be treated as permission to resume trading.
+See [rehearsal evidence](../verification/SCN-009-restored-services.md).

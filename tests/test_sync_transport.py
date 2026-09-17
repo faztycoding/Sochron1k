@@ -462,6 +462,50 @@ def test_init_and_status_need_no_service_key_or_network(config, tmp_path, monkey
     assert "SYNC_JOURNAL_UNAVAILABLE" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    "scenario", ["empty", "prepared", "exact", "missing", "failed", "conflict"]
+)
+def test_cli_reconcile_is_one_query_only_step(
+    config, journal, tmp_path, monkeypatch, capsys, scenario
+):
+    import sochron_worker.__main__ as entry
+
+    destination = FakeDestination()
+    if scenario != "empty":
+        pending = journal.prepare(journal.source.read())
+        if scenario != "prepared":
+            journal.begin_send(pending.batch_id)
+            destination.snapshot = dict(
+                archive_id=pending.batch.archive_id,
+                binding=json.loads(pending.batch.binding_json),
+                rows=pending.batch.wire_rows(),
+            )
+            if scenario == "missing":
+                destination.snapshot = None
+            elif scenario == "failed":
+                destination.read_fail = True
+            elif scenario == "conflict":
+                destination.snapshot["extra"] = True
+    journal.close()
+    configure(config, tmp_path, monkeypatch)
+    monkeypatch.setattr(entry, "SupabaseDestination", lambda config: destination)
+    expected, code = {
+        "empty": ("NO_PENDING", 0),
+        "prepared": ("REVIEW_REQUIRED", 3),
+        "exact": ("VERIFIED", 0),
+        "missing": ("PREPARED", 3),
+        "failed": ("UNKNOWN", 3),
+        "conflict": ("QUARANTINED", 2),
+    }[scenario]
+    assert main(["reconcile"]) == code
+    result = json.loads(capsys.readouterr().out)
+    assert result["state"] == expected
+    assert result["execution_ready"] is result["auto_trading_enabled"] is False
+    assert destination.calls == ([] if scenario in {"empty", "prepared"} else ["read"])
+    assert main(["reconcile", "--once"]) == 2
+    assert json.loads(capsys.readouterr().out)["state"] == "SYNC_CONFIG_INVALID"
+
+
 def test_oversized_request_and_wrong_archive_make_no_http_call(config, journal, monkeypatch):
     calls = []
     target = SupabaseDestination(config, transport=httpx.MockTransport(lambda r: calls.append(r)))
@@ -542,7 +586,7 @@ def test_real_cli_sigterm_retains_unknown_then_reconciles(config, tmp_path, monk
             assert db.execute("SELECT receipt FROM meta").fetchone()[0] == 0
         release.set()
         restarted = subprocess.run(
-            [*command, "run", "--once"], env=env, capture_output=True, text=True, timeout=10
+            [*command, "reconcile"], env=env, capture_output=True, text=True, timeout=10
         )
         assert restarted.returncode == 0, restarted.stdout + restarted.stderr
         assert json.loads(restarted.stdout)["state"] == "VERIFIED"

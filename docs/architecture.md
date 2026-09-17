@@ -130,6 +130,11 @@ private bundles with original capture intervals, module/config hashes and measur
 local rehearsal. It never activates state or starts a service. Actual-target,
 off-host and external reconciliation remain pending; see
 [ADR-015](decisions/ADR-015-local-recovery-operator.md).
+An explicit worker `reconcile` action now queries only the current UNKNOWN batch
+without sending or increasing attempts. A synthetic installed-artifact rehearsal
+reopens recovered runtime copies at their exact original fixture paths and checks
+worker read-back and query-only command recovery. This is not an owner activation
+tool or complete external-state inventory; actual-target admission remains pending.
 
 ## Failure behavior
 

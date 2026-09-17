@@ -60,7 +60,8 @@ recovery admission. AC-03 now has local read-only domain/cross-store admission
 evidence; see [audit verification](../verification/SCN-009-recovery-set-audit.md).
 AC-04 now has local installed backup/verify/inspection commands and measured
 synthetic recovery evidence; see [operator verification](../verification/SCN-009-operator-recovery.md).
-Application activation, external reconciliation, full Demo, off-host recovery and
+Restored runtime copies now have [synthetic installed-service rehearsal](../verification/SCN-009-restored-services.md).
+Owner/target activation, external reconciliation, full Demo, off-host recovery and
 actual-target RPO/RTO remain NOT READY/NOT RUN. Do not label the entire recovery
 contract PASS or treat local inspection as authorization to resume execution.
 
@@ -141,3 +142,34 @@ times; counts must include UNKNOWN/halts and sync send budgets. The resulting
 inspection bundle remains execution_ready=false, external reconciliation NOT_RUN.
 Local measured durations and age/span are not owner-approved RPO/RTO or a target
 power-loss/off-host/production recovery claim.
+
+### AC-04 restored-service rehearsal and query-only operator (before implementation)
+
+Add explicit `sochron-sync reconcile` as a single bounded pending-batch read-back,
+never a send loop. It may update local reconciliation state but must never invoke
+destination.store, prepare new batches or increase attempts. Reuse the existing
+exclusive journal/step lock, pinned destination/source identity and source-prefix
+validation. UNKNOWN may become VERIFIED only from exact read-back, PREPARED if
+missing/partial, or QUARANTINED on conflict. Read failure stays UNKNOWN. PREPARED
+returns REVIEW_REQUIRED without sending or inventing a dispatch attempt;
+QUARANTINED is preserved. An empty pending set returns NO_PENDING, not global
+recovery completeness or destination-history verification. `--once` remains valid
+only for run. Exit 0 is VERIFIED/NO_PENDING, 3 unresolved/review, 2 quarantined/error;
+all JSON retains execution_ready=false and Auto Trading false.
+
+Extend the installed-wheel synthetic rehearsal beyond byte inspection: retain
+unavailable original fixture paths, recreate only those synthetic runtime paths
+from verified inspection bytes, supply an empty private sync lock after proving
+the fixture worker exited, and reopen SQLite in the writers' required WAL mode.
+Do not edit the original source-directory/owner/archive/destination binding.
+Run the new installed reconcile command and independently check cursor, attempt
+budget and receiver store count. Repeated query-only recovery cannot send.
+Exercise restored command Journal/ExecutionService with a query-only simulator
+that raises on send; recover existing identifiers/SL evidence and retain baselines,
+both halts and exposure. Keep the backup/inspection byte evidence unchanged.
+
+The fixture-only reconstruction is not an owner activation command or target
+runbook authorization. It proves local application compatibility of restored
+state, not an atomic multi-file publication, actual broker identity or release
+readiness. Owner activation still needs stopped-service/fencing evidence, exact
+mount/path admission and separately authorized external reconciliation.

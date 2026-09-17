@@ -70,7 +70,14 @@ def operate(config: SyncConfig, action: str, *, once=False) -> int:
             emit("INITIALIZED" if action == "init" else "LOCAL_STATUS", journal)
             return 0
         destination = SupabaseDestination(config)
-        return process(journal, SyncDriver(journal, destination), once=once)
+        driver = SyncDriver(journal, destination)
+        if action == "reconcile":
+            state = driver.reconcile_pending()
+            emit(state, journal)
+            if state in {"VERIFIED", "NO_PENDING"}:
+                return 0
+            return 2 if state == "QUARANTINED" else 3
+        return process(journal, driver, once=once)
 
 
 class Parser(argparse.ArgumentParser):
@@ -82,7 +89,7 @@ class Parser(argparse.ArgumentParser):
 def main(argv=None) -> int:
     try:
         parser = Parser(description="Demo native M1 sync; private config path from environment")
-        parser.add_argument("action", choices=("init", "status", "run"))
+        parser.add_argument("action", choices=("init", "status", "run", "reconcile"))
         parser.add_argument("--once", action="store_true")
         args = parser.parse_args(argv)
         if args.once and args.action != "run":

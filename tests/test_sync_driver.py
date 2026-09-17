@@ -132,6 +132,91 @@ def test_ack_without_rows_never_advances(journal):
     assert journal.status().pending.attempts == 1
 
 
+@pytest.mark.parametrize("attempts", [1, 5])
+@pytest.mark.parametrize("reply", ["exact", "missing", "partial", "unavailable", "conflict"])
+def test_query_only_reconciliation_never_sends_or_increases_budget(journal, attempts, reply):
+    destination = FakeDestination()
+    pending = journal.prepare(journal.source.read())
+    for index in range(attempts):
+        pending = journal.begin_send(pending.batch_id)
+        if index < attempts - 1:
+            journal.reconcile(
+                pending.batch_id,
+                dict(archive_id=pending.batch.archive_id, binding=None, rows=[]),
+            )
+    destination.snapshot = dict(
+        archive_id=pending.batch.archive_id,
+        binding=json.loads(pending.batch.binding_json),
+        rows=pending.batch.wire_rows(),
+    )
+    if reply == "missing":
+        destination.snapshot = None
+    elif reply == "partial":
+        destination.snapshot["rows"].pop()
+    elif reply == "unavailable":
+        destination.read_fail = True
+    elif reply == "conflict":
+        destination.snapshot["binding"]["offset"] += 1
+    before = journal.status()
+    driver = SyncDriver(journal, destination)
+    expected = {
+        "exact": "VERIFIED",
+        "missing": "PREPARED",
+        "partial": "PREPARED",
+        "unavailable": "UNKNOWN",
+        "conflict": "QUARANTINED",
+    }[reply]
+    assert driver.reconcile_pending() == expected
+    assert destination.calls == ["read"]
+    with journal._connect() as db:
+        assert db.execute("SELECT attempts FROM batches").fetchone()[0] == attempts
+    assert journal.status().cursor == (
+        pending.batch.next_cursor if reply == "exact" else before.cursor
+    )
+    # A later invocation does not turn PREPARED into a send or clear quarantine.
+    assert (
+        driver.reconcile_pending()
+        == {
+            "VERIFIED": "NO_PENDING",
+            "PREPARED": "REVIEW_REQUIRED",
+            "UNKNOWN": "UNKNOWN",
+            "QUARANTINED": "QUARANTINED",
+        }[expected]
+    )
+    assert destination.calls == (["read", "read"] if reply == "unavailable" else ["read"])
+
+
+def test_query_only_empty_and_prepared_do_not_prepare_or_query(journal):
+    destination = FakeDestination()
+    driver = SyncDriver(journal, destination)
+    assert driver.reconcile_pending() == "NO_PENDING"
+    assert journal.status().cursor.receipt == 0  # source has unsynchronized rows
+    pending = journal.prepare(journal.source.read())
+    before = journal.status()
+    assert driver.reconcile_pending() == "REVIEW_REQUIRED"
+    assert journal.status() == before and pending.attempts == 0 and destination.calls == []
+
+
+def test_query_only_checks_exclusive_lock_target_and_source(journal, monkeypatch):
+    destination = FakeDestination()
+    driver = SyncDriver(journal, destination)
+    pending = journal.prepare(journal.source.read())
+    journal.begin_send(pending.batch_id)
+    with journal.step_lock, pytest.raises(JournalUnavailable):
+        driver.reconcile_pending()
+    destination.origin = "https://wrong.example"
+    with pytest.raises(JournalUnavailable):
+        driver.reconcile_pending()
+    destination.origin = ORIGIN
+    monkeypatch.setattr(
+        journal.source,
+        "read",
+        lambda *args, **kwargs: replace(pending.batch, rows=tuple(reversed(pending.batch.rows))),
+    )
+    assert driver.reconcile_pending() == "QUARANTINED"
+    assert journal.status().cursor.receipt == 0 and destination.calls == []
+
+
 def test_lost_response_reconciles_without_second_send_after_restart(journal, setup_chart):
     destination = FakeDestination()
     destination.lose = True

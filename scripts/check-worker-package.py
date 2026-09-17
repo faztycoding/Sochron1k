@@ -56,15 +56,16 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def exercise_recovery(command, python, directory, sync_config, wheel_hash):
+def exercise_recovery(command, python, directory, sync_config, wheel_hash, invoke_sync):
     from decimal import Decimal
 
     from conftest import intent, observed_at
     from sochron1k.journal import Journal
-    from sochron1k.models import CommandState, RiskState
+    from sochron1k.models import BrokerDeal, BrokerSnapshot, CommandState, RiskState
 
     raw = json.loads(sync_config.read_text())
-    command_path = directory / "recovery-commands.sqlite3"
+    command_path = directory / "commands" / "journal.sqlite3"
+    command_path.parent.mkdir(mode=0o700)
     command_path.touch(mode=0o600)
     journal = Journal(command_path)
     request = intent.__wrapped__(observed_at.__wrapped__()).model_copy(
@@ -85,6 +86,24 @@ def exercise_recovery(command, python, directory, sync_config, wheel_hash):
     journal.reserve(request, Decimal("0.1"), Decimal("100"))
     journal.begin_dispatch(request.command_id, "recovery-fixture-attempt")
     journal.transition(request.command_id, CommandState.UNKNOWN)
+    broker_file = directory / "synthetic-broker-snapshot.json"
+    broker_file.touch(mode=0o600)
+    broker_file.write_text(
+        BrokerSnapshot(
+            command_id=request.command_id,
+            order_ticket="fixture-order",
+            position_id="fixture-position",
+            requested_volume=Decimal("0.1"),
+            filled_volume=Decimal("0.1"),
+            remaining_volume=Decimal("0"),
+            stop_loss_confirmed=True,
+            deals=(
+                BrokerDeal(
+                    deal_ticket="fixture-deal", volume=Decimal("0.1"), price=request.requested_entry
+                ),
+            ),
+        ).model_dump_json()
+    )
     config = directory / "recovery-config.json"
     config.touch(mode=0o600)
     config.write_text(
@@ -158,7 +177,11 @@ def exercise_recovery(command, python, directory, sync_config, wheel_hash):
     moved = []
     try:
         # Only generated fixtures: originals are unavailable during verify and restore.
-        for path in (Path(raw["source_directory"]), Path(raw["state_directory"]), command_path):
+        for path in (
+            Path(raw["source_directory"]),
+            Path(raw["state_directory"]),
+            command_path.parent,
+        ):
             hidden = path.with_name(path.name + "-unavailable")
             path.rename(hidden)
             moved.append((path, hidden))
@@ -209,10 +232,92 @@ def exercise_recovery(command, python, directory, sync_config, wheel_hash):
             invalid not in rejected.stdout + rejected.stderr and not rejected.stderr,
             "recovery argument disclosure",
         )
+        # Fixture-only offline activation: the worker above has exited. Preserve the
+        # exact original binding/paths, and never modify backup/inspection evidence.
+        source_bytes = {
+            str(p.relative_to(inspection)): p.read_bytes()
+            for p in inspection.rglob("*")
+            if p.is_file()
+        }
+        activation_start = time.monotonic()
+        for role, destination in (
+            ("archive", Path(raw["source_directory"]) / "bars.sqlite3"),
+            ("sync", Path(raw["state_directory"]) / "sync.sqlite3"),
+            ("commands", command_path),
+        ):
+            require(destination.parent.parent == directory, "fixture activation scope")
+            destination.parent.mkdir(mode=0o700)
+            with destination.open("xb") as handle:
+                os.chmod(destination, 0o600)
+                handle.write((inspection / role / "snapshot.sqlite3").read_bytes())
+            # NativeArchiveSource intentionally refuses DELETE-mode inspection copies.
+            with sqlite3.connect(destination) as db:
+                require(
+                    db.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal",
+                    "fixture WAL activation",
+                )
+            db.close()
+        lock = Path(raw["state_directory"]) / "sync.lock"
+        lock.touch(mode=0o600, exist_ok=False)
+        status = invoke_sync("status")
+        require(
+            status["pending"] == "UNKNOWN"
+            and status["attempts"] == 1
+            and status["cursor_receipt"] == 0,
+            "restored worker initial state",
+        )
+        require(invoke_sync("reconcile")["state"] == "VERIFIED", "restored worker reconcile")
+        require(invoke_sync("reconcile")["state"] == "NO_PENDING", "query-only repeat")
+        with sqlite3.connect(Path(raw["state_directory"]) / "sync.sqlite3") as db:
+            require(
+                db.execute("SELECT state,attempts FROM batches").fetchone() == ("VERIFIED", 1),
+                "restored attempt budget",
+            )
+            require(
+                db.execute("SELECT receipt FROM meta").fetchone()[0] == 1,
+                "restored cursor evidence",
+            )
+        db.close()
+        probe = run(
+            [
+                str(python),
+                "-I",
+                str(ROOT / "tests/fixtures/recovery_query_probe.py"),
+                str(command_path),
+                str(broker_file),
+            ],
+            cwd=directory,
+            env=env,
+        )
+        require(not probe.stderr, "restored command probe stderr")
+        command_recovery = json.loads(probe.stdout)
+        require(
+            command_recovery
+            == dict(
+                result="PASS",
+                broker="query-only-simulator",
+                queries=4,
+                sends=0,
+                execution_ready=False,
+                auto_trading_enabled=False,
+            ),
+            "restored command query-only result",
+        )
+        measurements["application_rehearsal_seconds"] = time.monotonic() - activation_start
+        require(
+            {
+                str(p.relative_to(inspection)): p.read_bytes()
+                for p in inspection.rglob("*")
+                if p.is_file()
+            }
+            == source_bytes,
+            "activation mutated inspection evidence",
+        )
         check(
             "installed recovery backup/verify/isolated restore; unavailable originals; "
             "UNKNOWN/halts preserved"
         )
+        check("restored exact-path worker read-back and command query-only simulator; no new sends")
         return {
             **measurements,
             "capture_start": before["capture_start"],
@@ -222,9 +327,18 @@ def exercise_recovery(command, python, directory, sync_config, wheel_hash):
             "execution_ready": False,
             "broker_reconciliation": "NOT_RUN",
             "destination_reconciliation": "NOT_RUN",
+            "restored_application_rehearsal": dict(
+                worker="VERIFIED_THEN_NO_PENDING",
+                attempts=1,
+                cursor_receipt=1,
+                command=command_recovery,
+                scope="synthetic-only",
+            ),
         }
     finally:
         for path, hidden in reversed(moved):
+            if path.exists():
+                path.rename(path.with_name(path.name + "-rehearsed"))
             hidden.rename(path)
 
 
@@ -248,6 +362,11 @@ def exercise(command, python, directory, wheel_hash):
         return status
 
     require(invoke("run", "--once")["state"] == "DISABLED", "default must be disabled")
+    require(invoke("reconcile")["state"] == "DISABLED", "query-only default must be disabled")
+    require(
+        invoke("reconcile", "--once", expected=2)["state"] == "SYNC_CONFIG_INVALID",
+        "query-only flags",
+    )
     require(
         "private config" in run([str(command), "--help"], cwd=directory, env=env).stdout,
         "installed help",
@@ -361,7 +480,7 @@ def exercise(command, python, directory, wheel_hash):
             require(db.execute("select receipt from meta").fetchone()[0] == 0, "early cursor")
         release.set()
         recovery = exercise_recovery(
-            directory / "venv/bin/sochron-recovery", python, directory, config, wheel_hash
+            directory / "venv/bin/sochron-recovery", python, directory, config, wheel_hash, invoke
         )
         require(invoke("run", "--once")["state"] == "VERIFIED", "installed reconciliation")
         require(invoke("run", "--once")["state"] == "IDLE", "installed idle")
@@ -547,6 +666,7 @@ print(json.dumps(values))
                 ROOT / ".gitignore",
                 ROOT / "tests/test_chart.py",
                 ROOT / "tests/conftest.py",
+                ROOT / "tests/fixtures/recovery_query_probe.py",
                 ROOT / "tests/test_native_source.py",
                 ROOT / "tests/test_bar_history.py",
                 ROOT / "tests/test_telemetry_bridge.py",
