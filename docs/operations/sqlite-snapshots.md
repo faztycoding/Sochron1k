@@ -47,8 +47,10 @@ Development check:
 .venv/bin/pytest -q tests/test_sqlite_snapshot.py
 ```
 
-Next: domain validators and a compatible recovery-set manifest for command journal,
-bar archive and sync journal; explicit operator commands; isolated reconciliation;
+The [read-only recovery-set inspector](recovery-set-audit.md) now checks domain
+relationships across three ordered snapshots without starting their writers.
+Next: capture orchestration and a compatible recovery-set manifest for command
+journal, bar archive and sync journal; explicit operator commands; isolated reconciliation;
 measured recovery objectives; then approved actual-target/off-host rehearsal.
 Do not rebind a sync journal, initialize a second journal or clear a halt to make a
 restore pass. See [contract](../contracts/SCN-009-local-recovery.md) and

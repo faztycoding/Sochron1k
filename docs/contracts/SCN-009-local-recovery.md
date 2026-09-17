@@ -56,5 +56,49 @@ separate recovery boundaries, not silently covered by a SQLite copy.
 AC-01 and AC-02 have local engine verification with synthetic WAL databases and
 an isolated copy of a synthetic command journal; see
 [retained evidence](../verification/SCN-009-sqlite-snapshots.md). This is not domain
-recovery admission. AC-03 and AC-04 remain NOT IMPLEMENTED/NOT RUN. Full Demo,
-off-host recovery, actual-target reconciliation and RPO/RTO remain NOT READY.
+recovery admission. AC-03 now has local read-only domain/cross-store admission
+evidence; see [audit verification](../verification/SCN-009-recovery-set-audit.md).
+Operator capture/materialization orchestration and measured recovery (AC-04),
+external reconciliation, full Demo, off-host recovery and actual-target RPO/RTO
+remain NOT READY/NOT RUN. Do not label the entire recovery contract PASS.
+
+### AC-03 read-only recovery-set admission (before implementation)
+
+Audit three already verified individual snapshots, captured in command -> sync ->
+archive order. The archive is append-only: every ledger row through the pending
+batch must match the exact contiguous M1 prefix in the later archive, not merely
+exist somewhere in it. Later archive rows are allowed; a cursor ahead of archive,
+skipped row, mixed identity, different binding or changed payload is denied.
+This establishes a compatible causal set, not a cross-database atomic instant.
+
+Require explicit expected Demo identity, active experiment, archive/owner IDs,
+original source-directory binding, destination and offset/config. No credentials,
+environment discovery, path rebinding or original source access. Require an aware
+audit time and explicit bounded maximum snapshot age/span, used for admission only,
+not an inferred owner-approved RPO. Pinned schema fingerprints plus user_version
+must match the current schema implementations; reject extra triggers/tables/indexes.
+
+Validate all command payload fingerprints, scope/identity, transition chains,
+attempts, broker order/deal volumes, exposure reservations and risk baselines/halts.
+After the initial atomic CREATED/VALIDATED/QUEUED chain, never admit a rewind into
+those states that could make a previously dispatched command look unsent.
+Require the active risk baseline and a baseline for every retained experiment;
+reject missing risk evidence rather than initializing it. Validate all archive
+receipts, all four timeframes, closure/grid/offset evidence and latest projections.
+Validate the entire sync ledger, cursor, state, attempts and clock ordering against
+the archive prefix. Retain UNKNOWN, QUARANTINED and exhausted budgets as unresolved
+conditions, never reset or relabel them VERIFIED. Return only bounded counts,
+state summaries and hashes; execution_ready remains false even for an admitted set.
+
+Use mode=ro/query_only inspection, bounded DB fields/queries and one overall
+cooperative deadline. Reverify snapshot bytes/manifests after all domain checks.
+Do not invoke Journal/BarHistory/SyncJournal constructors on snapshots, since they
+initialize/change modes or acquire writer authority. Tests must use actual domain
+writers to construct fixtures, then independently corrupt rows while retaining a
+valid SQLite snapshot/hash, so generic integrity cannot substitute for the audit.
+Cover missing baseline, cleared evidence inconsistencies, broken transition/order/
+exposure relationships, older/wrong archive, skipped ledger rows, wrong origin/owner,
+UNKNOWN/quarantine/budget preservation, stale/future/mixed capture intervals,
+schema drift, clock and output changes; inspection must leave every input unchanged.
+CLI/capture orchestration, isolated multi-store materialization and measured recovery
+remain AC-04 work; this audit does not resume an application or contact a destination.

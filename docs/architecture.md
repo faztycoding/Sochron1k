@@ -117,9 +117,15 @@ see [ADR-009](decisions/ADR-009-native-m1-sync-boundary.md).
 SCN-009 adds an internal WAL-aware SQLite snapshot/isolated-copy library with no
 service, endpoint, scheduler or execution authority. Individual snapshots preserve
 committed database bytes and carry integrity metadata; they are not a consistent
-multi-store recovery set. Domain validation and operator delivery remain pending.
+multi-store recovery set. Individual integrity is not domain or operator admission.
 See [ADR-013](decisions/ADR-013-private-sqlite-snapshots.md) and
 [engine evidence](verification/SCN-009-sqlite-snapshots.md).
+
+A read-only three-snapshot domain inspector now verifies command/risk evidence,
+all archive timeframes and the full sync ledger against an exact M1 prefix in a
+later archive. This is causal compatibility, not atomic multi-file capture or
+external reconciliation. Capture/materialization orchestration and operator CLI
+remain pending; see [ADR-014](decisions/ADR-014-recovery-set-admission.md).
 
 ## Failure behavior
 
