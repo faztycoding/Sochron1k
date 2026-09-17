@@ -185,7 +185,8 @@ evidence that rows were synchronized.
 
 The 64 MiB main-journal quota is not a filesystem/WAL cap. At warning thresholds
 70%/85%, plan reviewed export/retention and verify free disk. Never prune ledger
-rows automatically. Consistent backup/restore, target-host retention and measured
+rows automatically. The [local recovery operator](local-recovery.md) now supplies
+causal backup/verify/inspection bundles. Target-host recovery/retention and approved
 RPO/RTO are still required before unattended deployment; copying only a live
 SQLite main file is not a verified backup.
 
@@ -195,9 +196,10 @@ Next: complete consistent backup/restore and recovery gates (AC-07). R-015 has
 [local fixed-runtime evidence](../verification/SCN-003-fixed-sqlite.md), not target approval.
 SCN-009's [individual SQLite snapshot engine](sqlite-snapshots.md) now has local
 verification, and a [read-only recovery-set inspector](recovery-set-audit.md) now
-checks domain relationships and exact source prefixes. Operator capture/restore
-commands and measured recovery remain pending. Do not use an individual snapshot
-or an inspector result as authorization to resume a worker.
+checks domain relationships and exact source prefixes. Installed capture/verify/
+inspection commands now have [measured local evidence](../verification/SCN-009-operator-recovery.md).
+Actual-target/off-host recovery and external reconciliation remain pending. Do not
+use a snapshot, bundle or inspector result as authorization to resume a worker.
 Local AC-06 testing
 does not establish installed-service or target-host behavior. Still required from the
 owner: chosen Supabase project/owner, broker Demo server/account specifications,

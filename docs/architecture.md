@@ -124,8 +124,12 @@ See [ADR-013](decisions/ADR-013-private-sqlite-snapshots.md) and
 A read-only three-snapshot domain inspector now verifies command/risk evidence,
 all archive timeframes and the full sync ledger against an exact M1 prefix in a
 later archive. This is causal compatibility, not atomic multi-file capture or
-external reconciliation. Capture/materialization orchestration and operator CLI
-remain pending; see [ADR-014](decisions/ADR-014-recovery-set-admission.md).
+external reconciliation; see [ADR-014](decisions/ADR-014-recovery-set-admission.md).
+An explicit installed recovery operator now captures, verifies and materializes
+private bundles with original capture intervals, module/config hashes and measured
+local rehearsal. It never activates state or starts a service. Actual-target,
+off-host and external reconciliation remain pending; see
+[ADR-015](decisions/ADR-015-local-recovery-operator.md).
 
 ## Failure behavior
 

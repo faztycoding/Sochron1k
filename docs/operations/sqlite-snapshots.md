@@ -1,9 +1,9 @@
 # Internal SQLite snapshot engine (SCN-009)
 
-This is a development library, not a completed operator backup/recovery workflow.
-No daemon, API endpoint, CLI, upload or retention deletion is enabled. Full Demo
-remains NOT READY. Use only synthetic fixtures until the domain bundle/operator
-gates are complete; no owner database has been backed up or restored in this task.
+This is the low-level library used by the explicit
+[local recovery operator](local-recovery.md). It does not itself start a daemon,
+API endpoint, upload or retention deletion. Full Demo remains NOT READY; no owner
+database has been backed up or restored in the implementation task.
 
 `sochron1k.sqlite_snapshot` exposes:
 
@@ -49,12 +49,12 @@ Development check:
 
 The [read-only recovery-set inspector](recovery-set-audit.md) now checks domain
 relationships across three ordered snapshots without starting their writers.
-Next: capture orchestration and a compatible recovery-set manifest for command
-journal, bar archive and sync journal; explicit operator commands; isolated reconciliation;
-measured recovery objectives; then approved actual-target/off-host rehearsal.
+Capture orchestration and a recovery-set manifest now exist in the explicit
+operator. Next: separately approved application activation/external reconciliation,
+recovery objectives and actual-target/off-host rehearsal.
 Do not rebind a sync journal, initialize a second journal or clear a halt to make a
 restore pass. See [contract](../contracts/SCN-009-local-recovery.md) and
 [ADR-013](../decisions/ADR-013-private-sqlite-snapshots.md).
 Local engine checks and their exact source/artifact identities are recorded in
 [SCN-009 evidence](../verification/SCN-009-sqlite-snapshots.md); they do not clear
-the outstanding domain/operator or target release gates.
+the outstanding target, activation, external-reconciliation or release gates.

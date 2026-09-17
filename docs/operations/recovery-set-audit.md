@@ -1,9 +1,9 @@
 # Internal recovery-set audit (SCN-009)
 
-Development API only. Not a supported operator restore command, daemon or route;
-do not point it at user databases as part of this task. Full Demo remains NOT READY.
-The next operator delivery must orchestrate capture/materialization and record
-reviewed artifact/config provenance. No account/service has been resumed here.
+This internal API is used by the explicit [local recovery operator](local-recovery.md),
+not a daemon or HTTP route. Do not point it at user databases as part of this task.
+Full Demo remains NOT READY. The operator supplies capture/materialization and
+artifact/config records; no account/service has been resumed here.
 
 `sochron_worker.recovery_audit.audit_recovery_set` accepts the three directories
 produced by the [SQLite snapshot engine](sqlite-snapshots.md), a secret-free

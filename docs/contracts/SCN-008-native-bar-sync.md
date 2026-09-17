@@ -85,7 +85,10 @@ R-015 fixed SQLite admission now has [local arm64 evidence](../verification/SCN-
 actual target admission remains required.
 The worker is not enabled
 or deployed; strategy dataset approval and full Demo acceptance are not claimed.
-Next is backup/restore delivery and target gates, not hosted enablement.
+Local backup/verify/inspection delivery now has
+[installed rehearsal evidence](../verification/SCN-009-operator-recovery.md).
+Application activation, external reconciliation, target/off-host recovery and
+approved RPO/RTO remain required, not hosted enablement.
 
 ## Availability and recovery semantics
 

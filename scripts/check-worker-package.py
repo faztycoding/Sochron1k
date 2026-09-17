@@ -17,6 +17,7 @@ import sys
 import tarfile
 import tempfile
 import threading
+import time
 import tomllib
 import zipfile
 from datetime import UTC, datetime
@@ -55,7 +56,179 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def exercise(command, python, directory):
+def exercise_recovery(command, python, directory, sync_config, wheel_hash):
+    from decimal import Decimal
+
+    from conftest import intent, observed_at
+    from sochron1k.journal import Journal
+    from sochron1k.models import CommandState, RiskState
+
+    raw = json.loads(sync_config.read_text())
+    command_path = directory / "recovery-commands.sqlite3"
+    command_path.touch(mode=0o600)
+    journal = Journal(command_path)
+    request = intent.__wrapped__(observed_at.__wrapped__()).model_copy(
+        update={"account_ref": raw["identity"]["account_ref"], "symbol": raw["identity"]["symbol"]}
+    )
+    journal.save_risk_state(
+        RiskState(
+            account_ref=request.account_ref,
+            experiment_id=request.experiment_id,
+            bangkok_day="2026-09-17",
+            daily_baseline=Decimal("100000"),
+            experiment_baseline=Decimal("100000"),
+            daily_halt=True,
+            total_halt=True,
+            updated_at=observed_at.__wrapped__(),
+        )
+    )
+    journal.reserve(request, Decimal("0.1"), Decimal("100"))
+    journal.begin_dispatch(request.command_id, "recovery-fixture-attempt")
+    journal.transition(request.command_id, CommandState.UNKNOWN)
+    config = directory / "recovery-config.json"
+    config.touch(mode=0o600)
+    config.write_text(
+        json.dumps(
+            dict(
+                binding=dict(
+                    identity=raw["identity"],
+                    active_experiment_id=request.experiment_id,
+                    archive_id=raw["archive_id"],
+                    owner_id=raw["owner_id"],
+                    source_directory=raw["source_directory"],
+                    destination=raw["origin"],
+                    offset_seconds=raw["offset_seconds"],
+                    chart=raw["chart"],
+                ),
+                command_database=str(command_path),
+                sync_database=str(Path(raw["state_directory"]) / "sync.sqlite3"),
+                archive_database=str(Path(raw["source_directory"]) / "bars.sqlite3"),
+                max_age_seconds=3600,
+                max_span_seconds=60,
+                operator_provenance_claims=dict(
+                    source_revision=run(["git", "rev-parse", "HEAD"]).stdout.strip(),
+                    artifact_sha256=wheel_hash,
+                ),
+            )
+        )
+    )
+    backup, inspection = directory / "recovery-backup", directory / "recovery-inspection"
+    env = {"PATH": os.defpath, "LANG": "C.UTF-8"}
+    measurements = {}
+
+    def invoke(action, *args, module=False):
+        executable = (
+            [str(python), "-I", "-m", "sochron_worker.recovery_cli"] if module else [str(command)]
+        )
+        start = time.monotonic()
+        reply = run(
+            [*executable, action, "--config", str(config), *map(str, args)], cwd=directory, env=env
+        )
+        measurements[action + "_process_seconds"] = time.monotonic() - start
+        require(not reply.stderr and str(directory) not in reply.stdout, "recovery CLI disclosure")
+        status = json.loads(reply.stdout)
+        require(
+            status["execution_ready"] is False and status["auto_trading_enabled"] is False,
+            "recovery enabled execution",
+        )
+        require(status["command_unknown"] == status["total_halts"] == 1, "recovery risk state")
+        require(
+            status["sync_pending"]
+            == dict(state="UNKNOWN", attempts=1, send_budget_exhausted=False),
+            "recovery pending state",
+        )
+        measurements[action + "_reported_seconds"] = status["elapsed_seconds"]
+        return status
+
+    captured = invoke("backup", "--output", backup)
+    require(captured["state"] == "BACKUP_CREATED", "installed recovery backup")
+    original = (backup / "bundle.json").read_bytes()
+    unavailable = run(
+        [str(command), "backup", "--config", str(config), "--output", str(backup)],
+        cwd=directory,
+        env=env,
+        expected=2,
+    )
+    require(
+        json.loads(unavailable.stdout)["state"] == "RECOVERY_BUNDLE_UNAVAILABLE"
+        and not unavailable.stderr
+        and (backup / "bundle.json").read_bytes() == original,
+        "recovery replaced existing target",
+    )
+    moved = []
+    try:
+        # Only generated fixtures: originals are unavailable during verify and restore.
+        for path in (Path(raw["source_directory"]), Path(raw["state_directory"]), command_path):
+            hidden = path.with_name(path.name + "-unavailable")
+            path.rename(hidden)
+            moved.append((path, hidden))
+        require(
+            invoke("verify", "--bundle", backup, module=True)["state"] == "BUNDLE_VERIFIED",
+            "installed module verification",
+        )
+        restored = invoke("restore", "--bundle", backup, "--output", inspection)
+        require(restored["state"] == "INSPECTION_CREATED", "installed recovery restore")
+        require(all(not path.exists() for path, _ in moved), "recovery recreated original source")
+        manifest = json.loads((inspection / "bundle.json").read_text())
+        before = json.loads(original)
+        require(
+            manifest["parent_bundle_sha256"] == captured["bundle_sha256"]
+            and manifest["capture_start"] == before["capture_start"]
+            and manifest["capture_end"] == before["capture_end"]
+            and manifest["evidence"] == before["evidence"],
+            "recovery evidence changed",
+        )
+        with sqlite3.connect(inspection / "commands/snapshot.sqlite3") as db:
+            require(
+                db.execute("SELECT state FROM commands").fetchone() == ("unknown",), "lost UNKNOWN"
+            )
+            require(
+                db.execute("SELECT count(*) FROM exposure_slots").fetchone()[0] == 1,
+                "lost exposure",
+            )
+            require(
+                db.execute(
+                    "SELECT daily_baseline,experiment_baseline,daily_halt,total_halt "
+                    "FROM risk_state"
+                ).fetchone()
+                == ("100000", "100000", 1, 1),
+                "lost risk baselines/halts",
+            )
+        with sqlite3.connect(inspection / "sync/snapshot.sqlite3") as db:
+            require(
+                db.execute("SELECT state,attempts FROM batches").fetchone() == ("UNKNOWN", 1),
+                "lost sync state",
+            )
+            require(
+                db.execute("SELECT receipt FROM meta").fetchone()[0] == 0, "advanced restore cursor"
+            )
+        require((backup / "bundle.json").read_bytes() == original, "source bundle changed")
+        invalid = "sb_secret_" + secrets.token_urlsafe(32)
+        rejected = run([str(command), invalid], cwd=directory, env=env, expected=2)
+        require(
+            invalid not in rejected.stdout + rejected.stderr and not rejected.stderr,
+            "recovery argument disclosure",
+        )
+        check(
+            "installed recovery backup/verify/isolated restore; unavailable originals; "
+            "UNKNOWN/halts preserved"
+        )
+        return {
+            **measurements,
+            "capture_start": before["capture_start"],
+            "capture_end": before["capture_end"],
+            "backup_sha256": captured["bundle_sha256"],
+            "inspection_sha256": restored["bundle_sha256"],
+            "execution_ready": False,
+            "broker_reconciliation": "NOT_RUN",
+            "destination_reconciliation": "NOT_RUN",
+        }
+    finally:
+        for path, hidden in reversed(moved):
+            hidden.rename(path)
+
+
+def exercise(command, python, directory, wheel_hash):
     # Parent creates fixtures using development helpers. Child has only the installed wheel.
     sys.path[:0] = [str(ROOT / p) for p in ("services/api/src", "services/worker/src", "tests")]
     from sochron1k.bar_history import BarHistory
@@ -187,6 +360,9 @@ def exercise(command, python, directory):
             )
             require(db.execute("select receipt from meta").fetchone()[0] == 0, "early cursor")
         release.set()
+        recovery = exercise_recovery(
+            directory / "venv/bin/sochron-recovery", python, directory, config, wheel_hash
+        )
         require(invoke("run", "--once")["state"] == "VERIFIED", "installed reconciliation")
         require(invoke("run", "--once")["state"] == "IDLE", "installed idle")
         status = invoke("status")
@@ -196,6 +372,7 @@ def exercise(command, python, directory):
             "installed init/status, duplicate-init denial, "
             "SIGTERM UNKNOWN and restart without resend"
         )
+        return recovery
     finally:
         release.set()
         if child is not None and child.poll() is None:
@@ -245,6 +422,11 @@ def verify(output):
             "sochron-sync = sochron_worker.__main__:cli"
             in archive.read("sochron1k-0.1.0.dist-info/entry_points.txt").decode(),
             "entry point mismatch",
+        )
+        require(
+            "sochron-recovery = sochron_worker.recovery_cli:cli"
+            in archive.read("sochron1k-0.1.0.dist-info/entry_points.txt").decode(),
+            "recovery entry point mismatch",
         )
     with tarfile.open(sdist) as archive:
         prefix = "sochron1k-0.1.0/"
@@ -342,7 +524,7 @@ print(json.dumps(values))
         check(
             "fresh non-editable environment, exact production dependencies, no source/dev imports"
         )
-        exercise(environment / "bin/sochron-sync", python, directory)
+        recovery = exercise(environment / "bin/sochron-sync", python, directory, digest(wheel))
     return dict(
         result="PASS",
         revision=run(["git", "rev-parse", "HEAD"]).stdout.strip(),
@@ -353,6 +535,7 @@ print(json.dumps(values))
         uv="0.12.15",
         build={n: locked[n] for n in build_names},
         checks=CHECKS,
+        recovery_rehearsal=recovery,
         artifact_sha256={p.name: digest(p) for p in (wheel, sdist, requirements)},
         input_sha256={
             str(p.relative_to(ROOT)): digest(p)
@@ -363,6 +546,7 @@ print(json.dumps(values))
                 Path(__file__),
                 ROOT / ".gitignore",
                 ROOT / "tests/test_chart.py",
+                ROOT / "tests/conftest.py",
                 ROOT / "tests/test_native_source.py",
                 ROOT / "tests/test_bar_history.py",
                 ROOT / "tests/test_telemetry_bridge.py",

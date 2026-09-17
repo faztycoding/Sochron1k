@@ -96,12 +96,16 @@ Supabase history synchronization, a complete backtest dataset or Demo release ev
 The optional [native M1 synchronization worker](docs/operations/native-m1-sync.md)
 now has private configuration, a durable journal, bounded HTTP RPCs and explicit
 init/status/run commands. It is disabled without configuration and is not started
-by Compose. [Real local Supabase integration](docs/verification/SCN-008-local-sync.md)
+by default API/web Compose. [Real local Supabase integration](docs/verification/SCN-008-local-sync.md)
 now verifies Auth/owner isolation, exact values and recovery after a committed but
 lost response. This is not target deployment or authority to enable a hosted destination.
 The [internal Python artifact](docs/verification/SCN-008-worker-package.md) can now
 be installed without source-relative PYTHONPATH and exposes `sochron-sync`.
-It remains opt-in; target container and backup/restore delivery are still pending.
+It remains opt-in; a local worker container and the installed
+[`sochron-recovery` operator](docs/operations/local-recovery.md) now have synthetic
+verification. Recovery commands capture/verify three databases and create isolated
+inspection bundles without enabling execution. Actual-target/off-host recovery,
+external reconciliation and Demo release gates remain pending.
 
 ## Local Supabase foundation
 

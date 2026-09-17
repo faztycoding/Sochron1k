@@ -58,9 +58,11 @@ an isolated copy of a synthetic command journal; see
 [retained evidence](../verification/SCN-009-sqlite-snapshots.md). This is not domain
 recovery admission. AC-03 now has local read-only domain/cross-store admission
 evidence; see [audit verification](../verification/SCN-009-recovery-set-audit.md).
-Operator capture/materialization orchestration and measured recovery (AC-04),
-external reconciliation, full Demo, off-host recovery and actual-target RPO/RTO
-remain NOT READY/NOT RUN. Do not label the entire recovery contract PASS.
+AC-04 now has local installed backup/verify/inspection commands and measured
+synthetic recovery evidence; see [operator verification](../verification/SCN-009-operator-recovery.md).
+Application activation, external reconciliation, full Demo, off-host recovery and
+actual-target RPO/RTO remain NOT READY/NOT RUN. Do not label the entire recovery
+contract PASS or treat local inspection as authorization to resume execution.
 
 ### AC-03 read-only recovery-set admission (before implementation)
 
@@ -102,3 +104,40 @@ UNKNOWN/quarantine/budget preservation, stale/future/mixed capture intervals,
 schema drift, clock and output changes; inspection must leave every input unchanged.
 CLI/capture orchestration, isolated multi-store materialization and measured recovery
 remain AC-04 work; this audit does not resume an application or contact a destination.
+
+### AC-04 local operator delivery (before implementation)
+
+Deliver installed `sochron-recovery backup|verify|restore` and equivalent module
+entry points. No action without an explicit private config; no environment/source
+discovery. Config contains only explicit three source paths, RecoveryBinding,
+admission age/span and operator-asserted source revision/artifact hash. It must not
+accept a broker/API credential. Preserve its byte hash; verification/restoration
+use the same config without opening original sources or changing path bindings.
+
+Backup creates a new private bundle directory, captures command -> sync -> archive,
+runs domain admission, hashes each member manifest and publishes bundle.json last
+with fsync. Record actual application-module hashes, runtime/dependency identities,
+operator provenance distinctly labelled as assertions, measured elapsed time and
+the original capture interval. No claim that asserted provenance is authenticated.
+Any failed/interrupted operation leaves retained unaccepted output, never success.
+
+Verify requires exact member sets/private permissions, bounded strict metadata,
+config identity, current application-module byte identity, individual snapshot
+hashes, domain audit and stable aggregate evidence. No stored PASS result alone
+establishes acceptance. Restore first verifies the bundle, then materializes every
+member only in a new private directory, re-audits and publishes a new inspection
+bundle with parent-bundle hash and separately measured duration. Retain the original
+capture interval; never treat restoration time as a newer data recovery point.
+
+Reject existing output, unsafe paths, nested output inside the source bundle,
+partial/mixed/tampered/stale/code-incompatible bundles, config drift, clock reversal
+and publication failures. No in-place restore, lock-file recreation, live filename
+activation, reset, service start, network, upload, pruning or unattended schedule.
+CLI results/errors must not echo arbitrary args, paths, identities, keys or SQL.
+SIGINT/SIGTERM return STOPPED without traceback; SIGKILL-before-publication is not
+a completed bundle. Require installed-wheel, fresh-process backup/verify/restore
+rehearsal with independent SQL preservation checks and measured capture/restore
+times; counts must include UNKNOWN/halts and sync send budgets. The resulting
+inspection bundle remains execution_ready=false, external reconciliation NOT_RUN.
+Local measured durations and age/span are not owner-approved RPO/RTO or a target
+power-loss/off-host/production recovery claim.
