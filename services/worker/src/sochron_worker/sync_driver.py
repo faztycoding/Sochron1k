@@ -17,6 +17,11 @@ class DestinationConflict(RuntimeError):
     """Receiver confirmed a conflict; quarantine instead of replacing evidence."""
 
 
+class SendBudgetExhausted(RuntimeError):
+    def __init__(self) -> None:
+        super().__init__("SYNC_SEND_BUDGET_EXHAUSTED")
+
+
 class Destination(Protocol):
     owner_id: str
     origin: str
@@ -27,8 +32,13 @@ class Destination(Protocol):
 
 
 class SyncDriver:
-    def __init__(self, journal: SyncJournal, destination: Destination) -> None:
+    def __init__(
+        self, journal: SyncJournal, destination: Destination, *, max_sends: int = 5
+    ) -> None:
+        if type(max_sends) is not int or not 1 <= max_sends <= 5:
+            raise ValueError("invalid send budget")
         self.journal, self.destination = journal, destination
+        self.max_sends = max_sends
         self._lock = journal.step_lock
 
     def _target(self) -> None:
@@ -76,6 +86,8 @@ class SyncDriver:
             if pending.state == "UNKNOWN":
                 # Missing rows become PREPARED but do not send again in this same step.
                 return self._reconcile(pending)
+            if pending.attempts >= self.max_sends:
+                raise SendBudgetExhausted()
             pending = self.journal.begin_send(pending.batch_id)
             self._target()
             try:

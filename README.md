@@ -93,6 +93,12 @@ gaps in 20-row pages. It can read the archive after API restart without a live
 snapshot; only an explicit refresh advances the page set's watermark. This is not raw-tick capture,
 Supabase history synchronization, a complete backtest dataset or Demo release evidence.
 
+The optional [native M1 synchronization worker](docs/operations/native-m1-sync.md)
+now has private configuration, a durable journal, bounded HTTP RPCs and explicit
+init/status/run commands. It is disabled without configuration and is not started
+by Compose. Local HTTP/process recovery tests are not yet real Supabase end-to-end
+acceptance or authority to enable a hosted destination.
+
 ## Local Supabase foundation
 
 The pinned Supabase CLI, local configuration, initial migration, and pgTAP authorization tests are committed. The browser role is read-only and owner-scoped; anonymous access and browser writes are denied. No hosted project is linked and no remote database has been changed.

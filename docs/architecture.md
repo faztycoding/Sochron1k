@@ -100,8 +100,10 @@ network operation and does not persist or acknowledge a synchronization cursor.
 A separate private SQLite sync journal and one-step driver now persist exact
 intent/UNKNOWN before send and advance the cursor only after independent read-back.
 Local process-crash recovery is verified with a synthetic durable destination,
-not real PostgREST. Private HTTP transport/config, scheduling, packaging and full
-end-to-end recovery remain to be implemented;
+not real PostgREST. Private config, bounded HTTP RPC transport and a serial explicit
+operator runner now exist, disabled without configuration. Neither API startup nor
+Compose starts the worker. Real Supabase HTTP/role integration, deployment packaging
+and full target recovery remain outstanding;
 see [ADR-009](decisions/ADR-009-native-m1-sync-boundary.md).
 
 ## Failure behavior

@@ -2,7 +2,8 @@
 
 2026-09-17. Receiving boundary implemented locally under SCN-008, Demo only;
 read-only source, durable worker journal and one-step driver implemented locally.
-Private transport/config and end-to-end HTTP evidence remain outstanding.
+Private config, bounded HTTP transport and explicit runner implemented locally.
+Real Supabase end-to-end HTTP evidence and deployment packaging remain outstanding.
 
 ## Decision
 
@@ -50,6 +51,22 @@ silent deletion. The lock is advisory on the supported local POSIX filesystem;
 Windows worker operation and network filesystems are not established. This is
 separate from the Windows-or-Wine MT5 executor choice. Process termination tests
 are not power-loss, storage-controller, target-host restore or release evidence.
+
+The operator runner reads one private config and separate credential file, uses
+the existing HTTPX dependency and exposes only the two fixed native RPCs. No SDK,
+automatic service or Compose enablement is added. Each sync HTTP operation runs
+in its own async client with a total cancellation deadline; the synchronous driver
+waits for it serially. Cookies/client sessions are not retained between RPCs.
+The worker supports backend secret keys and legacy service-role JWTs without
+passing a secret key as an invalid user bearer token. Config pins the owner/origin;
+credential syntax validation does not substitute for Supabase authentication.
+
+Every batch has at most five persisted sends, including across process restarts.
+UNKNOWN remains eligible for read-back at that limit, but not another send. The
+runner additionally exits after five unresolved steps and uses bounded backoff.
+There is no automatic reset/repair or background restart. This favors explicit
+operator review over indefinitely hammering an unavailable/misconfigured target.
+The full operator and local PostgREST acceptance still needs AC-06/07 evidence.
 
 ## Alternatives and consequences
 

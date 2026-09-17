@@ -72,12 +72,54 @@ AC-03 now has local read-only exporter evidence; see
 [source verification](../verification/SCN-008-native-source.md).
 AC-04 now has local journal/one-step driver and process-crash evidence; see
 [journal verification](../verification/SCN-008-sync-journal.md).
-AC-05 through AC-07 remain NOT IMPLEMENTED / NOT RUN. These library components
-are not yet a configured runnable sync service, deployment, strategy dataset
-approval or full Demo acceptance. Next is private transport/config and real local
-HTTP integration, not an assumption that database ACK means synchronization.
+AC-05 now has private config, bounded HTTP transport and explicit runner evidence;
+see [transport verification](../verification/SCN-008-sync-transport.md).
+AC-06 real Supabase end-to-end evidence remains NOT RUN. AC-07 has an initial
+[operator runbook](../operations/native-m1-sync.md), but complete operator delivery,
+packaging and target recovery gates remain incomplete. The worker is not enabled
+or deployed; strategy dataset approval and full Demo acceptance are not claimed.
+Next is actual local Supabase HTTP/role/recovery integration.
 
 ## Availability and recovery semantics
+
+### AC-05 transport/config/runner detail (before implementation)
+
+Use the existing pinned HTTPX dependency; no SDK or new package. The operator
+sets only `SOCHRON_SYNC_CONFIG_FILE`, a canonical absolute private JSON file.
+No config means DISABLED and no source/journal/network access. Explicit enabled
+config pins the source directory/archive/Demo identity/offset interval, separate
+state directory, owner UUID and destination origin. The service key is read from
+a separate private file, never an argument or environment value. Reject oversized,
+duplicate-key, unknown-field, unsafe-path/mode/owner/link or malformed input with
+fixed redacted errors. Accept backend secret keys or legacy service-role JWT syntax;
+syntax is not proof of remote authentication. No publishable/anon/user credential.
+
+Allow canonical HTTPS DNS origins with default TLS verification, or an explicit
+IPv4 loopback HTTP origin/port for local testing. Reject userinfo, paths, query,
+fragment, backslashes, whitespace, Unicode and ambiguous ports. Do not follow
+redirects, use environment proxy/CA settings, retain cookies, or log request/response
+bodies. Only two fixed POST RPCs exist, with pinned owner/archive arguments and
+bounded JSON. Reject compressed responses; enforce 262,144-byte request/response
+caps, 2-second socket inactivity and a 10-second total async request deadline.
+No transport-layer retries. Known native conflict replies quarantine; other HTTP
+errors/timeouts remain UNKNOWN. Successful store is still followed by independent
+read-back; malformed successful read-back is a conflict, not synchronization.
+
+Provide local `init`, `status`, `run --once` and serial `run` commands. Init creates
+only the explicit empty private worker state, without network. Status reads local
+state without a key/network and is not destination verification. Run is the explicit
+operator action that can sync configured data. No automatic service installation,
+Compose enablement or startup. Use bounded exponential backoff for unresolved work,
+five persisted sends per batch, and exit after five consecutive unresolved steps
+per process. At the send budget, an UNKNOWN batch may still reconcile; never send
+again or reset its attempts. Do not auto-restart exhausted workers. Idle polling
+and successful work may continue serially until stopped. SIGINT/SIGTERM must not
+clear pending state or print a traceback/credential. Config/key rotation requires
+stop and restart; missing state or quarantine requires operator review, not reset.
+
+Verify fake HTTP plus real loopback socket behavior, redirect/auth/error/size/deadline
+negatives, private config, disabled/no-send commands, budget persistence, restart
+and redacted output. These tests are distinct from AC-06 real Supabase HTTP/roles.
 
 ### AC-04 journal/driver detail (before implementation)
 
