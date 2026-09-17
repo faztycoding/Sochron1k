@@ -34,7 +34,8 @@ yet. A wheel does not include a Python interpreter or OS dependencies.
 
 The current worker is POSIX-only (flock and Unix ownership). A generic wheel tag
 does not certify Windows support. The MT5 Windows/Wine executor is a different
-boundary. Linux container packaging, installed-service lifecycle, consistent
+boundary. [ADR-011](ADR-011-worker-container.md) now supplies opt-in Linux container
+packaging and local replacement evidence. Fixed-runtime admission, consistent
 backup/restore and target-host gates remain required; local macOS installation
 does not establish them. No automatic restart may bypass retry-budget review.
 

@@ -2,14 +2,15 @@
 
 ## Status and authority
 
-Optional backend worker, not enabled by default or included in Compose. AC-03/04
+Optional backend worker, not enabled by default or included in API/web Compose. AC-03/04
 have source/journal evidence; AC-05 now has config/HTTP/runner tests against fake
 HTTP and real loopback sockets/processes. AC-06 now has
 [actual local Supabase/Auth/PostgREST evidence](../verification/SCN-008-local-sync.md),
 including process termination after commit and read-back without a second send.
 An [internal Python artifact](../verification/SCN-008-worker-package.md) now provides
 an installed `sochron-sync` command, verified outside the source checkout. This is
-part of AC-07, not completed container/target/backup delivery.
+part of AC-07. An opt-in [Linux container](worker-container.md) now has local
+replacement/reconciliation evidence, not target/backup delivery or release approval.
 Hosted setup, destination credentials,
 target deployment and full Demo gates are NOT READY. No MT5/execution operation
 exists in this worker. Starting it does not enable Auto Trading.
@@ -190,7 +191,8 @@ SQLite main file is not a verified backup.
 
 ## Outstanding delivery
 
-Next: complete operator/packaging and recovery gates (AC-07). Local AC-06 testing
+Next: admit a fixed SQLite runtime (R-015), then complete recovery gates (AC-07).
+Local AC-06 testing
 does not establish installed-service or target-host behavior. Still required from the
 owner: chosen Supabase project/owner, broker Demo server/account specifications,
 MT5 host/build, and deployment/domain/alert/budget decisions. Credentials go only

@@ -1,0 +1,24 @@
+# Opt-in operator artifact only. Default compose.yaml does not start this worker.
+name: sochron1k-worker
+services:
+  worker:
+    image: ${SOCHRON_WORKER_IMAGE:-sochron1k-worker:local}
+    build:
+      context: .
+      dockerfile: services/worker/Dockerfile
+    user: "10001:10001"
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:size=16m,mode=1777"]
+    network_mode: none
+    restart: "no"
+    stop_grace_period: 15s
+    pids_limit: 64
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "3"

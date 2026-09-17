@@ -86,6 +86,7 @@ npx -y -p node@24.21.0 npm run check:db:static
 npx -y -p node@24.21.0 npm run check:compose:static
 bash scripts/with-local-docker.sh npx -y -p node@24.21.0 .venv/bin/python scripts/check-native-sync-local.py
 .venv/bin/python scripts/check-worker-package.py
+bash scripts/with-local-docker.sh .venv/bin/python scripts/check-worker-container.py
 ```
 
 The native-sync local check requires the guarded local Supabase stack and applied
@@ -94,6 +95,9 @@ and does not authorize hosted writes.
 The worker package verifier requires uv 0.12.15 on PATH (or `SOCHRON_UV`) and
 `uv sync --frozen --all-groups`; it builds and exercises a disposable installed
 environment without hosted/broker access.
+The container verifier requires the local Docker engine and project development
+environment; it uses only isolated synthetic containers. A passing functional
+report does not clear SQLite patch admission (R-015) or target release gates.
 
 Add build, lint, type-check, test, migration, and deployment commands only after they exist and have run successfully in this repository.
 

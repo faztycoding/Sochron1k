@@ -76,15 +76,43 @@ AC-05 now has private config, bounded HTTP transport and explicit runner evidenc
 see [transport verification](../verification/SCN-008-sync-transport.md).
 AC-06 now has real local Supabase/Auth/PostgREST, hard process-crash and owner-role
 evidence; see [local integration verification](../verification/SCN-008-local-sync.md).
-AC-07 has an initial
-[operator runbook](../operations/native-m1-sync.md), but complete operator delivery,
-target container packaging and recovery gates remain incomplete. An internal wheel
+AC-07 has an
+[operator runbook](../operations/native-m1-sync.md), but complete operator delivery
+and target recovery gates remain incomplete. An internal wheel
 and installed operator command now have [local artifact evidence](../verification/SCN-008-worker-package.md).
+Opt-in Linux container delivery has [local replacement evidence](../verification/SCN-008-worker-container.md);
+SQLite patch admission remains a release blocker (R-015).
 The worker is not enabled
 or deployed; strategy dataset approval and full Demo acceptance are not claimed.
-Next is operator packaging and recovery delivery, not hosted enablement.
+Next is fixed-runtime admission and recovery delivery, not hosted enablement.
 
 ## Availability and recovery semantics
+
+### AC-07 Linux container detail (before implementation)
+
+Build a separate worker image from the admitted digest-pinned Python base and
+locked wheel/runtime dependencies. Runtime must contain installed packages, not
+the checkout, test fixtures, build tools, config, keys or journal. Keep default
+API/web Compose unchanged. A standalone worker manifest defaults to DISABLED,
+no networking/ports/mounts, non-root UID 10001, read-only root, dropped capabilities,
+no privilege escalation, bounded tmpfs/logging and no automatic restart.
+
+Explicit private operator configuration supplies source/state/config volumes and
+approved destination networking. Keep source/state paths stable across replacement.
+Config is mounted read-only; source volume allows SQLite WAL sidecar bookkeeping
+while the application connection remains mode=ro/query_only. This is not an
+OS-enforced read-only source boundary. Document same-host/local-volume and UID
+requirements; never use immutable=1 for the changing source archive.
+
+Verify an invocation-owned local Linux Compose project, with synthetic source,
+private runtime-generated key, isolated loopback receiver and no egress/host ports.
+Inspect effective runtime controls and installed package identity. Prove explicit
+init/status, duplicate init and concurrent writer denial, SIGTERM after receiver
+acceptance, durable UNKNOWN/cursor retention, then container replacement with
+independent read-back and no second send. Check source tables remain unchanged
+and unsafe private config is denied without traffic. Retain image/input hashes,
+runtime versions, scoped evidence and cleanup outcome. Container evidence is not
+real PostgREST, target deployment, power loss, backup restore or full Demo acceptance.
 
 ### AC-07 installable artifact detail (before implementation)
 

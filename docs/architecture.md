@@ -106,8 +106,10 @@ without configuration. Neither API startup nor
 Compose starts the worker. Local Supabase HTTP/role integration has
 [AC-06 evidence](verification/SCN-008-local-sync.md). An internal Python wheel now
 ships both domain and worker packages with an installed operator command;
-see [ADR-010](decisions/ADR-010-python-delivery-artifact.md). Target container packaging,
-hosted integration and full target recovery remain outstanding;
+see [ADR-010](decisions/ADR-010-python-delivery-artifact.md). An opt-in Linux worker
+image and isolated container-replacement verifier now exist; default API/web
+Compose still starts no worker. See [ADR-011](decisions/ADR-011-worker-container.md).
+SQLite patch admission, hosted integration and full target recovery remain outstanding;
 see [ADR-009](decisions/ADR-009-native-m1-sync-boundary.md).
 
 ## Failure behavior
