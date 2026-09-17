@@ -101,6 +101,27 @@ def test_private_config_roundtrip_and_disabled(config, tmp_path, monkeypatch):
     assert load_config() is None
 
 
+@pytest.mark.parametrize("raises", [False, True])
+def test_installed_entry_point_shares_sigterm_handler_and_restores_it(monkeypatch, raises):
+    import sochron_worker.__main__ as entry
+
+    previous = signal.getsignal(signal.SIGTERM)
+
+    def invoke():
+        assert signal.getsignal(signal.SIGTERM) is entry.stop
+        if raises:
+            raise SystemExit(0)
+        return 17
+
+    monkeypatch.setattr(entry, "main", invoke)
+    if raises:
+        with pytest.raises(SystemExit):
+            entry.cli()
+    else:
+        assert entry.cli() == 17
+    assert signal.getsignal(signal.SIGTERM) is previous
+
+
 @pytest.mark.parametrize(
     "url",
     [

@@ -78,11 +78,36 @@ AC-06 now has real local Supabase/Auth/PostgREST, hard process-crash and owner-r
 evidence; see [local integration verification](../verification/SCN-008-local-sync.md).
 AC-07 has an initial
 [operator runbook](../operations/native-m1-sync.md), but complete operator delivery,
-packaging and target recovery gates remain incomplete. The worker is not enabled
+target container packaging and recovery gates remain incomplete. An internal wheel
+and installed operator command now have [local artifact evidence](../verification/SCN-008-worker-package.md).
+The worker is not enabled
 or deployed; strategy dataset approval and full Demo acceptance are not claimed.
 Next is operator packaging and recovery delivery, not hosted enablement.
 
 ## Availability and recovery semantics
+
+### AC-07 installable artifact detail (before implementation)
+
+Build one internal Python wheel containing the existing API domain package and
+worker package without moving their source boundaries or adding another service.
+Use a pinned build backend and locked build dependencies. Keep runtime dependency
+versions unchanged and exclude fixtures, secrets, runtime state, frontend assets
+and build tools from the wheel. Export a hash-locked production dependency manifest.
+Do not publish to a registry, install a daemon, start Compose or enable any sync
+destination. Source development and existing API container invocation must remain
+compatible. Record the artifact-boundary decision in an ADR.
+
+Provide an installed `sochron-sync` command with the same explicit init/status/run
+semantics, redacted failures and SIGTERM handling as `python -m sochron_worker`.
+Verify a freshly created isolated virtual environment outside the checkout, no
+PYTHONPATH or editable source link, exact installed dependency versions, and wheel
+member hashes matching source. Rebuild the wheel from its sdist and verify equal
+artifact bytes under the pinned build environment. Run disabled/help/invalid input,
+private init/status, duplicate init denial, real loopback lost-response/stop/restart
+and cursor/UNKNOWN retention against the installed entry point. No pytest package
+or source tree may be required by the installed child process. Capture revision,
+input/artifact hashes and evidence scope. Installed-command testing is not hosted
+Auth, actual MT5, Linux target deployment, backup restore or full AC-07 acceptance.
 
 ### AC-06 real local verifier detail (before implementation)
 

@@ -108,6 +108,14 @@ def stop(signum, frame):
     raise KeyboardInterrupt()
 
 
+def cli() -> int:
+    """Shared installed/module entry point; install handlers only when invoked."""
+    previous = signal.signal(signal.SIGTERM, stop)
+    try:
+        return main()
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
 if __name__ == "__main__":
-    signal.signal(signal.SIGTERM, stop)
-    raise SystemExit(main())
+    raise SystemExit(cli())

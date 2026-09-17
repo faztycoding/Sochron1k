@@ -7,6 +7,9 @@ have source/journal evidence; AC-05 now has config/HTTP/runner tests against fak
 HTTP and real loopback sockets/processes. AC-06 now has
 [actual local Supabase/Auth/PostgREST evidence](../verification/SCN-008-local-sync.md),
 including process termination after commit and read-back without a second send.
+An [internal Python artifact](../verification/SCN-008-worker-package.md) now provides
+an installed `sochron-sync` command, verified outside the source checkout. This is
+part of AC-07, not completed container/target/backup delivery.
 Hosted setup, destination credentials,
 target deployment and full Demo gates are NOT READY. No MT5/execution operation
 exists in this worker. Starting it does not enable Auto Trading.
@@ -19,9 +22,61 @@ path, but those attributes do not reduce the key's privileges outside this proce
 
 ## Configuration
 
-Use pinned Python 3.14.7 and the existing project `.venv`/lockfile. Both
+Use pinned Python 3.14.7. For source development using the project `.venv`, both
 `services/api/src` (shared domain types only) and `services/worker/src` must be on
-`PYTHONPATH`. This is local source invocation, not deployment packaging.
+`PYTHONPATH`. The installed artifact below needs neither source path.
+
+## Build and verify the internal artifact
+
+Use uv 0.12.15. Build dependencies are locked separately; production dependencies
+are unchanged. From the repository root:
+
+```bash
+uv sync --frozen --all-groups
+.venv/bin/python scripts/check-worker-package.py
+```
+
+If uv is not on PATH, set `SOCHRON_UV` to its absolute executable path for the
+verifier. The verifier checks its version. It creates a unique ignored directory
+under `output/worker-package/`, containing a wheel, sdist, hash-locked production
+`requirements.txt` and `result.json`. It checks exact contents, builds a matching
+wheel directly and from the sdist, and installs into a disposable fresh environment
+outside the checkout. It exercises the installed command against a loopback fixture,
+including SIGTERM/UNKNOWN/restart. Test environment, keys and fixture journals are
+removed afterward; artifact/evidence files are retained. No owner service is enabled.
+
+`uv sync` intentionally does not install project console scripts in the developer
+environment (`tool.uv.package=false`). Its entry-point warning is expected; use
+the installed wheel or the source commands below, not an assumed `.venv/bin/sochron-sync`.
+
+For a reviewed artifact with result PASS, transfer its wheel, requirements and
+evidence together to the approved POSIX host. Verify SHA-256 against the retained
+manifest and trusted source revision first. Create a new version-specific environment,
+not an in-place upgrade of an active worker. Example placeholders below must be
+replaced with exact reviewed paths; these do not select or authorize a hosted target:
+
+```bash
+uv venv --no-project --python /absolute/path/to/python3.14 /absolute/new/release/venv
+uv pip install --python /absolute/new/release/venv/bin/python --require-hashes --only-binary :all: -r /absolute/artifact/requirements.txt
+uv pip install --python /absolute/new/release/venv/bin/python --no-deps --no-index /absolute/artifact/sochron1k-0.1.0-py3-none-any.whl
+/absolute/new/release/venv/bin/sochron-sync --help
+```
+
+The verifier has exercised these installation operations locally, not on Linux or
+the target host. The wheel contains the API domain and worker packages, not a
+Python interpreter, frontend, credentials or database state. It is not published
+to a package registry. Do not use version `0.1.0` alone as artifact identity.
+
+After private configuration is prepared under the authority above, substitute
+`/absolute/new/release/venv/bin/sochron-sync` for the source prefix in init/status/run
+commands below. Importing/installing does not initialize a journal. Start `run`
+only explicitly, stop with SIGINT/SIGTERM and inspect the exit/status. Do not add
+an automatic restart loop after retry exhaustion. Preserve the same source/state
+paths during an application update; do not initialize another journal to evade
+UNKNOWN or quarantine. Before any rollback, verify old code understands the current
+schema/config and rehearse recovery separately; an old wheel is not a state backup.
+
+## Private configuration
 
 `SOCHRON_SYNC_CONFIG_FILE` contains only an absolute config-file path. No variable
 means DISABLED, with no archive/journal/network access. An explicit private JSON

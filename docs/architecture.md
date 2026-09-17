@@ -104,7 +104,9 @@ durable test destination and actual local Auth/PostgREST. Private config, bounde
 HTTP RPC transport and a serial explicit operator runner now exist, disabled
 without configuration. Neither API startup nor
 Compose starts the worker. Local Supabase HTTP/role integration has
-[AC-06 evidence](verification/SCN-008-local-sync.md); deployment packaging,
+[AC-06 evidence](verification/SCN-008-local-sync.md). An internal Python wheel now
+ships both domain and worker packages with an installed operator command;
+see [ADR-010](decisions/ADR-010-python-delivery-artifact.md). Target container packaging,
 hosted integration and full target recovery remain outstanding;
 see [ADR-009](decisions/ADR-009-native-m1-sync-boundary.md).
 

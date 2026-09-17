@@ -99,6 +99,9 @@ init/status/run commands. It is disabled without configuration and is not starte
 by Compose. [Real local Supabase integration](docs/verification/SCN-008-local-sync.md)
 now verifies Auth/owner isolation, exact values and recovery after a committed but
 lost response. This is not target deployment or authority to enable a hosted destination.
+The [internal Python artifact](docs/verification/SCN-008-worker-package.md) can now
+be installed without source-relative PYTHONPATH and exposes `sochron-sync`.
+It remains opt-in; target container and backup/restore delivery are still pending.
 
 ## Local Supabase foundation
 

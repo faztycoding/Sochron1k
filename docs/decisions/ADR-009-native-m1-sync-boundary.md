@@ -4,7 +4,8 @@
 read-only source, durable worker journal and one-step driver implemented locally.
 Private config, bounded HTTP transport and explicit runner implemented locally.
 Real local Supabase end-to-end HTTP evidence is retained under
-[AC-06 verification](../verification/SCN-008-local-sync.md). Deployment packaging,
+[AC-06 verification](../verification/SCN-008-local-sync.md). Internal Python packaging
+is covered by [ADR-010](ADR-010-python-delivery-artifact.md); target container packaging,
 hosted integration and target recovery remain outstanding.
 
 ## Decision
@@ -32,8 +33,9 @@ initializing `BarHistory` constructor. Read transactions include binding/cursor
 validation and bounded receipt-ordered rows in one WAL snapshot. Availability is
 observed after fetching committed rows. Domain models are reused from the current
 API source package without importing its HTTP routes or startup entry point; a
-separate shared package is unnecessary for this boundary. Deployment packaging
-for the runnable worker remains future work, not implied by pytest's import paths.
+separate shared package is unnecessary for this boundary. ADR-010 ships both Python
+packages in one internal wheel with isolated installed-command evidence. Target
+container packaging remains future work, not implied by pytest's import paths.
 
 The worker journal uses a separately initialized private POSIX directory and
 `sync.sqlite3`, WAL/FULL, a process-held nonblocking `flock`, and one in-process
