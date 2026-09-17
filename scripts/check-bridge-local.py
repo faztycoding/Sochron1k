@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SCN-004 real-loopback HTTP check; synthetic telemetry, no MT5 connection."""
+"""SCN-004/006 loopback HTTP; synthetic telemetry and bars, no MT5 connection."""
 
 from __future__ import annotations
 
@@ -43,6 +43,18 @@ def main() -> None:
             os.open(private, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), "w"
         ) as stream:
             json.dump(config, stream)
+        chart_private = Path(directory) / "chart.json"
+        now_seconds = int(time.time())
+        with os.fdopen(
+            os.open(chart_private, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), "w"
+        ) as stream:
+            json.dump(
+                {
+                    "offset_valid_from_server_s": now_seconds - 86400,
+                    "offset_valid_until_server_s": now_seconds + 86400,
+                },
+                stream,
+            )
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             listener.listen(128)
@@ -50,6 +62,7 @@ def main() -> None:
             environment = os.environ | {
                 "PYTHONPATH": str(ROOT / "services/api/src"),
                 "SOCHRON_BRIDGE_CONFIG_FILE": str(private),
+                "SOCHRON_CHART_CONFIG_FILE": str(chart_private),
                 "TRADING_MODE": "live",
                 "AUTO_TRADING_ENABLED": "true",
             }
@@ -151,6 +164,79 @@ def main() -> None:
                         == received,
                         "replay refreshed receipt time",
                     )
+                    chart_challenge = client.get("/bridge/v1/chart/challenge", headers=auth)
+                    require(chart_challenge.status_code == 200, "chart challenge failed")
+                    require(chart_challenge.json()["next_sequence"] == 1, "chart sequence shared")
+                    bar_start = int(time.time()) // 60 * 60
+                    chart_packet = {
+                        "protocol": "sochron.chart.v1",
+                        "source": "mt5-copyrates",
+                        "boot_id": chart_challenge.json()["boot_id"],
+                        "sequence": 1,
+                        "identity": identity,
+                        "trade_mode": "demo",
+                        "terminal_build": 1,
+                        "observed_at": datetime.now(UTC).isoformat(),
+                        "broker_utc_offset_seconds": 0,
+                        "timeframe": "M1",
+                        "price_basis": "bid",
+                        "digits": 2,
+                        "tick_size": "0.01",
+                        "bars": [
+                            {
+                                "time_server_s": bar_start - (239 - index) * 60,
+                                "open": "2500.00",
+                                "high": "2501.00",
+                                "low": "2499.00",
+                                "close": "2500.20",
+                                "tick_volume": 10,
+                                "spread_points": 20,
+                            }
+                            for index in range(240)
+                        ],
+                    }
+                    require(len(json.dumps(chart_packet)) > 16_384, "fixture below chart boundary")
+                    require(
+                        client.post("/bridge/v1/chart/snapshot", json=chart_packet).status_code
+                        == 401,
+                        "anonymous chart write",
+                    )
+                    chart_received = client.post(
+                        "/bridge/v1/chart/snapshot", headers=auth, json=chart_packet
+                    )
+                    require(chart_received.status_code == 200, "native bars not accepted")
+                    require(
+                        client.post(
+                            "/bridge/v1/chart/snapshot", headers=auth, json=chart_packet
+                        ).json()["duplicate"],
+                        "chart replay not detected",
+                    )
+                    require(
+                        client.get("/bridge/v1/challenge", headers=auth).json()["next_sequence"]
+                        == 3,
+                        "chart changed telemetry sequence",
+                    )
+                    require(
+                        client.get("/owner/chart/M1", headers=auth).status_code == 503,
+                        "executor credential bypassed disabled owner auth",
+                    )
+                    chart_packet["sequence"] = 2
+                    chart_packet["bars"][0]["close"] = "2500.30"
+                    correction = client.post(
+                        "/bridge/v1/chart/snapshot", headers=auth, json=chart_packet
+                    )
+                    require(
+                        correction.status_code == 409
+                        and correction.json() == {"detail": "CLOSED_BAR_CHANGED"},
+                        "closed bar changed silently",
+                    )
+                    require(
+                        correction.headers.get("cache-control") == "no-store", "chart cacheable"
+                    )
+                    require(
+                        client.get("/bridge/v1/status").json()["state"] == "connected",
+                        "chart rejection mutated independent quote state",
+                    )
                     packet["trade_mode"] = "real"
                     denied = client.post("/bridge/v1/snapshot", headers=auth, json=packet)
                     require(denied.status_code == 422, "non-Demo packet accepted")
@@ -183,18 +269,21 @@ def main() -> None:
         "services/api/src/sochron1k/telemetry.py",
         "services/api/src/sochron1k/bridge_api.py",
         "services/api/src/sochron1k/main.py",
+        "services/api/src/sochron1k/chart.py",
+        "services/api/src/sochron1k/chart_api.py",
+        "tests/test_chart.py",
         "tests/test_telemetry_bridge.py",
     ]
     print(
         json.dumps(
             {
-                "contract": "SCN-004",
+                "contracts": ["SCN-004", "SCN-006 API ingress"],
                 "result": "PASS",
                 "source_revision": revision,
                 "dirty": dirty,
                 "python": platform.python_version(),
                 "environment": "loopback HTTP",
-                "fixture": "synthetic-http-v1",
+                "fixture": "synthetic-http-v1 and 240 native-bar wire fixtures",
                 "checked_at": datetime.now(UTC).isoformat(),
                 "sha256": {
                     name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in files
@@ -214,5 +303,5 @@ if __name__ == "__main__":
         main()
     except Exception:
         # Do not dump HTTP requests, private config or their containing exceptions.
-        print("FAIL SCN-004 loopback verifier; no broker operation attempted", file=sys.stderr)
+        print("FAIL SCN-004/006 loopback verifier; no broker operation attempted", file=sys.stderr)
         raise SystemExit(1) from None

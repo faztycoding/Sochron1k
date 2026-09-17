@@ -18,8 +18,9 @@ Vite environment, command-line argument, screenshot, chat, fixture or Git file.
 
 Without a private configuration, protected routes return 503 and status is
 `disabled`. Configuration never enables execution, even if inherited environment
-variables request live or Auto Trading. The web console is not yet wired to these
-routes; only its existing API health check is active.
+variables request live or Auto Trading. The web console reads the authorized
+`/owner/telemetry` view using its separate owner session; executor tokens never
+enter the browser. See [owner authentication](owner-authentication.md).
 
 ## Local verification without a broker
 
@@ -112,7 +113,47 @@ build, Demo currency/capital, exact symbol, margin mode and broker timestamp off
 Do not send the account password in chat. Account reference and credential must be
 configured locally through the approved secret channel.
 
-Still required: compiled EA, actual read-only round trip, authenticated owner UI,
+Still required: compiled EA, actual read-only round trip, real owner configuration,
 persistent bars/ticks/history, execution fencing, command/SL/reconciliation and
 recovery gates, one separately authorized Demo open/close, alerts/restore and
 target-host burn-in. Local ingress success does not satisfy those gates.
+
+## Native chart channel (SCN-006)
+
+The API and authenticated React chart support native M1/M5/M15/H1 windows, independently
+of sampled Bid/Ask telemetry. The current EA source does **not** produce these
+windows yet. Browser/API verification uses synthetic frames, not MT5 observations.
+
+Routes: executor-authenticated `GET /bridge/v1/chart/challenge` and
+`POST /bridge/v1/chart/snapshot`; owner-authenticated `GET /owner/chart/{timeframe}`.
+The chart challenge uses the current API boot ID but a separate sequence. A chart
+frame is limited to 128 KiB and 2–240 bars; telemetry stays at 16 KiB. No public
+price endpoint or trade control is added. `ChartFrame` in `chart.py` defines the
+authoritative wire shape. Snapshot freshness is 15 seconds, live quote freshness
+five seconds, and the last bar never becomes closed just because time passed.
+
+In addition to the existing bridge and owner Auth configs, set
+`SOCHRON_CHART_CONFIG_FILE` to a separate private owner-only regular JSON file:
+
+- `offset_valid_from_server_s`: first raw broker-clock epoch second for which the
+  bridge's pinned UTC offset has been independently verified.
+- `offset_valid_until_server_s`: exclusive end of that verified interval.
+
+Do not substitute Bangkok time or guess dates; historical windows crossing an
+unverified daylight-saving transition are rejected. Missing config keeps charts
+disabled; invalid config fails startup without printing private input. The files
+are read at startup. Restarting clears the disposable chart cache and boot fence,
+not durable research history. A corrected closed bar fails closed: investigate
+the source/time mapping and authorize resynchronization before restarting/reseeding.
+Do not automatically reset a rejection to hide a broker correction.
+
+The UI preserves decimal strings and includes a keyboard-accessible bar selector,
+forming-bar color, UTC/Bangkok labels, and explicit gaps/stale/rejected states.
+Numerical canvas limitations fall back to exact text values. Gaps use a single
+whitespace marker with their actual missing-interval counts alongside; spacing is
+not proportional to elapsed wall time. This is not raw-tick capture, durable M1
+storage, a strategy input, a market-session calendar or execution evidence.
+
+Run the existing HTTP and browser verifiers above (browser command in README) to
+exercise this channel locally. Tests create their own private config and clean it
+up. Actual owner/broker configurations and all terminal gates remain outstanding.

@@ -30,9 +30,10 @@ describe("Sochron1k safety console", () => {
     expect(screen.getByText("ยังไม่พร้อมส่งคำสั่งไป MT5")).toBeVisible();
     expect(screen.getByLabelText("ตรวจสอบเฉพาะระบบ local")).toHaveTextContent("LOCAL");
     expect(screen.queryByText("35")).not.toBeInTheDocument();
-    for (const unavailableItem of screen.getAllByText("กราฟ")) {
-      expect(unavailableItem.closest('[aria-disabled="true"]')).not.toBeNull();
+    for (const chartLink of screen.getAllByRole("link", { name: /กราฟ/ })) {
+      expect(chartLink).toHaveAttribute("href", "#market-chart");
     }
+    expect(screen.getByRole("heading", { name: "กราฟราคา Demo" })).toBeVisible();
     await waitFor(() => expect(screen.getByText("ออนไลน์ · v0.1.0")).toBeVisible());
     expect(screen.queryByRole("button", { name: /ซื้อ|ขาย|เปิดออเดอร์/ })).not.toBeInTheDocument();
   });

@@ -22,7 +22,9 @@ function setup(privateResponse: () => Promise<Response> = async () => json(fixtu
     watch: vi.fn(fn => { callback = fn; return unsubscribe; }), dispose: vi.fn(),
   };
   const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (path) =>
-    String(path) === "/api/auth/config" ? json(config) : privateResponse());
+    String(path) === "/api/auth/config" ? json(config) : String(path).startsWith("/api/owner/chart/") ?
+      json({ state: "disabled", feed_status: fixture().status, observation: null,
+        snapshot_age_seconds: null, latest_bar_age_seconds: null, execution_ready: false }) : privateResponse());
   const factory = vi.fn(async () => auth);
   const result = render(<OwnerPanel factory={factory} />);
   return { auth, fetch, factory, unsubscribe, emit: (value: string | null) => callback(value), ...result };

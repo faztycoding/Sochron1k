@@ -17,6 +17,33 @@
   --amber: #f1b84b;
 }
 
+.chart-panel { margin-top: 18px; min-width: 0; scroll-margin-top: 20px; }
+.nav-item { text-decoration: none; }
+.chart-heading { flex-wrap: wrap; }
+.timeframe-controls { display: flex; gap: 4px; }
+.timeframe-controls button { min-width: 44px; min-height: 44px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); background: var(--surface-deep); cursor: pointer; }
+.timeframe-controls button[aria-pressed="true"] { color: var(--gold-soft); border-color: var(--gold); }
+.chart-empty { min-height: 130px; padding: 28px 0; color: var(--muted); }
+.chart-empty p { max-width: 65ch; }
+.chart-plot { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.chart-plot--stale { opacity: 0.65; }
+.candle-canvas { height: 360px; width: 100%; }
+.chart-legend, .chart-attribution { color: var(--muted); font-size: 12px; }
+.chart-attribution a { color: var(--gold-soft); }
+.chart-gap { padding: 12px; border-left: 2px solid var(--amber); color: var(--gold-soft); font-size: 14px; overflow-wrap: anywhere; }
+.chart-gap p { color: var(--muted); }
+.bar-selector { display: grid; gap: 8px; margin-top: 18px; color: var(--muted); font-size: 14px; }
+.bar-selector select { max-width: 100%; min-width: 0; min-height: 44px; background: var(--surface-deep); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 8px; font: inherit; }
+.bar-selector select:focus-visible, .chart-gap summary:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+.bar-state { color: var(--gold-soft); font-size: 14px; }
+.chart-values { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.chart-values dt { color: var(--muted); font-size: 12px; }
+.chart-values dd { margin: 5px 0; font: 500 18px "Inter", sans-serif; white-space: nowrap; overflow-x: auto; }
+@media (max-width: 700px) {
+  .chart-values { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .candle-canvas { height: 280px; }
+}
+
 * { box-sizing: border-box; }
 
 html { scroll-behavior: smooth; }

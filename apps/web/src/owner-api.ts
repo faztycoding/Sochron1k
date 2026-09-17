@@ -83,7 +83,7 @@ export function parseTelemetry(value: unknown): Telemetry {
 export class ApiError extends Error {
   constructor(readonly status: number) { super("API request failed"); }
 }
-export async function readJSON(path: string, signal: AbortSignal, token?: string): Promise<unknown> {
+export async function readJSON(path: string, signal: AbortSignal, token?: string, maxBytes = 65536): Promise<unknown> {
   const response = await fetch(path, {
     signal: AbortSignal.any([signal, AbortSignal.timeout(6000)]), cache: "no-store",
     credentials: "omit", redirect: "error",
@@ -100,7 +100,7 @@ export async function readJSON(path: string, signal: AbortSignal, token?: string
       const chunk = await reader.read();
       if (chunk.done) break;
       bytes += chunk.value.byteLength;
-      if (bytes > 65536) throw new Error("Response too large");
+      if (bytes > maxBytes) throw new Error("Response too large");
       body += decoder.decode(chunk.value, { stream: true });
     }
     return JSON.parse(body + decoder.decode());

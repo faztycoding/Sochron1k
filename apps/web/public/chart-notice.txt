@@ -1,0 +1,12 @@
+TradingView Lightweight Charts™
+Copyright (с) 2025 TradingView, Inc. https://www.tradingview.com/
+
+Sochron1k uses Lightweight Charts 5.2.1 under the Apache License, Version 2.0.
+The library is unmodified. Application-specific adapters are separate code.
+License copy: /lightweight-charts-LICENSE.txt
+License source: https://www.apache.org/licenses/LICENSE-2.0
+Source: https://github.com/tradingview/lightweight-charts/tree/v5.2.1
+Notice: https://github.com/tradingview/lightweight-charts/blob/v5.2.1/NOTICE
+
+Includes fancy-canvas 2.1.0 (MIT). License copy: /fancy-canvas-LICENSE.txt
+License source: https://github.com/tradingview/fancy-canvas/blob/master/LICENSE

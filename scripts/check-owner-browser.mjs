@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SCN-005: real browser/Auth/API, synthetic telemetry, no broker operations.
+// SCN-005/006: real browser/Auth/API/chart, synthetic data, no broker operations.
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -68,6 +68,7 @@ async function run() {
   let pump;
   let pumping = false;
   let feedEnabled = true;
+  let chartEnabled = true;
   let pumpFailure = false;
   let cleanupOK = true;
   let creationUnresolved = false;
@@ -97,6 +98,10 @@ async function run() {
     const bridgeToken = randomBytes(32).toString("base64url");
     const authPath = join(temporary, "owner.json");
     const bridgePath = join(temporary, "bridge.json");
+    const chartPath = join(temporary, "chart.json");
+    const fixtureEpoch = Math.floor(Date.now() / 1000);
+    await writeFile(chartPath, JSON.stringify({ offset_valid_from_server_s: fixtureEpoch - 10 * 86400,
+      offset_valid_until_server_s: fixtureEpoch + 86400 }), { mode: 0o600, flag: "wx" });
     await writeFile(authPath, JSON.stringify({ supabase_url: origin, public_key: local.ANON_KEY,
       owner_id: users[0].id }), { mode: 0o600, flag: "wx" });
     await writeFile(bridgePath, JSON.stringify({ identity: template.identity, token: bridgeToken,
@@ -110,6 +115,7 @@ async function run() {
     ].join("\n")], { cwd: root, stdio: ["ignore", "pipe", "ignore"], env: {
       ...process.env, PYTHONPATH: join(root, "services/api/src"),
       SOCHRON_OWNER_AUTH_CONFIG_FILE: authPath, SOCHRON_BRIDGE_CONFIG_FILE: bridgePath,
+      SOCHRON_CHART_CONFIG_FILE: chartPath,
     } });
     const port = await new Promise((done, reject) => {
       let text = "";
@@ -131,6 +137,25 @@ async function run() {
     assert.equal(challenge.status, 200);
     template.boot_id = (await challenge.json()).boot_id;
     let sequence = 0;
+    let chartSequence = 0;
+    const periods = { M1: 60, M5: 300, M15: 900, H1: 3600 };
+    const gapTimes = Object.fromEntries(Object.entries(periods).map(([key, period]) => [key, Math.floor(fixtureEpoch / period) * period - period * 8]));
+    async function sendChart(timeframe, now) {
+      const period = periods[timeframe], last = Math.floor(now / 1000 / period) * period;
+      const bars = Array.from({ length: 120 }, (_, index) => {
+        const start = last - period * (119 - index), price = 2500 + (Math.floor(start / period) % 37) / 10;
+        return { time_server_s: start, open: price.toFixed(2), high: (price + 0.9).toFixed(2),
+          low: (price - 0.4).toFixed(2), close: (price + (index % 2 ? 0.2 : -0.2)).toFixed(2), tick_volume: 50, spread_points: 20 };
+      }).filter(bar => bar.time_server_s !== gapTimes[timeframe]);
+      // Prices and direction depend on absolute bar time, not a shifting array index.
+      for (const bar of bars) bar.close = (Number(bar.open) + (Math.floor(bar.time_server_s / period) % 2 ? 0.2 : -0.2)).toFixed(2);
+      const response = await http(`${apiOrigin}/bridge/v1/chart/snapshot`, { method: "POST", headers: bridgeHeaders,
+        body: JSON.stringify({ protocol: "sochron.chart.v1", source: "mt5-copyrates", boot_id: template.boot_id,
+          sequence: ++chartSequence, identity: template.identity, trade_mode: "demo", terminal_build: template.terminal_build,
+          observed_at: new Date(now).toISOString(), broker_utc_offset_seconds: 0, timeframe, price_basis: "bid",
+          digits: template.contract.digits, tick_size: template.contract.tick_size, bars }) });
+      assert.equal(response.status, 200);
+    }
     pumping = true;
     pump = (async () => {
       while (pumping) {
@@ -140,6 +165,7 @@ async function run() {
             body: JSON.stringify({ ...template, sequence: ++sequence, observed_at: new Date(now).toISOString(),
               tick_time_server_msc: now }) });
           assert.equal(response.status, 200);
+          if (chartEnabled) for (const timeframe of Object.keys(periods)) await sendChart(timeframe, Date.now());
         }
         await delay(400);
       }
@@ -170,6 +196,7 @@ async function run() {
     const panel = page.getByRole("region", { name: "บัญชี Demo ของคุณ" });
     const equity = panel.getByText(template.equity, { exact: true });
     const connected = panel.getByText("เชื่อมต่อแล้ว", { exact: true });
+    const chart = page.locator("#market-chart");
     async function login(user) {
       await page.getByLabel("อีเมลเจ้าของ").fill(user.email);
       await page.getByLabel("รหัสผ่าน", { exact: true }).fill(user.password);
@@ -187,11 +214,13 @@ async function run() {
       await page.getByRole("button", { name: "ออกจากระบบ", exact: true }).click();
       await page.getByText("ออกจากระบบแล้ว", { exact: true }).waitFor();
       assert.equal(await equity.count(), 0);
+      assert.equal(await chart.locator("canvas").count(), 0);
     }
     stage = "foreign user denial";
-    await login(users[1]);
+    const foreignToken = await login(users[1]);
     await page.getByText("บัญชีนี้ไม่มีสิทธิ์เจ้าของระบบ", { exact: true }).waitFor();
     assert.equal(await equity.count(), 0);
+    assert.equal((await http(`${apiOrigin}/owner/chart/M5`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     await logout(); checks.push(stage);
 
     stage = "owner login and private telemetry";
@@ -202,6 +231,30 @@ async function run() {
     assert(await page.getByText("DEMO ONLY", { exact: true }).isVisible());
     assert.equal(await page.getByRole("button", { name: /เปิดออเดอร์|ซื้อ|ขาย/ }).count(), 0);
     assert.equal(await page.locator('input[type="password"]').count(), 0);
+    checks.push(stage);
+
+    stage = "native chart rendering and keyboard timeframe selection";
+    await chart.getByLabel("ตรวจค่าแท่งเทียน (UTC)").waitFor();
+    await chart.locator("canvas").first().waitFor();
+    assert(await chart.getByText("ยังไม่ยืนยันปิด — ค่านี้ยังเปลี่ยนได้", { exact: true }).isVisible());
+    assert(await chart.getByText(/มีช่วงข้อมูลขาด 1 ช่วง/).isVisible());
+    for (const timeframe of ["M1", "M15", "H1", "M5"]) {
+      const button = chart.getByRole("button", { name: timeframe, exact: true });
+      await button.focus(); await page.keyboard.press("Enter");
+      await chart.getByRole("img", { name: `กราฟแท่งเทียน ${timeframe} เวลา UTC; ค่า OHLC แบบข้อความอยู่ด้านล่าง`, exact: true }).waitFor();
+      assert.equal(await button.getAttribute("aria-pressed"), "true");
+    }
+    await chart.getByLabel("ตรวจค่าแท่งเทียน (UTC)").selectOption({ index: 0 });
+    assert(await chart.getByText("แท่งปิดแล้ว — มีแท่งถัดไปยืนยัน", { exact: true }).isVisible());
+    assert(await chart.locator(".chart-values dd").evaluateAll(values => values.length === 4 && values.every(value => /^\d+\.\d{2}$/.test(value.textContent))));
+    const inspectedTime = await chart.getByLabel("ตรวจค่าแท่งเทียน (UTC)").inputValue();
+    const chartRead = await http(`${apiOrigin}/owner/chart/M5`, { headers: { Authorization: `Bearer ${originalToken}` } });
+    assert.equal(chartRead.status, 200); assert.equal(chartRead.headers.get("cache-control"), "no-store");
+    const inspectedBar = (await chartRead.json()).observation.bars.find(bar => bar.open_time_utc === inspectedTime);
+    assert(inspectedBar);
+    assert.deepEqual(await chart.locator(".chart-values dd").allTextContents(), [inspectedBar.open, inspectedBar.high, inspectedBar.low, inspectedBar.close]);
+    assert.equal((await http(`${webOrigin}/chart-notice.txt`)).status, 200);
+    assert.equal((await http(`${webOrigin}/lightweight-charts-LICENSE.txt`)).status, 200);
     checks.push(stage);
 
     stage = "no persistent browser session";
@@ -218,6 +271,7 @@ async function run() {
       const range = document.createRange(); range.selectNodeContents(value);
       return range.getClientRects().length === 1 && value.scrollWidth <= value.clientWidth;
     })));
+    assert(await chart.locator(".chart-values dd").evaluateAll(values => values.length === 4 && values.every(value => value.scrollWidth <= value.clientWidth)));
     await page.screenshot({ path: join(output, "mobile-synthetic.png"), fullPage: true });
     await page.setViewportSize({ width: 1440, height: 1000 });
     checks.push(stage);
@@ -226,8 +280,24 @@ async function run() {
     feedEnabled = false;
     await panel.getByText("ข้อมูลเก่า — ห้ามใช้เป็นราคาปัจจุบัน", { exact: true }).waitFor();
     assert(await panel.getByText("Bid ล่าสุดที่บันทึก", { exact: true }).isVisible());
+    await chart.getByText("ข้อมูลเก่า — ไม่ใช่ราคาปัจจุบัน", { exact: true }).waitFor();
     feedEnabled = true;
-    await connected.waitFor(); checks.push(stage);
+    await connected.waitFor(); await chart.getByText("ข้อมูลล่าสุดจากช่อง MT5", { exact: true }).waitFor(); checks.push(stage);
+
+    stage = "chart network failure clears values and reconnects";
+    await page.route("**/api/owner/chart/*", route => route.abort());
+    await chart.getByText("อ่านกราฟไม่ได้ ซ่อนข้อมูลแล้ว กำลังลองเชื่อมต่อใหม่", { exact: true }).waitFor();
+    assert.equal(await chart.locator("canvas").count(), 0);
+    assert.equal(await chart.locator(".chart-values dd").count(), 0);
+    await page.unroute("**/api/owner/chart/*");
+    await chart.getByLabel("ตรวจค่าแท่งเทียน (UTC)").waitFor(); checks.push(stage);
+
+    stage = "chart snapshot expiry independent of fresh telemetry";
+    chartEnabled = false;
+    await chart.getByText("ข้อมูลเก่า — ไม่ใช่ราคาปัจจุบัน", { exact: true }).waitFor({ timeout: 20000 });
+    assert(await connected.isVisible());
+    chartEnabled = true;
+    await chart.getByText("ข้อมูลล่าสุดจากช่อง MT5", { exact: true }).waitFor(); checks.push(stage);
 
     stage = "SDK refresh with accelerated browser clock";
     const refreshResponses = [];
@@ -271,6 +341,7 @@ async function run() {
     const claims = JSON.parse(Buffer.from(freshToken.split(".")[1], "base64url").toString());
     assert(claims.exp > Date.now() / 1000);
     assert.equal((await http(`${apiOrigin}/owner/session`, { headers: { Authorization: `Bearer ${freshToken}` } })).status, 401);
+    assert.equal((await http(`${apiOrigin}/owner/chart/M5`, { headers: { Authorization: `Bearer ${freshToken}` } })).status, 401);
     checks.push(stage);
 
     stage = "reload loses memory session";
@@ -303,6 +374,8 @@ async function run() {
   const sources = ["scripts/check-owner-browser.mjs", "scripts/supabase-local.sh", "package-lock.json", "uv.lock",
     "supabase/config.toml", "supabase/migrations/20260916224038_owner_session_validation.sql", "apps/web/src/OwnerPanel.tsx",
     "apps/web/src/styles.css",
+    "apps/web/src/chart-api.ts", "apps/web/src/ChartPanel.tsx", "apps/web/src/CandleCanvas.tsx",
+    "services/api/src/sochron1k/chart.py", "services/api/src/sochron1k/chart_api.py",
     "apps/web/src/owner-api.ts", "apps/web/src/owner-auth.ts", "services/api/src/sochron1k/main.py",
     "services/api/src/sochron1k/owner_auth.py", "services/api/src/sochron1k/telemetry.py", "tests/fixtures/mt5-telemetry-v1.json"];
   const sha256 = {};
@@ -313,7 +386,7 @@ async function run() {
     checked_at: new Date().toISOString(), node: process.version, playwright: "1.63.0", chromium: browserVersion,
     python: command(join(root, ".venv/bin/python"), ["--version"]), runtime_images: runtimeImages.sort(),
     production_build_sha256: buildSha256, refresh_diagnostics: refreshDiagnostics,
-    checks, sha256, fixture: "synthetic telemetry; two generated local Auth users",
+    checks, sha256, fixture: "synthetic telemetry and OHLC; two generated local Auth users",
     token_refresh: "accelerated browser clock; real refresh-token HTTP exchange; server clock unchanged",
     mt5: "NOT_RUN", hosted_supabase: "NOT_RUN", artifacts: output };
   await writeFile(join(output, "result.json"), JSON.stringify(result, null, 2));

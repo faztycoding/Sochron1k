@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
@@ -81,10 +82,11 @@ def snapshot(bridge: AuthenticatedBridge) -> Observation:
     return observation
 
 
-@router.post("/snapshot")
-async def receive_snapshot(request: Request, bridge: AuthenticatedBridge) -> FrameReceipt:
+async def bounded_json(request: Request, reject: Callable[[], None], max_bytes: int) -> object:
+    """Called only after the route's authentication dependency has succeeded."""
+
     def deny(status_code: int, code: str) -> None:
-        bridge.reject()
+        reject()
         raise HTTPException(status_code=status_code, detail=code)
 
     if request.headers.get("content-type", "").split(";", 1)[0].strip() != "application/json":
@@ -95,7 +97,7 @@ async def receive_snapshot(request: Request, bridge: AuthenticatedBridge) -> Fra
     try:
         async with asyncio.timeout(2):
             async for chunk in request.stream():
-                if len(body) + len(chunk) > MAX_FRAME_BYTES:
+                if len(body) + len(chunk) > max_bytes:
                     deny(413, "FRAME_TOO_LARGE")
                 body.extend(chunk)
     except TimeoutError:
@@ -103,16 +105,25 @@ async def receive_snapshot(request: Request, bridge: AuthenticatedBridge) -> Fra
     except ClientDisconnect:
         deny(400, "FRAME_INTERRUPTED")
     try:
-        decoded = json.loads(
+        return json.loads(
             body,
             object_pairs_hook=unique_object,
             parse_float=Decimal,
             parse_constant=reject_constant,
         )
+    except ValueError, RecursionError:
+        deny(422, "INVALID_FRAME")
+
+
+@router.post("/snapshot")
+async def receive_snapshot(request: Request, bridge: AuthenticatedBridge) -> FrameReceipt:
+    decoded = await bounded_json(request, bridge.reject, MAX_FRAME_BYTES)
+    try:
         frame = TelemetryFrame.model_validate(decoded)
     except ValidationError, ValueError, RecursionError:
         # Pydantic's default errors include input values; do not echo broker data.
-        deny(422, "INVALID_FRAME")
+        bridge.reject()
+        raise HTTPException(status_code=422, detail="INVALID_FRAME") from None
     try:
         return bridge.accept(frame)
     except BridgeDenied as error:

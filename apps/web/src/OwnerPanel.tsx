@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError, parseConfig, parseTelemetry, quoteIsFresh, readJSON, type Telemetry } from "./owner-api";
 import { createOwnerAuth, type AuthFactory, type OwnerAuth } from "./owner-auth";
+import { ChartPanel } from "./ChartPanel";
 
 const stateLabels = {
   disabled: "ยังไม่ตั้งค่า MT5 bridge", awaiting_snapshot: "รอข้อมูลจาก MT5",
@@ -121,7 +122,7 @@ export function OwnerPanel({ factory = createOwnerAuth, onConnectionChange }: {
     finally { setBusy(false); }
   }
 
-  return <section className="panel owner-panel" aria-labelledby="owner-title">
+  return <><section className="panel owner-panel" aria-labelledby="owner-title">
     <div className="panel-heading">
       <div><h2 id="owner-title">บัญชี Demo ของคุณ</h2><p className="owner-subtitle">ข้อมูลส่วนตัวสำหรับเจ้าของระบบเท่านั้น</p></div>
       {token || logoutPending ? <button className="quiet-button" disabled={busy} onClick={() => void signOut()}>
@@ -161,5 +162,5 @@ export function OwnerPanel({ factory = createOwnerAuth, onConnectionChange }: {
         <p className="owner-hint">การเชื่อมต่อข้อมูลไม่ใช่การผ่าน preflight หรือการยืนยัน SL — Auto Trading ยังคงปิด</p>
       </> : <p className="owner-hint">ยังไม่มีข้อมูลบัญชีหรือราคาที่ MT5 ยืนยัน ไม่มีการจำลองยอดเงินหรือราคาในส่วนนี้</p>}
     </div> : null}
-  </section>;
+  </section><ChartPanel token={data ? token : null} identity={data?.observation?.frame.identity ?? null} /></>;
 }
