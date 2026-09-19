@@ -173,6 +173,15 @@ fixtures. It consumes ADR-018 rather than changing the transport architecture.
 It is uncompiled and has no executor lock, ledger, preflight, inventory scan,
 `OrderCheck`, `OrderSend`, transaction handling or reconciliation authority.
 
+SCN-014 adds a public redacted UI integration read model at `/ui/connections`.
+It reports implementation and runtime state separately for the core API, owner Auth,
+telemetry, chart, history, execution evidence, signals and statistics. The response
+contains only fixed route/source identifiers and safe state enums; it never exposes
+owner, account, broker-value, credential or filesystem data. The browser validates
+the exact map and renders the route rail even if its status request fails. The map
+does not create missing owner execution, signal or statistics read models and never
+grants execution authority.
+
 | Failure | Required behavior |
 | --- | --- |
 | AI unavailable or invalid | Strategies that require AI enter `WAIT`; position management continues |

@@ -23,6 +23,7 @@ from .execution_bridge_api import router as execution_bridge_router
 from .owner_api import router as owner_router
 from .owner_auth import OwnerAuthSettings, OwnerVerifier, load_owner_auth_settings
 from .telemetry import BridgeSettings, TelemetryBridge, load_bridge_settings
+from .ui_connections import UiConnectionMap, build_ui_connection_map
 
 
 class HealthResponse(BaseModel):
@@ -74,7 +75,7 @@ def create_app(
     @app.middleware("http")
     async def bridge_no_cache(request: Request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith(("/bridge/", "/executor/", "/owner/", "/auth/")):
+        if request.url.path.startswith(("/bridge/", "/executor/", "/owner/", "/auth/", "/ui/")):
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -97,6 +98,19 @@ def create_app(
             trading_mode="demo",
             auto_trading_enabled=False,
             execution_ready=False,
+        )
+
+    @app.get("/ui/connections")
+    def ui_connections() -> UiConnectionMap:
+        chart = app.state.chart_store
+        chart_states = tuple(chart.view(timeframe).state for timeframe in ("M1", "M5", "M15", "H1"))
+        return build_ui_connection_map(
+            owner_auth_configured=owner_auth_settings is not None,
+            telemetry_state=app.state.telemetry_bridge.status().state,
+            chart_enabled=chart.enabled,
+            chart_states=chart_states,
+            history_configured=chart.history is not None,
+            execution_state=app.state.execution_bridge.status().state,
         )
 
     return app

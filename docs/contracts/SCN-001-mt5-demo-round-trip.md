@@ -127,7 +127,7 @@ Given the local API is online, offline, or still loading, when the monitoring co
 | AC-06 | Process restart test with persisted pending, unknown, position, and halt fixtures | PARTIAL, not PASS - durable UNKNOWN recovery and persistent halt fixtures pass; process-kill and actual executor recovery remain unverified |
 | AC-07 | Owner-authorized MT5 Demo round trip and identifier/account reconciliation | PARTIAL, operationally BLOCKED - local durable cancel-before-close, ambiguous-effect reconciliation and final exact-cost audit fixtures pass; no MQL5 mutation adapter, account details or authorized Demo round trip exists |
 | AC-08 | Secret scan, client-bundle inspection, and live-account denial test | PARTIAL, not PASS - source/client-bundle scans, API live-mode denial and separate private execution-credential checks pass; the pure MQL wire sources are scanned and accept no credential input, but no mutation EA or compiled executor artifact exists to inspect |
-| AC-09 | Component tests plus desktop and mobile browser inspection for safe state and unavailable controls | PARTIAL, not PASS - component tests and local Firefox inspection pass; committed cross-browser regression and authenticated backend integration remain |
+| AC-09 | Component tests plus desktop and mobile browser inspection for safe state and unavailable controls | PARTIAL, not PASS - component and pinned-Chromium authenticated integration pass at 1440/390/320 px; the UI now maps existing and missing APIs without an order control, but cross-browser and actual MT5 integration remain |
 
 No row can change to `PASS` without a named command or procedure, source revision, environment identity, expected result, observed result, and retained evidence reference.
 

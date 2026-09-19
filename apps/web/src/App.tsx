@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ConnectionMap, type ConnectionViewState } from "./ConnectionMap";
+import { parseConnectionMap } from "./connection-api";
 import { OwnerPanel } from "./OwnerPanel";
+import { readJSON } from "./owner-api";
 
 type Health = {
   status: "ok";
   service: string;
   version: string;
   trading_mode: "demo";
-  auto_trading_enabled: boolean;
-  execution_ready: boolean;
+  auto_trading_enabled: false;
+  execution_ready: false;
 };
 
 type ConnectionState =
@@ -32,6 +35,15 @@ const blockers = [
   "ยังไม่ผ่าน VPS restart และ network-loss gate",
 ] as const;
 
+function parseHealth(value: unknown): Health {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid health");
+  const health = value as Record<string, unknown>;
+  if (health.status !== "ok" || health.service !== "sochron1k-api" || typeof health.version !== "string" ||
+      !/^\d+\.\d+\.\d+$/.test(health.version) || health.trading_mode !== "demo" ||
+      health.auto_trading_enabled !== false || health.execution_ready !== false) throw new Error("Invalid health");
+  return health as Health;
+}
+
 function LogoMark() {
   return (
     <svg aria-hidden="true" className="logo-mark" viewBox="0 0 36 36">
@@ -48,23 +60,34 @@ function StateDot({ tone }: { tone: "good" | "warn" | "bad" }) {
 export function App() {
   const [ownerConnection, setOwnerConnection] = useState("รอเข้าสู่ระบบเจ้าของ");
   const [connection, setConnection] = useState<ConnectionState>({ kind: "loading" });
+  const [connectionMap, setConnectionMap] = useState<ConnectionViewState>({ kind: "loading" });
+  const checkGeneration = useRef(0);
 
   const checkHealth = useCallback(async () => {
+    const generation = ++checkGeneration.current;
     setConnection({ kind: "loading" });
-    try {
-      const response = await fetch("/api/health", { headers: { Accept: "application/json" } });
+    setConnectionMap({ kind: "loading" });
+    const healthRequest = (async () => {
+      const response = await fetch("/api/health", { cache: "no-store", redirect: "error", headers: { Accept: "application/json" } });
       if (!response.ok) {
         throw new Error(`Health request failed: ${response.status}`);
       }
-      const health = (await response.json()) as Health;
-      setConnection({ kind: "ready", health, checkedAt: new Date() });
-    } catch {
-      setConnection({ kind: "error", checkedAt: new Date() });
-    }
+      return parseHealth(await response.json());
+    })();
+    const mapRequest = readJSON("/api/ui/connections", new AbortController().signal, undefined, 32768)
+      .then(parseConnectionMap);
+    const [healthResult, mapResult] = await Promise.allSettled([healthRequest, mapRequest]);
+    if (generation !== checkGeneration.current) return;
+    const checkedAt = new Date();
+    setConnection(healthResult.status === "fulfilled" ?
+      { kind: "ready", health: healthResult.value, checkedAt } : { kind: "error", checkedAt });
+    setConnectionMap(mapResult.status === "fulfilled" ?
+      { kind: "ready", data: mapResult.value } : { kind: "error" });
   }, []);
 
   useEffect(() => {
     void checkHealth();
+    return () => { checkGeneration.current++; };
   }, [checkHealth]);
 
   const apiOnline = connection.kind === "ready";
@@ -79,8 +102,10 @@ export function App() {
           <span>Sochron1k</span>
         </a>
         <nav className="rail-nav">
-          {navigation.map((item, index) => index === 1 ? (
-            <a className="nav-item" href="#market-chart" key={item}><span className="nav-index">02</span><span>{item}</span></a>
+          {navigation.map((item, index) => index === 1 || index === 4 ? (
+            <a className="nav-item" href={index === 1 ? "#market-chart" : "#api-connections"} key={item}>
+              <span className="nav-index">0{index + 1}</span><span>{index === 4 ? "การเชื่อมต่อ" : item}</span>
+            </a>
           ) : (
             <span
               aria-current={index === 0 ? "page" : undefined}
@@ -131,6 +156,8 @@ export function App() {
             <strong>ปิด</strong>
           </div>
         </section>
+
+        <ConnectionMap state={connectionMap} onRetry={() => void checkHealth()} />
 
         <OwnerPanel onConnectionChange={setOwnerConnection} />
 

@@ -193,6 +193,22 @@ async function run() {
     page.on("pageerror", () => pageErrors++);
     await page.clock.install({ time: Date.now() });
     await page.goto(webOrigin);
+    stage = "redacted API connection map";
+    const connectionMap = page.getByRole("region", { name: "แผนที่การเชื่อมต่อ API" });
+    await connectionMap.getByText("/api/owner/telemetry", { exact: true }).waitFor();
+    assert(await connectionMap.getByText("ยังไม่มี /api/owner/execution", { exact: true }).isVisible());
+    assert(await connectionMap.getByText("ยังไม่มี /api/owner/signals", { exact: true }).isVisible());
+    assert(await connectionMap.getByText("ยังไม่มี /api/owner/statistics", { exact: true }).isVisible());
+    const mapResponse = await http(`${apiOrigin}/ui/connections`);
+    assert.equal(mapResponse.status, 200);
+    assert.equal(mapResponse.headers.get("cache-control"), "no-store");
+    const mapBody = await mapResponse.json();
+    assert.equal(mapBody.demo_only, true);
+    assert.equal(mapBody.auto_trading_enabled, false);
+    assert.equal(mapBody.execution_ready, false);
+    assert.deepEqual(mapBody.connections.map(item => item.id), ["core_api", "owner_auth",
+      "market_telemetry", "native_chart", "bar_history", "execution_evidence", "signals", "statistics"]);
+    checks.push(stage);
     await page.getByLabel("อีเมลเจ้าของ").waitFor();
     assert((await page.locator("body").ariaSnapshot()).includes("อีเมลเจ้าของ"));
     const panel = page.getByRole("region", { name: "บัญชี Demo ของคุณ" });
@@ -329,6 +345,7 @@ async function run() {
       return range.getClientRects().length === 1 && value.scrollWidth <= value.clientWidth;
     })));
     assert(await chart.locator(".chart-values dd").evaluateAll(values => values.length === 4 && values.every(value => value.scrollWidth <= value.clientWidth)));
+    assert(await connectionMap.locator(".connection-row").evaluateAll(rows => rows.length === 8 && rows.every(row => row.scrollWidth <= row.clientWidth)));
     await page.screenshot({ path: join(output, "mobile-synthetic.png"), fullPage: true });
     assert(await history.locator(".history-table-scroll").evaluate(element => element.scrollWidth > element.clientWidth));
     await history.screenshot({ path: join(output, "history-mobile-synthetic.png") });
@@ -472,7 +489,11 @@ async function run() {
     "apps/web/src/history-api.ts", "apps/web/src/HistoryPanel.tsx", "apps/web/src/history-api.test.ts",
     "apps/web/src/HistoryPanel.test.tsx", "apps/web/src/test/history-fixture.ts", "services/api/src/sochron1k/bar_history.py",
     "services/api/src/sochron1k/chart.py", "services/api/src/sochron1k/chart_api.py",
-    "apps/web/src/owner-api.ts", "apps/web/src/owner-auth.ts", "services/api/src/sochron1k/main.py",
+    "apps/web/src/owner-api.ts", "apps/web/src/owner-auth.ts", "apps/web/src/App.tsx",
+    "apps/web/src/App.test.tsx", "apps/web/src/connection-api.ts",
+    "apps/web/src/connection-api.test.ts", "apps/web/src/ConnectionMap.tsx",
+    "services/api/src/sochron1k/main.py", "services/api/src/sochron1k/ui_connections.py",
+    "tests/test_api_safety.py",
     "services/api/src/sochron1k/owner_auth.py", "services/api/src/sochron1k/telemetry.py", "tests/fixtures/mt5-telemetry-v1.json"];
   const sha256 = {};
   for (const file of sources) sha256[file] = createHash("sha256").update(await readFile(file)).digest("hex");

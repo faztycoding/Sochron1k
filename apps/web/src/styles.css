@@ -127,6 +127,32 @@ h1 { margin: 0; font-size: clamp(24px, 3vw, 36px); line-height: 1.15; letter-spa
 .lock-state { display: grid; justify-items: end; color: var(--muted); font-size: 12px; }
 .lock-state strong { color: var(--amber); font-size: 17px; }
 
+.connection-panel { margin-top: 18px; padding: 0; overflow: hidden; scroll-margin-top: 20px; }
+.connection-heading { padding: 22px; align-items: center; }
+.connection-heading-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 9px; }
+.connection-overall { flex-shrink: 0; border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; color: var(--muted); font-size: 12px; }
+.connection-overall--ready { color: var(--green); border-color: rgba(57, 201, 138, 0.38); }
+.connection-overall--error { color: var(--red); border-color: rgba(240, 100, 107, 0.38); }
+.connection-key, .connection-row { display: grid; grid-template-columns: minmax(165px, 1fr) minmax(230px, 1.3fr) minmax(145px, 0.8fr) minmax(145px, 0.9fr); column-gap: 20px; }
+.connection-key { padding: 9px 22px 9px 54px; border-top: 1px solid var(--line); background: var(--surface-deep); color: var(--muted); font-size: 11px; }
+.connection-rail { position: relative; list-style: none; margin: 0; padding: 0; }
+.connection-rail::before { content: ""; position: absolute; z-index: 0; top: 28px; bottom: 28px; left: 31px; width: 1px; background: linear-gradient(var(--gold), var(--line) 62%, var(--red)); }
+.connection-row { position: relative; min-height: 91px; align-items: center; padding: 15px 22px 15px 54px; border-top: 1px solid rgba(48, 57, 70, 0.7); }
+.connection-node { position: absolute; z-index: 1; left: 21px; width: 21px; height: 21px; display: grid; place-items: center; border: 1px solid #625638; border-radius: 50%; background: var(--surface); color: var(--gold-soft); font: 600 10px "Inter", sans-serif; }
+.connection-surface, .connection-routes { min-width: 0; display: grid; gap: 4px; }
+.connection-surface strong { font-size: 14px; }
+.connection-surface small { color: var(--muted); line-height: 1.45; }
+.connection-routes { align-content: center; }
+.connection-routes code { width: fit-content; max-width: 100%; overflow-wrap: anywhere; color: #cad2dc; font: 500 12px "Inter", sans-serif; }
+.connection-routes .route-missing { color: var(--red); }
+.connection-source { color: var(--muted); font-size: 13px; }
+.connection-state { display: inline-block; border-left: 2px solid var(--line); padding-left: 10px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.connection-state--ready { color: var(--green); border-color: var(--green); }
+.connection-state--waiting, .connection-state--partial { color: var(--amber); border-color: var(--amber); }
+.connection-state--degraded, .connection-state--missing { color: var(--red); border-color: var(--red); }
+.connection-cell-label { display: none; }
+.connection-note { margin: 0; padding: 13px 22px; border-top: 1px solid var(--line); color: var(--muted); background: var(--surface-deep); font-size: 12px; line-height: 1.55; }
+
 .status-grid, .lower-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 18px; margin-top: 18px; }
 .panel { padding: 22px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .panel--primary { background: linear-gradient(145deg, #1b222c, #141a21 72%); }
@@ -217,6 +243,9 @@ button:disabled { cursor: wait; opacity: 0.6; }
   .mobile-nav .nav-item > span { color: var(--gold); font: 600 10px "Inter", sans-serif; }
   .mobile-nav .nav-item.is-active { color: var(--text); box-shadow: inset 0 2px 0 var(--gold); }
   .mobile-nav .nav-item.is-disabled { opacity: 0.72; }
+  .connection-key { display: none; }
+  .connection-row { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px 22px; padding-block: 18px; }
+  .connection-cell-label { display: block; margin-bottom: 2px; color: var(--muted); font-size: 10px; }
 }
 
 @media (max-width: 620px) {
@@ -226,6 +255,13 @@ button:disabled { cursor: wait; opacity: 0.6; }
   .safety-banner { grid-template-columns: auto 1fr; }
   .lock-state { grid-column: 2; justify-items: start; }
   .panel { padding: 18px; }
+  .connection-panel { padding: 0; }
+  .connection-heading { padding: 18px; align-items: start; flex-direction: column; }
+  .connection-heading-actions { justify-content: flex-start; }
+  .connection-row { grid-template-columns: 1fr; padding: 17px 18px 17px 50px; gap: 12px; }
+  .connection-rail::before { left: 26px; }
+  .connection-node { left: 16px; top: 19px; }
+  .connection-note { padding-inline: 18px; }
   .risk-matrix { grid-template-columns: 1fr; }
   .risk-matrix div { min-height: 88px; }
   .lifecycle { grid-template-columns: 1fr; gap: 12px; }

@@ -83,6 +83,13 @@ npx -y -p node@24.21.0 npm run dev --workspace @sochron1k/web
 
 The console is deliberately monitoring-only. It shows the local API state, fixed risk policy, command lifecycle, and outstanding release gates without inventing broker values or exposing an order-entry control.
 
+The connection map directly below the safety banner now shows which browser API
+feeds every visible area and which upstream source is still missing. It separates
+implemented API code from runtime connectivity. Account/price, chart and closed-bar
+history routes exist; the authenticated owner execution view, signals and statistics
+routes are explicitly marked as not yet implemented. Its public status model is
+redacted and always preserves Demo-only, Auto Trading off and execution-not-ready.
+
 The owner workspace includes a Lightweight Charts candlestick panel with M1/M5/M15/H1,
 exact OHLC inspection, forming/closed bars and explicit feed gaps/freshness. It stays
 empty until owner telemetry and native chart data are available. The chart API/UI
@@ -175,5 +182,7 @@ execution-protocol codec as uncompiled checkpoints.
 Compile/verify the native CopyRates producer against SCN-004/006,
 verify actual Demo data, then implement and compile the default-off mutation EA
 that consumes the SCN-012/013 contract and complete the remaining target recovery
-work. A real Demo round trip still
+work. The UI connection rail identifies the next read APIs as
+`/api/owner/execution`, `/api/owner/signals` and `/api/owner/statistics`; none is
+shown as real data until its source and authorization boundary exist. A real Demo round trip still
 requires owner inputs and explicit target authorization listed in the task contract.
