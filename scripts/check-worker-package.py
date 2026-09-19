@@ -91,6 +91,10 @@ def exercise_startup(python, directory):
             sends=1,
             attempts=1,
             deals=1,
+            management_sends=1,
+            management_attempts=1,
+            management_deals=1,
+            final_net_pnl="0",
             halts_preserved=True,
             execution_ready=False,
             auto_trading_enabled=False,
@@ -99,7 +103,7 @@ def exercise_startup(python, directory):
     )
     check(
         "installed execution startup, missing baseline, UNKNOWN recovery, "
-        "generation and halt denial"
+        "generation and halt denial, UNKNOWN close query reconciliation"
     )
     return result
 

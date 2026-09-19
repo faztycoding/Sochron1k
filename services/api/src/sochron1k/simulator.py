@@ -6,7 +6,16 @@ from enum import StrEnum
 from uuid import uuid4
 
 from .executor import ExecutorInventory
-from .models import AccountSnapshot, BrokerDeal, BrokerSnapshot, CommandIntent, CommandState
+from .models import (
+    AccountSnapshot,
+    BrokerDeal,
+    BrokerSnapshot,
+    CommandIntent,
+    CommandState,
+    ManagementIntent,
+    ManagementOperation,
+    ManagementSnapshot,
+)
 
 
 class SimulatorBehavior(StrEnum):
@@ -17,15 +26,29 @@ class SimulatorBehavior(StrEnum):
     REJECT = "reject"
 
 
+class ManagementBehavior(StrEnum):
+    COMPLETE = "complete"
+    ACCEPT_THEN_TIMEOUT = "accept_then_timeout"
+    PARTIAL_CLOSE = "partial_close"
+    REJECT = "reject"
+
+
 @dataclass
 class SimulatorAdapter:
     behavior: SimulatorBehavior = SimulatorBehavior.FILL
     account: AccountSnapshot | None = None
     symbol: str = ""
+    management_behavior: ManagementBehavior = ManagementBehavior.COMPLETE
+    close_profit: Decimal = Decimal("0")
+    close_commission: Decimal = Decimal("0")
+    close_swap: Decimal = Decimal("0")
+    close_fee: Decimal = Decimal("0")
 
     def __post_init__(self) -> None:
         self.send_count = 0
+        self.manage_count = 0
         self._snapshots: dict[str, BrokerSnapshot] = {}
+        self._management_snapshots: dict[str, ManagementSnapshot] = {}
         self.query_available = True
         self.generation = uuid4().hex
         self.executor_id = "simulator"
@@ -46,6 +69,7 @@ class SimulatorAdapter:
             foreign_orders=self.foreign_orders,
             foreign_positions=self.foreign_positions,
             snapshots=tuple(self._snapshots.values()),
+            management_snapshots=tuple(self._management_snapshots.values()),
         )
 
     def send(self, intent: CommandIntent, volume: Decimal, attempt_id: str) -> BrokerSnapshot:
@@ -93,3 +117,126 @@ class SimulatorAdapter:
         if not self.query_available:
             raise ConnectionError("simulated broker query unavailable")
         return self._snapshots.get(command_id)
+
+    def manage(
+        self,
+        intent: ManagementIntent,
+        target: BrokerSnapshot,
+        attempt_id: str,
+    ) -> ManagementSnapshot:
+        del attempt_id
+        if intent.command_id in self._management_snapshots:
+            return self._management_snapshots[intent.command_id]
+        current = self._snapshots.get(intent.target_command_id)
+        current_deals = (
+            {deal.deal_ticket: deal for deal in current.deals} if current is not None else {}
+        )
+        target_deals = {deal.deal_ticket: deal for deal in target.deals}
+        if (
+            current is None
+            or current.model_dump(exclude={"deals"}) != target.model_dump(exclude={"deals"})
+            or len(current_deals) != len(current.deals)
+            or current_deals != target_deals
+        ):
+            raise RuntimeError("simulated target changed before management")
+        if self.account is None:
+            raise ConnectionError("simulator is unconfigured")
+        self.manage_count += 1
+        suffix = intent.command_id[-8:]
+        if intent.operation is ManagementOperation.CANCEL:
+            requested = current.remaining_volume
+            if requested <= 0:
+                raise RuntimeError("simulated target has no pending volume")
+            if self.management_behavior is ManagementBehavior.REJECT:
+                completed = Decimal("0")
+                remaining = requested
+                target_after = current
+                terminal = CommandState.REJECTED
+            else:
+                completed = requested
+                remaining = Decimal("0")
+                target_terminal = (
+                    CommandState.CANCELLED if current.open_position_volume == 0 else None
+                )
+                target_after = current.model_copy(
+                    update={
+                        "remaining_volume": Decimal("0"),
+                        "cancelled_volume": current.cancelled_volume + requested,
+                        "terminal_state": target_terminal,
+                    }
+                )
+                terminal = CommandState.CANCELLED
+            snapshot = ManagementSnapshot(
+                command_id=intent.command_id,
+                target_command_id=intent.target_command_id,
+                operation=intent.operation,
+                broker_order_ticket=current.order_ticket or f"cancel-{suffix}",
+                position_id=current.position_id,
+                requested_volume=requested,
+                completed_volume=completed,
+                remaining_volume=remaining,
+                terminal_state=terminal,
+                target=target_after,
+                observed_at=self.account.checked_at,
+            )
+        else:
+            requested = current.open_position_volume
+            if current.remaining_volume or requested <= 0:
+                raise RuntimeError("simulated target is not closeable")
+            if self.management_behavior is ManagementBehavior.REJECT:
+                completed = Decimal("0")
+                remaining = requested
+                deals = ()
+                target_after = current
+                terminal = CommandState.REJECTED
+            else:
+                completed = (
+                    requested / 2
+                    if self.management_behavior is ManagementBehavior.PARTIAL_CLOSE
+                    else requested
+                )
+                remaining = requested - completed
+                deal = BrokerDeal(
+                    deal_ticket=f"exit-{suffix}-1",
+                    volume=completed,
+                    price=current.deals[-1].price,
+                    profit=self.close_profit,
+                    commission=self.close_commission,
+                    swap=self.close_swap,
+                    fee=self.close_fee,
+                    occurred_at=self.account.checked_at,
+                )
+                deals = (deal,)
+                target_terminal = CommandState.CLOSED if remaining == 0 else None
+                target_after = current.model_copy(
+                    update={
+                        "closed_volume": current.closed_volume + completed,
+                        "stop_loss_confirmed": current.stop_loss_confirmed and remaining > 0,
+                        "terminal_state": target_terminal,
+                    }
+                )
+                terminal = target_terminal
+            snapshot = ManagementSnapshot(
+                command_id=intent.command_id,
+                target_command_id=intent.target_command_id,
+                operation=intent.operation,
+                broker_order_ticket=f"close-{suffix}",
+                position_id=current.position_id,
+                requested_volume=requested,
+                completed_volume=completed,
+                remaining_volume=remaining,
+                deals=deals,
+                terminal_state=terminal,
+                target=target_after,
+                observed_at=self.account.checked_at,
+            )
+        self._snapshots[intent.target_command_id] = snapshot.target
+        self._management_snapshots[intent.command_id] = snapshot
+        if self.management_behavior is ManagementBehavior.ACCEPT_THEN_TIMEOUT:
+            raise TimeoutError("simulated response loss after management acceptance")
+        return snapshot
+
+    def query_management(self, command_id: str) -> ManagementSnapshot | None:
+        if not self.query_available:
+            raise ConnectionError("simulated broker query unavailable")
+        return self._management_snapshots.get(command_id)

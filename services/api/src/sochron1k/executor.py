@@ -6,7 +6,14 @@ from typing import Protocol
 
 from pydantic import Field, StrictBool, StrictInt
 
-from .models import AccountSnapshot, BrokerSnapshot, CommandIntent, StrictModel
+from .models import (
+    AccountSnapshot,
+    BrokerSnapshot,
+    CommandIntent,
+    ManagementIntent,
+    ManagementSnapshot,
+    StrictModel,
+)
 
 
 class ExecutorInventory(StrictModel):
@@ -19,6 +26,7 @@ class ExecutorInventory(StrictModel):
     foreign_orders: StrictInt = Field(ge=0, le=100000)
     foreign_positions: StrictInt = Field(ge=0, le=100000)
     snapshots: tuple[BrokerSnapshot, ...] = Field(max_length=1000)
+    management_snapshots: tuple[ManagementSnapshot, ...] = Field(default=(), max_length=1000)
 
 
 class ExecutorAdapter(Protocol):
@@ -27,3 +35,12 @@ class ExecutorAdapter(Protocol):
     def send(self, intent: CommandIntent, volume: Decimal, attempt_id: str) -> BrokerSnapshot: ...
 
     def query(self, command_id: str) -> BrokerSnapshot | None: ...
+
+    def manage(
+        self,
+        intent: ManagementIntent,
+        target: BrokerSnapshot,
+        attempt_id: str,
+    ) -> ManagementSnapshot: ...
+
+    def query_management(self, command_id: str) -> ManagementSnapshot | None: ...

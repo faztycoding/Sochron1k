@@ -16,7 +16,14 @@ from uuid import UUID
 from pydantic import Field, StrictInt, field_validator
 from sochron1k.bar_history import MAX_DATABASE_BYTES, ArchivedBar
 from sochron1k.chart import EPOCH, PERIODS, ChartFrame, ChartSettings
-from sochron1k.models import CommandIntent, CommandState, RiskState, StrictModel
+from sochron1k.models import (
+    CommandIntent,
+    CommandState,
+    ManagementIntent,
+    ManagementOperation,
+    RiskState,
+    StrictModel,
+)
 from sochron1k.sqlite_snapshot import verify_snapshot
 from sochron1k.telemetry import DemoIdentity
 
@@ -26,7 +33,7 @@ from .sync_journal import MAX_JOURNAL_BYTES, STATES, canonical, decode_batch, ut
 
 # Exact sqlite_schema signatures of the current writers; changes need reviewed admission.
 SCHEMAS = {
-    "commands": (0, "7442afc1f2481bd9df32575478b4c112e45e42c69b61bcfea5591ea6c2a0a6f7"),
+    "commands": (0, "bf15fe71e298eb12dcab1c08e51c62e4a59324a5e9fe0a67fd4667084f063a8d"),
     "archive": (1, "ccb8fa69d2d66dfbf1ee506687234255084130feea32494968f650ccc003d809"),
     "sync": (1, "9e80d5a9d5c4bd688402afb716651b6eecca5e639c92ce5681a09313b7352b5d"),
 }
@@ -114,6 +121,17 @@ def _decimal(value, *, zero=False):
     return result
 
 
+def _signed_decimal(value):
+    _require(isinstance(value, str) and 0 < len(value) <= 80)
+    result = Decimal(value)
+    _require(
+        result.is_finite()
+        and len(result.as_tuple().digits) <= 80
+        and -100 <= result.as_tuple().exponent <= 100
+    )
+    return result
+
+
 def _bit(value):
     _require(type(value) is int and value in (0, 1))
     return bool(value)
@@ -129,7 +147,7 @@ def _hex(value):
 
 def _sequence(db, table, column):
     maximum = db.execute(f"SELECT COALESCE(MAX({column}),0) FROM {table}").fetchone()[0]
-    rows = db.execute("SELECT name,seq FROM sqlite_sequence").fetchall()
+    rows = db.execute("SELECT name,seq FROM sqlite_sequence WHERE name=?", (table,)).fetchall()
     _require(db.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == maximum)
     _require(
         (maximum == 0 and not rows)
@@ -151,7 +169,21 @@ def _commands(db, binding, latest, tick):
         _require(utc(row["updated_at"]) <= latest)
         risks[state.experiment_id] = dict(row)
     _require(binding.active_experiment_id in risks)
-    counts = dict(commands=0, unresolved=0, unknown=0, attempts=0, orders=0, deals=0, exposure=0)
+    counts = dict(
+        commands=0,
+        unresolved=0,
+        unknown=0,
+        attempts=0,
+        orders=0,
+        deals=0,
+        exposure=0,
+        management_commands=0,
+        management_unresolved=0,
+        management_unknown=0,
+        management_attempts=0,
+        management_deals=0,
+    )
+    broker_evidence = {}
     for row in db.execute("SELECT * FROM commands ORDER BY command_id"):
         tick()
         counts["commands"] += 1
@@ -225,6 +257,7 @@ def _commands(db, binding, latest, tick):
         if orders:
             _require(len(attempts) == 1 and state.value not in {"created", "validated", "queued"})
         filled = Decimal(0)
+        order_evidence = None
         for order in orders:
             _require(
                 isinstance(order["order_ticket"], str) and 0 < len(order["order_ticket"]) <= 128
@@ -232,20 +265,64 @@ def _commands(db, binding, latest, tick):
             requested = _decimal(order["requested_volume"])
             filled = _decimal(order["filled_volume"], zero=True)
             remaining = _decimal(order["remaining_volume"], zero=True)
-            _require(requested == volume and filled + remaining == requested)
+            lifecycle = db.execute(
+                "SELECT * FROM broker_order_lifecycle WHERE command_id=?",
+                (intent.command_id,),
+            ).fetchall()
+            _require(len(lifecycle) == 1)
+            cancelled = _decimal(lifecycle[0]["cancelled_volume"], zero=True)
+            closed = _decimal(lifecycle[0]["closed_volume"], zero=True)
+            _require(
+                requested == volume
+                and filled + remaining + cancelled == requested
+                and closed <= filled
+            )
+            position = filled - closed
+            order_evidence = dict(
+                order_ticket=order["order_ticket"],
+                position_id=order["position_id"],
+                requested=requested,
+                filled=filled,
+                remaining=remaining,
+                cancelled=cancelled,
+                closed=closed,
+            )
             _require(_bit(order["sl_confirmed"]) == protected)
-            if state.value in {"acknowledged", "rejected"}:
-                _require(filled == 0)
+            if state is CommandState.ACKNOWLEDGED:
+                _require(
+                    filled == cancelled == closed == 0
+                    and remaining == requested
+                    and order["position_id"] is None
+                    and not protected
+                )
+            if state is CommandState.REJECTED:
+                _require(
+                    filled == cancelled == closed == 0
+                    and remaining == requested
+                    and order["position_id"] is None
+                    and not protected
+                )
             if filled:
                 _require(
                     isinstance(order["position_id"], str) and 0 < len(order["position_id"]) <= 128
                 )
             if state is CommandState.FILLED:
-                _require(filled == volume and protected)
+                _require(remaining == 0 and position > 0 and protected)
             if state is CommandState.PARTIALLY_FILLED:
-                _require(0 < filled < volume)
+                _require(position > 0 and remaining > 0)
             if state is CommandState.PROTECTION_FAILED:
-                _require(filled == volume and not protected)
+                _require(remaining == 0 and position > 0 and not protected)
+            if state is CommandState.CLOSING:
+                _require(remaining == 0 and position > 0)
+            if state is CommandState.CLOSED:
+                _require(filled > 0 and closed == filled and remaining == 0 and not protected)
+            if state in {CommandState.CANCELLED, CommandState.EXPIRED}:
+                _require(
+                    filled == closed == remaining == 0
+                    and cancelled == requested
+                    and order["position_id"] is None
+                    and not protected
+                )
         if protected or state.value in {
             "acknowledged",
             "filled",
@@ -257,19 +334,219 @@ def _commands(db, binding, latest, tick):
             _require(len(orders) == 1 and len(attempts) == 1)
         dealt = Decimal(0)
         for deal in db.execute(
-            "SELECT * FROM broker_deals WHERE command_id=?", (intent.command_id,)
+            """
+            SELECT d.*,f.profit,f.commission,f.swap,f.fee,f.occurred_at
+            FROM broker_deals d
+            LEFT JOIN broker_deal_financials f USING(deal_ticket)
+            WHERE d.command_id=?
+            """,
+            (intent.command_id,),
         ):
             tick()
             _require(isinstance(deal["deal_ticket"], str) and 0 < len(deal["deal_ticket"]) <= 128)
             dealt += _decimal(deal["volume"])
             _decimal(deal["price"])
+            _require(deal["profit"] is not None)
+            for field in ("profit", "commission", "swap", "fee"):
+                _signed_decimal(deal[field])
+            if deal["occurred_at"] is not None:
+                _require(utc(deal["occurred_at"]) <= latest)
             counts["deals"] += 1
         _require(dealt == filled)
+        if order_evidence is not None:
+            broker_evidence[intent.command_id] = order_evidence
         counts["orders"] += len(orders)
         counts["unresolved"] += int(state.value not in TERMINAL)
         counts["unknown"] += int(state is CommandState.UNKNOWN)
+    _require(
+        db.execute("SELECT count(*) FROM broker_order_lifecycle").fetchone()[0] == counts["orders"]
+        and db.execute("SELECT count(*) FROM broker_deal_financials").fetchone()[0]
+        == counts["deals"]
+    )
+    active_management = {}
+    managed_volume = {}
+    for row in db.execute("SELECT * FROM management_commands ORDER BY command_id"):
+        tick()
+        counts["management_commands"] += 1
+        intent = ManagementIntent.model_validate(_json(row["payload_json"], 8192))
+        state = CommandState(row["state"])
+        _require(
+            intent.command_id == row["command_id"]
+            and intent.account_ref == row["account_ref"] == binding.identity.account_ref
+            and intent.experiment_id == row["experiment_id"]
+            and intent.experiment_id in risks
+            and intent.target_command_id == row["target_command_id"]
+            and intent.symbol == binding.identity.symbol
+            and intent.operation.value == row["operation"]
+            and intent.idempotency_scope == row["scope"]
+            and intent.idempotency_key == row["idempotency_key"]
+            and intent.canonical_fingerprint() == row["fingerprint"]
+            and utc(row["created_at"]) <= utc(row["updated_at"]) <= latest
+        )
+        target = db.execute(
+            "SELECT state,account_ref,experiment_id FROM commands WHERE command_id=?",
+            (intent.target_command_id,),
+        ).fetchone()
+        _require(
+            target is not None
+            and target["account_ref"] == intent.account_ref
+            and target["experiment_id"] == intent.experiment_id
+        )
+        parent = broker_evidence.get(intent.target_command_id)
+        _require(parent is not None)
+        volume = _decimal(row["requested_volume"])
+        previous, occurred, transitions, sends = None, None, 0, []
+        for event in db.execute(
+            """
+            SELECT * FROM management_transitions
+            WHERE command_id=? ORDER BY transition_id
+            """,
+            (intent.command_id,),
+        ):
+            tick()
+            current = CommandState(event["to_state"])
+            timestamp = utc(event["occurred_at"])
+            _require(event["from_state"] == previous and timestamp <= latest)
+            _require(occurred is None or occurred <= timestamp)
+            if transitions < 3:
+                _require(
+                    current.value == ("created", "validated", "queued")[transitions]
+                    and timestamp == utc(row["created_at"])
+                )
+            else:
+                _require(current.value not in {"created", "validated", "queued"})
+            if current is CommandState.SENT:
+                _require(previous == "queued")
+                sends.append(event["occurred_at"])
+            previous, occurred = current.value, timestamp
+            transitions += 1
+        _require(
+            transitions >= 3 and previous == state.value and occurred == utc(row["updated_at"])
+        )
+        attempts = db.execute(
+            "SELECT * FROM management_attempts WHERE command_id=?", (intent.command_id,)
+        ).fetchall()
+        _require(len(attempts) == len(sends) <= 1)
+        for attempt in attempts:
+            _require(
+                isinstance(attempt["attempt_id"], str)
+                and 0 < len(attempt["attempt_id"]) <= 128
+                and attempt["started_at"] == sends[0]
+                and attempt["outcome"] is None
+            )
+        if state is not CommandState.QUEUED:
+            _require(len(attempts) == 1)
+        counts["management_attempts"] += len(attempts)
+        outcomes = db.execute(
+            "SELECT * FROM management_outcomes WHERE command_id=?",
+            (intent.command_id,),
+        ).fetchall()
+        _require(len(outcomes) <= 1)
+        deals = db.execute(
+            "SELECT * FROM management_deals WHERE command_id=? ORDER BY deal_ticket",
+            (intent.command_id,),
+        ).fetchall()
+        completed = Decimal(0)
+        if outcomes:
+            outcome = outcomes[0]
+            _require(
+                isinstance(outcome["broker_order_ticket"], str)
+                and 0 < len(outcome["broker_order_ticket"]) <= 128
+                and (outcome["position_id"] is None or 0 < len(outcome["position_id"]) <= 128)
+            )
+            requested = _decimal(outcome["requested_volume"])
+            completed = _decimal(outcome["completed_volume"], zero=True)
+            remaining = _decimal(outcome["remaining_volume"], zero=True)
+            observed = utc(outcome["observed_at"])
+            _require(
+                requested == volume and completed + remaining == requested and observed <= latest
+            )
+            totals = managed_volume.setdefault(
+                intent.target_command_id,
+                {ManagementOperation.CANCEL: Decimal(0), ManagementOperation.CLOSE: Decimal(0)},
+            )
+            totals[intent.operation] += completed
+            dealt = Decimal(0)
+            for deal in deals:
+                tick()
+                _require(
+                    isinstance(deal["deal_ticket"], str) and 0 < len(deal["deal_ticket"]) <= 128
+                )
+                dealt += _decimal(deal["volume"])
+                _decimal(deal["price"])
+                for field in ("profit", "commission", "swap", "fee"):
+                    _signed_decimal(deal[field])
+                if deal["occurred_at"] is not None:
+                    _require(utc(deal["occurred_at"]) <= observed)
+            counts["management_deals"] += len(deals)
+            if intent.operation is ManagementOperation.CLOSE:
+                _require(
+                    dealt == completed
+                    and outcome["position_id"] == parent["position_id"]
+                    and requested <= parent["filled"]
+                    and completed <= parent["closed"]
+                )
+            else:
+                _require(
+                    not deals
+                    and dealt == 0
+                    and outcome["broker_order_ticket"] == parent["order_ticket"]
+                    and outcome["position_id"] == parent["position_id"]
+                    and requested <= parent["requested"]
+                    and completed <= parent["cancelled"]
+                )
+            if state is CommandState.CLOSED:
+                _require(
+                    intent.operation is ManagementOperation.CLOSE
+                    and completed == requested
+                    and remaining == 0
+                    and target["state"] == "closed"
+                )
+            elif state is CommandState.CANCELLED:
+                _require(
+                    intent.operation is ManagementOperation.CANCEL
+                    and completed == requested
+                    and remaining == 0
+                )
+            elif state is CommandState.REJECTED:
+                _require(completed == 0 and remaining == requested and not deals)
+            elif state is CommandState.CLOSING:
+                _require(
+                    intent.operation is ManagementOperation.CLOSE
+                    and 0 < completed < requested
+                    and remaining > 0
+                    and target["state"] == "closing"
+                )
+            else:
+                _require(False)
+        else:
+            _require(not deals)
+            _require(state in {CommandState.QUEUED, CommandState.SENT, CommandState.UNKNOWN})
+        if state.value not in TERMINAL:
+            active_management[intent.target_command_id] = (
+                active_management.get(intent.target_command_id, 0) + 1
+            )
+            _require(target["state"] not in TERMINAL)
+            if intent.operation is ManagementOperation.CLOSE and state is not CommandState.QUEUED:
+                _require(target["state"] == "closing")
+        counts["management_unresolved"] += int(state.value not in TERMINAL)
+        counts["management_unknown"] += int(state is CommandState.UNKNOWN)
+    _require(
+        all(value == 1 for value in active_management.values())
+        and db.execute("SELECT count(*) FROM management_outcomes").fetchone()[0]
+        <= counts["management_commands"]
+        and db.execute("SELECT count(*) FROM management_deals").fetchone()[0]
+        == counts["management_deals"]
+    )
+    for command_id, totals in managed_volume.items():
+        parent = broker_evidence[command_id]
+        _require(
+            totals[ManagementOperation.CANCEL] <= parent["cancelled"]
+            and totals[ManagementOperation.CLOSE] <= parent["closed"]
+        )
     _require(counts["exposure"] <= 1)
     _sequence(db, "command_transitions", "transition_id")
+    _sequence(db, "management_transitions", "transition_id")
     return {
         **counts,
         "experiments": len(risks),

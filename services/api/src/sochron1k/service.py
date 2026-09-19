@@ -9,12 +9,14 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from .executor import ExecutorAdapter
-from .journal import BrokerEvidenceConflict, Journal
+from .journal import BrokerEvidenceConflict, Journal, ManagementConflict
 from .models import (
     AccountSnapshot,
     CommandIntent,
     CommandState,
     ContractSpec,
+    ManagementIntent,
+    ManagementSnapshot,
     MarketSnapshot,
     RiskContext,
     SubmissionResult,
@@ -202,6 +204,140 @@ class ExecutionService:
             reason="EMERGENCY_CLOSE_REQUIRED" if state is CommandState.PROTECTION_FAILED else None,
         )
 
+    def manage(
+        self,
+        *,
+        policy: PreflightPolicy,
+        account: AccountSnapshot,
+        intent: ManagementIntent,
+        now: datetime | None = None,
+    ) -> SubmissionResult:
+        if self._pid != os.getpid() or self._startup is None:
+            raise RiskDenied("STARTUP_REQUIRED")
+        with self._lock:
+            try:
+                return self._manage(policy=policy, account=account, intent=intent, now=now)
+            except RiskDenied as error:
+                if error.reason in {
+                    "NO_PENDING_ORDER",
+                    "PENDING_CANCEL_REQUIRED",
+                    "NO_OPEN_POSITION",
+                    "TARGET_COMMAND_NOT_FOUND",
+                    "TARGET_BINDING_MISMATCH",
+                    "TARGET_BROKER_EVIDENCE_MISSING",
+                }:
+                    raise
+                self._startup = None
+                raise
+            except Exception:
+                self._startup = None
+                raise
+
+    def _manage(self, *, policy, account, intent, now):
+        if self._startup is None:
+            raise RiskDenied("STARTUP_REQUIRED")
+        started = time.monotonic()
+        observed_at = now or datetime.now(UTC)
+
+        def fresh_management_preflight():
+            elapsed = time.monotonic() - started
+            if elapsed < 0:
+                raise RiskDenied("STARTUP_INVALID_TIME")
+            checked_at = observed_at + timedelta(seconds=elapsed)
+            if (
+                checked_at > intent.expires_at
+                or account.trade_mode.value != "demo"
+                or not account.can_trade
+                or account.account_ref != policy.account_ref
+                or account.server != policy.server
+                or account.currency != policy.currency
+                or account.margin_mode != policy.margin_mode
+                or intent.account_ref != policy.account_ref
+                or intent.experiment_id != experiment
+                or intent.symbol != policy.symbol
+                or not 0 <= (checked_at - account.checked_at).total_seconds() <= 5
+            ):
+                raise RiskDenied("MANAGEMENT_PREFLIGHT_DENIED")
+            return checked_at
+
+        bound_policy, experiment, executor, generation, admitted_risk = self._startup
+        if policy != bound_policy or intent.experiment_id != experiment:
+            raise RiskDenied("STARTUP_BINDING_MISMATCH")
+        inventory, current_risk, _ = self._inspect(
+            policy, experiment, executor, observed_at, generation
+        )
+        if (
+            current_risk.bangkok_day,
+            current_risk.daily_baseline,
+            current_risk.experiment_baseline,
+        ) != (
+            admitted_risk.bangkok_day,
+            admitted_risk.daily_baseline,
+            admitted_risk.experiment_baseline,
+        ):
+            raise RiskDenied("RISK_BASELINE_MISMATCH")
+        if account != inventory.account:
+            raise RiskDenied("ACCOUNT_SNAPSHOT_MISMATCH")
+        fresh_management_preflight()
+        try:
+            reservation = self.journal.reserve_management(intent, expected_risk=current_risk)
+        except ManagementConflict as error:
+            if error.reason in {
+                "NO_PENDING_ORDER",
+                "PENDING_CANCEL_REQUIRED",
+                "NO_OPEN_POSITION",
+                "TARGET_COMMAND_NOT_FOUND",
+                "TARGET_BINDING_MISMATCH",
+                "TARGET_BROKER_EVIDENCE_MISSING",
+            }:
+                raise RiskDenied(error.reason) from None
+            raise
+        if reservation.duplicate:
+            row = self.journal.management_command(reservation.command_id)
+            return SubmissionResult(
+                command_id=reservation.command_id,
+                state=CommandState(row["state"]),
+                volume=reservation.volume,
+                duplicate=True,
+            )
+        attempt_id = str(uuid.uuid4())
+        self.journal.begin_management_dispatch(
+            intent.command_id, attempt_id, expected_risk=current_risk
+        )
+        fresh_management_preflight()
+        target = self.journal.broker_snapshot(intent.target_command_id)
+        try:
+            snapshot = self.adapter.manage(intent, target, attempt_id)
+            snapshot = ManagementSnapshot.model_validate(snapshot.model_dump())
+            if (
+                snapshot.command_id != intent.command_id
+                or snapshot.target_command_id != intent.target_command_id
+            ):
+                raise BrokerEvidenceConflict()
+            checked_at = observed_at + timedelta(seconds=time.monotonic() - started)
+            if not 0 <= (checked_at - snapshot.observed_at).total_seconds() <= 5:
+                raise BrokerEvidenceConflict()
+            state = self.journal.apply_management_snapshot(snapshot)
+        except Exception:
+            self._startup = None
+            self.journal.transition_management(
+                intent.command_id,
+                CommandState.UNKNOWN,
+                "adapter outcome unconfirmed after management dispatch",
+            )
+            return SubmissionResult(
+                command_id=intent.command_id,
+                state=CommandState.UNKNOWN,
+                volume=reservation.volume,
+                reason="RECONCILIATION_REQUIRED",
+            )
+        return SubmissionResult(
+            command_id=intent.command_id,
+            state=state,
+            volume=reservation.volume,
+            protected=snapshot.target.stop_loss_confirmed,
+        )
+
     def reconcile(self, command_id: str) -> SubmissionResult:
         if self._pid != os.getpid():
             raise RiskDenied("STARTUP_REQUIRED")
@@ -228,6 +364,50 @@ class ExecutionService:
             volume=Decimal(row["volume"]),
             protected=snapshot.stop_loss_confirmed,
         )
+
+    def reconcile_management(self, command_id: str) -> SubmissionResult:
+        if self._pid != os.getpid():
+            raise RiskDenied("STARTUP_REQUIRED")
+        with self._lock:
+            self._startup = None
+            row = self.journal.management_command(command_id)
+            snapshot = self.adapter.query_management(command_id)
+            if snapshot is None:
+                return SubmissionResult(
+                    command_id=command_id,
+                    state=CommandState.UNKNOWN,
+                    volume=Decimal(row["requested_volume"]),
+                    reason="BROKER_OUTCOME_NOT_FOUND",
+                )
+            if snapshot.command_id != command_id:
+                raise BrokerEvidenceConflict()
+            state = self.journal.apply_management_snapshot(snapshot)
+            return SubmissionResult(
+                command_id=command_id,
+                state=state,
+                volume=Decimal(row["requested_volume"]),
+                protected=snapshot.target.stop_loss_confirmed,
+            )
+
+    def recover_management(self) -> dict[str, CommandState]:
+        if self._pid != os.getpid():
+            raise RiskDenied("STARTUP_REQUIRED")
+        with self._lock:
+            self._startup = None
+            outcomes = {}
+            for command_id in self.journal.unresolved_management_ids():
+                try:
+                    outcomes[command_id] = self.reconcile_management(command_id).state
+                except ConnectionError:
+                    current = CommandState(self.journal.management_command(command_id)["state"])
+                    if current is not CommandState.UNKNOWN:
+                        self.journal.transition_management(
+                            command_id,
+                            CommandState.UNKNOWN,
+                            "broker unavailable during management reconciliation",
+                        )
+                    outcomes[command_id] = CommandState.UNKNOWN
+            return outcomes
 
     def recover(self) -> dict[str, CommandState]:
         if self._pid != os.getpid():

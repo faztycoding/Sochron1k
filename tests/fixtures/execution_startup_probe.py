@@ -2,7 +2,7 @@
 
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from sochron1k.journal import Journal
@@ -11,13 +11,15 @@ from sochron1k.models import (
     CommandIntent,
     CommandState,
     ContractSpec,
+    ManagementIntent,
+    ManagementOperation,
     MarketSnapshot,
     RiskContext,
     RiskState,
 )
 from sochron1k.preflight import PreflightPolicy
 from sochron1k.service import ExecutionService, RiskDenied
-from sochron1k.simulator import SimulatorAdapter, SimulatorBehavior
+from sochron1k.simulator import ManagementBehavior, SimulatorAdapter, SimulatorBehavior
 
 
 def denied(call, reason):
@@ -84,8 +86,32 @@ def probe(config_path):
     journal.save_risk_state(state)
     restarted.startup(**startup)
     denied(lambda: restarted.submit(**args), "TOTAL_HALT_ACTIVE")
+    restarted.startup(**startup)
+    adapter.management_behavior = ManagementBehavior.ACCEPT_THEN_TIMEOUT
+    close = ManagementIntent(
+        command_id="installed-management-close",
+        idempotency_key="installed-management-close",
+        account_ref=args["intent"].account_ref,
+        experiment_id=args["intent"].experiment_id,
+        target_command_id=args["intent"].command_id,
+        symbol=args["intent"].symbol,
+        operation=ManagementOperation.CLOSE,
+        reason="risk_halt",
+        expires_at=args["now"] + timedelta(seconds=30),
+    )
+    uncertain = restarted.manage(
+        policy=args["policy"], account=args["account"], intent=close, now=args["now"]
+    )
+    assert uncertain.state is CommandState.UNKNOWN
+    resolved = restarted.reconcile_management(close.command_id)
+    assert resolved.state is CommandState.CLOSED
+    final = journal.final_trade_audit(args["intent"].command_id)
     assert journal.risk_state(state.account_ref, state.experiment_id) == state
-    assert adapter.send_count == 1
+    counts = journal.counts()
+    assert adapter.send_count == adapter.manage_count == 1
+    assert counts["management_attempts"] == counts["management_deals"] == 1
+    assert counts["exposure_slots"] == 0
+    assert not journal.unresolved_management_ids()
     print(
         json.dumps(
             dict(
@@ -94,6 +120,10 @@ def probe(config_path):
                 sends=1,
                 attempts=1,
                 deals=1,
+                management_sends=1,
+                management_attempts=1,
+                management_deals=1,
+                final_net_pnl=str(final.net_pnl),
                 halts_preserved=True,
                 execution_ready=False,
                 auto_trading_enabled=False,

@@ -10,8 +10,21 @@ from uuid import UUID, uuid4
 import pytest
 from sochron1k.bar_history import BarHistory
 from sochron1k.journal import Journal
-from sochron1k.models import BrokerDeal, BrokerSnapshot, CommandState, RiskState
-from sochron1k.sqlite_snapshot import create_snapshot, materialize_snapshot, verify_snapshot
+from sochron1k.models import (
+    BrokerDeal,
+    BrokerSnapshot,
+    CommandState,
+    ManagementIntent,
+    ManagementOperation,
+    ManagementSnapshot,
+    RiskState,
+)
+from sochron1k.sqlite_snapshot import (
+    SnapshotUnavailable,
+    create_snapshot,
+    materialize_snapshot,
+    verify_snapshot,
+)
 from sochron_worker import recovery_audit as audit
 from sochron_worker.sync_journal import SyncJournal, canonical
 from test_bar_history import accept, attach
@@ -197,7 +210,7 @@ def test_command_broker_relationships(recovery_case, state):
         BrokerSnapshot(
             command_id=case["intent"].command_id,
             order_ticket="order-fixture",
-            position_id="position-fixture",
+            position_id=None if state == "rejected" else "position-fixture",
             requested_volume=Decimal("0.1"),
             filled_volume=filled,
             remaining_volume=Decimal("0.1") - filled,
@@ -213,6 +226,106 @@ def test_command_broker_relationships(recovery_case, state):
     assert result["commands"]["deals"] == int(bool(filled))
     assert result["commands"]["exposure"] == int(state != "rejected")
     assert result["execution_ready"] is False
+
+
+def close_fixture(case):
+    risk = case["commands"].risk_state(case["intent"].account_ref, case["intent"].experiment_id)
+    now = risk.updated_at
+    case["commands"].apply_broker_snapshot(
+        BrokerSnapshot(
+            command_id=case["intent"].command_id,
+            order_ticket="entry-order",
+            position_id="position",
+            requested_volume=Decimal("0.1"),
+            filled_volume=Decimal("0.1"),
+            remaining_volume=Decimal("0"),
+            deals=(
+                BrokerDeal(
+                    deal_ticket="entry-deal",
+                    volume=Decimal("0.1"),
+                    price=Decimal("2500.2"),
+                    commission=Decimal("-1"),
+                    occurred_at=now,
+                ),
+            ),
+            stop_loss_confirmed=True,
+        )
+    )
+    intent = ManagementIntent(
+        command_id="management-close",
+        idempotency_key="management-close",
+        account_ref=case["intent"].account_ref,
+        experiment_id=case["intent"].experiment_id,
+        target_command_id=case["intent"].command_id,
+        symbol=case["intent"].symbol,
+        operation=ManagementOperation.CLOSE,
+        reason="risk_halt",
+        expires_at=now + timedelta(seconds=30),
+    )
+    reservation = case["commands"].reserve_management(intent, expected_risk=risk)
+    case["commands"].begin_management_dispatch(
+        reservation.command_id, "management-attempt", expected_risk=risk
+    )
+    target = case["commands"].broker_snapshot(case["intent"].command_id)
+    deal = BrokerDeal(
+        deal_ticket="exit-deal",
+        volume=target.open_position_volume,
+        price=Decimal("2501.2"),
+        profit=Decimal("10"),
+        commission=Decimal("-1"),
+        occurred_at=now,
+    )
+    case["commands"].apply_management_snapshot(
+        ManagementSnapshot(
+            command_id=intent.command_id,
+            target_command_id=intent.target_command_id,
+            operation=intent.operation,
+            broker_order_ticket="exit-order",
+            position_id=target.position_id,
+            requested_volume=target.open_position_volume,
+            completed_volume=target.open_position_volume,
+            remaining_volume=Decimal("0"),
+            deals=(deal,),
+            terminal_state=CommandState.CLOSED,
+            target=target.model_copy(
+                update={
+                    "closed_volume": target.filled_volume,
+                    "stop_loss_confirmed": False,
+                    "terminal_state": CommandState.CLOSED,
+                }
+            ),
+            observed_at=now,
+        )
+    )
+
+
+def test_management_close_and_financials_are_recovery_admitted(recovery_case):
+    close_fixture(recovery_case)
+    result = inspect(recovery_case)
+    assert result["commands"]["management_commands"] == 1
+    assert result["commands"]["management_attempts"] == 1
+    assert result["commands"]["management_deals"] == 1
+    assert result["commands"]["management_unresolved"] == 0
+    assert result["commands"]["exposure"] == result["commands"]["unresolved"] == 0
+    audit = recovery_case["commands"].final_trade_audit(recovery_case["intent"].command_id)
+    assert audit.net_pnl == Decimal("8") and audit.close_reason == "risk_halt"
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "UPDATE management_deals SET profit='NaN'",
+        "UPDATE management_outcomes SET position_id='foreign-position'",
+        "UPDATE management_outcomes SET observed_at='2099-01-01T00:00:00+00:00'",
+    ],
+)
+def test_corrupt_management_evidence_is_denied(recovery_case, statement):
+    close_fixture(recovery_case)
+    assert inspect(recovery_case)["commands"]["management_deals"] == 1
+    sql(recovery_case["commands"].path, statement)
+    paths = take(recovery_case)
+    with pytest.raises(audit.RecoveryUnavailable):
+        inspect(recovery_case, paths)
 
 
 @pytest.mark.parametrize(
@@ -448,6 +561,7 @@ def test_archive_projection_and_receipts_denied(recovery_case, kind):
         "UPDATE broker_orders SET requested_volume='1'",
         "UPDATE broker_deals SET volume='0.01'",
         "UPDATE broker_deals SET price='NaN'",
+        "DELETE FROM broker_deal_financials",
         "DELETE FROM broker_deals",
     ],
 )
@@ -467,6 +581,10 @@ def test_corrupt_broker_evidence_denied(recovery_case, statement):
     )
     assert inspect(case)["commands"]["deals"] == 1
     sql(case["commands"].path, statement)
+    if statement == "DELETE FROM broker_deals":
+        with pytest.raises(SnapshotUnavailable):
+            take(case)
+        return
     paths = take(case)
     assert verify_snapshot(paths["commands"])
     with pytest.raises(audit.RecoveryUnavailable):

@@ -8,7 +8,7 @@
 | Version | 1.1 |
 | Owner | Project owner; technical implementer not yet named |
 | Parent project | Sochron1k |
-| Current state | Local safety core implemented and under verification; BLOCKED for a real Demo send pending the MT5 adapter, owner inputs, credentials, and explicit target authorization |
+| Current state | Local entry/startup/position-management safety core implemented and under verification; BLOCKED for a real Demo send pending the MT5 adapter, owner inputs, credentials, and explicit target authorization |
 | Done scope | Implementation verified first, then Demo operation verified as a separate gate |
 | Risk tier | High assurance |
 | Evidence base | Blueprint v1.1 and repository base revisions `776859c`, `e9a1972` |
@@ -19,7 +19,7 @@ Prove the first end-to-end execution slice: read XAU/USD Demo market and contrac
 
 ## Current behavior
 
-The repository contains a pinned Python runtime contract, FastAPI health boundary, Pydantic execution schemas, deterministic risk sizing, SQLite WAL command journal, isolated executor simulator, targeted pytest/Hypothesis checks, a responsive local monitoring console, a Supabase schema with local pgTAP checks, and an API/web container topology with local arm64 runtime evidence. SCN-004 adds disabled-by-default, authenticated read-only telemetry ingress with local Python/HTTP evidence and a source-only MQL5 observer checkpoint. The observer is uncompiled; the worker, real MT5 execution adapter and target-host evidence are not implemented. No Demo operation has been attempted or authorized by this contract alone.
+The repository contains a pinned Python runtime contract, FastAPI health boundary, Pydantic execution schemas, deterministic risk sizing and halt latching, a SQLite WAL command journal, isolated executor simulator, explicit startup admission, durable local cancel/close reconciliation and final-trade audit, targeted pytest/Hypothesis checks, a responsive local monitoring console, a Supabase schema with local pgTAP checks, and an API/web container topology with local arm64 runtime evidence. SCN-004 adds disabled-by-default, authenticated read-only telemetry ingress with local Python/HTTP evidence and a source-only MQL5 observer checkpoint. The observer is uncompiled; the real MT5 execution adapter and target-host evidence are not implemented. No Demo operation has been attempted or authorized by this contract alone.
 
 ## Scope
 
@@ -125,7 +125,7 @@ Given the local API is online, offline, or still loading, when the monitoring co
 | AC-04 | Fault test that accepts then drops the response, followed by reconciliation | PARTIAL, not PASS - isolated accept-then-timeout reconciliation passes without resend; actual bridge interruption remains unverified |
 | AC-05 | Adapter integration test for fill, partial fill, and rejected-SL events | PARTIAL, not PASS - simulator identifier, duplicate-deal, partial-fill, and rejected-SL fixtures pass; MT5 event ordering remains unverified |
 | AC-06 | Process restart test with persisted pending, unknown, position, and halt fixtures | PARTIAL, not PASS - durable UNKNOWN recovery and persistent halt fixtures pass; process-kill and actual executor recovery remain unverified |
-| AC-07 | Owner-authorized MT5 Demo round trip and identifier/account reconciliation | BLOCKED - account details and authorization absent |
+| AC-07 | Owner-authorized MT5 Demo round trip and identifier/account reconciliation | PARTIAL, operationally BLOCKED - local durable cancel-before-close, ambiguous-effect reconciliation and final exact-cost audit fixtures pass; no MQL5 mutation adapter, account details or authorized Demo round trip exists |
 | AC-08 | Secret scan, client-bundle inspection, and live-account denial test | PARTIAL, not PASS - source and built client-bundle secret scans plus API live-mode denial pass; no MT5 executor exists to inspect |
 | AC-09 | Component tests plus desktop and mobile browser inspection for safe state and unavailable controls | PARTIAL, not PASS - component tests and local Firefox inspection pass; committed cross-browser regression and authenticated backend integration remain |
 

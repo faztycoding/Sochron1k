@@ -67,6 +67,13 @@ The initial state machine is:
 
 Terminal or alternate states include `REJECTED`, `EXPIRED`, `CANCELLED`, and `UNKNOWN`. `UNKNOWN` requires reconciliation against MT5 orders, positions, and history before a retry or replacement.
 
+Cancel-pending and close-position are separately idempotent management commands,
+not rewrites of the entry command. Each is journaled before executor invocation and
+reconciles cumulative broker evidence. A partial entry cancels its pending remainder
+before closing its filled position. Exposure remains reserved through ambiguous or
+partial management, and a risk halt blocks new entries without blocking risk-reducing
+management. See [ADR-017](decisions/ADR-017-durable-position-management.md).
+
 ### Strategy evidence
 
 Signals and zones record both `formed_at` and `confirmed_at`, the strategy version, parameter set, data cutoff, evidence IDs, and expiry. Research and UI must not present a signal as available before its confirmation time.
@@ -143,6 +150,12 @@ admission, rechecks it before submissions, and validates broker evidence before
 journal application. No execution endpoint or MT5 mutation adapter is exposed;
 see [ADR-016](decisions/ADR-016-execution-startup-admission.md). This is local
 simulator admission, not distributed fencing or a cleared Demo release gate.
+
+SCN-011 extends that local boundary with durable cancel/close commands, management
+inventory at startup, deterministic halt latching and a final closed-trade audit.
+Ambiguous management remains UNKNOWN and query-only reconciliation never resends.
+This remains simulator evidence; no MT5 mutation adapter or external control route
+exists. See [ADR-017](decisions/ADR-017-durable-position-management.md).
 
 | Failure | Required behavior |
 | --- | --- |

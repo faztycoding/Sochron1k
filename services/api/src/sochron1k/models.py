@@ -6,7 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class TradeMode(StrEnum):
@@ -19,6 +19,11 @@ class TradeMode(StrEnum):
 class Side(StrEnum):
     BUY = "buy"
     SELL = "sell"
+
+
+class ManagementOperation(StrEnum):
+    CANCEL = "cancel"
+    CLOSE = "close"
 
 
 class CommandState(StrEnum):
@@ -122,6 +127,43 @@ class CommandIntent(StrictModel):
         return f"{self.account_ref}:{self.experiment_id}:{self.operation}"
 
 
+class ManagementIntent(StrictModel):
+    command_id: str = Field(min_length=1, max_length=128)
+    idempotency_key: str = Field(min_length=1, max_length=128)
+    account_ref: str = Field(min_length=1, max_length=128)
+    experiment_id: str = Field(min_length=1, max_length=128)
+    target_command_id: str = Field(min_length=1, max_length=128)
+    symbol: str = Field(min_length=1, max_length=32)
+    operation: ManagementOperation
+    reason: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9_]+$")
+    expires_at: datetime
+
+    @field_validator("expires_at")
+    @classmethod
+    def management_expiry_is_timezone_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("expires_at must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def cannot_target_itself(self):
+        if self.command_id == self.target_command_id:
+            raise ValueError("management command cannot target itself")
+        return self
+
+    def canonical_fingerprint(self) -> str:
+        payload = self.model_dump(mode="json", exclude={"command_id"})
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        return hashlib.sha256(encoded).hexdigest()
+
+    @property
+    def idempotency_scope(self) -> str:
+        return (
+            f"{self.account_ref}:{self.experiment_id}:"
+            f"{self.target_command_id}:{self.operation.value}"
+        )
+
+
 class RiskContext(StrictModel):
     equity: Decimal = Field(gt=0)
     daily_baseline: Decimal = Field(gt=0)
@@ -154,21 +196,83 @@ class RiskState(StrictModel):
 
 
 class BrokerDeal(StrictModel):
-    deal_ticket: str
+    deal_ticket: str = Field(min_length=1, max_length=128)
     volume: Decimal = Field(gt=0)
     price: Decimal = Field(gt=0)
+    profit: Decimal = Decimal("0")
+    commission: Decimal = Decimal("0")
+    swap: Decimal = Decimal("0")
+    fee: Decimal = Decimal("0")
+    occurred_at: datetime | None = None
+
+    @field_validator("occurred_at")
+    @classmethod
+    def deal_time_is_timezone_aware(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("occurred_at must be timezone-aware")
+        return value
 
 
 class BrokerSnapshot(StrictModel):
-    command_id: str
-    order_ticket: str | None = None
-    position_id: str | None = None
+    command_id: str = Field(min_length=1, max_length=128)
+    order_ticket: str | None = Field(default=None, max_length=128)
+    position_id: str | None = Field(default=None, max_length=128)
     requested_volume: Decimal = Field(gt=0)
     filled_volume: Decimal = Field(ge=0)
     remaining_volume: Decimal = Field(ge=0)
+    cancelled_volume: Decimal = Field(default=Decimal("0"), ge=0)
+    closed_volume: Decimal = Field(default=Decimal("0"), ge=0)
     deals: tuple[BrokerDeal, ...] = ()
     stop_loss_confirmed: bool
     terminal_state: CommandState | None = None
+
+    @property
+    def open_position_volume(self) -> Decimal:
+        return self.filled_volume - self.closed_volume
+
+
+class ManagementSnapshot(StrictModel):
+    command_id: str = Field(min_length=1, max_length=128)
+    target_command_id: str = Field(min_length=1, max_length=128)
+    operation: ManagementOperation
+    broker_order_ticket: str = Field(min_length=1, max_length=128)
+    position_id: str | None = Field(default=None, max_length=128)
+    requested_volume: Decimal = Field(gt=0)
+    completed_volume: Decimal = Field(ge=0)
+    remaining_volume: Decimal = Field(ge=0)
+    deals: tuple[BrokerDeal, ...] = ()
+    terminal_state: CommandState | None = None
+    target: BrokerSnapshot
+    observed_at: datetime
+
+    @field_validator("observed_at")
+    @classmethod
+    def management_observation_is_timezone_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("observed_at must be timezone-aware")
+        return value
+
+
+class TradeAudit(StrictModel):
+    command_id: str
+    account_ref: str
+    experiment_id: str
+    symbol: str
+    entry_order_ticket: str
+    position_id: str
+    requested_volume: Decimal
+    entry_volume: Decimal
+    cancelled_volume: Decimal
+    closed_volume: Decimal
+    entry_deal_tickets: tuple[str, ...]
+    exit_order_tickets: tuple[str, ...]
+    exit_deal_tickets: tuple[str, ...]
+    gross_profit: Decimal
+    commission: Decimal
+    swap: Decimal
+    fee: Decimal
+    net_pnl: Decimal
+    close_reason: str
 
 
 class SubmissionResult(StrictModel):
