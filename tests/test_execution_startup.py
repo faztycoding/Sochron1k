@@ -554,3 +554,80 @@ def test_slow_journal_cannot_send_after_preflight_expires(ready_case, monkeypatc
     assert service.journal.counts()["exposure_slots"] == 1
     with pytest.raises(RiskDenied, match="STARTUP_REQUIRED"):
         service.submit(**args)
+
+
+def test_rejected_inventory_label_does_not_hide_filled_exposure(ready_case):
+    service, args, startup, _ = ready_case
+    journal, intent = service.journal, args["intent"]
+    journal.reserve(intent, Decimal("0.1"), Decimal("100"))
+    journal.begin_dispatch(intent.command_id, "attempt")
+    rejected = snapshot(intent).model_copy(
+        update={
+            "filled_volume": Decimal("0"),
+            "remaining_volume": Decimal("0.1"),
+            "deals": (),
+            "stop_loss_confirmed": False,
+            "position_id": None,
+            "terminal_state": CommandState.REJECTED,
+        }
+    )
+    journal.apply_broker_snapshot(rejected)
+    before = journal.counts()
+    service.adapter._snapshots[intent.command_id] = snapshot(intent).model_copy(
+        update={"terminal_state": CommandState.REJECTED}
+    )
+    with pytest.raises(RiskDenied, match="STARTUP_UNAVAILABLE"):
+        service.startup(**startup)
+    assert journal.counts() == before and service.adapter.send_count == 0
+
+
+@pytest.mark.parametrize("stage", ["reserve", "begin_dispatch"])
+def test_expected_risk_must_belong_to_target_command(ready_case, stage):
+    service, args, _, state = ready_case
+    journal, intent = service.journal, args["intent"]
+    foreign = state.model_copy(update={"account_ref": "foreign"})
+    journal.save_risk_state(foreign)
+    if stage == "begin_dispatch":
+        journal.reserve(intent, Decimal("0.1"), Decimal("100"))
+    before = journal.counts()
+    with pytest.raises(RiskStateConflict):
+        if stage == "reserve":
+            journal.reserve(intent, Decimal("0.1"), Decimal("100"), expected_risk=foreign)
+        else:
+            journal.begin_dispatch(intent.command_id, "attempt", expected_risk=foreign)
+    assert journal.counts() == before
+
+
+def test_orphan_attempt_cannot_make_queued_command_a_fill(ready_case):
+    service, args, _, _ = ready_case
+    journal, intent = service.journal, args["intent"]
+    journal.reserve(intent, Decimal("0.1"), Decimal("100"))
+    with journal._connect() as db:
+        db.execute(
+            "INSERT INTO dispatch_attempts VALUES (?, ?, ?, NULL)",
+            ("orphan", intent.command_id, args["now"].isoformat()),
+        )
+    before = journal.counts()
+    with pytest.raises(BrokerEvidenceConflict):
+        journal.apply_broker_snapshot(snapshot(intent))
+    assert journal.counts() == before
+
+
+@pytest.mark.parametrize("kind", ["exception", "malformed"])
+def test_unexpected_adapter_outcome_is_durable_unknown(ready_case, monkeypatch, kind):
+    service, args, startup, _ = ready_case
+    service.startup(**startup)
+
+    def bad_adapter(*args):
+        if kind == "exception":
+            raise RuntimeError("synthetic adapter failure after possible send")
+        return None
+
+    monkeypatch.setattr(service.adapter, "send", bad_adapter)
+    result = service.submit(**args)
+    assert result.state is CommandState.UNKNOWN and not result.protected
+    assert service.journal.command(args["intent"].command_id)["state"] == "unknown"
+    assert service.journal.counts()["dispatch_attempts"] == 1
+    assert service.journal.counts()["exposure_slots"] == 1
+    with pytest.raises(RiskDenied, match="STARTUP_REQUIRED"):
+        service.submit(**args)

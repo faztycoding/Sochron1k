@@ -178,7 +178,10 @@ class ExecutionService:
             if snapshot.command_id != intent.command_id:
                 raise BrokerEvidenceConflict()
             state = self.journal.apply_broker_snapshot(snapshot)
-        except TimeoutError, ConnectionError, BrokerEvidenceConflict:
+        except Exception:
+            # Invocation may already have had an effect even for an unexpected
+            # exception/malformed response. Persist UNKNOWN or propagate storage
+            # failure; never return a fill or silently replay the command.
             self._startup = None
             self.journal.transition(
                 intent.command_id,

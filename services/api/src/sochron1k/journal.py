@@ -142,6 +142,7 @@ class Journal:
         try:
             connection.execute("BEGIN IMMEDIATE")
             if expected_risk is not None:
+                self._check_risk_scope(expected_risk, intent.account_ref, intent.experiment_id)
                 self._check_risk(connection, expected_risk)
             existing = connection.execute(
                 """
@@ -231,13 +232,15 @@ class Journal:
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
-            if expected_risk is not None:
-                self._check_risk(connection, expected_risk)
             row = connection.execute(
-                "SELECT state FROM commands WHERE command_id=?", (command_id,)
+                "SELECT state, account_ref, experiment_id FROM commands WHERE command_id=?",
+                (command_id,),
             ).fetchone()
             if row is None:
                 raise KeyError(command_id)
+            if expected_risk is not None:
+                self._check_risk_scope(expected_risk, row["account_ref"], row["experiment_id"])
+                self._check_risk(connection, expected_risk)
             previous = CommandState(row["state"])
             if previous is not CommandState.QUEUED:
                 raise RuntimeError(f"cannot dispatch command from {previous.value}")
@@ -378,6 +381,17 @@ class Journal:
         finally:
             connection.close()
 
+    def validate_broker_snapshot(self, snapshot: BrokerSnapshot) -> None:
+        snapshot = BrokerSnapshot.model_validate(snapshot.model_dump())
+        with self._connect() as db:
+            db.execute("BEGIN")
+            row = db.execute(
+                "SELECT * FROM commands WHERE command_id=?", (snapshot.command_id,)
+            ).fetchone()
+            if row is None:
+                raise BrokerEvidenceConflict()
+            self._validate_broker_evidence(db, row, snapshot)
+
     @staticmethod
     def _validate_broker_evidence(db, row, snapshot):
         def require(condition):
@@ -385,6 +399,7 @@ class Journal:
                 raise BrokerEvidenceConflict()
 
         require(snapshot.terminal_state in {None, CommandState.REJECTED})
+        require(len(snapshot.deals) <= 1000)
         numbers = [
             snapshot.requested_volume,
             snapshot.filled_volume,
@@ -406,14 +421,15 @@ class Journal:
             require(snapshot.filled_volume + snapshot.remaining_volume == snapshot.requested_volume)
             require(sum((d.volume for d in snapshot.deals), Decimal(0)) == snapshot.filled_volume)
         require(bool(snapshot.order_ticket) and len(snapshot.order_ticket) <= 128)
-        require(len(snapshot.deals) <= 1000)
         require(len({d.deal_ticket for d in snapshot.deals}) == len(snapshot.deals))
         require(all(d.deal_ticket and len(d.deal_ticket) <= 128 for d in snapshot.deals))
         require(not snapshot.filled_volume or bool(snapshot.position_id))
         require(snapshot.position_id is None or 0 < len(snapshot.position_id) <= 128)
         require(not snapshot.stop_loss_confirmed or snapshot.filled_volume > 0)
         require(snapshot.terminal_state is None or snapshot.filled_volume == 0)
-        require(row["state"] not in {"closed", "cancelled", "expired"})
+        require(
+            row["state"] not in {"closed", "cancelled", "expired", "created", "validated", "queued"}
+        )
         require(row["state"] != "rejected" or snapshot.terminal_state is CommandState.REJECTED)
         require(
             db.execute(
@@ -473,6 +489,11 @@ class Journal:
             ).fetchone()
         )
         if current != expected or current.daily_halt or current.total_halt:
+            raise RiskStateConflict()
+
+    @staticmethod
+    def _check_risk_scope(expected, account_ref, experiment_id):
+        if (expected.account_ref, expected.experiment_id) != (account_ref, experiment_id):
             raise RiskStateConflict()
 
     def startup_state(self, account_ref, experiment_id):

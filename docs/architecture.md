@@ -138,6 +138,12 @@ tool or complete external-state inventory; actual-target admission remains pendi
 
 ## Failure behavior
 
+SCN-010 now gates the local ExecutionService behind explicit inventory/risk startup
+admission, rechecks it before submissions, and validates broker evidence before
+journal application. No execution endpoint or MT5 mutation adapter is exposed;
+see [ADR-016](decisions/ADR-016-execution-startup-admission.md). This is local
+simulator admission, not distributed fencing or a cleared Demo release gate.
+
 | Failure | Required behavior |
 | --- | --- |
 | AI unavailable or invalid | Strategies that require AI enter `WAIT`; position management continues |

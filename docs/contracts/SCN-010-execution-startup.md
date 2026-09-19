@@ -48,3 +48,22 @@ The Python gate is not distributed executor fencing or a hard I/O deadline. A
 complete MT5 inventory producer, broker OrderCalcProfit, close/cancel reconciliation,
 target crash tests and approved Demo round trip remain required. Public API health
 and all release-level execution/Auto Trading flags remain false.
+
+## Candidate review additions (2026-09-20, before fixes)
+
+Review the checkpoint against these explicit negative cases: a known rejected
+command in inventory must still have validated zero-fill/volume/ticket evidence;
+its terminal label alone cannot justify admission. Optional low-level expected-risk
+arguments must identify the command's actual account and experiment. A pre-dispatch
+QUEUED command cannot gain fill evidence just because an orphan attempt exists.
+Unexpected adapter response/exception after invocation must retain UNKNOWN when
+the journal is writable, while a journal failure still prevents a successful
+result. Runtime dispatch/close/release authority remains unchanged.
+
+## Evidence status
+
+Local AC-01 through AC-05 are verified against the simulator, fresh installed
+artifact and the affected API/worker Linux images. The review additions above are
+covered by failing-first regressions. This does not verify an MT5 inventory producer,
+broker mutation, target fencing, close/cancel, halt release or a Demo round trip;
+those gates remain open. See [SCN-010 verification](../verification/SCN-010-execution-startup.md).

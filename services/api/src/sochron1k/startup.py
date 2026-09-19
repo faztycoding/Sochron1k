@@ -94,6 +94,9 @@ def inspect_startup(journal, adapter, policy, experiment_id, executor_id, now, g
                 row["state"] == "rejected" and snapshot.terminal_state is CommandState.REJECTED,
                 "EXECUTOR_INVENTORY_CONFLICT",
             )
+        # A terminal label is not evidence: validate volumes, tickets and deals even
+        # when this snapshot will not mutate the active-command journal.
+        journal.validate_broker_snapshot(snapshot)
     require(all(row["command_id"] in snapshots for row in active), "STARTUP_UNRESOLVED")
     for row in active:
         snapshot = snapshots[row["command_id"]]
