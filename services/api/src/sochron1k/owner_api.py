@@ -6,6 +6,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from .bridge_api import BridgeDep
+from .execution_evidence import (
+    ExecutionEvidenceReader,
+    ExecutionEvidenceView,
+    disabled_execution_evidence,
+)
 from .models import StrictModel
 from .owner_auth import OwnerAuthDenied, OwnerVerifier
 from .telemetry import TelemetryView
@@ -36,3 +41,9 @@ def session(owner: OwnerDep) -> OwnerSession:
 @router.get("/telemetry")
 def telemetry(owner: OwnerDep, bridge: BridgeDep) -> TelemetryView:
     return bridge.view()
+
+
+@router.get("/execution")
+def execution(owner: OwnerDep, request: Request) -> ExecutionEvidenceView:
+    reader: ExecutionEvidenceReader | None = request.app.state.execution_evidence
+    return reader.view() if reader is not None else disabled_execution_evidence()

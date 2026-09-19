@@ -73,6 +73,17 @@ def _execution_runtime(state: str) -> RuntimeState:
     return "degraded"
 
 
+def _execution_evidence_runtime(bridge_state: str, evidence_state: RuntimeState) -> RuntimeState:
+    if evidence_state == "degraded":
+        return "degraded"
+    bridge = _execution_runtime(bridge_state)
+    if evidence_state == "connected" and bridge == "connected":
+        return "connected"
+    if evidence_state == "connected" or bridge != "awaiting_configuration":
+        return "awaiting_source"
+    return "awaiting_configuration"
+
+
 def build_ui_connection_map(
     *,
     owner_auth_configured: bool,
@@ -81,6 +92,7 @@ def build_ui_connection_map(
     chart_states: tuple[str, ...],
     history_configured: bool,
     execution_state: str,
+    execution_evidence_state: RuntimeState,
 ) -> UiConnectionMap:
     return UiConnectionMap(
         connections=(
@@ -121,10 +133,9 @@ def build_ui_connection_map(
             ),
             UiConnection(
                 id="execution_evidence",
-                implementation="partial",
-                runtime=_execution_runtime(execution_state),
-                current_routes=("/api/executor/v1/status",),
-                required_route="/api/owner/execution",
+                implementation="available",
+                runtime=_execution_evidence_runtime(execution_state, execution_evidence_state),
+                current_routes=("/api/executor/v1/status", "/api/owner/execution"),
                 sources=("mt5_execution",),
             ),
             UiConnection(

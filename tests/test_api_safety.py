@@ -69,10 +69,10 @@ async def test_ui_connection_map_is_redacted_and_truthful_when_unconfigured() ->
         assert nodes[key]["runtime"] == "awaiting_configuration"
     assert nodes["execution_evidence"] == {
         "id": "execution_evidence",
-        "implementation": "partial",
+        "implementation": "available",
         "runtime": "awaiting_configuration",
-        "current_routes": ["/api/executor/v1/status"],
-        "required_route": "/api/owner/execution",
+        "current_routes": ["/api/executor/v1/status", "/api/owner/execution"],
+        "required_route": None,
         "sources": ["mt5_execution"],
     }
     assert nodes["signals"]["implementation"] == "missing"

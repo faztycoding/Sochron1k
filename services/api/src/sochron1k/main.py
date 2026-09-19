@@ -20,6 +20,7 @@ from .execution_bridge import (
     load_execution_bridge_settings,
 )
 from .execution_bridge_api import router as execution_bridge_router
+from .execution_evidence import ExecutionEvidenceReader, load_execution_evidence_reader
 from .owner_api import router as owner_router
 from .owner_auth import OwnerAuthSettings, OwnerVerifier, load_owner_auth_settings
 from .telemetry import BridgeSettings, TelemetryBridge, load_bridge_settings
@@ -47,6 +48,7 @@ def create_app(
     chart_settings: ChartSettings | None = None,
     history_directory: Path | None = None,
     execution_bridge_settings: ExecutionBridgeSettings | None = None,
+    execution_evidence: ExecutionEvidenceReader | None = None,
 ) -> FastAPI:
     if (
         bridge_settings is not None
@@ -59,6 +61,7 @@ def create_app(
     app.state.telemetry_bridge = TelemetryBridge(bridge_settings)
     app.state.execution_bridge = ExecutionPollingBridge(execution_bridge_settings)
     app.state.owner_verifier = OwnerVerifier(owner_auth_settings)
+    app.state.execution_evidence = execution_evidence
     history = None
     if history_directory is not None:
         if bridge_settings is None or chart_settings is None:
@@ -111,6 +114,11 @@ def create_app(
             chart_states=chart_states,
             history_configured=chart.history is not None,
             execution_state=app.state.execution_bridge.status().state,
+            execution_evidence_state=(
+                execution_evidence.runtime_state()
+                if execution_evidence is not None
+                else "awaiting_configuration"
+            ),
         )
 
     return app
@@ -124,4 +132,5 @@ app = create_app(
     if os.environ.get("SOCHRON_CHART_HISTORY_DIR")
     else None,
     load_execution_bridge_settings(),
+    load_execution_evidence_reader(),
 )

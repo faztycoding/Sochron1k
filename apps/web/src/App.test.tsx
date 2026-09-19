@@ -49,7 +49,7 @@ describe("Sochron1k safety console", () => {
     expect(screen.getByText("/api/owner/telemetry")).toBeVisible();
     expect(screen.getByText("ยังไม่มี /api/owner/signals")).toBeVisible();
     expect(screen.getByText("ยังไม่มี /api/owner/statistics")).toBeVisible();
-    expect(screen.getByText("ยังไม่มี /api/owner/execution")).toBeVisible();
+    expect(screen.getAllByText("/api/owner/execution").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /ซื้อ|ขาย|เปิดออเดอร์/ })).not.toBeInTheDocument();
   });
 
@@ -87,7 +87,7 @@ describe("Sochron1k safety console", () => {
     render(<App />);
     expect(await screen.findByText("อ่านสถานะไม่ได้")).toBeVisible();
     expect(screen.getByText("/api/owner/telemetry")).toBeVisible();
-    expect(screen.getByText("ยังไม่มี /api/owner/execution")).toBeVisible();
+    expect(screen.getAllByText("/api/owner/execution").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /ซื้อ|ขาย|เปิดออเดอร์/ })).not.toBeInTheDocument();
   });
 });

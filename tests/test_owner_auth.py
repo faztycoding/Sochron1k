@@ -113,7 +113,7 @@ async def test_ac01_disabled():
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=create_app()), base_url="http://fixture"
     ) as client:
-        for path in ("session", "telemetry"):
+        for path in ("session", "telemetry", "execution"):
             response = await client.get("/owner/" + path, headers=bearer())
             assert response.status_code == 503
             assert response.json() == {"detail": "OWNER_AUTH_DISABLED"}

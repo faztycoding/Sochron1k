@@ -14,6 +14,9 @@ const fixture = () => ({
       identity: { account_ref: "synthetic-account", server: "Synthetic-Demo", currency: "USD", symbol: "XAUUSD.fixture" } } },
 });
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
+const disabledExecution = () => ({ trading_mode: "demo", read_only: true, source: "local-execution-journal",
+  status: { state: "disabled", reason: "not_configured", total_commands: 0, truncated: false,
+    auto_trading_enabled: false, execution_ready: false }, commands: [] });
 function setup(privateResponse: () => Promise<Response> = async () => json(fixture()),
   historyResponse: () => Promise<Response> = async () => json(disabledHistory())) {
   let callback: (token: string | null) => void = () => {};
@@ -27,7 +30,8 @@ function setup(privateResponse: () => Promise<Response> = async () => json(fixtu
     String(path) === "/api/auth/config" ? json(config) : String(path).startsWith("/api/owner/chart/") ?
       json({ state: "disabled", feed_status: fixture().status, observation: null,
         snapshot_age_seconds: null, latest_bar_age_seconds: null, execution_ready: false }) :
-      String(path).startsWith("/api/owner/history/") ? historyResponse() : privateResponse());
+      String(path).startsWith("/api/owner/history/") ? historyResponse() :
+      String(path) === "/api/owner/execution" ? json(disabledExecution()) : privateResponse());
   const factory = vi.fn(async () => auth);
   const result = render(<OwnerPanel factory={factory} />);
   return { auth, fetch, factory, unsubscribe, emit: (value: string | null) => callback(value), ...result };

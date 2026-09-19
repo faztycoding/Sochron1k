@@ -182,6 +182,19 @@ the exact map and renders the route rail even if its status request fails. The m
 does not create missing owner execution, signal or statistics read models and never
 grants execution authority.
 
+SCN-015 adds the missing authenticated owner execution projection at
+`/owner/execution`. It reads one explicitly configured, existing private
+ExecutionService SQLite journal through a pinned, bounded, query-only connection.
+A clean journal is read immutably without creating WAL sidecars; a journal with
+pending WAL frames is read with checkpoint-on-close disabled so committed frames
+remain visible without changing database/WAL content. SQLite shared-memory lock
+coordination is not execution evidence. The route exposes validated command,
+order, deal, position, cumulative volume, rejection and SL records while excluding
+account bindings, payloads, idempotency keys, credentials and paths. It never
+constructs ExecutionService or invokes the executor. Missing configuration is a
+disabled view; replacement, corruption or incompatible schema is degraded. The
+browser panel is read-only and public readiness remains false.
+
 | Failure | Required behavior |
 | --- | --- |
 | AI unavailable or invalid | Strategies that require AI enter `WAIT`; position management continues |
