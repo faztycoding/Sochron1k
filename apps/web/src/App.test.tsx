@@ -10,7 +10,7 @@ const json = (value: unknown, status = 200) => new Response(JSON.stringify(value
 const connectionFixture = () => ({
   demo_only: true, auto_trading_enabled: false, execution_ready: false,
   connections: connectionIds.map(id => ({ id, implementation: connectionDefinitions[id].implementation,
-    runtime: id === "core_api" ? "connected" : id === "signals" || id === "statistics" ? "not_applicable" : "awaiting_configuration",
+    runtime: id === "core_api" ? "connected" : id === "statistics" ? "not_applicable" : "awaiting_configuration",
     current_routes: connectionDefinitions[id].routes, required_route: connectionDefinitions[id].required,
     sources: connectionDefinitions[id].sources })),
 });
@@ -43,11 +43,14 @@ describe("Sochron1k safety console", () => {
     for (const chartLink of screen.getAllByRole("link", { name: /กราฟ/ })) {
       expect(chartLink).toHaveAttribute("href", "#market-chart");
     }
+    for (const signalLink of screen.getAllByRole("link", { name: /สัญญาณ/ })) {
+      expect(signalLink).toHaveAttribute("href", "#signal-evidence");
+    }
     expect(screen.getByRole("heading", { name: "กราฟราคา Demo" })).toBeVisible();
     await waitFor(() => expect(screen.getByText("ออนไลน์ · v0.1.0")).toBeVisible());
     expect(screen.getByRole("heading", { name: "แผนที่การเชื่อมต่อ API" })).toBeVisible();
     expect(screen.getByText("/api/owner/telemetry")).toBeVisible();
-    expect(screen.getByText("ยังไม่มี /api/owner/signals")).toBeVisible();
+    expect(screen.getAllByText("/api/owner/signals").length).toBeGreaterThan(0);
     expect(screen.getByText("ยังไม่มี /api/owner/statistics")).toBeVisible();
     expect(screen.getAllByText("/api/owner/execution").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /ซื้อ|ขาย|เปิดออเดอร์/ })).not.toBeInTheDocument();

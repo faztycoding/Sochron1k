@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SCN-005/006/007/014/015: browser/Auth/read models, synthetic data, no broker operations.
+// SCN-005/006/007/014/015/016: browser/Auth/read models, synthetic data, no broker operations.
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -64,6 +64,7 @@ async function run() {
   const temporary = await realpath(await mkdtemp(join(tmpdir(), "sochron-browser-")));
   const users = [];
   const issuedTokens = []; // Memory only; revoke generated sessions before deleting test users.
+  const signalFixtures = [];
   let api;
   let web;
   let browser;
@@ -104,6 +105,36 @@ async function run() {
     const chartPath = join(temporary, "chart.json");
     const executionPath = join(temporary, "execution.sqlite3");
     const fixtureEpoch = Math.floor(Date.now() / 1000);
+    async function insertFixture(table, body) {
+      const response = await http(`${origin}/rest/v1/${table}?select=id`, { method: "POST",
+        headers: { ...admin, "Content-Type": "application/json", Prefer: "return=representation" },
+        body: JSON.stringify(body) });
+      assert.equal(response.status, 201);
+      const rows = await response.json();
+      assert.equal(rows.length, 1); assert(Number.isSafeInteger(rows[0].id));
+      return rows[0].id;
+    }
+    stage = "seed isolated owner-RLS signal evidence";
+    for (let index = 0; index < users.length; index++) {
+      const unique = randomUUID();
+      const confirmed = new Date((fixtureEpoch - 60) * 1000);
+      const strategyId = await insertFixture("strategy_versions", { owner_id: users[index].id,
+        version_id: `browser-pa01-${unique}`, code_hash: createHash("sha256").update(`strategy-${unique}`).digest("hex"),
+        parameters: {}, status: "active", data_cutoff: new Date((fixtureEpoch - 600) * 1000).toISOString() });
+      const accountId = await insertFixture("accounts", { owner_id: users[index].id,
+        account_ref: `browser-account-${unique}`, server_ref: "Synthetic-Demo", account_mode: "demo",
+        currency: "USD", initial_equity: "100000", policy_version: "risk-v1.1" });
+      const experimentId = await insertFixture("experiments", { owner_id: users[index].id,
+        account_id: accountId, strategy_version_id: strategyId, experiment_id: `browser-experiment-${unique}`,
+        status: "demo", initial_equity: "100000", policy_version: "risk-v1.1" });
+      const signalId = `browser-signal-${index}-${unique}`;
+      await insertFixture("signals", { owner_id: users[index].id, experiment_id: experimentId,
+        strategy_version_id: strategyId, signal_id: signalId, setup_id: `browser-setup-${unique}`,
+        action: "buy", formed_at: new Date((fixtureEpoch - 300) * 1000).toISOString(),
+        confirmed_at: confirmed.toISOString(), expires_at: new Date((fixtureEpoch + 300) * 1000).toISOString(),
+        evidence_ids: [`browser-feature-${unique}`] });
+      signalFixtures.push({ owner_id: users[index].id, signal_id: signalId });
+    }
     await writeFile(chartPath, JSON.stringify({ offset_valid_from_server_s: fixtureEpoch - 10 * 86400,
       offset_valid_until_server_s: fixtureEpoch + 86400 }), { mode: 0o600, flag: "wx" });
     await writeFile(authPath, JSON.stringify({ supabase_url: origin, public_key: local.ANON_KEY,
@@ -205,7 +236,7 @@ async function run() {
     const connectionMap = page.getByRole("region", { name: "แผนที่การเชื่อมต่อ API" });
     await connectionMap.getByText("/api/owner/telemetry", { exact: true }).waitFor();
     assert(await connectionMap.getByText("/api/owner/execution", { exact: true }).isVisible());
-    assert(await connectionMap.getByText("ยังไม่มี /api/owner/signals", { exact: true }).isVisible());
+    assert(await connectionMap.getByText("/api/owner/signals", { exact: true }).isVisible());
     assert(await connectionMap.getByText("ยังไม่มี /api/owner/statistics", { exact: true }).isVisible());
     const mapResponse = await http(`${apiOrigin}/ui/connections`);
     assert.equal(mapResponse.status, 200);
@@ -224,6 +255,7 @@ async function run() {
     const connected = panel.getByText("เชื่อมต่อแล้ว", { exact: true });
     const chart = page.locator("#market-chart");
     const history = page.locator("#bar-history");
+    const signals = page.locator("#signal-evidence");
     const execution = page.locator("#execution-evidence");
     async function login(user) {
       await page.getByLabel("อีเมลเจ้าของ").fill(user.email);
@@ -245,6 +277,7 @@ async function run() {
       assert.equal(await equity.count(), 0);
       assert.equal(await chart.locator("canvas").count(), 0);
       assert.equal(await history.locator("tbody tr").count(), 0);
+      assert.equal(await signals.getByText(signalFixtures[0].signal_id, { exact: true }).count(), 0);
       assert.equal(await execution.getByText("browser-command-confirmed", { exact: true }).count(), 0);
     }
     stage = "foreign user denial";
@@ -254,6 +287,11 @@ async function run() {
     assert.equal((await http(`${apiOrigin}/owner/chart/M5`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/history/M5`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/execution`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
+    assert.equal((await http(`${apiOrigin}/owner/signals`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
+    const foreignRows = await (await http(`${origin}/rest/v1/signals?select=signal_id`, {
+      headers: { apikey: local.ANON_KEY, Authorization: `Bearer ${foreignToken}` },
+    })).json();
+    assert.deepEqual(foreignRows, [{ signal_id: signalFixtures[1].signal_id }]);
     await logout(); checks.push(stage);
 
     stage = "owner login and private telemetry";
@@ -264,6 +302,31 @@ async function run() {
     assert(await page.getByText("DEMO ONLY", { exact: true }).isVisible());
     assert.equal(await page.getByRole("button", { name: /เปิดออเดอร์|ซื้อ|ขาย/ }).count(), 0);
     assert.equal(await page.locator('input[type="password"]').count(), 0);
+    await signals.getByText(signalFixtures[0].signal_id, { exact: true }).waitFor();
+    assert(await signals.getByText("BUY", { exact: true }).isVisible());
+    assert(await signals.getByText("ยังอยู่ในอายุสัญญาณ", { exact: true }).isVisible());
+    assert(await signals.getByText(/browser-pa01-/).isVisible());
+    assert(await page.evaluate(() => {
+      const chartNode = document.querySelector("#market-chart");
+      const signalNode = document.querySelector("#signal-evidence");
+      const historyNode = document.querySelector("#bar-history");
+      return Boolean(chartNode && signalNode && historyNode &&
+        chartNode.compareDocumentPosition(signalNode) & Node.DOCUMENT_POSITION_FOLLOWING &&
+        signalNode.compareDocumentPosition(historyNode) & Node.DOCUMENT_POSITION_FOLLOWING);
+    }));
+    const signalResponse = await http(`${apiOrigin}/owner/signals`, {
+      headers: { Authorization: `Bearer ${originalToken}` },
+    });
+    assert.equal(signalResponse.status, 200);
+    const signalBody = await signalResponse.json();
+    assert.equal(signalBody.status.state, "available");
+    assert.deepEqual(signalBody.signals.map(item => item.signal_id), [signalFixtures[0].signal_id]);
+    assert(!JSON.stringify(signalBody).includes(users[0].id));
+    const ownerRows = await (await http(`${origin}/rest/v1/signals?select=signal_id`, {
+      headers: { apikey: local.ANON_KEY, Authorization: `Bearer ${originalToken}` },
+    })).json();
+    assert.deepEqual(ownerRows, [{ signal_id: signalFixtures[0].signal_id }]);
+    checks.push("owner signal RLS evidence, causal projection and UI placement");
     await execution.getByText("browser-command-confirmed", { exact: true }).waitFor();
     assert(await execution.getByText("MT5 ยืนยันแล้ว", { exact: true }).isVisible());
     assert(await execution.getByText(/Deal: browser-deal-confirmed/).isVisible());
@@ -498,6 +561,16 @@ async function run() {
         if (![204, 401, 403, 404].includes(response.status)) cleanupOK = false;
       } catch { cleanupOK = false; }
     }
+    if (users.length) {
+      const ownerFilter = `in.(${users.map(user => user.id).join(",")})`;
+      for (const table of ["signals", "experiments", "accounts", "strategy_versions"]) {
+        try {
+          const url = new URL(`${origin}/rest/v1/${table}`); url.searchParams.set("owner_id", ownerFilter);
+          const response = await http(url, { method: "DELETE", headers: { ...admin, Prefer: "return=minimal" } });
+          if (![200, 204].includes(response.status)) cleanupOK = false;
+        } catch { cleanupOK = false; }
+      }
+    }
     for (const user of users) {
       try {
         const response = await http(`${origin}/auth/v1/admin/users/${user.id}`, { method: "DELETE", headers: admin });
@@ -513,6 +586,8 @@ async function run() {
     "supabase/config.toml", "supabase/migrations/20260916224038_owner_session_validation.sql", "apps/web/src/OwnerPanel.tsx",
     "apps/web/src/ExecutionPanel.tsx", "apps/web/src/execution-api.ts", "apps/web/src/ExecutionPanel.test.tsx",
     "apps/web/src/execution-api.test.ts", "tests/fixtures/execution_evidence_seed.py",
+    "apps/web/src/SignalPanel.tsx", "apps/web/src/signal-api.ts", "apps/web/src/SignalPanel.test.tsx",
+    "apps/web/src/signal-api.test.ts", "services/api/src/sochron1k/signal_evidence.py",
     "apps/web/src/styles.css",
     "apps/web/src/chart-api.ts", "apps/web/src/ChartPanel.tsx", "apps/web/src/CandleCanvas.tsx",
     "apps/web/src/history-api.ts", "apps/web/src/HistoryPanel.tsx", "apps/web/src/history-api.test.ts",
@@ -523,7 +598,7 @@ async function run() {
     "apps/web/src/connection-api.test.ts", "apps/web/src/ConnectionMap.tsx",
     "services/api/src/sochron1k/main.py", "services/api/src/sochron1k/ui_connections.py",
     "services/api/src/sochron1k/owner_api.py", "services/api/src/sochron1k/execution_evidence.py",
-    "tests/test_api_safety.py", "tests/test_execution_evidence.py",
+    "tests/test_api_safety.py", "tests/test_execution_evidence.py", "tests/test_signal_evidence.py",
     "services/api/src/sochron1k/owner_auth.py", "services/api/src/sochron1k/telemetry.py", "tests/fixtures/mt5-telemetry-v1.json"];
   const sha256 = {};
   for (const file of sources) sha256[file] = createHash("sha256").update(await readFile(file)).digest("hex");
@@ -534,7 +609,7 @@ async function run() {
     checked_at: new Date().toISOString(), node: process.version, playwright: "1.63.0", chromium: browserVersion,
     python: command(join(root, ".venv/bin/python"), ["--version"]), runtime_images: runtimeImages.sort(),
     production_build_sha256: buildSha256, refresh_diagnostics: refreshDiagnostics,
-    checks, sha256, fixture: "synthetic telemetry, OHLC and execution journal; two generated local Auth users",
+    checks, sha256, fixture: "synthetic telemetry, OHLC, execution journal and owner-RLS signals; two generated local Auth users",
     token_refresh: "accelerated browser clock; real refresh-token HTTP exchange; server clock unchanged",
     mt5: "NOT_RUN", hosted_supabase: "NOT_RUN", artifacts: output };
   await writeFile(join(output, "result.json"), JSON.stringify(result, null, 2));

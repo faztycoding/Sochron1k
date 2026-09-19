@@ -4,6 +4,7 @@ import { createOwnerAuth, type AuthFactory, type OwnerAuth } from "./owner-auth"
 import { ChartPanel } from "./ChartPanel";
 import { HistoryPanel } from "./HistoryPanel";
 import { ExecutionPanel } from "./ExecutionPanel";
+import { SignalPanel } from "./SignalPanel";
 
 const stateLabels = {
   disabled: "ยังไม่ตั้งค่า MT5 bridge", awaiting_snapshot: "รอข้อมูลจาก MT5",
@@ -165,6 +166,7 @@ export function OwnerPanel({ factory = createOwnerAuth, onConnectionChange }: {
       </> : <p className="owner-hint">ยังไม่มีข้อมูลบัญชีหรือราคาที่ MT5 ยืนยัน ไม่มีการจำลองยอดเงินหรือราคาในส่วนนี้</p>}
     </div> : null}
   </section><ChartPanel token={data ? token : null} identity={data?.observation?.frame.identity ?? null} />
+    <SignalPanel token={token} />
     <HistoryPanel token={data ? token : null} identity={data?.observation?.frame.identity ?? null} />
     <ExecutionPanel token={token} /></>;
 }

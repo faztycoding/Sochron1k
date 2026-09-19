@@ -47,8 +47,8 @@ export const connectionDefinitions: Record<ConnectionId, Definition> = {
     required: null, sources: ["local_bar_archive"], sourceLabel: "Local bar archive", implementation: "available" },
   execution_evidence: { title: "คำสั่งและการป้องกันสถานะ", result: "Order / Deal / Position / SL ที่ยืนยันแล้ว", routes: ["/api/executor/v1/status", "/api/owner/execution"],
     required: null, sources: ["mt5_execution"], sourceLabel: "MT5 Execution EA", implementation: "available" },
-  signals: { title: "สัญญาณ", result: "เหตุผล กลยุทธ์ และเวลายืนยัน", routes: [],
-    required: "/api/owner/signals", sources: ["strategy_service"], sourceLabel: "Strategy service", implementation: "missing" },
+  signals: { title: "สัญญาณ", result: "เหตุผล กลยุทธ์ และเวลายืนยัน", routes: ["/api/owner/signals"],
+    required: null, sources: ["supabase_signals"], sourceLabel: "Supabase signals · รอ strategy producer", implementation: "available" },
   statistics: { title: "สถิติ", result: "ผลลัพธ์ ต้นทุน และความไม่แน่นอน", routes: [],
     required: "/api/owner/statistics", sources: ["research_metrics"], sourceLabel: "Research metrics", implementation: "missing" },
 };

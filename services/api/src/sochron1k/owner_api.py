@@ -13,6 +13,11 @@ from .execution_evidence import (
 )
 from .models import StrictModel
 from .owner_auth import OwnerAuthDenied, OwnerVerifier
+from .signal_evidence import (
+    SignalEvidenceReader,
+    SignalEvidenceUnavailable,
+    SignalEvidenceView,
+)
 from .telemetry import TelemetryView
 
 
@@ -47,3 +52,14 @@ def telemetry(owner: OwnerDep, bridge: BridgeDep) -> TelemetryView:
 def execution(owner: OwnerDep, request: Request) -> ExecutionEvidenceView:
     reader: ExecutionEvidenceReader | None = request.app.state.execution_evidence
     return reader.view() if reader is not None else disabled_execution_evidence()
+
+
+@router.get("/signals")
+async def signals(owner: OwnerDep, request: Request) -> SignalEvidenceView:
+    reader: SignalEvidenceReader | None = request.app.state.signal_evidence
+    if reader is None:
+        raise HTTPException(status_code=503, detail="SIGNALS_DISABLED")
+    try:
+        return await reader.view(owner, request.headers.getlist("authorization"))
+    except SignalEvidenceUnavailable:
+        raise HTTPException(status_code=503, detail="SIGNALS_UNAVAILABLE") from None

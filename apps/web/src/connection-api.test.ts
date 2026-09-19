@@ -7,7 +7,7 @@ function fixture() {
     connections: connectionIds.map(id => ({
       id,
       implementation: connectionDefinitions[id].implementation,
-      runtime: id === "core_api" ? "connected" : id === "signals" || id === "statistics" ? "not_applicable" : "awaiting_configuration",
+      runtime: id === "core_api" ? "connected" : id === "statistics" ? "not_applicable" : "awaiting_configuration",
       current_routes: [...connectionDefinitions[id].routes],
       required_route: connectionDefinitions[id].required,
       sources: [...connectionDefinitions[id].sources],

@@ -23,6 +23,7 @@ from .execution_bridge_api import router as execution_bridge_router
 from .execution_evidence import ExecutionEvidenceReader, load_execution_evidence_reader
 from .owner_api import router as owner_router
 from .owner_auth import OwnerAuthSettings, OwnerVerifier, load_owner_auth_settings
+from .signal_evidence import SignalEvidenceReader
 from .telemetry import BridgeSettings, TelemetryBridge, load_bridge_settings
 from .ui_connections import UiConnectionMap, build_ui_connection_map
 
@@ -49,6 +50,7 @@ def create_app(
     history_directory: Path | None = None,
     execution_bridge_settings: ExecutionBridgeSettings | None = None,
     execution_evidence: ExecutionEvidenceReader | None = None,
+    signal_evidence: SignalEvidenceReader | None = None,
 ) -> FastAPI:
     if (
         bridge_settings is not None
@@ -62,6 +64,9 @@ def create_app(
     app.state.execution_bridge = ExecutionPollingBridge(execution_bridge_settings)
     app.state.owner_verifier = OwnerVerifier(owner_auth_settings)
     app.state.execution_evidence = execution_evidence
+    app.state.signal_evidence = signal_evidence or (
+        SignalEvidenceReader(owner_auth_settings) if owner_auth_settings is not None else None
+    )
     history = None
     if history_directory is not None:
         if bridge_settings is None or chart_settings is None:
@@ -119,6 +124,7 @@ def create_app(
                 if execution_evidence is not None
                 else "awaiting_configuration"
             ),
+            signal_configured=app.state.signal_evidence is not None,
         )
 
     return app

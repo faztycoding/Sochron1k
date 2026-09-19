@@ -88,11 +88,16 @@ feeds every visible area and which upstream source is still missing. It separate
 implemented API code from runtime connectivity. Account/price, chart and closed-bar
 history routes exist. The authenticated `/api/owner/execution` read model and UI
 panel now exist but remain empty until an existing private ExecutionService journal
-is explicitly connected; signals and statistics remain marked as not implemented.
+is explicitly connected. The authenticated `/api/owner/signals` read model and UI
+panel now consume the existing owner-RLS Supabase relations, but remain empty until
+a reviewed strategy producer writes versioned evidence. Statistics remain marked
+as not implemented.
 The execution view opens no trading path and preserves confirmed Order/Deal/Position/
 SL evidence and `UNKNOWN` exactly. Its public status model is redacted and always
 preserves Demo-only, Auto Trading off and execution-not-ready. See the
 [owner execution evidence runbook](docs/operations/owner-execution-evidence.md).
+Signal rows never become orders by being displayed; see the
+[owner signal evidence runbook](docs/operations/owner-signal-evidence.md).
 
 The owner workspace includes a Lightweight Charts candlestick panel with M1/M5/M15/H1,
 exact OHLC inspection, forming/closed bars and explicit feed gaps/freshness. It stays
@@ -186,8 +191,9 @@ execution-protocol codec as uncompiled checkpoints.
 Compile/verify the native CopyRates producer against SCN-004/006,
 verify actual Demo data, then implement and compile the default-off mutation EA
 that consumes the SCN-012/013 contract and complete the remaining target recovery
-work. The UI connection rail identifies the next read APIs as
-`/api/owner/signals` and `/api/owner/statistics`. The implemented owner execution
-read route is shown as real data only when its private journal source validates.
+work. The UI connection rail identifies `/api/owner/signals` as implemented but
+waiting for the versioned strategy producer, and `/api/owner/statistics` as the
+remaining missing browser read API. The implemented owner execution read route is
+shown as real data only when its private journal source validates.
 A real Demo round trip still requires owner inputs and explicit target authorization
 listed in the task contract.

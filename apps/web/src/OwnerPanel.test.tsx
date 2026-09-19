@@ -17,6 +17,9 @@ const json = (value: unknown, status = 200) => new Response(JSON.stringify(value
 const disabledExecution = () => ({ trading_mode: "demo", read_only: true, source: "local-execution-journal",
   status: { state: "disabled", reason: "not_configured", total_commands: 0, truncated: false,
     auto_trading_enabled: false, execution_ready: false }, commands: [] });
+const emptySignals = () => ({ trading_mode: "demo", read_only: true, source: "supabase-signals",
+  read_at_utc: "2026-09-17T00:00:00Z", status: { state: "awaiting_source", returned_count: 0, limit: 50,
+    auto_trading_enabled: false, execution_ready: false }, signals: [] });
 function setup(privateResponse: () => Promise<Response> = async () => json(fixture()),
   historyResponse: () => Promise<Response> = async () => json(disabledHistory())) {
   let callback: (token: string | null) => void = () => {};
@@ -31,7 +34,8 @@ function setup(privateResponse: () => Promise<Response> = async () => json(fixtu
       json({ state: "disabled", feed_status: fixture().status, observation: null,
         snapshot_age_seconds: null, latest_bar_age_seconds: null, execution_ready: false }) :
       String(path).startsWith("/api/owner/history/") ? historyResponse() :
-      String(path) === "/api/owner/execution" ? json(disabledExecution()) : privateResponse());
+      String(path) === "/api/owner/execution" ? json(disabledExecution()) :
+      String(path) === "/api/owner/signals" ? json(emptySignals()) : privateResponse());
   const factory = vi.fn(async () => auth);
   const result = render(<OwnerPanel factory={factory} />);
   return { auth, fetch, factory, unsubscribe, emit: (value: string | null) => callback(value), ...result };

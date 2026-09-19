@@ -18,6 +18,43 @@
 }
 
 .chart-panel { margin-top: 18px; min-width: 0; scroll-margin-top: 20px; }
+.signal-panel { margin-top: 18px; min-width: 0; scroll-margin-top: 20px; }
+.signal-panel code { color: var(--gold-soft); overflow-wrap: anywhere; }
+.signal-heading { align-items: center; }
+.signal-summary { display: flex; justify-content: space-between; gap: 12px; margin: 20px 0 12px; padding: 11px 13px; border-block: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+.signal-list { display: grid; gap: 12px; }
+.signal-card { overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-deep); }
+.signal-card > header { display: flex; justify-content: space-between; align-items: start; gap: 16px; padding: 14px; border-bottom: 1px solid var(--line); }
+.signal-card > header div { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 5px 10px; }
+.signal-card > header strong { min-width: 0; overflow-wrap: anywhere; font: 600 14px "Inter", sans-serif; }
+.signal-card > header small { grid-column: 2; color: var(--muted); overflow-wrap: anywhere; }
+.signal-action, .signal-validity { width: fit-content; flex-shrink: 0; border: 1px solid var(--line); border-radius: 999px; padding: 5px 8px; font: 600 11px "Inter", sans-serif; }
+.signal-action--buy { color: var(--green); border-color: rgba(57, 201, 138, 0.4); }
+.signal-action--sell, .signal-action--block { color: var(--red); border-color: rgba(240, 100, 107, 0.4); }
+.signal-action--wait { color: var(--amber); border-color: rgba(241, 184, 75, 0.4); }
+.signal-validity { color: var(--green); }
+.signal-validity--expired { color: var(--muted); }
+.signal-values { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
+.signal-values div { min-width: 0; padding: 13px 14px; border-right: 1px solid var(--line); }
+.signal-values div:last-child { border-right: 0; }
+.signal-values dt, .signal-values small { color: var(--muted); font-size: 11px; }
+.signal-values dd { margin: 5px 0; overflow-wrap: anywhere; font: 500 13px "Inter", sans-serif; }
+.signal-reason { margin: 0; padding: 11px 14px; border-top: 1px solid var(--line); color: var(--gold-soft); font-size: 12px; overflow-wrap: anywhere; }
+.signal-times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 20px; padding: 11px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+.signal-times strong { display: block; margin-top: 2px; color: var(--text); overflow-wrap: anywhere; font-weight: 500; }
+.signal-card > footer { display: grid; gap: 4px; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .signal-values { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .signal-values div:nth-child(2) { border-right: 0; }
+  .signal-values div:nth-child(-n + 2) { border-bottom: 1px solid var(--line); }
+}
+@media (max-width: 480px) {
+  .signal-heading, .signal-card > header { align-items: start; flex-direction: column; }
+  .signal-summary { flex-direction: column; }
+  .signal-values, .signal-times { grid-template-columns: 1fr; }
+  .signal-values div { border-right: 0; border-bottom: 1px solid var(--line); }
+  .signal-values div:last-child { border-bottom: 0; }
+}
 .history-panel { margin-top: 18px; min-width: 0; scroll-margin-top: 20px; }
 .execution-panel { margin-top: 18px; min-width: 0; scroll-margin-top: 20px; }
 .execution-heading { align-items: center; }

@@ -195,6 +195,18 @@ constructs ExecutionService or invokes the executor. Missing configuration is a
 disabled view; replacement, corruption or incompatible schema is degraded. The
 browser panel is read-only and public readiness remains false.
 
+SCN-016 adds the authenticated owner signal projection at `/owner/signals`.
+After the existing online owner/session verification, FastAPI forwards the exact
+owner token and unprivileged project key to the same pinned Supabase Data API.
+Existing forced RLS scopes `signals`, `experiments`, and `strategy_versions`; the
+API also validates every returned owner UUID and removes owner/internal database
+identifiers from its bounded response. It preserves BUY, SELL, WAIT, BLOCK and
+expiry exactly, enforces causal formed/confirmed/data-cutoff times, and exposes no
+write, promotion, command, risk or execution authority. Empty data remains
+`awaiting_source`. The producer and PA01 evidence remain unimplemented, so this
+read boundary is not strategy or Demo-release evidence; see
+[ADR-019](decisions/ADR-019-owner-signal-read-model.md).
+
 | Failure | Required behavior |
 | --- | --- |
 | AI unavailable or invalid | Strategies that require AI enter `WAIT`; position management continues |
