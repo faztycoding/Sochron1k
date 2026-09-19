@@ -15,8 +15,12 @@ from sochron1k.telemetry import BridgeSettings, TelemetryBridge, TelemetryFrame
 
 ROOT = Path(__file__).resolve().parents[1]
 GUARD = runpy.run_path(str(ROOT / "scripts/check-mt5-source.py"))
+EXECUTION_GUARD = runpy.run_path(str(ROOT / "scripts/check-execution-protocol-source.py"))
 SAMPLE = ROOT / "tests/fixtures/mt5-telemetry-v1.json"
 FIXTURE_VERIFIER = runpy.run_path(str(ROOT / "scripts/check-mt5-fixture.py"))
+EXECUTION_FIXTURE_VERIFIER = runpy.run_path(
+    str(ROOT / "scripts/check-execution-protocol-fixture.py")
+)
 
 
 def test_ea06_observer_source_guard_and_header_secret_scan_coverage():
@@ -186,3 +190,67 @@ async def test_ea06_synthetic_golden_fixture_is_accepted_by_api():
         assert observation["frame"]["ask"] == "2500.2000000000"
         assert (await client.get("/bridge/v1/status")).json()["state"] == "connected"
         assert (await client.get("/health")).json()["execution_ready"] is False
+
+
+def test_execution_protocol_source_is_pure_and_secret_scanned():
+    for name in EXECUTION_GUARD["SOURCES"]:
+        source = (ROOT / name).read_text()
+        assert EXECUTION_GUARD["findings"](
+            source, self_test=name.endswith("SelfTest.mq5")
+        ) == []
+    scanner = runpy.run_path(str(ROOT / "scripts/check-no-secrets.py"))
+    candidates = scanner["candidate_files"]()
+    assert ROOT / "mt5/ea/ExecutionProtocol.mqh" in candidates
+    assert ROOT / "mt5/ea/SochronExecutionProtocolSelfTest.mq5" in candidates
+
+
+@pytest.mark.parametrize(
+    "identifier",
+    sorted(EXECUTION_GUARD["FORBIDDEN_PURE"]),
+)
+def test_execution_protocol_guard_detects_terminal_or_mutation_access(identifier):
+    source = (ROOT / "mt5/ea/ExecutionProtocol.mqh").read_text()
+    assert EXECUTION_GUARD["findings"](
+        source + f"\nvoid injected() {{ {identifier}(); }}"
+    )
+
+
+def test_execution_protocol_guard_rejects_imports_unreviewed_include_and_secret_input():
+    source = (ROOT / "mt5/ea/ExecutionProtocol.mqh").read_text()
+    self_test = (ROOT / "mt5/ea/SochronExecutionProtocolSelfTest.mq5").read_text()
+    assert EXECUTION_GUARD["findings"](source + '\n#import "external.dll"')
+    assert EXECUTION_GUARD["findings"](source + '\n#include <Trade/Trade.mqh>')
+    assert EXECUTION_GUARD["findings"](
+        self_test + '\ninput string ExecutorToken="secret";', self_test=True
+    )
+    assert EXECUTION_GUARD["findings"](
+        self_test + '\nint h=FileOpen("another.json",FILE_WRITE);', self_test=True
+    )
+
+
+@pytest.mark.parametrize("kind", ["inventory", "outcome"])
+def test_execution_protocol_golden_verifier_is_exact_and_provenance_explicit(tmp_path, kind):
+    golden = ROOT / f"tests/fixtures/mt5-execution-{kind}-v1.json"
+    report = EXECUTION_FIXTURE_VERIFIER["verify"](golden, kind=kind)
+    assert report["input_is_committed_golden"] is True
+    assert report["protocol"] == (
+        "sochron.execution.inventory.v1"
+        if kind == "inventory"
+        else "sochron.execution.outcome.v1"
+    )
+    generated = tmp_path / f"{kind}.json"
+    generated.write_bytes(golden.read_bytes())
+    assert EXECUTION_FIXTURE_VERIFIER["verify"](
+        generated, kind=kind
+    )["input_is_committed_golden"] is False
+    packet = json.loads(golden.read_bytes())
+    packet["sequence" if kind == "inventory" else "dispatch_sequence"] = 2
+    generated.write_text(json.dumps(packet))
+    with pytest.raises(ValueError, match="not the exact synthetic fixture"):
+        EXECUTION_FIXTURE_VERIFIER["verify"](generated, kind=kind)
+    generated.write_bytes(golden.read_bytes() + b"\0")
+    with pytest.raises(ValueError, match="encoding or size"):
+        EXECUTION_FIXTURE_VERIFIER["verify"](generated, kind=kind)
+    generated.write_text('{"protocol":"x","protocol":"y"}')
+    with pytest.raises(ValueError):
+        EXECUTION_FIXTURE_VERIFIER["verify"](generated, kind=kind)

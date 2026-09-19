@@ -1,0 +1,24 @@
+{
+  "protocol": "sochron.execution.outcome.v1",
+  "boot_id": "11111111-2222-4333-8444-555555555555",
+  "dispatch_sequence": 7,
+  "attempt_id": "synthetic-attempt-1",
+  "generation": "synthetic-generation-1",
+  "command_id": "synthetic-command-1",
+  "target_command_id": null,
+  "operation": "open",
+  "observed_at": "2026-09-20T00:00:01Z",
+  "status": "rejected",
+  "snapshot": null,
+  "management_snapshot": null,
+  "rejection": {
+    "command_id": "synthetic-command-1",
+    "target_command_id": null,
+    "operation": "open",
+    "retcode": 10006,
+    "retcode_external": 0,
+    "request_id": 7,
+    "observed_at": "2026-09-20T00:00:01Z"
+  },
+  "uncertain": null
+}

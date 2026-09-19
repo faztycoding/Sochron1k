@@ -45,6 +45,9 @@ bash scripts/check-scn-001-local.sh
 .venv/bin/python scripts/check-bridge-local.py
 .venv/bin/python scripts/check-mt5-source.py
 .venv/bin/python scripts/check-mt5-fixture.py
+.venv/bin/python scripts/check-execution-protocol-source.py
+.venv/bin/python scripts/check-execution-protocol-fixture.py --kind inventory
+.venv/bin/python scripts/check-execution-protocol-fixture.py --kind outcome
 bash scripts/with-local-docker.sh npx -y -p node@24.21.0 .venv/bin/python scripts/check-owner-auth-local.py
 env -u DEBUG bash scripts/with-local-docker.sh npx -y -p node@24.21.0 node scripts/check-owner-browser.mjs
 npx -y -p node@24.21.0 npm run check:web
@@ -67,7 +70,9 @@ bash scripts/check-scn-001-local.sh
 
 The API health endpoint always reports Demo mode and currently reports `execution_ready=false`.
 An authenticated, disabled-by-default API-side execution polling adapter now exists,
-but no MQL5 mutation EA or broker credential is present. See the
+and a pure source-only MQL5 command/inventory/outcome codec now fixes its wire
+contract. No MQL5 mutation EA, compiled artifact or broker credential is present.
+See the
 [SCN-012 execution bridge runbook](docs/operations/execution-bridge.md).
 
 Run the responsive monitoring console with the pinned Node.js release:
@@ -165,8 +170,10 @@ The [read-only telemetry ingress](docs/operations/local-mt5-bridge.md) now has
 authenticated API and real-loopback HTTP evidence; it defaults to disabled without
 private local configuration. The owner web console now consumes its private view;
 no actual EA connection is verified yet.
-The [read-only EA source](mt5/ea/README.md) is prepared as an uncompiled checkpoint.
+The [MQL5 sources](mt5/ea/README.md) contain the read-only observer and pure
+execution-protocol codec as uncompiled checkpoints.
 Compile/verify the native CopyRates producer against SCN-004/006,
-verify actual Demo data, then implement and compile the MQL5 consumer for the
-SCN-012 polling contract and complete the remaining target recovery work. A real Demo round trip still
+verify actual Demo data, then implement and compile the default-off mutation EA
+that consumes the SCN-012/013 contract and complete the remaining target recovery
+work. A real Demo round trip still
 requires owner inputs and explicit target authorization listed in the task contract.

@@ -1,4 +1,4 @@
-# Sochron read-only Demo observer
+# Sochron MQL5 Demo adapters
 
 **Source checkpoint, not a compiled release.** No MetaEditor executable/terminal
 was found in the checked application directories or the workstation's Spotlight
@@ -13,13 +13,44 @@ terminal self-test result or actual Demo observation is claimed.
 - `TelemetryProtocol.mqh`: pure JSON encoder and bounded flat-response parser.
 - `SochronTelemetrySelfTest.mq5`: pure protocol tests and synthetic fixture output;
   it never reads an account or uses the network.
+- `ExecutionProtocol.mqh`: pure SCN-013 parser/encoder for the authenticated
+  SCN-012 execution wire contract. It has no network, account, file or trade access.
+- `SochronExecutionProtocolSelfTest.mq5`: pure execution-protocol cases that may
+  write only two named synthetic JSON fixtures.
 
 This observer cannot send, modify, close or cancel an order and does not manage
 positions. It does not replace the future execution/risk EA. Do not attach it as
 the only safety component to a running experiment or imply it protects positions.
 Keep application Auto Trading off. Compile checks do not authorize broker use.
 
-## Local source and wire checks
+## Execution protocol checkpoint (SCN-013)
+
+The execution protocol sources are an **uncompiled enabling component**, not an EA
+that can place, cancel or close an order. They parse the exact bounded command
+envelope, encode an empty Demo inventory bootstrap and encode confirmed-rejection
+or uncertain outcomes. No `WebRequest`, account query, `OrderCheck`, `OrderSend`,
+broker inventory scan or transaction callback exists in this checkpoint.
+
+Local source and hand-authored golden-fixture checks:
+
+```bash
+.venv/bin/python scripts/check-execution-protocol-source.py
+.venv/bin/python scripts/check-execution-protocol-fixture.py --kind inventory
+.venv/bin/python scripts/check-execution-protocol-fixture.py --kind outcome
+.venv/bin/python -m pytest -q tests/test_mt5_source.py
+```
+
+On the selected MT5 host, copy `TelemetryProtocol.mqh` and
+`ExecutionProtocol.mqh` beside `SochronExecutionProtocolSelfTest.mq5` in an
+isolated `MQL5/Scripts` folder. Compile with a recorded MetaEditor build and retain
+fresh zero-error/zero-warning output. Run the script with Auto Trading off; a pass
+writes `MQL5/Files/SochronExecutionInventorySelfTest.json` and
+`MQL5/Files/SochronExecutionOutcomeSelfTest.json`. Verify each actual generated
+path using the matching command above plus `--fixture PATH`. Require a fresh script
+PASS log and `input_is_committed_golden=false`; copied golden files alone are not
+MQL evidence. This host procedure is `NOT RUN` in the repository evidence.
+
+## Read-only observer source and wire checks
 
 Verified with the pinned project Python environment:
 

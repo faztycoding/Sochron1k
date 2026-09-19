@@ -165,6 +165,14 @@ synthetic local evidence only; no MQL5 mutation or target connection exists. See
 [ADR-018](decisions/ADR-018-execution-polling-bridge.md) and the
 [execution bridge runbook](operations/execution-bridge.md).
 
+SCN-013 fixes the corresponding pure MQL5 wire boundary before adding mutation.
+The source-only codec parses the exact command envelope and encodes empty bootstrap,
+confirmed-rejection and uncertain evidence. Static guards prohibit network, account,
+file and trading access in the header; its script writes only named synthetic
+fixtures. It consumes ADR-018 rather than changing the transport architecture.
+It is uncompiled and has no executor lock, ledger, preflight, inventory scan,
+`OrderCheck`, `OrderSend`, transaction handling or reconciliation authority.
+
 | Failure | Required behavior |
 | --- | --- |
 | AI unavailable or invalid | Strategies that require AI enter `WAIT`; position management continues |

@@ -1,0 +1,42 @@
+{
+  "protocol": "sochron.execution.inventory.v1",
+  "boot_id": "11111111-2222-4333-8444-555555555555",
+  "sequence": 1,
+  "identity": {
+    "executor_id": "synthetic-executor",
+    "account_ref": "123456789",
+    "server": "Synthetic-Demo",
+    "currency": "USD",
+    "margin_mode": "retail_hedging",
+    "symbol": "XAUUSD.fixture"
+  },
+  "trade_mode": "demo",
+  "terminal_build": 1,
+  "terminal_connected": true,
+  "account_trade_allowed": false,
+  "algo_trading_allowed": false,
+  "magic_number": 910001,
+  "observed_at": "2026-09-20T00:00:00Z",
+  "inventory": {
+    "executor_id": "synthetic-executor",
+    "generation": "synthetic-generation-1",
+    "account": {
+      "account_ref": "123456789",
+      "server": "Synthetic-Demo",
+      "currency": "USD",
+      "margin_mode": "retail_hedging",
+      "trade_mode": "demo",
+      "can_trade": false,
+      "equity": "1000.0000000000",
+      "checked_at": "2026-09-20T00:00:00Z"
+    },
+    "symbol": "XAUUSD.fixture",
+    "observed_at": "2026-09-20T00:00:00Z",
+    "complete": true,
+    "foreign_orders": 0,
+    "foreign_positions": 0,
+    "snapshots": [],
+    "management_snapshots": [],
+    "rejections": []
+  }
+}
