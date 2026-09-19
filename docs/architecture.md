@@ -218,6 +218,15 @@ authority. Empty data is `awaiting_source`, because the research producer and
 reproducible PA01 evaluation remain unimplemented; see
 [ADR-020](decisions/ADR-020-owner-research-statistics-read-model.md).
 
+SCN-018 fixes the first PA01 calculation boundary in `sochron_worker.pa01`.
+The pure kernel consumes explicit as-of closed M5/H1 evidence, calculates the
+versioned EMA/ATR/ADX and delayed L2/R2 pivots, and returns BUY, SELL, WAIT or BLOCK
+with stable evidence hashes. It has no clock-now, I/O, persistence, AI, risk,
+command or execution authority. Aggregation, scheduling and atomic
+feature/signal persistence remain missing, so the owner signal route correctly
+stays `awaiting_source`; see
+[ADR-021](decisions/ADR-021-pa01-v1-deterministic-kernel.md).
+
 | Failure | Required behavior |
 | --- | --- |
 | AI unavailable or invalid | Strategies that require AI enter `WAIT`; position management continues |

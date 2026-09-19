@@ -197,5 +197,9 @@ strategy and research producers. Statistics remain empty until an evaluation has
 dataset/split identity, sample size, uncertainty and explicit costs; the UI does
 not fabricate zero results. The implemented owner execution read route is shown as
 real data only when its private journal source validates.
+The first pure `PA01-v1` decision kernel is implemented with as-of M5/H1 evidence,
+delayed pivots and fixed indicator initialization, but it is not yet a running
+producer: M1 aggregation, scheduling and atomic feature/signal persistence are the
+next source-side boundary.
 A real Demo round trip still requires owner inputs and explicit target authorization
 listed in the task contract.
