@@ -247,6 +247,30 @@ def test_management_idempotency_and_changed_payload_conflict(
     assert service.adapter.manage_count == 1
 
 
+def test_entry_cannot_reuse_a_management_command_id(
+    tmp_path, policy, account, contract, market, intent, risk, observed_at
+):
+    service, _ = ready_service(tmp_path, account, policy, intent, observed_at)
+    open_trade(service, policy, account, contract, market, intent, risk, observed_at)
+    close = management_intent(
+        observed_at,
+        operation=ManagementOperation.CLOSE,
+        command_id="shared-command-id",
+        idempotency_key="management-shared-command-id",
+    )
+    manage(service, policy, account, close, observed_at)
+    reused = intent.model_copy(
+        update={
+            "command_id": close.command_id,
+            "idempotency_key": "entry-shared-command-id",
+            "signal_id": "entry-shared-command-id",
+        }
+    )
+
+    with pytest.raises(IdempotencyConflict, match="command ID"):
+        service.journal.reserve(reused, Decimal("0.10"), Decimal("500"))
+
+
 @pytest.mark.parametrize(
     ("equity", "daily", "total"),
     [

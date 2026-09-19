@@ -157,6 +157,14 @@ Ambiguous management remains UNKNOWN and query-only reconciliation never resends
 This remains simulator evidence; no MT5 mutation adapter or external control route
 exists. See [ADR-017](decisions/ADR-017-durable-position-management.md).
 
+SCN-012 adds a disabled-by-default, separately authenticated polling adapter for one
+future MT5 Demo executor. Boot/generation fencing, one claimed dispatch, exact replay,
+bounded waits, cumulative outcome binding and no-effect rejection evidence preserve
+the journal-before-send and UNKNOWN-before-retry rules. The API-side transport has
+synthetic local evidence only; no MQL5 mutation or target connection exists. See
+[ADR-018](decisions/ADR-018-execution-polling-bridge.md) and the
+[execution bridge runbook](operations/execution-bridge.md).
+
 | Failure | Required behavior |
 | --- | --- |
 | AI unavailable or invalid | Strategies that require AI enter `WAIT`; position management continues |

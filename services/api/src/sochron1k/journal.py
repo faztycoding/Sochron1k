@@ -12,6 +12,7 @@ from .models import (
     BrokerSnapshot,
     CommandIntent,
     CommandState,
+    ExecutorRejection,
     ManagementIntent,
     ManagementOperation,
     ManagementSnapshot,
@@ -213,6 +214,15 @@ class Journal:
                     fee TEXT NOT NULL,
                     occurred_at TEXT
                 );
+                CREATE TABLE IF NOT EXISTS executor_rejections (
+                    command_id TEXT PRIMARY KEY,
+                    target_command_id TEXT,
+                    operation TEXT NOT NULL,
+                    retcode INTEGER NOT NULL,
+                    retcode_external INTEGER NOT NULL,
+                    request_id INTEGER NOT NULL,
+                    observed_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -256,6 +266,13 @@ class Journal:
                     state=CommandState(existing["state"]),
                     volume=Decimal(existing["volume"]),
                     duplicate=True,
+                )
+            if connection.execute(
+                "SELECT 1 FROM management_commands WHERE command_id=?",
+                (intent.command_id,),
+            ).fetchone():
+                raise IdempotencyConflict(
+                    "command ID was already used by a management command"
                 )
             if connection.execute(
                 "SELECT 1 FROM exposure_slots WHERE account_ref=?",
@@ -427,6 +444,195 @@ class Journal:
             if row is None:
                 raise BrokerEvidenceConflict()
             self._validate_broker_evidence(db, row, snapshot)
+
+    @staticmethod
+    def _same_rejection(row, rejection: ExecutorRejection) -> bool:
+        return (
+            row["command_id"] == rejection.command_id
+            and row["target_command_id"] == rejection.target_command_id
+            and row["operation"] == rejection.operation
+            and row["retcode"] == rejection.retcode
+            and row["retcode_external"] == rejection.retcode_external
+            and row["request_id"] == rejection.request_id
+            and row["observed_at"] == rejection.observed_at.isoformat()
+        )
+
+    @staticmethod
+    def _insert_rejection(db, rejection: ExecutorRejection) -> None:
+        existing = db.execute(
+            "SELECT * FROM executor_rejections WHERE command_id=?",
+            (rejection.command_id,),
+        ).fetchone()
+        if existing is not None:
+            if not Journal._same_rejection(existing, rejection):
+                raise BrokerEvidenceConflict()
+            return
+        db.execute(
+            """
+            INSERT INTO executor_rejections(
+                command_id,target_command_id,operation,retcode,
+                retcode_external,request_id,observed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                rejection.command_id,
+                rejection.target_command_id,
+                rejection.operation,
+                rejection.retcode,
+                rejection.retcode_external,
+                rejection.request_id,
+                rejection.observed_at.isoformat(),
+            ),
+        )
+
+    @staticmethod
+    def _validate_executor_rejection_in(db, rejection: ExecutorRejection):
+        existing = db.execute(
+            "SELECT * FROM executor_rejections WHERE command_id=?",
+            (rejection.command_id,),
+        ).fetchone()
+        if existing is not None and not Journal._same_rejection(existing, rejection):
+            raise BrokerEvidenceConflict()
+        if rejection.operation == "open":
+            row = db.execute(
+                "SELECT * FROM commands WHERE command_id=?", (rejection.command_id,)
+            ).fetchone()
+            valid = (
+                row is not None
+                and rejection.target_command_id is None
+                and CommandState(row["state"])
+                in {CommandState.SENT, CommandState.UNKNOWN, CommandState.REJECTED}
+                and db.execute(
+                    "SELECT 1 FROM dispatch_attempts WHERE command_id=?",
+                    (rejection.command_id,),
+                ).fetchone()
+                is not None
+                and db.execute(
+                    "SELECT 1 FROM broker_orders WHERE command_id=?",
+                    (rejection.command_id,),
+                ).fetchone()
+                is None
+                and db.execute(
+                    "SELECT 1 FROM broker_deals WHERE command_id=?",
+                    (rejection.command_id,),
+                ).fetchone()
+                is None
+            )
+            kind = "entry"
+        else:
+            row = db.execute(
+                "SELECT * FROM management_commands WHERE command_id=?",
+                (rejection.command_id,),
+            ).fetchone()
+            valid = (
+                row is not None
+                and row["target_command_id"] == rejection.target_command_id
+                and row["operation"] == rejection.operation
+                and CommandState(row["state"])
+                in {CommandState.SENT, CommandState.UNKNOWN, CommandState.REJECTED}
+                and db.execute(
+                    "SELECT 1 FROM management_attempts WHERE command_id=?",
+                    (rejection.command_id,),
+                ).fetchone()
+                is not None
+                and db.execute(
+                    "SELECT 1 FROM management_outcomes WHERE command_id=?",
+                    (rejection.command_id,),
+                ).fetchone()
+                is None
+                and db.execute(
+                    "SELECT 1 FROM management_deals WHERE command_id=?",
+                    (rejection.command_id,),
+                ).fetchone()
+                is None
+            )
+            kind = "management"
+        if not valid:
+            raise BrokerEvidenceConflict()
+        return kind, row
+
+    def validate_executor_rejection(self, rejection: ExecutorRejection) -> None:
+        rejection = ExecutorRejection.model_validate(rejection.model_dump())
+        with self._connect() as db:
+            db.execute("BEGIN")
+            self._validate_executor_rejection_in(db, rejection)
+
+    def apply_executor_rejection(self, rejection: ExecutorRejection) -> CommandState:
+        rejection = ExecutorRejection.model_validate(rejection.model_dump())
+        db = self._connect()
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            kind, row = self._validate_executor_rejection_in(db, rejection)
+            if kind == "entry":
+                self._insert_rejection(db, rejection)
+                previous = CommandState(row["state"])
+                if previous is not CommandState.REJECTED:
+                    self._transition_in(
+                        db,
+                        rejection.command_id,
+                        previous,
+                        CommandState.REJECTED,
+                        self._now(),
+                        "confirmed broker rejection with no effect",
+                    )
+                db.execute("DELETE FROM exposure_slots WHERE command_id=?", (rejection.command_id,))
+            else:
+                self._insert_rejection(db, rejection)
+                previous = CommandState(row["state"])
+                if previous is not CommandState.REJECTED:
+                    self._management_transition_in(
+                        db,
+                        rejection.command_id,
+                        previous,
+                        CommandState.REJECTED,
+                        self._now(),
+                        "confirmed broker rejection with no effect",
+                    )
+                if rejection.operation == ManagementOperation.CLOSE.value:
+                    parent = db.execute(
+                        "SELECT * FROM commands WHERE command_id=?",
+                        (rejection.target_command_id,),
+                    ).fetchone()
+                    if parent is None:
+                        raise BrokerEvidenceConflict()
+                    snapshot = self._broker_snapshot_in(db, rejection.target_command_id)
+                    restored = self._broker_target(snapshot)
+                    parent_state = CommandState(parent["state"])
+                    if parent_state is CommandState.CLOSING:
+                        self._transition_in(
+                            db,
+                            rejection.target_command_id,
+                            parent_state,
+                            restored,
+                            self._now(),
+                            "close rejected; retained confirmed broker state",
+                        )
+                    elif parent_state is not restored:
+                        raise BrokerEvidenceConflict()
+            db.commit()
+            return CommandState.REJECTED
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    def executor_rejection(self, command_id: str) -> ExecutorRejection | None:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT * FROM executor_rejections WHERE command_id=?", (command_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return ExecutorRejection(
+            command_id=row["command_id"],
+            target_command_id=row["target_command_id"],
+            operation=row["operation"],
+            retcode=row["retcode"],
+            retcode_external=row["retcode_external"],
+            request_id=row["request_id"],
+            observed_at=row["observed_at"],
+        )
 
     @staticmethod
     def _broker_target(snapshot):
@@ -1583,5 +1789,6 @@ class Journal:
                     "management_attempts",
                     "management_outcomes",
                     "management_deals",
+                    "executor_rejections",
                 )
             }

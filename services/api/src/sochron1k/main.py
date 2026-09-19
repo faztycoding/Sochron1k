@@ -14,6 +14,12 @@ from .chart import ChartSettings, ChartStore, load_chart_settings
 from .chart_api import bridge_router as chart_bridge_router
 from .chart_api import history_router
 from .chart_api import owner_router as chart_owner_router
+from .execution_bridge import (
+    ExecutionBridgeSettings,
+    ExecutionPollingBridge,
+    load_execution_bridge_settings,
+)
+from .execution_bridge_api import router as execution_bridge_router
 from .owner_api import router as owner_router
 from .owner_auth import OwnerAuthSettings, OwnerVerifier, load_owner_auth_settings
 from .telemetry import BridgeSettings, TelemetryBridge, load_bridge_settings
@@ -39,9 +45,18 @@ def create_app(
     owner_auth_settings: OwnerAuthSettings | None = None,
     chart_settings: ChartSettings | None = None,
     history_directory: Path | None = None,
+    execution_bridge_settings: ExecutionBridgeSettings | None = None,
 ) -> FastAPI:
+    if (
+        bridge_settings is not None
+        and execution_bridge_settings is not None
+        and bridge_settings.token.get_secret_value()
+        == execution_bridge_settings.token.get_secret_value()
+    ):
+        raise RuntimeError("telemetry and execution bridges require separate credentials")
     app = FastAPI(title="Sochron1k API", version=__version__)
     app.state.telemetry_bridge = TelemetryBridge(bridge_settings)
+    app.state.execution_bridge = ExecutionPollingBridge(execution_bridge_settings)
     app.state.owner_verifier = OwnerVerifier(owner_auth_settings)
     history = None
     if history_directory is not None:
@@ -54,11 +69,12 @@ def create_app(
     app.include_router(chart_bridge_router)
     app.include_router(chart_owner_router)
     app.include_router(history_router)
+    app.include_router(execution_bridge_router)
 
     @app.middleware("http")
     async def bridge_no_cache(request: Request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith(("/bridge/", "/owner/", "/auth/")):
+        if request.url.path.startswith(("/bridge/", "/executor/", "/owner/", "/auth/")):
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -93,4 +109,5 @@ app = create_app(
     Path(os.environ["SOCHRON_CHART_HISTORY_DIR"])
     if os.environ.get("SOCHRON_CHART_HISTORY_DIR")
     else None,
+    load_execution_bridge_settings(),
 )

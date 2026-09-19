@@ -19,6 +19,7 @@ from sochron1k.chart import EPOCH, PERIODS, ChartFrame, ChartSettings
 from sochron1k.models import (
     CommandIntent,
     CommandState,
+    ExecutorRejection,
     ManagementIntent,
     ManagementOperation,
     RiskState,
@@ -33,7 +34,7 @@ from .sync_journal import MAX_JOURNAL_BYTES, STATES, canonical, decode_batch, ut
 
 # Exact sqlite_schema signatures of the current writers; changes need reviewed admission.
 SCHEMAS = {
-    "commands": (0, "bf15fe71e298eb12dcab1c08e51c62e4a59324a5e9fe0a67fd4667084f063a8d"),
+    "commands": (0, "66bd1ddfbe98c0556fa66180aa0fd676e460d8ccf3187ef50e132a93cf4cd7d8"),
     "archive": (1, "ccb8fa69d2d66dfbf1ee506687234255084130feea32494968f650ccc003d809"),
     "sync": (1, "9e80d5a9d5c4bd688402afb716651b6eecca5e639c92ce5681a09313b7352b5d"),
 }
@@ -182,6 +183,7 @@ def _commands(db, binding, latest, tick):
         management_unknown=0,
         management_attempts=0,
         management_deals=0,
+        executor_rejections=0,
     )
     broker_evidence = {}
     for row in db.execute("SELECT * FROM commands ORDER BY command_id"):
@@ -250,10 +252,29 @@ def _commands(db, binding, latest, tick):
                 and _decimal(slot["reserved_loss"]) == loss
             )
         counts["exposure"] += len(slots)
+        rejections = db.execute(
+            "SELECT * FROM executor_rejections WHERE command_id=?", (intent.command_id,)
+        ).fetchall()
+        _require(len(rejections) <= 1)
+        if rejections:
+            rejection = ExecutorRejection.model_validate(dict(rejections[0]))
+            _require(
+                rejection.command_id == intent.command_id
+                and rejection.target_command_id is None
+                and rejection.operation == "open"
+                and rejection.observed_at <= latest
+                and state is CommandState.REJECTED
+                and len(attempts) == 1
+                and not protected
+            )
+            counts["executor_rejections"] += 1
         orders = db.execute(
             "SELECT * FROM broker_orders WHERE command_id=?", (intent.command_id,)
         ).fetchall()
         _require(len(orders) <= 1)
+        _require(not (orders and rejections))
+        if state is CommandState.REJECTED:
+            _require(len(orders) + len(rejections) == 1)
         if orders:
             _require(len(attempts) == 1 and state.value not in {"created", "validated", "queued"})
         filled = Decimal(0)
@@ -437,11 +458,29 @@ def _commands(db, binding, latest, tick):
         if state is not CommandState.QUEUED:
             _require(len(attempts) == 1)
         counts["management_attempts"] += len(attempts)
+        rejections = db.execute(
+            "SELECT * FROM executor_rejections WHERE command_id=?", (intent.command_id,)
+        ).fetchall()
+        _require(len(rejections) <= 1)
+        if rejections:
+            rejection = ExecutorRejection.model_validate(dict(rejections[0]))
+            _require(
+                rejection.command_id == intent.command_id
+                and rejection.target_command_id == intent.target_command_id
+                and rejection.operation == intent.operation.value
+                and rejection.observed_at <= latest
+                and state is CommandState.REJECTED
+                and len(attempts) == 1
+            )
+            counts["executor_rejections"] += 1
         outcomes = db.execute(
             "SELECT * FROM management_outcomes WHERE command_id=?",
             (intent.command_id,),
         ).fetchall()
         _require(len(outcomes) <= 1)
+        _require(not (outcomes and rejections))
+        if state is CommandState.REJECTED:
+            _require(len(outcomes) + len(rejections) == 1)
         deals = db.execute(
             "SELECT * FROM management_deals WHERE command_id=? ORDER BY deal_ticket",
             (intent.command_id,),
@@ -521,7 +560,10 @@ def _commands(db, binding, latest, tick):
                 _require(False)
         else:
             _require(not deals)
-            _require(state in {CommandState.QUEUED, CommandState.SENT, CommandState.UNKNOWN})
+            _require(
+                state in {CommandState.QUEUED, CommandState.SENT, CommandState.UNKNOWN}
+                or (state is CommandState.REJECTED and len(rejections) == 1)
+            )
         if state.value not in TERMINAL:
             active_management[intent.target_command_id] = (
                 active_management.get(intent.target_command_id, 0) + 1
@@ -533,10 +575,19 @@ def _commands(db, binding, latest, tick):
         counts["management_unknown"] += int(state is CommandState.UNKNOWN)
     _require(
         all(value == 1 for value in active_management.values())
+        and not db.execute(
+            """
+            SELECT 1 FROM commands
+            INNER JOIN management_commands USING(command_id)
+            LIMIT 1
+            """
+        ).fetchone()
         and db.execute("SELECT count(*) FROM management_outcomes").fetchone()[0]
         <= counts["management_commands"]
         and db.execute("SELECT count(*) FROM management_deals").fetchone()[0]
         == counts["management_deals"]
+        and db.execute("SELECT count(*) FROM executor_rejections").fetchone()[0]
+        == counts["executor_rejections"]
     )
     for command_id, totals in managed_volume.items():
         parent = broker_evidence[command_id]

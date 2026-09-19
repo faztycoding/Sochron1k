@@ -14,6 +14,7 @@ from sochron1k.models import (
     BrokerDeal,
     BrokerSnapshot,
     CommandState,
+    ExecutorRejection,
     ManagementIntent,
     ManagementOperation,
     ManagementSnapshot,
@@ -226,6 +227,31 @@ def test_command_broker_relationships(recovery_case, state):
     assert result["commands"]["deals"] == int(bool(filled))
     assert result["commands"]["exposure"] == int(state != "rejected")
     assert result["execution_ready"] is False
+
+
+def test_confirmed_rejection_without_fake_ticket_is_recovery_admitted(recovery_case):
+    case = recovery_case
+    case["commands"].apply_executor_rejection(
+        ExecutorRejection(
+            command_id=case["intent"].command_id,
+            operation="open",
+            retcode=10006,
+            retcode_external=0,
+            request_id=19,
+            observed_at=case["commands"]
+            .risk_state(case["intent"].account_ref, case["intent"].experiment_id)
+            .updated_at,
+        )
+    )
+    result = inspect(case)
+    assert result["commands"]["executor_rejections"] == 1
+    assert result["commands"]["orders"] == result["commands"]["exposure"] == 0
+
+    sql(case["commands"].path, "UPDATE executor_rejections SET retcode=10012")
+    paths = take(case)
+    assert verify_snapshot(paths["commands"])
+    with pytest.raises(audit.RecoveryUnavailable):
+        inspect(case, paths)
 
 
 def close_fixture(case):

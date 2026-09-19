@@ -8,13 +8,14 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from .executor import ExecutorAdapter
+from .executor import ExecutorAdapter, ExecutorRejected
 from .journal import BrokerEvidenceConflict, Journal, ManagementConflict
 from .models import (
     AccountSnapshot,
     CommandIntent,
     CommandState,
     ContractSpec,
+    ExecutorRejection,
     ManagementIntent,
     ManagementSnapshot,
     MarketSnapshot,
@@ -180,6 +181,31 @@ class ExecutionService:
             if snapshot.command_id != intent.command_id:
                 raise BrokerEvidenceConflict()
             state = self.journal.apply_broker_snapshot(snapshot)
+        except ExecutorRejected as error:
+            try:
+                checked_at = observed_at + timedelta(seconds=time.monotonic() - started)
+                if not 0 <= (checked_at - error.evidence.observed_at).total_seconds() <= 5:
+                    raise BrokerEvidenceConflict()
+                state = self.journal.apply_executor_rejection(error.evidence)
+            except Exception:
+                self._startup = None
+                self.journal.transition(
+                    intent.command_id,
+                    CommandState.UNKNOWN,
+                    "adapter rejection evidence unconfirmed; reconciliation required",
+                )
+                return SubmissionResult(
+                    command_id=intent.command_id,
+                    state=CommandState.UNKNOWN,
+                    volume=decision.volume,
+                    reason="RECONCILIATION_REQUIRED",
+                )
+            return SubmissionResult(
+                command_id=intent.command_id,
+                state=state,
+                volume=decision.volume,
+                reason="BROKER_REJECTED",
+            )
         except Exception:
             # Invocation may already have had an effect even for an unexpected
             # exception/malformed response. Persist UNKNOWN or propagate storage
@@ -318,6 +344,31 @@ class ExecutionService:
             if not 0 <= (checked_at - snapshot.observed_at).total_seconds() <= 5:
                 raise BrokerEvidenceConflict()
             state = self.journal.apply_management_snapshot(snapshot)
+        except ExecutorRejected as error:
+            try:
+                checked_at = observed_at + timedelta(seconds=time.monotonic() - started)
+                if not 0 <= (checked_at - error.evidence.observed_at).total_seconds() <= 5:
+                    raise BrokerEvidenceConflict()
+                state = self.journal.apply_executor_rejection(error.evidence)
+            except Exception:
+                self._startup = None
+                self.journal.transition_management(
+                    intent.command_id,
+                    CommandState.UNKNOWN,
+                    "adapter rejection evidence unconfirmed after management dispatch",
+                )
+                return SubmissionResult(
+                    command_id=intent.command_id,
+                    state=CommandState.UNKNOWN,
+                    volume=reservation.volume,
+                    reason="RECONCILIATION_REQUIRED",
+                )
+            return SubmissionResult(
+                command_id=intent.command_id,
+                state=state,
+                volume=reservation.volume,
+                reason="BROKER_REJECTED",
+            )
         except Exception:
             self._startup = None
             self.journal.transition_management(
@@ -355,6 +406,14 @@ class ExecutionService:
                 volume=Decimal(row["volume"]),
                 reason="BROKER_OUTCOME_NOT_FOUND",
             )
+        if isinstance(snapshot, ExecutorRejection):
+            state = self.journal.apply_executor_rejection(snapshot)
+            return SubmissionResult(
+                command_id=command_id,
+                state=state,
+                volume=Decimal(row["volume"]),
+                reason="BROKER_REJECTED",
+            )
         if snapshot.command_id != command_id:
             raise BrokerEvidenceConflict()
         state = self.journal.apply_broker_snapshot(snapshot)
@@ -378,6 +437,14 @@ class ExecutionService:
                     state=CommandState.UNKNOWN,
                     volume=Decimal(row["requested_volume"]),
                     reason="BROKER_OUTCOME_NOT_FOUND",
+                )
+            if isinstance(snapshot, ExecutorRejection):
+                state = self.journal.apply_executor_rejection(snapshot)
+                return SubmissionResult(
+                    command_id=command_id,
+                    state=state,
+                    volume=Decimal(row["requested_volume"]),
+                    reason="BROKER_REJECTED",
                 )
             if snapshot.command_id != command_id:
                 raise BrokerEvidenceConflict()

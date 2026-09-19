@@ -5,13 +5,14 @@ from decimal import Decimal
 from enum import StrEnum
 from uuid import uuid4
 
-from .executor import ExecutorInventory
+from .executor import ExecutorInventory, ExecutorRejected
 from .models import (
     AccountSnapshot,
     BrokerDeal,
     BrokerSnapshot,
     CommandIntent,
     CommandState,
+    ExecutorRejection,
     ManagementIntent,
     ManagementOperation,
     ManagementSnapshot,
@@ -49,6 +50,7 @@ class SimulatorAdapter:
         self.manage_count = 0
         self._snapshots: dict[str, BrokerSnapshot] = {}
         self._management_snapshots: dict[str, ManagementSnapshot] = {}
+        self._rejections: dict[str, ExecutorRejection] = {}
         self.query_available = True
         self.generation = uuid4().hex
         self.executor_id = "simulator"
@@ -70,26 +72,30 @@ class SimulatorAdapter:
             foreign_positions=self.foreign_positions,
             snapshots=tuple(self._snapshots.values()),
             management_snapshots=tuple(self._management_snapshots.values()),
+            rejections=tuple(self._rejections.values()),
         )
 
     def send(self, intent: CommandIntent, volume: Decimal, attempt_id: str) -> BrokerSnapshot:
         del attempt_id
         if intent.command_id in self._snapshots:
             return self._snapshots[intent.command_id]
+        if intent.command_id in self._rejections:
+            raise ExecutorRejected(self._rejections[intent.command_id])
         self.send_count += 1
         suffix = intent.command_id[-8:]
         order_ticket = f"ord-{suffix}"
         position_id = f"pos-{suffix}"
         if self.behavior is SimulatorBehavior.REJECT:
-            snapshot = BrokerSnapshot(
+            rejection = ExecutorRejection(
                 command_id=intent.command_id,
-                order_ticket=order_ticket,
-                requested_volume=volume,
-                filled_volume=Decimal("0"),
-                remaining_volume=volume,
-                stop_loss_confirmed=False,
-                terminal_state=CommandState.REJECTED,
+                operation="open",
+                retcode=10006,
+                retcode_external=0,
+                request_id=self.send_count,
+                observed_at=self.account.checked_at,
             )
+            self._rejections[intent.command_id] = rejection
+            raise ExecutorRejected(rejection)
         else:
             filled = volume / 2 if self.behavior is SimulatorBehavior.PARTIAL_FILL else volume
             remaining = volume - filled
@@ -113,10 +119,10 @@ class SimulatorAdapter:
             raise TimeoutError("simulated response loss after broker acceptance")
         return snapshot
 
-    def query(self, command_id: str) -> BrokerSnapshot | None:
+    def query(self, command_id: str) -> BrokerSnapshot | ExecutorRejection | None:
         if not self.query_available:
             raise ConnectionError("simulated broker query unavailable")
-        return self._snapshots.get(command_id)
+        return self._snapshots.get(command_id) or self._rejections.get(command_id)
 
     def manage(
         self,
@@ -127,6 +133,8 @@ class SimulatorAdapter:
         del attempt_id
         if intent.command_id in self._management_snapshots:
             return self._management_snapshots[intent.command_id]
+        if intent.command_id in self._rejections:
+            raise ExecutorRejected(self._rejections[intent.command_id])
         current = self._snapshots.get(intent.target_command_id)
         current_deals = (
             {deal.deal_ticket: deal for deal in current.deals} if current is not None else {}
@@ -148,10 +156,17 @@ class SimulatorAdapter:
             if requested <= 0:
                 raise RuntimeError("simulated target has no pending volume")
             if self.management_behavior is ManagementBehavior.REJECT:
-                completed = Decimal("0")
-                remaining = requested
-                target_after = current
-                terminal = CommandState.REJECTED
+                rejection = ExecutorRejection(
+                    command_id=intent.command_id,
+                    target_command_id=intent.target_command_id,
+                    operation=intent.operation.value,
+                    retcode=10006,
+                    retcode_external=0,
+                    request_id=self.manage_count,
+                    observed_at=self.account.checked_at,
+                )
+                self._rejections[intent.command_id] = rejection
+                raise ExecutorRejected(rejection)
             else:
                 completed = requested
                 remaining = Decimal("0")
@@ -184,11 +199,17 @@ class SimulatorAdapter:
             if current.remaining_volume or requested <= 0:
                 raise RuntimeError("simulated target is not closeable")
             if self.management_behavior is ManagementBehavior.REJECT:
-                completed = Decimal("0")
-                remaining = requested
-                deals = ()
-                target_after = current
-                terminal = CommandState.REJECTED
+                rejection = ExecutorRejection(
+                    command_id=intent.command_id,
+                    target_command_id=intent.target_command_id,
+                    operation=intent.operation.value,
+                    retcode=10006,
+                    retcode_external=0,
+                    request_id=self.manage_count,
+                    observed_at=self.account.checked_at,
+                )
+                self._rejections[intent.command_id] = rejection
+                raise ExecutorRejected(rejection)
             else:
                 completed = (
                     requested / 2
@@ -236,7 +257,7 @@ class SimulatorAdapter:
             raise TimeoutError("simulated response loss after management acceptance")
         return snapshot
 
-    def query_management(self, command_id: str) -> ManagementSnapshot | None:
+    def query_management(self, command_id: str) -> ManagementSnapshot | ExecutorRejection | None:
         if not self.query_available:
             raise ConnectionError("simulated broker query unavailable")
-        return self._management_snapshots.get(command_id)
+        return self._management_snapshots.get(command_id) or self._rejections.get(command_id)

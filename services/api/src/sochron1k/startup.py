@@ -121,6 +121,12 @@ def inspect_startup(journal, adapter, policy, experiment_id, executor_id, now, g
         "EXECUTOR_INVENTORY_CONFLICT",
     )
     require(not (set(snapshots) & set(management_snapshots)), "EXECUTOR_INVENTORY_CONFLICT")
+    rejections = {item.command_id: item for item in inventory.rejections}
+    require(len(rejections) == len(inventory.rejections), "EXECUTOR_INVENTORY_CONFLICT")
+    require(
+        not (set(rejections) & (set(snapshots) | set(management_snapshots))),
+        "EXECUTOR_INVENTORY_CONFLICT",
+    )
     for command_id, snapshot in management_snapshots.items():
         try:
             row = journal.management_command(command_id)
@@ -140,20 +146,51 @@ def inspect_startup(journal, adapter, policy, experiment_id, executor_id, now, g
             "EXECUTOR_INVENTORY_STALE",
         )
         journal.validate_management_snapshot(snapshot)
-    require(all(row["command_id"] in snapshots for row in active), "STARTUP_UNRESOLVED")
+    for command_id, rejection in rejections.items():
+        try:
+            if rejection.operation == "open":
+                row = journal.command(command_id)
+                require(
+                    row["account_ref"] == policy.account_ref
+                    and row["experiment_id"] == experiment_id,
+                    "FOREIGN_EXPOSURE",
+                )
+            else:
+                row = journal.management_command(command_id)
+                require(
+                    row["account_ref"] == policy.account_ref
+                    and row["experiment_id"] == experiment_id,
+                    "FOREIGN_EXPOSURE",
+                )
+            if row["state"] in {"closed", "cancelled", "expired", "rejected"}:
+                require(row["state"] == "rejected", "EXECUTOR_INVENTORY_CONFLICT")
+            journal.validate_executor_rejection(rejection)
+        except KeyError:
+            raise StartupDenied("FOREIGN_EXPOSURE") from None
     require(
-        all(row["command_id"] in management_snapshots for row in management),
+        all(row["command_id"] in snapshots or row["command_id"] in rejections for row in active),
         "STARTUP_UNRESOLVED",
     )
+    require(
+        all(
+            row["command_id"] in management_snapshots or row["command_id"] in rejections
+            for row in management
+        ),
+        "STARTUP_UNRESOLVED",
+    )
+    for rejection in rejections.values():
+        journal.apply_executor_rejection(rejection)
     for row in management:
-        journal.apply_management_snapshot(management_snapshots[row["command_id"]])
+        if row["command_id"] in management_snapshots:
+            journal.apply_management_snapshot(management_snapshots[row["command_id"]])
     for row in active:
-        snapshot = snapshots[row["command_id"]]
-        journal.apply_broker_snapshot(snapshot)
-        require(
-            not snapshot.open_position_volume or snapshot.stop_loss_confirmed,
-            "STARTUP_UNPROTECTED",
-        )
+        if row["command_id"] in snapshots:
+            snapshot = snapshots[row["command_id"]]
+            journal.apply_broker_snapshot(snapshot)
+            require(
+                not snapshot.open_position_volume or snapshot.stop_loss_confirmed,
+                "STARTUP_UNPROTECTED",
+            )
     after, remaining, slots, remaining_management = journal.startup_state(
         policy.account_ref, experiment_id
     )
@@ -166,16 +203,19 @@ def inspect_startup(journal, adapter, policy, experiment_id, executor_id, now, g
     expected = {
         row["command_id"]
         for row in active
-        if snapshots[row["command_id"]].terminal_state not in terminal
+        if row["command_id"] in snapshots
+        and snapshots[row["command_id"]].terminal_state not in terminal
     }
     for row in management:
-        snapshot = management_snapshots[row["command_id"]]
-        if snapshot.target.terminal_state in terminal:
-            expected.discard(snapshot.target_command_id)
+        if row["command_id"] in management_snapshots:
+            snapshot = management_snapshots[row["command_id"]]
+            if snapshot.target.terminal_state in terminal:
+                expected.discard(snapshot.target_command_id)
     expected_management = {
         row["command_id"]
         for row in management
-        if management_snapshots[row["command_id"]].terminal_state not in terminal
+        if row["command_id"] in management_snapshots
+        and management_snapshots[row["command_id"]].terminal_state not in terminal
     }
     require(
         after == state

@@ -10,10 +10,19 @@ from .models import (
     AccountSnapshot,
     BrokerSnapshot,
     CommandIntent,
+    ExecutorRejection,
     ManagementIntent,
     ManagementSnapshot,
     StrictModel,
 )
+
+
+class ExecutorRejected(RuntimeError):
+    """The broker conclusively rejected a request with no external effect."""
+
+    def __init__(self, evidence: ExecutorRejection) -> None:
+        self.evidence = ExecutorRejection.model_validate(evidence.model_dump())
+        super().__init__("BROKER_REJECTED")
 
 
 class ExecutorInventory(StrictModel):
@@ -27,6 +36,7 @@ class ExecutorInventory(StrictModel):
     foreign_positions: StrictInt = Field(ge=0, le=100000)
     snapshots: tuple[BrokerSnapshot, ...] = Field(max_length=1000)
     management_snapshots: tuple[ManagementSnapshot, ...] = Field(default=(), max_length=1000)
+    rejections: tuple[ExecutorRejection, ...] = Field(default=(), max_length=1000)
 
 
 class ExecutorAdapter(Protocol):
@@ -34,7 +44,7 @@ class ExecutorAdapter(Protocol):
 
     def send(self, intent: CommandIntent, volume: Decimal, attempt_id: str) -> BrokerSnapshot: ...
 
-    def query(self, command_id: str) -> BrokerSnapshot | None: ...
+    def query(self, command_id: str) -> BrokerSnapshot | ExecutorRejection | None: ...
 
     def manage(
         self,
@@ -43,4 +53,6 @@ class ExecutorAdapter(Protocol):
         attempt_id: str,
     ) -> ManagementSnapshot: ...
 
-    def query_management(self, command_id: str) -> ManagementSnapshot | None: ...
+    def query_management(
+        self, command_id: str
+    ) -> ManagementSnapshot | ExecutorRejection | None: ...

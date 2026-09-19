@@ -65,7 +65,10 @@ uv sync --all-groups --frozen
 bash scripts/check-scn-001-local.sh
 ```
 
-The API health endpoint always reports Demo mode and currently reports `execution_ready=false`. No real MT5 adapter or broker credential is present.
+The API health endpoint always reports Demo mode and currently reports `execution_ready=false`.
+An authenticated, disabled-by-default API-side execution polling adapter now exists,
+but no MQL5 mutation EA or broker credential is present. See the
+[SCN-012 execution bridge runbook](docs/operations/execution-bridge.md).
 
 Run the responsive monitoring console with the pinned Node.js release:
 
@@ -164,6 +167,6 @@ private local configuration. The owner web console now consumes its private view
 no actual EA connection is verified yet.
 The [read-only EA source](mt5/ea/README.md) is prepared as an uncompiled checkpoint.
 Compile/verify the native CopyRates producer against SCN-004/006,
-verify actual Demo data, then complete
-the remaining SCN-001 execution and recovery work. A real Demo round trip still
+verify actual Demo data, then implement and compile the MQL5 consumer for the
+SCN-012 polling contract and complete the remaining target recovery work. A real Demo round trip still
 requires owner inputs and explicit target authorization listed in the task contract.

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from enum import StrEnum
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 
 
 class TradeMode(StrEnum):
@@ -251,6 +252,76 @@ class ManagementSnapshot(StrictModel):
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("observed_at must be timezone-aware")
         return value
+
+
+# Return codes in this allowlist are useful only after the executor has also
+# reconciled that the request created no broker order, deal or position effect.
+# Codes denoting success, timeout, connection loss, in-flight processing or an
+# already-mutated order/position are deliberately absent.
+CONFIRMED_NO_EFFECT_RETCODES = frozenset(
+    {
+        10004,  # requote
+        10006,  # request rejected
+        10007,  # request cancelled
+        10013,  # invalid request
+        10014,  # invalid volume
+        10015,  # invalid price
+        10016,  # invalid stops
+        10017,  # trading disabled
+        10018,  # market closed
+        10019,  # insufficient funds
+        10020,  # price changed
+        10021,  # no price
+        10022,  # invalid expiration
+        10024,  # too many requests
+        10026,  # server disabled auto trading
+        10027,  # terminal disabled auto trading
+        10029,  # frozen
+        10030,  # invalid filling mode
+        10032,  # allowed only on real accounts
+        10033,  # pending-order limit
+        10034,  # volume limit
+        10035,  # invalid order type
+        10040,  # position limit
+        10042,  # long only
+        10043,  # short only
+        10044,  # close only
+        10045,  # FIFO close required
+        10046,  # hedging prohibited
+    }
+)
+
+
+class ExecutorRejection(StrictModel):
+    command_id: str = Field(min_length=1, max_length=128)
+    target_command_id: str | None = Field(default=None, min_length=1, max_length=128)
+    operation: Literal["open", "cancel", "close"]
+    retcode: StrictInt
+    retcode_external: StrictInt = Field(ge=-2_147_483_648, le=2_147_483_647)
+    request_id: StrictInt = Field(ge=0, le=4_294_967_295)
+    observed_at: datetime
+
+    @field_validator("observed_at")
+    @classmethod
+    def rejection_time_is_timezone_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("observed_at must be timezone-aware")
+        return value.astimezone(UTC)
+
+    @field_validator("retcode")
+    @classmethod
+    def retcode_is_confirmed_no_effect(cls, value: int) -> int:
+        if value not in CONFIRMED_NO_EFFECT_RETCODES:
+            raise ValueError("retcode is not a confirmed no-effect rejection")
+        return value
+
+    @model_validator(mode="after")
+    def target_binding_matches_operation(self):
+        if (self.operation == "open") != (self.target_command_id is None):
+            raise ValueError("only management rejection requires target_command_id")
+        if self.target_command_id == self.command_id:
+            raise ValueError("rejection cannot target itself")
+        return self
 
 
 class TradeAudit(StrictModel):
