@@ -191,9 +191,11 @@ execution-protocol codec as uncompiled checkpoints.
 Compile/verify the native CopyRates producer against SCN-004/006,
 verify actual Demo data, then implement and compile the default-off mutation EA
 that consumes the SCN-012/013 contract and complete the remaining target recovery
-work. The UI connection rail identifies `/api/owner/signals` as implemented but
-waiting for the versioned strategy producer, and `/api/owner/statistics` as the
-remaining missing browser read API. The implemented owner execution read route is
-shown as real data only when its private journal source validates.
+work. The UI connection rail identifies `/api/owner/signals` and
+`/api/owner/statistics` as implemented read models waiting for their versioned
+strategy and research producers. Statistics remain empty until an evaluation has
+dataset/split identity, sample size, uncertainty and explicit costs; the UI does
+not fabricate zero results. The implemented owner execution read route is shown as
+real data only when its private journal source validates.
 A real Demo round trip still requires owner inputs and explicit target authorization
 listed in the task contract.

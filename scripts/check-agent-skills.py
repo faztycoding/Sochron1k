@@ -56,7 +56,9 @@ def main() -> int:
             except (OSError, ValueError) as error:
                 print(f"FAIL {name} ({kind}): {error}")
                 failed = True
-    print("Integrity only: this does not verify model selection, broker actions, or remote services.")
+    print(
+        "Integrity only: this does not verify model selection, broker actions, or remote services."
+    )
     return int(failed)
 
 

@@ -102,8 +102,8 @@ export function App() {
           <span>Sochron1k</span>
         </a>
         <nav className="rail-nav">
-          {navigation.map((item, index) => index === 1 || index === 2 || index === 4 ? (
-            <a className="nav-item" href={index === 1 ? "#market-chart" : index === 2 ? "#signal-evidence" : "#api-connections"} key={item}>
+          {navigation.map((item, index) => index === 1 || index === 2 || index === 3 || index === 4 ? (
+            <a className="nav-item" href={index === 1 ? "#market-chart" : index === 2 ? "#signal-evidence" : index === 3 ? "#research-statistics" : "#api-connections"} key={item}>
               <span className="nav-index">0{index + 1}</span><span>{index === 4 ? "การเชื่อมต่อ" : item}</span>
             </a>
           ) : (
@@ -271,8 +271,8 @@ export function App() {
       </main>
 
       <nav className="mobile-nav" aria-label="เมนูมือถือ">
-        {navigation.slice(0, 4).map((item, index) => index === 1 || index === 2 ? (
-          <a className="nav-item" href={index === 1 ? "#market-chart" : "#signal-evidence"} key={item}>
+        {navigation.slice(0, 4).map((item, index) => index > 0 ? (
+          <a className="nav-item" href={index === 1 ? "#market-chart" : index === 2 ? "#signal-evidence" : "#research-statistics"} key={item}>
             <span>{index + 1}</span>{item}
           </a>
         ) : (

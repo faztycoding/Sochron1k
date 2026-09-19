@@ -49,8 +49,8 @@ export const connectionDefinitions: Record<ConnectionId, Definition> = {
     required: null, sources: ["mt5_execution"], sourceLabel: "MT5 Execution EA", implementation: "available" },
   signals: { title: "สัญญาณ", result: "เหตุผล กลยุทธ์ และเวลายืนยัน", routes: ["/api/owner/signals"],
     required: null, sources: ["supabase_signals"], sourceLabel: "Supabase signals · รอ strategy producer", implementation: "available" },
-  statistics: { title: "สถิติ", result: "ผลลัพธ์ ต้นทุน และความไม่แน่นอน", routes: [],
-    required: "/api/owner/statistics", sources: ["research_metrics"], sourceLabel: "Research metrics", implementation: "missing" },
+  statistics: { title: "สถิติ", result: "ผลลัพธ์ ต้นทุน และความไม่แน่นอน", routes: ["/api/owner/statistics"],
+    required: null, sources: ["supabase_evaluations"], sourceLabel: "Supabase evaluations · รอ research producer", implementation: "available" },
 };
 
 const implementations = new Set<ImplementationState>(["available", "partial", "missing"]);

@@ -13,6 +13,11 @@ from .execution_evidence import (
 )
 from .models import StrictModel
 from .owner_auth import OwnerAuthDenied, OwnerVerifier
+from .research_statistics import (
+    ResearchStatisticsReader,
+    ResearchStatisticsUnavailable,
+    ResearchStatisticsView,
+)
 from .signal_evidence import (
     SignalEvidenceReader,
     SignalEvidenceUnavailable,
@@ -63,3 +68,14 @@ async def signals(owner: OwnerDep, request: Request) -> SignalEvidenceView:
         return await reader.view(owner, request.headers.getlist("authorization"))
     except SignalEvidenceUnavailable:
         raise HTTPException(status_code=503, detail="SIGNALS_UNAVAILABLE") from None
+
+
+@router.get("/statistics")
+async def statistics(owner: OwnerDep, request: Request) -> ResearchStatisticsView:
+    reader: ResearchStatisticsReader | None = request.app.state.research_statistics
+    if reader is None:
+        raise HTTPException(status_code=503, detail="STATISTICS_DISABLED")
+    try:
+        return await reader.view(owner, request.headers.getlist("authorization"))
+    except ResearchStatisticsUnavailable:
+        raise HTTPException(status_code=503, detail="STATISTICS_UNAVAILABLE") from None

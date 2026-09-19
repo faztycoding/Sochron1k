@@ -94,6 +94,7 @@ def build_ui_connection_map(
     execution_state: str,
     execution_evidence_state: RuntimeState,
     signal_configured: bool,
+    statistics_configured: bool,
 ) -> UiConnectionMap:
     return UiConnectionMap(
         connections=(
@@ -148,10 +149,12 @@ def build_ui_connection_map(
             ),
             UiConnection(
                 id="statistics",
-                implementation="missing",
-                runtime="not_applicable",
-                required_route="/api/owner/statistics",
-                sources=("research_metrics",),
+                implementation="available",
+                runtime=(
+                    "awaiting_source" if statistics_configured else "awaiting_configuration"
+                ),
+                current_routes=("/api/owner/statistics",),
+                sources=("supabase_evaluations",),
             ),
         )
     )

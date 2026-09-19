@@ -83,8 +83,14 @@ async def test_ui_connection_map_is_redacted_and_truthful_when_unconfigured() ->
         "required_route": None,
         "sources": ["supabase_signals"],
     }
-    assert nodes["statistics"]["implementation"] == "missing"
-    assert nodes["statistics"]["required_route"] == "/api/owner/statistics"
+    assert nodes["statistics"] == {
+        "id": "statistics",
+        "implementation": "available",
+        "runtime": "awaiting_configuration",
+        "current_routes": ["/api/owner/statistics"],
+        "required_route": None,
+        "sources": ["supabase_evaluations"],
+    }
     text = response.text.lower()
     for forbidden in ("token", "password", "owner_id", "account_ref", "supabase_url"):
         assert forbidden not in text
@@ -126,3 +132,4 @@ async def test_ui_connection_map_separates_configured_from_connected() -> None:
     assert nodes["bar_history"]["runtime"] == "awaiting_configuration"
     assert nodes["execution_evidence"]["runtime"] == "awaiting_source"
     assert nodes["signals"]["runtime"] == "awaiting_source"
+    assert nodes["statistics"]["runtime"] == "awaiting_source"

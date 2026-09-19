@@ -207,6 +207,17 @@ write, promotion, command, risk or execution authority. Empty data remains
 read boundary is not strategy or Demo-release evidence; see
 [ADR-019](decisions/ADR-019-owner-signal-read-model.md).
 
+SCN-017 adds the authenticated owner research-evaluation projection at
+`/owner/statistics`. It forwards the already verified owner token and unprivileged
+project key to the same owner-RLS Supabase boundary, then accepts only a bounded,
+strict metric/cost contract from `evaluations` with embedded strategy and optional
+experiment evidence. Win rate is derived from exact outcome counts; sample size,
+expectancy uncertainty, dataset/code identity, temporal split and costs remain
+visible. The reader has no write, aggregation, promotion, risk or execution
+authority. Empty data is `awaiting_source`, because the research producer and
+reproducible PA01 evaluation remain unimplemented; see
+[ADR-020](decisions/ADR-020-owner-research-statistics-read-model.md).
+
 | Failure | Required behavior |
 | --- | --- |
 | AI unavailable or invalid | Strategies that require AI enter `WAIT`; position management continues |

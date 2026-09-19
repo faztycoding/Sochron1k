@@ -55,6 +55,41 @@
   .signal-values div { border-right: 0; border-bottom: 1px solid var(--line); }
   .signal-values div:last-child { border-bottom: 0; }
 }
+.statistics-panel { margin-top: 18px; min-width: 0; scroll-margin-top: 20px; }
+.statistics-panel code { color: var(--gold-soft); overflow-wrap: anywhere; }
+.statistics-heading { align-items: center; }
+.statistics-list { display: grid; gap: 12px; }
+.statistics-card { overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-deep); }
+.statistics-card > header { display: flex; justify-content: space-between; align-items: start; gap: 16px; padding: 14px; border-bottom: 1px solid var(--line); }
+.statistics-card > header div { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 5px 10px; }
+.statistics-card > header strong { min-width: 0; overflow-wrap: anywhere; font: 600 14px "Inter", sans-serif; }
+.statistics-card > header small { grid-column: 2; color: var(--muted); }
+.split-badge, .sample-badge { width: fit-content; flex-shrink: 0; border: 1px solid rgba(214, 180, 106, 0.45); border-radius: 999px; padding: 5px 8px; color: var(--gold-soft); font: 600 11px "Inter", sans-serif; }
+.split-badge--train { color: var(--amber); border-color: rgba(241, 184, 75, 0.4); }
+.split-badge--test, .split-badge--walk_forward, .split-badge--shadow_demo { color: var(--green); border-color: rgba(57, 201, 138, 0.4); }
+.sample-badge { color: var(--text); border-color: var(--line); }
+.statistics-warning { margin: 0; padding: 10px 14px; border-bottom: 1px solid var(--line); color: var(--amber); font-size: 12px; }
+.statistics-values { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
+.statistics-values div { min-width: 0; padding: 14px; border-right: 1px solid var(--line); }
+.statistics-values div:last-child { border-right: 0; }
+.statistics-values dt, .statistics-values small { color: var(--muted); font-size: 11px; }
+.statistics-values dd { margin: 5px 0; overflow-wrap: anywhere; color: var(--gold-soft); font: 600 18px "Inter", sans-serif; }
+.statistics-costs { display: flex; flex-wrap: wrap; gap: 7px 18px; padding: 11px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+.statistics-costs strong { width: 100%; color: var(--text); }
+.statistics-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 20px; padding: 11px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+.statistics-meta span { min-width: 0; overflow-wrap: anywhere; }
+.statistics-meta strong { display: block; margin-top: 2px; color: var(--text); font-weight: 500; }
+@media (max-width: 760px) {
+  .statistics-values { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .statistics-values div:nth-child(2) { border-right: 0; }
+  .statistics-values div:nth-child(-n + 2) { border-bottom: 1px solid var(--line); }
+}
+@media (max-width: 480px) {
+  .statistics-heading, .statistics-card > header { align-items: start; flex-direction: column; }
+  .statistics-values, .statistics-meta { grid-template-columns: 1fr; }
+  .statistics-values div { border-right: 0; border-bottom: 1px solid var(--line); }
+  .statistics-values div:last-child { border-bottom: 0; }
+}
 .history-panel { margin-top: 18px; min-width: 0; scroll-margin-top: 20px; }
 .execution-panel { margin-top: 18px; min-width: 0; scroll-margin-top: 20px; }
 .execution-heading { align-items: center; }

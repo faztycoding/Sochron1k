@@ -65,6 +65,7 @@ async function run() {
   const users = [];
   const issuedTokens = []; // Memory only; revoke generated sessions before deleting test users.
   const signalFixtures = [];
+  const evaluationFixtures = [];
   let api;
   let web;
   let browser;
@@ -114,7 +115,7 @@ async function run() {
       assert.equal(rows.length, 1); assert(Number.isSafeInteger(rows[0].id));
       return rows[0].id;
     }
-    stage = "seed isolated owner-RLS signal evidence";
+    stage = "seed isolated owner-RLS signal and evaluation evidence";
     for (let index = 0; index < users.length; index++) {
       const unique = randomUUID();
       const confirmed = new Date((fixtureEpoch - 60) * 1000);
@@ -134,6 +135,18 @@ async function run() {
         confirmed_at: confirmed.toISOString(), expires_at: new Date((fixtureEpoch + 300) * 1000).toISOString(),
         evidence_ids: [`browser-feature-${unique}`] });
       signalFixtures.push({ owner_id: users[index].id, signal_id: signalId });
+      const datasetHash = createHash("sha256").update(`dataset-${unique}`).digest("hex");
+      await insertFixture("evaluations", { owner_id: users[index].id, strategy_version_id: strategyId,
+        experiment_id: experimentId, dataset_hash: datasetHash, split: "walk_forward",
+        metrics: { sample_size: 40, wins: 18, losses: 20, breakeven: 2, net_return_pct: 7.25,
+          expectancy_r: 0.18, expectancy_r_ci95_low: 0.03, expectancy_r_ci95_high: 0.33,
+          max_drawdown_pct: 3.5, profit_factor: 1.24 },
+        cost_assumptions: { spread_points: 18, slippage_points: 3, commission_per_lot: 7,
+          swap_included: true, operating_cost_per_trade: 0.12, currency: "USD" },
+        data_cutoff: new Date((fixtureEpoch - 60) * 1000).toISOString(),
+        created_at: new Date((fixtureEpoch - 30) * 1000).toISOString() });
+      evaluationFixtures.push({ owner_id: users[index].id, dataset_hash: datasetHash,
+        version_id: `browser-pa01-${unique}` });
     }
     await writeFile(chartPath, JSON.stringify({ offset_valid_from_server_s: fixtureEpoch - 10 * 86400,
       offset_valid_until_server_s: fixtureEpoch + 86400 }), { mode: 0o600, flag: "wx" });
@@ -237,7 +250,7 @@ async function run() {
     await connectionMap.getByText("/api/owner/telemetry", { exact: true }).waitFor();
     assert(await connectionMap.getByText("/api/owner/execution", { exact: true }).isVisible());
     assert(await connectionMap.getByText("/api/owner/signals", { exact: true }).isVisible());
-    assert(await connectionMap.getByText("ยังไม่มี /api/owner/statistics", { exact: true }).isVisible());
+    assert(await connectionMap.getByText("/api/owner/statistics", { exact: true }).isVisible());
     const mapResponse = await http(`${apiOrigin}/ui/connections`);
     assert.equal(mapResponse.status, 200);
     assert.equal(mapResponse.headers.get("cache-control"), "no-store");
@@ -256,6 +269,7 @@ async function run() {
     const chart = page.locator("#market-chart");
     const history = page.locator("#bar-history");
     const signals = page.locator("#signal-evidence");
+    const statistics = page.locator("#research-statistics");
     const execution = page.locator("#execution-evidence");
     async function login(user) {
       await page.getByLabel("อีเมลเจ้าของ").fill(user.email);
@@ -278,6 +292,7 @@ async function run() {
       assert.equal(await chart.locator("canvas").count(), 0);
       assert.equal(await history.locator("tbody tr").count(), 0);
       assert.equal(await signals.getByText(signalFixtures[0].signal_id, { exact: true }).count(), 0);
+      assert.equal(await statistics.getByText(evaluationFixtures[0].version_id, { exact: true }).count(), 0);
       assert.equal(await execution.getByText("browser-command-confirmed", { exact: true }).count(), 0);
     }
     stage = "foreign user denial";
@@ -288,10 +303,15 @@ async function run() {
     assert.equal((await http(`${apiOrigin}/owner/history/M5`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/execution`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/signals`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
+    assert.equal((await http(`${apiOrigin}/owner/statistics`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     const foreignRows = await (await http(`${origin}/rest/v1/signals?select=signal_id`, {
       headers: { apikey: local.ANON_KEY, Authorization: `Bearer ${foreignToken}` },
     })).json();
     assert.deepEqual(foreignRows, [{ signal_id: signalFixtures[1].signal_id }]);
+    const foreignEvaluations = await (await http(`${origin}/rest/v1/evaluations?select=dataset_hash`, {
+      headers: { apikey: local.ANON_KEY, Authorization: `Bearer ${foreignToken}` },
+    })).json();
+    assert.deepEqual(foreignEvaluations, [{ dataset_hash: evaluationFixtures[1].dataset_hash }]);
     await logout(); checks.push(stage);
 
     stage = "owner login and private telemetry";
@@ -309,10 +329,12 @@ async function run() {
     assert(await page.evaluate(() => {
       const chartNode = document.querySelector("#market-chart");
       const signalNode = document.querySelector("#signal-evidence");
+      const statisticsNode = document.querySelector("#research-statistics");
       const historyNode = document.querySelector("#bar-history");
-      return Boolean(chartNode && signalNode && historyNode &&
+      return Boolean(chartNode && signalNode && statisticsNode && historyNode &&
         chartNode.compareDocumentPosition(signalNode) & Node.DOCUMENT_POSITION_FOLLOWING &&
-        signalNode.compareDocumentPosition(historyNode) & Node.DOCUMENT_POSITION_FOLLOWING);
+        signalNode.compareDocumentPosition(statisticsNode) & Node.DOCUMENT_POSITION_FOLLOWING &&
+        statisticsNode.compareDocumentPosition(historyNode) & Node.DOCUMENT_POSITION_FOLLOWING);
     }));
     const signalResponse = await http(`${apiOrigin}/owner/signals`, {
       headers: { Authorization: `Bearer ${originalToken}` },
@@ -327,6 +349,25 @@ async function run() {
     })).json();
     assert.deepEqual(ownerRows, [{ signal_id: signalFixtures[0].signal_id }]);
     checks.push("owner signal RLS evidence, causal projection and UI placement");
+    await statistics.getByText(evaluationFixtures[0].version_id, { exact: true }).waitFor();
+    assert(await statistics.getByText("Walk-forward", { exact: true }).isVisible());
+    assert(await statistics.getByText("n = 40", { exact: true }).isVisible());
+    assert(await statistics.getByText("45.0000%", { exact: true }).isVisible());
+    assert(await statistics.getByText("Spread 18 points", { exact: true }).isVisible());
+    const statisticsResponse = await http(`${apiOrigin}/owner/statistics`, {
+      headers: { Authorization: `Bearer ${originalToken}` },
+    });
+    assert.equal(statisticsResponse.status, 200);
+    const statisticsBody = await statisticsResponse.json();
+    assert.equal(statisticsBody.status.state, "available");
+    assert.equal(statisticsBody.status.promotion_decided, false);
+    assert.deepEqual(statisticsBody.evaluations.map(item => item.dataset_hash), [evaluationFixtures[0].dataset_hash]);
+    assert(!JSON.stringify(statisticsBody).includes(users[0].id));
+    const ownerEvaluations = await (await http(`${origin}/rest/v1/evaluations?select=dataset_hash`, {
+      headers: { apikey: local.ANON_KEY, Authorization: `Bearer ${originalToken}` },
+    })).json();
+    assert.deepEqual(ownerEvaluations, [{ dataset_hash: evaluationFixtures[0].dataset_hash }]);
+    checks.push("owner research evaluation RLS, costs, uncertainty and UI placement");
     await execution.getByText("browser-command-confirmed", { exact: true }).waitFor();
     assert(await execution.getByText("MT5 ยืนยันแล้ว", { exact: true }).isVisible());
     assert(await execution.getByText(/Deal: browser-deal-confirmed/).isVisible());
@@ -512,6 +553,7 @@ async function run() {
     assert.equal((await http(`${apiOrigin}/owner/chart/M5`, { headers: { Authorization: `Bearer ${freshToken}` } })).status, 401);
     assert.equal((await http(`${apiOrigin}/owner/history/M5`, { headers: { Authorization: `Bearer ${freshToken}` } })).status, 401);
     assert.equal((await http(`${apiOrigin}/owner/execution`, { headers: { Authorization: `Bearer ${freshToken}` } })).status, 401);
+    assert.equal((await http(`${apiOrigin}/owner/statistics`, { headers: { Authorization: `Bearer ${freshToken}` } })).status, 401);
     checks.push(stage);
 
     stage = "reload loses memory session";
@@ -563,7 +605,7 @@ async function run() {
     }
     if (users.length) {
       const ownerFilter = `in.(${users.map(user => user.id).join(",")})`;
-      for (const table of ["signals", "experiments", "accounts", "strategy_versions"]) {
+      for (const table of ["evaluations", "signals", "experiments", "accounts", "strategy_versions"]) {
         try {
           const url = new URL(`${origin}/rest/v1/${table}`); url.searchParams.set("owner_id", ownerFilter);
           const response = await http(url, { method: "DELETE", headers: { ...admin, Prefer: "return=minimal" } });
@@ -588,6 +630,8 @@ async function run() {
     "apps/web/src/execution-api.test.ts", "tests/fixtures/execution_evidence_seed.py",
     "apps/web/src/SignalPanel.tsx", "apps/web/src/signal-api.ts", "apps/web/src/SignalPanel.test.tsx",
     "apps/web/src/signal-api.test.ts", "services/api/src/sochron1k/signal_evidence.py",
+    "apps/web/src/StatisticsPanel.tsx", "apps/web/src/statistics-api.ts", "apps/web/src/StatisticsPanel.test.tsx",
+    "apps/web/src/statistics-api.test.ts", "services/api/src/sochron1k/research_statistics.py",
     "apps/web/src/styles.css",
     "apps/web/src/chart-api.ts", "apps/web/src/ChartPanel.tsx", "apps/web/src/CandleCanvas.tsx",
     "apps/web/src/history-api.ts", "apps/web/src/HistoryPanel.tsx", "apps/web/src/history-api.test.ts",
@@ -599,6 +643,7 @@ async function run() {
     "services/api/src/sochron1k/main.py", "services/api/src/sochron1k/ui_connections.py",
     "services/api/src/sochron1k/owner_api.py", "services/api/src/sochron1k/execution_evidence.py",
     "tests/test_api_safety.py", "tests/test_execution_evidence.py", "tests/test_signal_evidence.py",
+    "tests/test_research_statistics.py",
     "services/api/src/sochron1k/owner_auth.py", "services/api/src/sochron1k/telemetry.py", "tests/fixtures/mt5-telemetry-v1.json"];
   const sha256 = {};
   for (const file of sources) sha256[file] = createHash("sha256").update(await readFile(file)).digest("hex");
@@ -609,7 +654,7 @@ async function run() {
     checked_at: new Date().toISOString(), node: process.version, playwright: "1.63.0", chromium: browserVersion,
     python: command(join(root, ".venv/bin/python"), ["--version"]), runtime_images: runtimeImages.sort(),
     production_build_sha256: buildSha256, refresh_diagnostics: refreshDiagnostics,
-    checks, sha256, fixture: "synthetic telemetry, OHLC, execution journal and owner-RLS signals; two generated local Auth users",
+    checks, sha256, fixture: "synthetic telemetry, OHLC, execution journal, owner-RLS signals and research evaluations; two generated local Auth users",
     token_refresh: "accelerated browser clock; real refresh-token HTTP exchange; server clock unchanged",
     mt5: "NOT_RUN", hosted_supabase: "NOT_RUN", artifacts: output };
   await writeFile(join(output, "result.json"), JSON.stringify(result, null, 2));
