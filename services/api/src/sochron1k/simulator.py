@@ -75,8 +75,29 @@ class SimulatorAdapter:
             rejections=tuple(self._rejections.values()),
         )
 
-    def send(self, intent: CommandIntent, volume: Decimal, attempt_id: str) -> BrokerSnapshot:
+    def send(
+        self,
+        intent: CommandIntent,
+        volume: Decimal,
+        risk_limit: Decimal,
+        cost_budget: Decimal,
+        attempt_id: str,
+    ) -> BrokerSnapshot:
         del attempt_id
+        if (
+            not all(isinstance(value, Decimal) and value.is_finite() for value in (
+                volume,
+                risk_limit,
+                cost_budget,
+            ))
+            or volume <= 0
+            or risk_limit <= 0
+            or cost_budget < 0
+            or cost_budget >= risk_limit
+        ):
+            raise ValueError("invalid simulator risk authorization")
+        self.last_risk_limit = risk_limit
+        self.last_cost_budget = cost_budget
         if intent.command_id in self._snapshots:
             return self._snapshots[intent.command_id]
         if intent.command_id in self._rejections:

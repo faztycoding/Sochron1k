@@ -14,6 +14,7 @@ from pydantic import SecretStr
 from sochron1k.execution_bridge import (
     ExecutionBridgeDenied,
     ExecutionBridgeSettings,
+    ExecutionDispatch,
     ExecutionInventoryFrame,
     ExecutionOutcomeFrame,
     ExecutionPollingBridge,
@@ -37,6 +38,8 @@ from sochron1k.service import ExecutionService
 from sochron1k.telemetry import BridgeSettings, DemoIdentity
 
 TOKEN = "e" * 48
+RISK_LIMIT = Decimal("100")
+COST_BUDGET = Decimal("1")
 
 
 def settings(*, timeout=Decimal("0.20")):
@@ -228,7 +231,14 @@ async def test_http_poll_and_outcome_complete_one_adapter_wait(intent):
             await client.post("/executor/v1/inventory", headers=auth, json=inventory)
         ).status_code == 200
         with ThreadPoolExecutor(max_workers=1) as pool:
-            waiting = pool.submit(bridge.send, request, Decimal("0.10"), "attempt-http")
+            waiting = pool.submit(
+                bridge.send,
+                request,
+                Decimal("0.10"),
+                RISK_LIMIT,
+                COST_BUDGET,
+                "attempt-http",
+            )
             response = None
             for _ in range(100):
                 response = await client.get("/executor/v1/commands/next", headers=auth)
@@ -278,12 +288,25 @@ def test_entry_poll_round_trip_and_exact_outcome_replay(intent, observed_at):
     bridge.accept_inventory(inventory_frame(bridge, observed_at))
     volume = Decimal("0.10")
     with ThreadPoolExecutor(max_workers=1) as pool:
-        waiting = pool.submit(bridge.send, intent, volume, "attempt-entry-1")
+        waiting = pool.submit(
+            bridge.send, intent, volume, RISK_LIMIT, COST_BUDGET, "attempt-entry-1"
+        )
         command = wait_for_command(bridge)
         assert command.operation == "open"
         assert command.volume == volume
+        assert command.risk_limit == RISK_LIMIT
+        assert command.cost_budget == COST_BUDGET
+        assert len(command.model_dump()) == 24
         assert command.fingerprint == intent.canonical_fingerprint()
         assert command.stop_loss == intent.stop_loss
+        with pytest.raises(ValueError, match="operation fields are inconsistent"):
+            ExecutionDispatch.model_validate(
+                command.model_dump() | {"risk_limit": None}
+            )
+        with pytest.raises(ValueError, match="operation fields are inconsistent"):
+            ExecutionDispatch.model_validate(
+                command.model_dump() | {"cost_budget": RISK_LIMIT}
+            )
         outcome = snapshot_outcome(bridge, command, filled_snapshot(intent, volume), observed_at)
         assert bridge.accept_outcome(outcome).duplicate is False
         assert waiting.result(timeout=1) == outcome.snapshot
@@ -299,7 +322,14 @@ def test_bound_outcome_cannot_clear_an_inventory_protocol_rejection(intent, obse
     original = inventory_frame(bridge, observed_at)
     bridge.accept_inventory(original)
     with ThreadPoolExecutor(max_workers=1) as pool:
-        waiting = pool.submit(bridge.send, intent, Decimal("0.10"), "attempt-latched")
+        waiting = pool.submit(
+            bridge.send,
+            intent,
+            Decimal("0.10"),
+            RISK_LIMIT,
+            COST_BUDGET,
+            "attempt-latched",
+        )
         command = wait_for_command(bridge)
         with pytest.raises(ExecutionBridgeDenied, match="SEQUENCE_CONFLICT"):
             bridge.accept_inventory(original.model_copy(update={"terminal_build": 5321}))
@@ -324,7 +354,9 @@ def test_unclaimed_timeout_withdraws_dispatch(intent, observed_at):
     bridge = ExecutionPollingBridge(settings(timeout=Decimal("0.01")), utc_now=lambda: observed_at)
     bridge.accept_inventory(inventory_frame(bridge, observed_at))
     with pytest.raises(TimeoutError):
-        bridge.send(intent, Decimal("0.10"), "attempt-unclaimed")
+        bridge.send(
+            intent, Decimal("0.10"), RISK_LIMIT, COST_BUDGET, "attempt-unclaimed"
+        )
     assert bridge.next_command() is None
     assert bridge.query(intent.command_id) is None
 
@@ -336,6 +368,8 @@ def test_adapter_refuses_foreign_identity_and_management_target(intent, observed
         bridge.send(
             intent.model_copy(update={"account_ref": "another-account"}),
             Decimal("0.10"),
+            RISK_LIMIT,
+            COST_BUDGET,
             "attempt-foreign",
         )
     close = ManagementIntent(
@@ -364,7 +398,14 @@ def test_claimed_timeout_retains_same_dispatch_for_late_reconciliation(intent, o
     bridge = ExecutionPollingBridge(settings(timeout=Decimal("0.03")), utc_now=lambda: observed_at)
     bridge.accept_inventory(inventory_frame(bridge, observed_at))
     with ThreadPoolExecutor(max_workers=1) as pool:
-        waiting = pool.submit(bridge.send, intent, Decimal("0.10"), "attempt-claimed")
+        waiting = pool.submit(
+            bridge.send,
+            intent,
+            Decimal("0.10"),
+            RISK_LIMIT,
+            COST_BUDGET,
+            "attempt-claimed",
+        )
         command = wait_for_command(bridge)
         with pytest.raises(TimeoutError):
             waiting.result(timeout=1)
@@ -380,7 +421,14 @@ def test_uncertain_result_never_becomes_rejection(intent, observed_at):
     bridge = ExecutionPollingBridge(settings(), utc_now=lambda: observed_at)
     bridge.accept_inventory(inventory_frame(bridge, observed_at))
     with ThreadPoolExecutor(max_workers=1) as pool:
-        waiting = pool.submit(bridge.send, intent, Decimal("0.10"), "attempt-unknown")
+        waiting = pool.submit(
+            bridge.send,
+            intent,
+            Decimal("0.10"),
+            RISK_LIMIT,
+            COST_BUDGET,
+            "attempt-unknown",
+        )
         command = wait_for_command(bridge)
         bridge.accept_outcome(
             ExecutionOutcomeFrame(
@@ -423,6 +471,8 @@ def test_management_dispatch_uses_confirmed_target_and_typed_rejection(intent, o
         assert command.volume == target.open_position_volume
         assert command.position_id == target.position_id
         assert command.broker_order_ticket == target.order_ticket
+        assert command.risk_limit is command.cost_budget is None
+        assert len(command.model_dump()) == 24
         evidence = ExecutorRejection(
             command_id=close.command_id,
             target_command_id=intent.command_id,
@@ -457,7 +507,14 @@ def test_generation_change_is_denied_while_dispatch_is_active(intent, observed_a
     bridge = ExecutionPollingBridge(settings(), utc_now=lambda: observed_at)
     bridge.accept_inventory(inventory_frame(bridge, observed_at))
     with ThreadPoolExecutor(max_workers=1) as pool:
-        waiting = pool.submit(bridge.send, intent, Decimal("0.10"), "attempt-active")
+        waiting = pool.submit(
+            bridge.send,
+            intent,
+            Decimal("0.10"),
+            RISK_LIMIT,
+            COST_BUDGET,
+            "attempt-active",
+        )
         wait_for_command(bridge)
         with pytest.raises(ExecutionBridgeDenied, match="GENERATION_CHANGED_WITH_ACTIVE_COMMAND"):
             bridge.accept_inventory(
@@ -478,7 +535,14 @@ def test_unclaimed_dispatch_is_not_exposed_after_inventory_becomes_unsafe(
     bridge = ExecutionPollingBridge(settings(), utc_now=lambda: observed_at)
     bridge.accept_inventory(inventory_frame(bridge, observed_at))
     with ThreadPoolExecutor(max_workers=1) as pool:
-        waiting = pool.submit(bridge.send, intent, Decimal("0.10"), "attempt-disabled")
+        waiting = pool.submit(
+            bridge.send,
+            intent,
+            Decimal("0.10"),
+            RISK_LIMIT,
+            COST_BUDGET,
+            "attempt-disabled",
+        )
         deadline = time.monotonic() + 1
         while not bridge.status().active_command and time.monotonic() < deadline:
             time.sleep(0.002)

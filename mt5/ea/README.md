@@ -55,6 +55,12 @@ envelope, encode an empty Demo inventory bootstrap and encode confirmed-rejectio
 or uncertain outcomes. No `WebRequest`, account query, `OrderCheck`, `OrderSend`,
 broker inventory scan or transaction callback exists in this checkpoint.
 
+SCN-026 evolves the command envelope to exactly 24 fields. Open commands require
+account-currency decimal strings `risk_limit` and `cost_budget`; cancel/close
+commands require both fields as `null`. The pure codec checks their shape and
+relation only. A future mutation EA must still calculate current broker loss with
+`OrderCalcProfit` before `OrderCheck`/`OrderSend`.
+
 Local source and hand-authored golden-fixture checks:
 
 ```bash

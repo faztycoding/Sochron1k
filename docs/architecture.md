@@ -306,6 +306,17 @@ still sees only policy status and owner signal reads. External source selection,
 completeness audit, target credential, scheduling and observation evidence remain
 pending; see [ADR-028](decisions/ADR-028-attested-calendar-gateway.md).
 
+SCN-026 closes the risk-authorization gap at the API/executor boundary. Each entry
+dispatch now persists the admitted account-currency `risk_limit` and exact
+volume-derived `cost_budget` one-to-one with its dispatch attempt before exposure
+to the polling adapter. The 24-field MQL command requires both values for entries
+and explicit nulls for management. Startup and recovery reject missing, malformed
+or inconsistent authorization. This does not calculate broker P/L or authorize a
+mutation; the future default-off EA must still use current MT5 contract data with
+`OrderCalcProfit`, then `OrderCheck`, one `OrderSend`, transaction reconciliation
+and broker-side SL confirmation. See
+[ADR-029](decisions/ADR-029-durable-broker-risk-authorization.md).
+
 | Failure | Required behavior |
 | --- | --- |
 | AI unavailable or invalid | Strategies that require AI enter `WAIT`; position management continues |

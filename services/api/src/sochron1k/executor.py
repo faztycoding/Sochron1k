@@ -42,7 +42,14 @@ class ExecutorInventory(StrictModel):
 class ExecutorAdapter(Protocol):
     def inventory(self) -> ExecutorInventory: ...
 
-    def send(self, intent: CommandIntent, volume: Decimal, attempt_id: str) -> BrokerSnapshot: ...
+    def send(
+        self,
+        intent: CommandIntent,
+        volume: Decimal,
+        risk_limit: Decimal,
+        cost_budget: Decimal,
+        attempt_id: str,
+    ) -> BrokerSnapshot: ...
 
     def query(self, command_id: str) -> BrokerSnapshot | ExecutorRejection | None: ...
 

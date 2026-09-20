@@ -197,7 +197,9 @@ def test_restart_reconciles_only_matching_evidence_without_resend(ready_case, ki
     journal, adapter, intent = service.journal, service.adapter, args["intent"]
     journal.reserve(intent, Decimal("0.1"), Decimal("100"))
     if kind != "queued":
-        journal.begin_dispatch(intent.command_id, "attempt-before-restart")
+        journal.begin_dispatch(
+            intent.command_id, "attempt-before-restart", Decimal("1000"), Decimal("0")
+        )
         journal.transition(intent.command_id, CommandState.UNKNOWN)
     if kind not in {"missing", "queued"}:
         adapter._snapshots[intent.command_id] = snapshot(intent).model_copy(
@@ -331,7 +333,7 @@ def test_invalid_broker_evidence_rolls_back_without_overwriting_history(ready_ca
     service, args, _, _ = ready_case
     journal, intent = service.journal, args["intent"]
     journal.reserve(intent, Decimal("0.1"), Decimal("100"))
-    journal.begin_dispatch(intent.command_id, "attempt")
+    journal.begin_dispatch(intent.command_id, "attempt", Decimal("1000"), Decimal("0"))
     original = snapshot(intent)
     journal.apply_broker_snapshot(original)
     changes = {
@@ -394,7 +396,7 @@ def test_startup_detects_journal_relationship_or_concurrent_risk_change(
     service, args, startup, state = ready_case
     journal, intent = service.journal, args["intent"]
     journal.reserve(intent, Decimal("0.1"), Decimal("100"))
-    journal.begin_dispatch(intent.command_id, "attempt")
+    journal.begin_dispatch(intent.command_id, "attempt", Decimal("1000"), Decimal("0"))
     service.adapter._snapshots[intent.command_id] = snapshot(intent)
     if field == "risk-during-query":
         original = service.adapter.inventory
@@ -456,13 +458,17 @@ def test_broker_tickets_cannot_be_reassigned_to_another_command(ready_case, tick
     service, args, _, _ = ready_case
     journal, intent = service.journal, args["intent"]
     journal.reserve(intent, Decimal("0.1"), Decimal("100"))
-    journal.begin_dispatch(intent.command_id, "first-attempt")
+    journal.begin_dispatch(
+        intent.command_id, "first-attempt", Decimal("1000"), Decimal("0")
+    )
     journal.apply_broker_snapshot(snapshot(intent))
     other = intent.model_copy(
         update={"command_id": "other-command", "account_ref": "other-account"}
     )
     journal.reserve(other, Decimal("0.1"), Decimal("100"))
-    journal.begin_dispatch(other.command_id, "other-attempt")
+    journal.begin_dispatch(
+        other.command_id, "other-attempt", Decimal("1000"), Decimal("0")
+    )
     candidate = snapshot(other)
     if ticket == "deal":
         candidate = candidate.model_copy(update={"order_ticket": "other-order"})
@@ -490,7 +496,8 @@ def test_ambiguous_dispatch_requires_new_startup_and_never_claims_fill(
     service, args, startup, _ = ready_case
     service.startup(**startup)
 
-    def unconfirmed(intent, volume, attempt):
+    def unconfirmed(intent, volume, risk_limit, cost_budget, attempt):
+        assert risk_limit > cost_budget >= 0
         if kind == "connection":
             raise ConnectionError("fixture response loss")
         value = snapshot(intent)
@@ -516,10 +523,10 @@ def test_reconcile_refuses_snapshot_for_another_requested_command(ready_case, mo
     service, args, _, _ = ready_case
     intent, journal = args["intent"], service.journal
     journal.reserve(intent, Decimal("0.1"), Decimal("100"))
-    journal.begin_dispatch(intent.command_id, "attempt-a")
+    journal.begin_dispatch(intent.command_id, "attempt-a", Decimal("1000"), Decimal("0"))
     other = intent.model_copy(update={"command_id": "other", "account_ref": "other-account"})
     journal.reserve(other, Decimal("0.1"), Decimal("100"))
-    journal.begin_dispatch(other.command_id, "attempt-b")
+    journal.begin_dispatch(other.command_id, "attempt-b", Decimal("1000"), Decimal("0"))
     monkeypatch.setattr(service.adapter, "query", lambda command_id: snapshot(other))
     before = journal.counts()
     with pytest.raises(BrokerEvidenceConflict):
@@ -560,7 +567,7 @@ def test_rejected_inventory_label_does_not_hide_filled_exposure(ready_case):
     service, args, startup, _ = ready_case
     journal, intent = service.journal, args["intent"]
     journal.reserve(intent, Decimal("0.1"), Decimal("100"))
-    journal.begin_dispatch(intent.command_id, "attempt")
+    journal.begin_dispatch(intent.command_id, "attempt", Decimal("1000"), Decimal("0"))
     rejected = snapshot(intent).model_copy(
         update={
             "filled_volume": Decimal("0"),
@@ -594,12 +601,18 @@ def test_expected_risk_must_belong_to_target_command(ready_case, stage):
         if stage == "reserve":
             journal.reserve(intent, Decimal("0.1"), Decimal("100"), expected_risk=foreign)
         else:
-            journal.begin_dispatch(intent.command_id, "attempt", expected_risk=foreign)
+            journal.begin_dispatch(
+                intent.command_id,
+                "attempt",
+                Decimal("1000"),
+                Decimal("0"),
+                expected_risk=foreign,
+            )
     assert journal.counts() == before
 
 
 def test_orphan_attempt_cannot_make_queued_command_a_fill(ready_case):
-    service, args, _, _ = ready_case
+    service, args, startup, _ = ready_case
     journal, intent = service.journal, args["intent"]
     journal.reserve(intent, Decimal("0.1"), Decimal("100"))
     with journal._connect() as db:
@@ -611,6 +624,53 @@ def test_orphan_attempt_cannot_make_queued_command_a_fill(ready_case):
     with pytest.raises(BrokerEvidenceConflict):
         journal.apply_broker_snapshot(snapshot(intent))
     assert journal.counts() == before
+    with pytest.raises(RiskDenied, match="JOURNAL_DISPATCH_AUTHORIZATION_MISMATCH"):
+        service.startup(**startup)
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "DELETE FROM dispatch_authorizations",
+        "UPDATE dispatch_authorizations SET risk_limit='NaN'",
+        "UPDATE dispatch_authorizations SET cost_budget='100'",
+    ],
+)
+def test_startup_denies_missing_or_invalid_dispatch_authorization(ready_case, statement):
+    service, args, startup, _ = ready_case
+    journal, intent = service.journal, args["intent"]
+    journal.reserve(intent, Decimal("0.1"), Decimal("100"))
+    journal.begin_dispatch(intent.command_id, "attempt", Decimal("1000"), Decimal("0"))
+    journal.transition(intent.command_id, CommandState.UNKNOWN)
+    with journal._connect() as db:
+        db.execute(statement)
+    with pytest.raises(RiskDenied, match="JOURNAL_DISPATCH_AUTHORIZATION_MISMATCH"):
+        service.startup(**startup)
+    assert service.adapter.send_count == 0
+
+
+@pytest.mark.parametrize(
+    "risk_limit,cost_budget",
+    [
+        (Decimal("99"), Decimal("0")),
+        (Decimal("1000"), Decimal("100")),
+        (Decimal("1000"), Decimal("-1")),
+        (Decimal("NaN"), Decimal("0")),
+    ],
+)
+def test_invalid_dispatch_authorization_rolls_back_atomically(
+    ready_case, risk_limit, cost_budget
+):
+    service, args, _, _ = ready_case
+    journal, intent = service.journal, args["intent"]
+    journal.reserve(intent, Decimal("0.1"), Decimal("100"))
+    before = journal.counts()
+    with pytest.raises(ValueError, match="dispatch risk authorization"):
+        journal.begin_dispatch(intent.command_id, "attempt", risk_limit, cost_budget)
+    assert journal.counts() == before
+    assert journal.command(intent.command_id)["state"] == "queued"
+    with pytest.raises(KeyError):
+        journal.dispatch_authorization(intent.command_id)
 
 
 @pytest.mark.parametrize("kind", ["exception", "malformed"])

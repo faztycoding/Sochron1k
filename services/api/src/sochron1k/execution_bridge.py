@@ -152,6 +152,12 @@ class ExecutionDispatch(StrictModel):
     symbol: str = Field(min_length=1, max_length=32)
     operation: Literal["open", "cancel", "close"]
     volume: Decimal = Field(gt=0, allow_inf_nan=False, max_digits=24, decimal_places=10)
+    risk_limit: Decimal | None = Field(
+        default=None, gt=0, allow_inf_nan=False, max_digits=24, decimal_places=10
+    )
+    cost_budget: Decimal | None = Field(
+        default=None, ge=0, allow_inf_nan=False, max_digits=24, decimal_places=10
+    )
     expires_at: AwareDatetime
     side: Side | None = None
     requested_entry: Decimal | None = Field(
@@ -174,6 +180,9 @@ class ExecutionDispatch(StrictModel):
             valid = (
                 self.target_command_id is None
                 and all(value is not None for value in entry_fields)
+                and self.risk_limit is not None
+                and self.cost_budget is not None
+                and self.cost_budget < self.risk_limit
                 and self.broker_order_ticket is None
                 and self.position_id is None
                 and self.reason is None
@@ -182,6 +191,8 @@ class ExecutionDispatch(StrictModel):
             valid = (
                 self.target_command_id is not None
                 and all(value is None for value in entry_fields)
+                and self.risk_limit is None
+                and self.cost_budget is None
                 and self.broker_order_ticket is not None
                 and self.reason is not None
                 and (self.operation != "close" or self.position_id is not None)
@@ -525,7 +536,14 @@ class ExecutionPollingBridge:
             raise TimeoutError("EXECUTOR_OUTCOME_UNCERTAIN")
         return outcome.snapshot or outcome.management_snapshot
 
-    def send(self, intent: CommandIntent, volume: Decimal, attempt_id: str) -> BrokerSnapshot:
+    def send(
+        self,
+        intent: CommandIntent,
+        volume: Decimal,
+        risk_limit: Decimal,
+        cost_budget: Decimal,
+        attempt_id: str,
+    ) -> BrokerSnapshot:
         intent = CommandIntent.model_validate(intent.model_dump())
         if intent.operation != "open":
             raise RuntimeError("EXECUTOR_OPERATION_MISMATCH")
@@ -539,6 +557,8 @@ class ExecutionPollingBridge:
                 symbol=intent.symbol,
                 operation="open",
                 volume=volume,
+                risk_limit=risk_limit,
+                cost_budget=cost_budget,
                 expires_at=intent.expires_at,
                 side=intent.side,
                 requested_entry=intent.requested_entry,
@@ -576,6 +596,8 @@ class ExecutionPollingBridge:
                 symbol=intent.symbol,
                 operation=intent.operation.value,
                 volume=volume,
+                risk_limit=None,
+                cost_budget=None,
                 expires_at=intent.expires_at,
                 broker_order_ticket=target.order_ticket,
                 position_id=target.position_id,

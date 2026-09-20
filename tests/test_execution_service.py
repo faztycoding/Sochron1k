@@ -72,6 +72,12 @@ def test_ac03_same_request_dispatches_once(
     assert repeated.command_id == intent.command_id
     assert adapter.send_count == 1
     assert journal.counts()["dispatch_attempts"] == 1
+    authorization = journal.dispatch_authorization(intent.command_id)
+    assert Decimal(authorization["risk_limit"]) == adapter.last_risk_limit
+    assert Decimal(authorization["cost_budget"]) == adapter.last_cost_budget
+    assert Decimal(authorization["cost_budget"]) < Decimal(
+        journal.command(intent.command_id)["reserved_loss"]
+    ) <= Decimal(authorization["risk_limit"])
 
 
 def test_ac03_concurrent_duplicate_submissions_dispatch_once(

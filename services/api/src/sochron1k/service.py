@@ -172,12 +172,25 @@ class ExecutionService:
             )
 
         attempt_id = str(uuid.uuid4())
-        self.journal.begin_dispatch(intent.command_id, attempt_id, expected_risk=persistent_risk)
+        cost_budget = decision.volume * risk.costs_per_lot
+        self.journal.begin_dispatch(
+            intent.command_id,
+            attempt_id,
+            decision.available_risk,
+            cost_budget,
+            expected_risk=persistent_risk,
+        )
         # Local journal work can outlive quote freshness or command expiry. The executor
         # must also recheck immediately at its own mutation boundary in a real adapter.
         fresh_preflight()
         try:
-            snapshot = self.adapter.send(intent, decision.volume, attempt_id)
+            snapshot = self.adapter.send(
+                intent,
+                decision.volume,
+                decision.available_risk,
+                cost_budget,
+                attempt_id,
+            )
             if snapshot.command_id != intent.command_id:
                 raise BrokerEvidenceConflict()
             state = self.journal.apply_broker_snapshot(snapshot)

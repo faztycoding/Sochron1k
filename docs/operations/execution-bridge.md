@@ -27,6 +27,12 @@ read-only observer may satisfy the policy writer's empty-account source without
 changing the normal execution status from non-ready. It does not feed the owner
 execution journal panel.
 
+Every current `sochron.execution.command.v1` response has exactly 24 fields.
+Entry commands carry decimal-string `risk_limit` and `cost_budget`; management
+commands carry both as `null`. These values are persisted beside the API dispatch
+attempt before the command is exposed. They are account-currency authorization,
+not evidence that broker loss has already been calculated.
+
 ## Private API configuration
 
 Create an owner-only regular JSON file (mode `0600` or `0400`) outside the
@@ -72,8 +78,10 @@ those target controls.
 4. Before any mutation, locally recheck Demo mode, exact account/server/symbol,
    terminal trading permission, magic number, contract metadata, freshness, command
    expiry and local attempt/command idempotency.
-5. Run `OrderCheck`; journal the local attempt; issue at most the exact claimed
-   mutation; reconcile `OnTradeTransaction`, orders, history and positions.
+5. For an entry, use `OrderCalcProfit` with current broker metadata and deny when
+   absolute entry-to-SL loss plus `cost_budget` exceeds `risk_limit`. Journal the
+   local attempt, run `OrderCheck`, issue at most the exact claimed mutation, and
+   reconcile `OnTradeTransaction`, orders, history and positions.
 6. Report a cumulative snapshot. Report confirmed rejection only after both the
    reviewed return code and reconciled absence of any effect. Report timeout,
    disconnect, processing or conflicting state as uncertain.
@@ -94,8 +102,9 @@ the complete package, recovery schema and unrelated boundaries:
 bash scripts/check-scn-001-local.sh
 ```
 
-These use only synthetic local state. The SCN-024 source guard additionally checks
-that the observer contains no command polling or named mutation authority. Actual
+These use only synthetic local state. The SCN-026 source guard additionally checks
+the exact 24-field risk envelope, while the SCN-024 source guard checks that the
+observer contains no command polling or named mutation authority. Actual
 MetaEditor compilation, EA HTTP, account reads and trade APIs, target-host network
 loss, terminal restart, broker return codes and an owner-authorized Demo open/close
 remain `NOT RUN`.

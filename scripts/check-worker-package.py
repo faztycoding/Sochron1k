@@ -136,7 +136,12 @@ def exercise_recovery(command, python, directory, sync_config, wheel_hash, invok
         )
     )
     journal.reserve(request, Decimal("0.1"), Decimal("100"))
-    journal.begin_dispatch(request.command_id, "recovery-fixture-attempt")
+    journal.begin_dispatch(
+        request.command_id,
+        "recovery-fixture-attempt",
+        Decimal("1000"),
+        Decimal("0"),
+    )
     journal.transition(request.command_id, CommandState.UNKNOWN)
     broker_file = directory / "synthetic-broker-snapshot.json"
     broker_file.touch(mode=0o600)

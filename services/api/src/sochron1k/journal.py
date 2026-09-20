@@ -115,6 +115,12 @@ class Journal:
                     started_at TEXT NOT NULL,
                     outcome TEXT
                 );
+                CREATE TABLE IF NOT EXISTS dispatch_authorizations (
+                    attempt_id TEXT PRIMARY KEY REFERENCES dispatch_attempts(attempt_id),
+                    command_id TEXT NOT NULL UNIQUE REFERENCES commands(command_id),
+                    risk_limit TEXT NOT NULL,
+                    cost_budget TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS exposure_slots (
                     account_ref TEXT NOT NULL,
                     experiment_id TEXT NOT NULL,
@@ -337,13 +343,36 @@ class Journal:
             connection.close()
 
     def begin_dispatch(
-        self, command_id: str, attempt_id: str, *, expected_risk: RiskState | None = None
+        self,
+        command_id: str,
+        attempt_id: str,
+        risk_limit: Decimal,
+        cost_budget: Decimal,
+        *,
+        expected_risk: RiskState | None = None,
     ) -> None:
+        values = (risk_limit, cost_budget)
+        if (
+            any(
+                not isinstance(value, Decimal)
+                or not value.is_finite()
+                or len(value.as_tuple().digits) > 80
+                or not -100 <= value.as_tuple().exponent <= 100
+                for value in values
+            )
+            or risk_limit <= 0
+            or cost_budget < 0
+            or cost_budget >= risk_limit
+        ):
+            raise ValueError("invalid dispatch risk authorization")
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
-                "SELECT state, account_ref, experiment_id FROM commands WHERE command_id=?",
+                """
+                SELECT state, account_ref, experiment_id, reserved_loss
+                FROM commands WHERE command_id=?
+                """,
                 (command_id,),
             ).fetchone()
             if row is None:
@@ -354,6 +383,9 @@ class Journal:
             previous = CommandState(row["state"])
             if previous is not CommandState.QUEUED:
                 raise RuntimeError(f"cannot dispatch command from {previous.value}")
+            reserved_loss = Decimal(row["reserved_loss"])
+            if not cost_budget < reserved_loss <= risk_limit:
+                raise ValueError("dispatch risk authorization does not cover reservation")
             now = self._now()
             connection.execute(
                 """
@@ -361,6 +393,14 @@ class Journal:
                 VALUES (?, ?, ?)
                 """,
                 (attempt_id, command_id, now),
+            )
+            connection.execute(
+                """
+                INSERT INTO dispatch_authorizations(
+                    attempt_id, command_id, risk_limit, cost_budget
+                ) VALUES (?, ?, ?, ?)
+                """,
+                (attempt_id, command_id, str(risk_limit), str(cost_budget)),
             )
             self._transition_in(connection, command_id, previous, CommandState.SENT, now, None)
             connection.commit()
@@ -1658,6 +1698,34 @@ class Journal:
                 raise KeyError(command_id)
             return row
 
+    def dispatch_authorization(self, command_id: str) -> sqlite3.Row:
+        """Return the exact durable attempt/authorization pair for an entry command."""
+        with self._connect() as connection:
+            attempts = connection.execute(
+                """
+                SELECT a.attempt_id, a.command_id, a.started_at, a.outcome,
+                       d.command_id AS authorization_command_id,
+                       d.risk_limit, d.cost_budget
+                FROM dispatch_attempts AS a
+                LEFT JOIN dispatch_authorizations AS d USING(attempt_id)
+                WHERE a.command_id=?
+                """,
+                (command_id,),
+            ).fetchall()
+            authorization_count = connection.execute(
+                "SELECT count(*) FROM dispatch_authorizations WHERE command_id=?",
+                (command_id,),
+            ).fetchone()[0]
+            if not attempts and authorization_count == 0:
+                raise KeyError(command_id)
+            if (
+                len(attempts) != 1
+                or authorization_count != 1
+                or attempts[0]["authorization_command_id"] != command_id
+            ):
+                raise RuntimeError("dispatch authorization mismatch")
+            return attempts[0]
+
     def save_risk_state(self, state: RiskState) -> None:
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -1779,6 +1847,7 @@ class Journal:
                     "commands",
                     "command_transitions",
                     "dispatch_attempts",
+                    "dispatch_authorizations",
                     "broker_orders",
                     "broker_deals",
                     "broker_order_lifecycle",

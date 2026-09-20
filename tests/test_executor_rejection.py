@@ -135,7 +135,7 @@ def test_rejection_binding_and_evidence_are_immutable(tmp_path, intent, risk, ob
     journal = Journal(tmp_path / "journal.sqlite3")
     provision(journal, intent, risk, observed_at)
     journal.reserve(intent, Decimal("0.10"), Decimal("100"))
-    journal.begin_dispatch(intent.command_id, "attempt-1")
+    journal.begin_dispatch(intent.command_id, "attempt-1", Decimal("1000"), Decimal("0"))
     evidence = rejection(intent.command_id, observed_at)
     assert journal.apply_executor_rejection(evidence) is CommandState.REJECTED
     assert journal.apply_executor_rejection(evidence) is CommandState.REJECTED
@@ -220,7 +220,9 @@ def test_startup_inventory_can_resolve_unknown_to_confirmed_rejection(
     journal = Journal(tmp_path / "startup-rejection.sqlite3")
     provision(journal, intent, risk, observed_at)
     journal.reserve(intent, Decimal("0.10"), Decimal("100"))
-    journal.begin_dispatch(intent.command_id, "attempt-startup")
+    journal.begin_dispatch(
+        intent.command_id, "attempt-startup", Decimal("1000"), Decimal("0")
+    )
     journal.transition(intent.command_id, CommandState.UNKNOWN)
     adapter = SimulatorAdapter(account=account, symbol=intent.symbol)
     adapter._rejections[intent.command_id] = rejection(

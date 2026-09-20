@@ -31,7 +31,9 @@ def seed(path: Path) -> None:
     )
     journal = Journal(path)
     journal.reserve(intent, Decimal("0.10"), Decimal("100"))
-    journal.begin_dispatch(intent.command_id, "browser-attempt")
+    journal.begin_dispatch(
+        intent.command_id, "browser-attempt", Decimal("1000"), Decimal("0")
+    )
     journal.apply_broker_snapshot(
         BrokerSnapshot(
             command_id=intent.command_id,

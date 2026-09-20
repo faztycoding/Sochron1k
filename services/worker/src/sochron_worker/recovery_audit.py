@@ -34,7 +34,7 @@ from .sync_journal import MAX_JOURNAL_BYTES, STATES, canonical, decode_batch, ut
 
 # Exact sqlite_schema signatures of the current writers; changes need reviewed admission.
 SCHEMAS = {
-    "commands": (0, "66bd1ddfbe98c0556fa66180aa0fd676e460d8ccf3187ef50e132a93cf4cd7d8"),
+    "commands": (0, "c94bc67e998e0a6ef7854f5ad23e8ce7b1c605ce62552786b0d21c32b5dfed7b"),
     "archive": (1, "ccb8fa69d2d66dfbf1ee506687234255084130feea32494968f650ccc003d809"),
     "sync": (1, "9e80d5a9d5c4bd688402afb716651b6eecca5e639c92ce5681a09313b7352b5d"),
 }
@@ -175,6 +175,7 @@ def _commands(db, binding, latest, tick):
         unresolved=0,
         unknown=0,
         attempts=0,
+        dispatch_authorizations=0,
         orders=0,
         deals=0,
         exposure=0,
@@ -232,15 +233,28 @@ def _commands(db, binding, latest, tick):
         attempts = db.execute(
             "SELECT * FROM dispatch_attempts WHERE command_id=?", (intent.command_id,)
         ).fetchall()
+        authorizations = db.execute(
+            "SELECT * FROM dispatch_authorizations WHERE command_id=?", (intent.command_id,)
+        ).fetchall()
         _require(len(attempts) == len(sends) <= 1)
+        _require(len(authorizations) == len(attempts))
         for attempt in attempts:
             _require(
                 isinstance(attempt["attempt_id"], str) and 0 < len(attempt["attempt_id"]) <= 128
             )
             _require(attempt["started_at"] == sends[0] and attempt["outcome"] is None)
+        for authorization in authorizations:
+            risk_limit = _decimal(authorization["risk_limit"])
+            cost_budget = _decimal(authorization["cost_budget"], zero=True)
+            _require(
+                authorization["attempt_id"] == attempts[0]["attempt_id"]
+                and authorization["command_id"] == intent.command_id
+                and cost_budget < loss <= risk_limit
+            )
         if state.value not in {"queued", "unknown", "expired", "cancelled"}:
             _require(len(attempts) == 1)
         counts["attempts"] += len(attempts)
+        counts["dispatch_authorizations"] += len(authorizations)
         slots = db.execute(
             "SELECT * FROM exposure_slots WHERE command_id=?", (intent.command_id,)
         ).fetchall()
@@ -383,6 +397,8 @@ def _commands(db, binding, latest, tick):
         db.execute("SELECT count(*) FROM broker_order_lifecycle").fetchone()[0] == counts["orders"]
         and db.execute("SELECT count(*) FROM broker_deal_financials").fetchone()[0]
         == counts["deals"]
+        and db.execute("SELECT count(*) FROM dispatch_authorizations").fetchone()[0]
+        == counts["dispatch_authorizations"]
     )
     active_management = {}
     managed_volume = {}

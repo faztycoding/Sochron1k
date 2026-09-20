@@ -183,7 +183,9 @@ def test_command_unknown_and_total_halt_preserved(private, intent, observed_at):
     path.touch(mode=0o600)
     journal = Journal(path)
     journal.reserve(intent, Decimal("0.1"), Decimal("100"))
-    journal.begin_dispatch(intent.command_id, "attempt-fixture")
+    journal.begin_dispatch(
+        intent.command_id, "attempt-fixture", Decimal("1000"), Decimal("0")
+    )
     journal.transition(intent.command_id, CommandState.UNKNOWN)
     state = RiskState(
         account_ref=intent.account_ref,

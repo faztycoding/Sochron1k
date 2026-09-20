@@ -5,18 +5,20 @@
 #include "TelemetryProtocol.mqh"
 
 #define SCX_MAX_COMMAND_BYTES 16384
-#define SCX_ALL_COMMAND_FIELDS 4194303
+#define SCX_ALL_COMMAND_FIELDS 16777215
 
 struct ScxCommand
   {
    string protocol,boot_id,attempt_id,generation,command_id,target_command_id;
    string fingerprint,account_ref,experiment_id,symbol,operation,side;
-   string volume_text,requested_entry_text,stop_loss_text,take_profit_text;
+   string volume_text,risk_limit_text,cost_budget_text;
+   string requested_entry_text,stop_loss_text,take_profit_text;
    string broker_order_ticket,position_id,reason,expires_at_text;
    long dispatch_sequence,magic_number;
-   double volume,requested_entry,stop_loss,take_profit;
+   double volume,risk_limit,cost_budget,requested_entry,stop_loss,take_profit;
    datetime expires_at;
-   bool has_target,has_side,has_requested_entry,has_stop_loss,has_take_profit;
+   bool has_target,has_risk_limit,has_cost_budget,has_side;
+   bool has_requested_entry,has_stop_loss,has_take_profit;
    bool has_broker_order_ticket,has_position_id,has_reason;
   };
 
@@ -108,7 +110,7 @@ bool ScxIntegerToken(const string text,int &position,long &value)
    return ScPositiveInteger(StringSubstr(text,start,position-start),value);
   }
 
-bool ScxDecimalText(const string raw,double &value)
+bool ScxBoundedDecimalText(const string raw,double &value,const bool allow_zero)
   {
    int length=StringLen(raw),point=-1,digits=0,fraction=0;
    if(length<1 || length>40) return false;
@@ -131,8 +133,14 @@ bool ScxDecimalText(const string raw,double &value)
    int integer_length=(point<0 ? length : point);
    if(integer_length>1 && StringGetCharacter(raw,0)==48) return false;
    value=StringToDouble(raw);
-   return MathIsValidNumber(value) && value>0;
+   return MathIsValidNumber(value) && (value>0 || (allow_zero && value==0));
   }
+
+bool ScxDecimalText(const string raw,double &value)
+  { return ScxBoundedDecimalText(raw,value,false); }
+
+bool ScxNonNegativeDecimalText(const string raw,double &value)
+  { return ScxBoundedDecimalText(raw,value,true); }
 
 bool ScxDecimalValue(const string text,int &position,string &raw,double &value)
   {
@@ -147,6 +155,17 @@ bool ScxDecimalOrNull(const string text,int &position,string &raw,double &value,
      { position+=4; raw=""; value=0; present=false; return true; }
    present=true;
    return ScxDecimalValue(text,position,raw,value);
+  }
+
+bool ScxNonNegativeDecimalOrNull(const string text,int &position,string &raw,
+                                 double &value,bool &present)
+  {
+   ScSpace(text,position);
+   if(StringSubstr(text,position,4)=="null")
+     { position+=4; raw=""; value=0; present=false; return true; }
+   present=true;
+   if(!ScAsciiString(text,position,raw)) return false;
+   return ScxNonNegativeDecimalText(raw,value);
   }
 
 bool ScxDigits(const string text,const int start,const int count,int &value)
@@ -211,11 +230,15 @@ bool ScxCommandValid(const ScxCommand &command)
    if(command.operation=="open")
      return !command.has_target && command.has_side &&
         (command.side=="buy" || command.side=="sell") &&
+        command.has_risk_limit && command.has_cost_budget &&
+        command.risk_limit>0 && command.cost_budget>=0 &&
+        command.cost_budget<command.risk_limit &&
         command.has_requested_entry && command.has_stop_loss && command.has_take_profit &&
         !command.has_broker_order_ticket && !command.has_position_id && !command.has_reason;
    if(command.operation!="cancel" && command.operation!="close") return false;
    return command.has_target && !command.has_side && !command.has_requested_entry &&
       !command.has_stop_loss && !command.has_take_profit &&
+      !command.has_risk_limit && !command.has_cost_budget &&
       command.has_broker_order_ticket && ScxSafeIdentifier(command.broker_order_ticket,128) &&
       (command.operation!="close" || (command.has_position_id &&
        ScxSafeIdentifier(command.position_id,128))) &&
@@ -242,7 +265,7 @@ bool ScxCommandJson(const string text,ScxCommand &command)
    int position=0,fields=0;
    string seen="|";
    if(!ScTake(text,position,123)) return false;
-   for(int count=0;count<22;count++)
+   for(int count=0;count<24;count++)
      {
       string key;
       if(!ScAsciiString(text,position,key) || StringFind(seen,"|"+key+"|")>=0 ||
@@ -282,6 +305,18 @@ bool ScxCommandJson(const string text,ScxCommand &command)
         {
          if(!ScxDecimalValue(text,position,command.volume_text,command.volume)) return false;
          fields|=8192;
+        }
+      else if(key=="risk_limit")
+        {
+         if(!ScxDecimalOrNull(text,position,command.risk_limit_text,
+            command.risk_limit,command.has_risk_limit)) return false;
+         fields|=4194304;
+        }
+      else if(key=="cost_budget")
+        {
+         if(!ScxNonNegativeDecimalOrNull(text,position,command.cost_budget_text,
+            command.cost_budget,command.has_cost_budget)) return false;
+         fields|=8388608;
         }
       else if(key=="expires_at")
         {

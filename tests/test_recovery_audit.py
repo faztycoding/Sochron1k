@@ -65,7 +65,9 @@ def recovery_case(tmp_path, setup_chart, archive, intent):
         )
     )
     commands.reserve(intent, Decimal("0.1"), Decimal("100"))
-    commands.begin_dispatch(intent.command_id, "fixture-attempt")
+    commands.begin_dispatch(
+        intent.command_id, "fixture-attempt", Decimal("1000"), Decimal("0")
+    )
     commands.transition(intent.command_id, CommandState.UNKNOWN)
     with SyncJournal(
         directory, reader, OWNER, ORIGIN, create=True, utc_now=setup_chart[0].now
@@ -367,7 +369,9 @@ def test_corrupt_management_evidence_is_denied(recovery_case, statement):
         "UPDATE commands SET volume='0'",
         "UPDATE exposure_slots SET reserved_loss='0.01'",
         "DELETE FROM exposure_slots",
-        "DELETE FROM dispatch_attempts",
+        "DELETE FROM dispatch_authorizations",
+        "UPDATE dispatch_authorizations SET risk_limit='NaN'",
+        "UPDATE dispatch_authorizations SET cost_budget='100'",
         "UPDATE command_transitions SET from_state='unknown' WHERE transition_id=2",
         "DELETE FROM command_transitions WHERE transition_id=2",
         "UPDATE sqlite_sequence SET seq=99",

@@ -2,6 +2,7 @@
 
 import time
 from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 
 from .executor import ExecutorInventory
@@ -23,6 +24,23 @@ def aware(value):
     return (
         isinstance(value, datetime) and value.tzinfo is not None and value.utcoffset() is not None
     )
+
+
+def bounded_decimal(value, *, zero=False):
+    try:
+        result = Decimal(value)
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    if (
+        not isinstance(value, str)
+        or not 0 < len(value) <= 80
+        or not result.is_finite()
+        or len(result.as_tuple().digits) > 80
+        or not -100 <= result.as_tuple().exponent <= 100
+        or (result < 0 if zero else result <= 0)
+    ):
+        return None
+    return result
 
 
 def inspect_startup(journal, adapter, policy, experiment_id, executor_id, now, generation=None):
@@ -60,6 +78,26 @@ def inspect_startup(journal, adapter, policy, experiment_id, executor_id, now, g
             and slot["reserved_loss"] == row["reserved_loss"],
             "JOURNAL_EXPOSURE_MISMATCH",
         )
+        try:
+            authorization = journal.dispatch_authorization(row["command_id"])
+        except KeyError:
+            require(row["state"] == "queued", "JOURNAL_DISPATCH_AUTHORIZATION_MISMATCH")
+        except RuntimeError:
+            raise StartupDenied("JOURNAL_DISPATCH_AUTHORIZATION_MISMATCH") from None
+        else:
+            risk_limit = bounded_decimal(authorization["risk_limit"])
+            cost_budget = bounded_decimal(authorization["cost_budget"], zero=True)
+            reserved_loss = bounded_decimal(row["reserved_loss"])
+            require(
+                row["state"] != "queued"
+                and authorization["command_id"] == row["command_id"]
+                and authorization["authorization_command_id"] == row["command_id"]
+                and risk_limit is not None
+                and cost_budget is not None
+                and reserved_loss is not None
+                and cost_budget < reserved_loss <= risk_limit,
+                "JOURNAL_DISPATCH_AUTHORIZATION_MISMATCH",
+            )
     active_ids = {row["command_id"] for row in active}
     for row in management:
         intent = ManagementIntent.model_validate_json(row["payload_json"])

@@ -28,6 +28,7 @@ string ScxOpenCommandFixture()
       "\"fingerprint\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\","+
       "\"account_ref\":\"123456789\",\"experiment_id\":\"synthetic-experiment\","+
       "\"symbol\":\"XAUUSD.fixture\",\"operation\":\"open\",\"volume\":\"0.10\","+
+      "\"risk_limit\":\"100.00\",\"cost_budget\":\"1.00\","+
       "\"expires_at\":\"2026-09-20T00:00:30Z\",\"side\":\"buy\","+
       "\"requested_entry\":\"2500.20\",\"stop_loss\":\"2495.20\","+
       "\"take_profit\":\"2510.20\",\"broker_order_ticket\":null,"+
@@ -45,6 +46,7 @@ string ScxCloseCommandFixture()
       "\"fingerprint\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\","+
       "\"account_ref\":\"123456789\",\"experiment_id\":\"synthetic-experiment\","+
       "\"symbol\":\"XAUUSD.fixture\",\"operation\":\"close\",\"volume\":\"0.10\","+
+      "\"risk_limit\":null,\"cost_budget\":null,"+
       "\"expires_at\":\"2026-09-20T00:01:00.123456Z\",\"side\":null,"+
       "\"requested_entry\":null,\"stop_loss\":null,\"take_profit\":null,"+
       "\"broker_order_ticket\":\"7001\",\"position_id\":\"8001\","+
@@ -67,7 +69,8 @@ void OnStart()
    string good=ScxOpenCommandFixture();
    ScxCheck(ScxCommandJson(good,command),"open command");
    ScxCheck(command.operation=="open" && command.side=="buy" &&
-      command.volume_text=="0.10" && command.volume==0.10,"open values");
+      command.volume_text=="0.10" && command.volume==0.10 &&
+      command.risk_limit==100.00 && command.cost_budget==1.00,"open values");
    ScxCheck(ScxCommandBinding(command,boot,"synthetic-generation-1",910001,
       "123456789","XAUUSD.fixture"),"command identity binding");
    ScxCheck(!ScxCommandBinding(command,boot,"synthetic-generation-1",910001,
@@ -93,6 +96,11 @@ void OnStart()
       "synthetic experiment"),command),"unsafe identifier denied");
    ScxCheck(!ScxCommandJson(ScxChanged(good,"\"broker_order_ticket\":null",
       "\"broker_order_ticket\":\"7001\""),command),"entry broker ticket denied");
+   ScxCheck(!ScxCommandJson(ScxChanged(good,"\"risk_limit\":\"100.00\"",
+      "\"risk_limit\":null"),command),"entry risk limit required");
+   ScxCheck(!ScxCommandJson(ScxChanged(good,"\"cost_budget\":\"1.00\"",
+      "\"cost_budget\":\"100.00\""),command),"cost below risk required");
+   ScxCheck(ScxNonNegativeDecimalText("0",command.cost_budget),"zero cost allowed");
    ScxCheck(ScxDecimalText("0.0000000001",command.volume),"ten decimal places");
    ScxCheck(!ScxDecimalText("0.00000000001",command.volume),"decimal precision bound");
    ScxCheck(!ScxDecimalText("01.00",command.volume),"leading decimal zero");
