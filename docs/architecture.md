@@ -325,6 +325,16 @@ free of terminal, network, file and trade access, so it cannot itself establish
 an order, fill, position or SL state. See
 [ADR-030](decisions/ADR-030-typed-cumulative-mql-evidence.md).
 
+SCN-028 adds the separately default-off MQL mutation boundary. One exact Demo
+identity, a fixed loopback transport, non-shared terminal-local lock and bounded
+append-only ledger fence a single `OrderSend` call site. Entry preflight uses fresh
+MT5 contract/tick/session data, `OrderCalcProfit`, authorized risk/cost and margin;
+timer reconciliation reads current state plus history and reports typed cumulative
+evidence. A callback only schedules that reconciliation, and ambiguous state stays
+uncertain. This is an uncompiled source checkpoint: MetaEditor, terminal locking,
+durability, broker behavior and Demo round trip are still unverified. See
+[ADR-031](decisions/ADR-031-default-off-mt5-demo-mutation-boundary.md).
+
 | Failure | Required behavior |
 | --- | --- |
 | AI unavailable or invalid | Strategies that require AI enter `WAIT`; position management continues |

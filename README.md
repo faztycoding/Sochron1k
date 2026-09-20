@@ -48,6 +48,7 @@ bash scripts/check-scn-001-local.sh
 .venv/bin/python scripts/check-execution-protocol-source.py
 .venv/bin/python scripts/check-execution-protocol-fixture.py --kind inventory
 .venv/bin/python scripts/check-execution-protocol-fixture.py --kind outcome
+.venv/bin/python scripts/check-demo-executor-source.py
 bash scripts/with-local-docker.sh npx -y -p node@24.21.0 .venv/bin/python scripts/check-owner-auth-local.py
 env -u DEBUG bash scripts/with-local-docker.sh npx -y -p node@24.21.0 node scripts/check-owner-browser.mjs
 npx -y -p node@24.21.0 npm run check:web
@@ -70,8 +71,11 @@ bash scripts/check-scn-001-local.sh
 
 The API health endpoint always reports Demo mode and currently reports `execution_ready=false`.
 An authenticated, disabled-by-default API-side execution polling adapter now exists,
-and a pure source-only MQL5 command/inventory/outcome codec now fixes its wire
-contract. No MQL5 mutation EA, compiled artifact or broker credential is present.
+the pure MQL5 codec fixes its command/inventory/outcome wire, and a separately
+default-off MQL5 mutation EA source now implements the intended Demo fence,
+write-ahead ledger, broker preflight and cumulative reconciliation. No compiled
+artifact, terminal observation or broker credential is present, so this is not a
+Demo release and Auto Trading remains off.
 See the
 [SCN-012 execution bridge runbook](docs/operations/execution-bridge.md).
 
@@ -200,18 +204,17 @@ authenticated API and real-loopback HTTP evidence; it defaults to disabled witho
 private local configuration. The owner web console now consumes its private view;
 no actual EA connection is verified yet.
 The [MQL5 sources](mt5/ea/README.md) contain the telemetry observer, read-only
-execution-inventory observer and pure execution-protocol codec as uncompiled
-checkpoints. The [inventory runbook](docs/operations/read-only-execution-inventory.md)
+execution-inventory observer, pure execution-protocol codec and default-off Demo
+mutation EA as uncompiled checkpoints. The
+[inventory runbook](docs/operations/read-only-execution-inventory.md)
 maps its private `/executor/v1` API to the browser-safe status and owner routes.
 Compile/verify both read-only observers on the selected Demo host, verify actual
-data and the narrow loopback route, then implement and compile the separately
-default-off mutation EA that consumes the SCN-012/013 contract and complete the
-remaining target recovery work. The current 24-field execution command already
+data and the narrow loopback route, then compile and test the mutation EA and
+complete the remaining target recovery work. The current 24-field execution
+command already
 persists `risk_limit` and `cost_budget` before dispatch so that EA can deny adverse
-broker-side loss with `OrderCalcProfit`; this is a contract checkpoint, not a
-working mutation path. Its pure MQL codec can now return cumulative entry,
-management and restart-inventory evidence, but no committed EA populates that
-evidence from MT5 yet. The UI connection rail identifies `/api/policy/v1/status`,
+broker-side loss with `OrderCalcProfit`; the source now performs that check, but it
+has not run against a broker. The UI connection rail identifies `/api/policy/v1/status`,
 `/api/owner/signals` and
 `/api/owner/statistics` as implemented read models waiting for their versioned
 strategy and research producers. Statistics remain empty until an evaluation has

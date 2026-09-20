@@ -3,9 +3,12 @@
 Status: API-side SCN-012 transport is implemented and locally verified with
 synthetic fixtures. SCN-024 adds an uncompiled, default-off MQL source that can
 upload policy-only current-empty inventory while hard-coding algorithmic trading
-false. It has not consumed a command or made a broker request, and the current
-Compose topology does not mount its private configuration or expose its loopback
-route. It is not a Demo release gate or unattended-trading authorization.
+false. SCN-028 now adds a distinct, default-off mutation EA source with a local
+ledger, exact Demo fence, broker preflight and cumulative reconciliation. It has
+not been compiled, attached, connected or allowed to make a broker request, and
+the current Compose topology does not mount its private configuration or establish
+the MT5 loopback path. It is not a Demo release gate or unattended-trading
+authorization.
 
 ## Internal routes
 
@@ -33,10 +36,9 @@ commands carry both as `null`. These values are persisted beside the API dispatc
 attempt before the command is exposed. They are account-currency authorization,
 not evidence that broker loss has already been calculated.
 
-The pure SCN-027 codec can now encode cumulative entry/deal/SL evidence and
-management evidence with its updated target into snapshot outcomes and restart
-inventory. This is a schema boundary only: no committed EA currently reads MT5
-history or populates those structures.
+The SCN-027 codec encodes cumulative entry/deal/SL and management evidence. The
+SCN-028 source EA now populates that schema from bounded MT5 current/history reads,
+but this behavior remains uncompiled and unobserved on a terminal.
 
 ## Private API configuration
 
@@ -93,9 +95,38 @@ those target controls.
 7. Repeat the exact same outcome after a lost HTTP response. Never create a new
    broker request just because outcome delivery failed.
 
+SCN-028 additionally caps that same loss-plus-cost amount at 0.25% of current MT5
+Equity, rounded down for the allowed budget in account-currency precision. The
+dispatched limit remains an upper bound; a later Equity decline cannot make the EA
+increase risk.
+
 An HTTP 200 acknowledges only API validation/receipt. It is not a fill, close,
 cancel or protection claim. `OrderSend=true` is also not enough; the cumulative
 broker snapshot must prove the state.
+
+## SCN-028 source boundary
+
+The reviewed source is `mt5/ea/SochronDemoExecutor.mq5` with
+`ExecutionRuntime.mqh`, `ExecutionLedger.mqh`, `ExecutionProtocol.mqh` and
+`TelemetryProtocol.mqh`. Its committed default is disabled. The executor token,
+lock and ledger names are fixed and terminal-local; no token, password or URL is
+an EA input. The lock and ledger omit sharing flags, and ledger records use
+single-byte ASCII plus explicit flushes. Those design choices still require an
+actual second-instance denial test and power/crash recovery evidence on the
+selected filesystem.
+
+Source admission is:
+
+```bash
+.venv/bin/python scripts/check-demo-executor-source.py
+.venv/bin/pytest -q tests/test_demo_executor_source.py tests/test_execution_bridge.py
+```
+
+The guard constrains the include graph, fixed files/routes, default-off start,
+Demo-only identifiers, one send/check call site, journal ordering, repeated scans,
+bounded callback and broker risk gate. It deliberately reports compilation,
+runtime locking/durability, account access, broker operation and Demo round trip as
+`NOT RUN`.
 
 ## Local verification
 
@@ -107,12 +138,11 @@ the complete package, recovery schema and unrelated boundaries:
 bash scripts/check-scn-001-local.sh
 ```
 
-These use only synthetic local state. The SCN-026 source guard additionally checks
-the exact 24-field risk envelope, while the SCN-024 source guard checks that the
-observer contains no command polling or named mutation authority. Actual
-MetaEditor compilation, EA HTTP, account reads and trade APIs, target-host network
-loss, terminal restart, broker return codes and an owner-authorized Demo open/close
-remain `NOT RUN`.
+These use only synthetic local state. The SCN-026 source guard checks the exact
+24-field risk envelope, SCN-024 keeps the observer mutation-free, and SCN-028
+checks the mutation-source boundary. Actual MetaEditor compilation, EA HTTP,
+account reads and trade APIs, target-host network loss, terminal restart, broker
+return codes and an owner-authorized Demo open/close remain `NOT RUN`.
 
 ## Inputs still required for a real Demo target
 
@@ -126,5 +156,5 @@ remain `NOT RUN`.
 - named halt-release authority, alert destination and explicit authorization for
   the first bounded Demo open-to-close dry run.
 
-Until those inputs and the remaining EA/target gates exist, leave this bridge
-disabled and do not label the system Demo-ready.
+Until those inputs and the remaining compile/target gates pass, leave this bridge
+and EA disabled and do not label the system Demo-ready.

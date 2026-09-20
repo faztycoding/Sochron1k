@@ -95,6 +95,7 @@ def main():
             "services/worker/Dockerfile",
             "scripts/build-container-sqlite.py",
             "scripts/check-container-sqlite.py",
+            "scripts/check-demo-executor-source.py",
             "scripts/check-execution-inventory-source.py",
             "scripts/check-no-secrets.py",
         ):

@@ -21,11 +21,56 @@ terminal self-test result or actual Demo observation is claimed.
   algorithmic trading false and never polls a command.
 - `SochronExecutionProtocolSelfTest.mq5`: pure execution-protocol cases that may
   write only two named synthetic JSON fixtures.
+- `SochronDemoExecutor.mq5`: separately default-off SCN-028 Demo mutation EA. It
+  consumes only the fixed authenticated execution bridge and has one reviewed
+  `OrderSend` call site.
+- `ExecutionRuntime.mqh`: exact Demo identity, broker preflight and bounded
+  current/history reconciliation helpers.
+- `ExecutionLedger.mqh`: terminal-local lock-compatible, append-only command and
+  exact-outcome record format. `FileFlush` is required but target durability is
+  not inferred from source.
 
-Neither observer can send, modify, close or cancel an order or manage positions.
-They do not replace the future execution/risk EA. Do not attach either as the only
-safety component to a running experiment or imply it protects positions. Keep
-application Auto Trading off. Compile checks do not authorize broker use.
+Neither observer can send, modify, close or cancel an order. The executor source
+can do so only after explicit enablement, but it is uncompiled and has no target
+evidence. Do not attach any checkpoint as the only safety component to a running
+experiment or imply it protects positions. Keep application Auto Trading off.
+Compile checks do not authorize broker use.
+
+## Default-off Demo executor source (SCN-028)
+
+With `EnableDemoExecution=false`, `OnInit` returns before opening files, reading an
+account, starting a timer, calling the network or reaching a broker API. If later
+enabled on an authorized target, all identity fields are mandatory and must match
+the current Demo login, server, account currency, margin mode, chart symbol and
+magic number. There is no live or contest branch.
+
+The EA opens a fixed terminal-local token, a non-shared lock and an append-only
+ASCII ledger. It posts complete startup inventory before command polling. Every
+command is journaled as `PREPARED`; `SEND_STARTED` is appended and flushed before
+the sole `OrderSend` call. `OrderSend=true` is never treated as a fill. Current
+orders/positions and selected history are reread to build typed cumulative entry,
+management, deal and SL evidence. Missing/conflicting state becomes uncertain and
+prevents another command. Entry loss plus authorized costs must fit both the
+durable dispatch limit and a hard 0.25% cap from current MT5 Equity.
+
+Run the local source and mutation checks with:
+
+```bash
+.venv/bin/python scripts/check-demo-executor-source.py
+.venv/bin/pytest -q tests/test_demo_executor_source.py tests/test_execution_bridge.py
+```
+
+These checks prove reviewed source patterns only. They do not prove compilation,
+exclusive locking, filesystem durability, WebRequest latency, callback ordering,
+broker loss calculations, fills, protection or recovery. Before even a Demo send,
+compile `SochronDemoExecutor.mq5` with `ExecutionRuntime.mqh`,
+`ExecutionLedger.mqh`, `ExecutionProtocol.mqh` and `TelemetryProtocol.mqh` beside
+it under an isolated `MQL5/Experts` folder. Retain a fresh zero-error/zero-warning
+compiler log, all source and EX5 hashes, and the selected terminal build. Then run
+the disabled-start, duplicate/lost-response, partial-fill, rejected-SL,
+cancel/close, restart, network-loss and foreign-state target cases from the
+[execution bridge runbook](../../docs/operations/execution-bridge.md). No target
+procedure has run on this workstation.
 
 ## Read-only execution inventory source (SCN-024)
 
@@ -58,8 +103,9 @@ broker inventory scan or transaction callback exists in this checkpoint.
 SCN-026 evolves the command envelope to exactly 24 fields. Open commands require
 account-currency decimal strings `risk_limit` and `cost_budget`; cancel/close
 commands require both fields as `null`. The pure codec checks their shape and
-relation only. A future mutation EA must still calculate current broker loss with
-`OrderCalcProfit` before `OrderCheck`/`OrderSend`.
+relation only. SCN-028 now calculates current broker loss with `OrderCalcProfit`
+before `OrderCheck`/`OrderSend` in the separate default-off source above; that
+sequence remains uncompiled.
 
 SCN-027 adds typed cumulative deal, entry, management, rejection, inventory and
 snapshot-outcome encoders. The synthetic inventory now covers a closed parent and
