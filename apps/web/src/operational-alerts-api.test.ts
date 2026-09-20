@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { alertDefinitions, alertKinds, parseAlertMutationReceipt, parseOperationalAlerts } from "./operational-alerts-api";
+import { alertDefinitions, alertKinds, parseAlertMutationReceipt, parseApiBudget, parseOperationalAlerts } from "./operational-alerts-api";
+
+function disabledBudget() {
+  return { protocol: "sochron.api-budget-view.v1", trading_mode: "demo", read_only: true,
+    auto_trading_enabled: false, execution_ready: false, state: "disabled",
+    generated_at_utc: "2026-09-20T04:00:00Z", policy: null, evidence: null };
+}
 
 function fixture() {
   return {
-    protocol: "sochron.operational-alerts.v2", trading_mode: "demo", read_only: true,
+    protocol: "sochron.operational-alerts.v3", trading_mode: "demo", read_only: true,
     auto_trading_enabled: false, execution_ready: false, delivery_configured: false,
     lifecycle_runtime: "connected", lifecycle_mutations_enabled: true,
     status: "partial", generated_at_utc: "2026-09-20T04:00:00Z", truncated: false,
+    api_budget: disabledBudget(),
     alerts: [{ id: "0123456789abcdef01234567", condition_id: "fedcba9876543210fedcba98",
       kind: "unknown_execution", severity: "critical", source: "execution_journal",
       source_ref: "0123456789abcdef", detail_code: "entry_unknown",
@@ -59,6 +66,39 @@ describe("operational alert inventory contract", () => {
   ])("rejects %s", (_name, mutate) => {
     const value = fixture(); mutate(value);
     expect(() => parseOperationalAlerts(value)).toThrow();
+  });
+});
+
+describe("API budget view contract", () => {
+  function warningBudget() {
+    return { ...disabledBudget(), state: "warning",
+      policy: { currency: "USD", monthly_limit: "100.00", warning_fraction: "0.70",
+        critical_fraction: "0.85", stale_after_seconds: 3600 },
+      evidence: { source_ref: "0123456789abcdef", period_start_utc: "2026-09-01T00:00:00Z",
+        period_end_utc: "2026-10-01T00:00:00Z", observed_at_utc: "2026-09-20T03:59:00Z",
+        coverage_until_utc: "2026-09-20T03:58:00Z", billed_cost: "65.00",
+        unbilled_estimate: "5.00", total_cost: "70.00", remaining_amount: "30.00",
+        usage_percent: "70.0000" } };
+  }
+
+  it("accepts exact provider-neutral budget evidence", () => {
+    const parsed = parseApiBudget(warningBudget());
+    expect(parsed.state).toBe("warning");
+    expect(parsed.evidence?.total_cost).toBe("70.00");
+  });
+
+  it.each([
+    ["wrong total", (value: ReturnType<typeof warningBudget>) => { value.evidence.total_cost = "70.01"; }],
+    ["wrong threshold state", (value: ReturnType<typeof warningBudget>) => { value.state = "connected"; }],
+    ["future coverage", (value: ReturnType<typeof warningBudget>) => {
+      value.evidence.coverage_until_utc = "2026-09-20T04:01:00Z";
+    }],
+    ["private path", (value: ReturnType<typeof warningBudget>) => {
+      Object.assign(value.evidence, { snapshot_file: "/private/budget.json" });
+    }],
+  ])("rejects %s", (_name, mutate) => {
+    const value = warningBudget(); mutate(value);
+    expect(() => parseApiBudget(value)).toThrow();
   });
 });
 

@@ -15,6 +15,7 @@ from sochron1k.alert_lifecycle import (
     AlertLifecycleUnavailable,
     enrich_operational_alert_inventory,
 )
+from sochron1k.api_budget import ApiBudgetReader
 from sochron1k.main import create_app
 from sochron1k.operational_alerts import KINDS, OperationalAlert, build_operational_alert_inventory
 from sochron1k.owner_auth import OwnerAuthDenied, OwnerAuthSettings
@@ -116,19 +117,20 @@ async def test_scn033_owner_inventory_is_redacted_and_mutations_need_configurati
     assert disabled.status_code == 503 and disabled.json()["detail"] == "ALERT_LIFECYCLE_DISABLED"
     assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
     body = response.json()
-    assert body["protocol"] == "sochron.operational-alerts.v2"
+    assert body["protocol"] == "sochron.operational-alerts.v3"
     assert body["trading_mode"] == "demo" and body["read_only"] is True
     assert body["auto_trading_enabled"] is False and body["execution_ready"] is False
     assert body["delivery_configured"] is False and body["status"] == "partial"
     assert body["lifecycle_runtime"] == "awaiting_configuration"
     assert body["lifecycle_mutations_enabled"] is False
+    assert body["api_budget"]["state"] == "disabled"
     assert body["alerts"] == [] and body["truncated"] is False
     assert [item["kind"] for item in body["coverage"]] == list(KINDS)
     assert body["coverage"][-1] == {
         "kind": "api_budget",
-        "implementation": "missing",
+        "implementation": "available",
         "runtime": "awaiting_configuration",
-        "api_routes": ["/api/owner/alerts"],
+        "api_routes": ["/api/owner/alerts", "/api/owner/api-budget"],
         "sources": ["api_budget"],
     }
     for forbidden in ("password", "account_ref", "server", "filesystem", "token"):
@@ -141,11 +143,11 @@ def test_scn033_stale_telemetry_has_stable_condition_identity_without_delivery_c
     policy = SimpleNamespace(status=lambda: SimpleNamespace(state="disabled"))
     first = build_operational_alert_inventory(
         telemetry=telemetry, execution=execution, journal=None, history=None,
-        policy=policy, now=NOW,
+        policy=policy, api_budget=ApiBudgetReader(None), now=NOW,
     )
     second = build_operational_alert_inventory(
         telemetry=telemetry, execution=execution, journal=None, history=None,
-        policy=policy, now=NOW + timedelta(seconds=2),
+        policy=policy, api_budget=ApiBudgetReader(None), now=NOW + timedelta(seconds=2),
     )
     assert first.status == "degraded" and first.delivery_configured is False
     assert [(item.kind, item.source, item.detail_code) for item in first.alerts] == [
@@ -377,6 +379,7 @@ def test_scn033_current_condition_is_not_lost_when_history_is_truncated(
         journal=None,
         history=None,
         policy=SimpleNamespace(status=lambda: SimpleNamespace(state="disabled")),
+        api_budget=ApiBudgetReader(None),
         now=clock.value,
     )
     inventory = empty.model_copy(update={"alerts": (first,)})

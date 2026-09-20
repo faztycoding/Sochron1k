@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SCN-005/006/007/014/015/016/032/033: browser/Auth/read models and local alert lifecycle; no broker operations.
+// SCN-005/006/007/014/015/016/032/033/034: browser/Auth/read models and local alert/budget evidence; no broker operations.
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -106,6 +106,8 @@ async function run() {
     const chartPath = join(temporary, "chart.json");
     const executionPath = join(temporary, "execution.sqlite3");
     const alertLifecycleDir = join(temporary, "alert-lifecycle");
+    const apiBudgetConfigPath = join(temporary, "api-budget-config.json");
+    const apiBudgetSnapshotPath = join(temporary, "api-budget-snapshot.json");
     await mkdir(alertLifecycleDir, { mode: 0o700 });
     const fixtureEpoch = Math.floor(Date.now() / 1000);
     async function insertFixture(table, body) {
@@ -156,6 +158,19 @@ async function run() {
       owner_id: users[0].id }), { mode: 0o600, flag: "wx" });
     await writeFile(bridgePath, JSON.stringify({ identity: template.identity, token: bridgeToken,
       broker_utc_offset_seconds: 0 }), { mode: 0o600, flag: "wx" });
+    const budgetObserved = new Date(Date.now() - 1000);
+    const budgetPeriodStart = new Date(Date.UTC(budgetObserved.getUTCFullYear(), budgetObserved.getUTCMonth(), 1));
+    const budgetPeriodEnd = new Date(Date.UTC(budgetObserved.getUTCFullYear(), budgetObserved.getUTCMonth() + 1, 1));
+    await writeFile(apiBudgetSnapshotPath, JSON.stringify({ protocol: "sochron.api-budget-snapshot.v1",
+      source_id: "synthetic-browser-provider", revision: "browser-cost-fixture-1",
+      period_start_utc: budgetPeriodStart.toISOString(), period_end_utc: budgetPeriodEnd.toISOString(),
+      observed_at_utc: budgetObserved.toISOString(),
+      coverage_until_utc: new Date(budgetObserved.getTime() - 1000).toISOString(), currency: "USD",
+      billed_cost: "65.00", unbilled_estimate: "5.00" }), { mode: 0o600, flag: "wx" });
+    await writeFile(apiBudgetConfigPath, JSON.stringify({ enabled: true,
+      snapshot_file: apiBudgetSnapshotPath, currency: "USD", monthly_limit: "100.00",
+      warning_fraction: "0.70", critical_fraction: "0.85", stale_after_seconds: 3600 }),
+    { mode: 0o600, flag: "wx" });
     const seeded = JSON.parse(command(join(root, ".venv/bin/python"),
       ["tests/fixtures/execution_evidence_seed.py", executionPath],
       { PYTHONPATH: join(root, "services/api/src") }));
@@ -172,6 +187,7 @@ async function run() {
       SOCHRON_CHART_CONFIG_FILE: chartPath, SOCHRON_CHART_HISTORY_DIR: temporary,
       SOCHRON_EXECUTION_JOURNAL_PATH: executionPath,
       SOCHRON_ALERT_LIFECYCLE_DIR: alertLifecycleDir,
+      SOCHRON_API_BUDGET_CONFIG_FILE: apiBudgetConfigPath,
     } });
     api = launchApi();
     const port = await new Promise((done, reject) => {
@@ -330,6 +346,7 @@ async function run() {
     assert.equal((await http(`${apiOrigin}/owner/history/M5`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/execution`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/alerts`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
+    assert.equal((await http(`${apiOrigin}/owner/api-budget`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/alerts/${"a".repeat(24)}/acknowledge`, {
       method: "POST", headers: { Authorization: `Bearer ${foreignToken}`, "Idempotency-Key": randomUUID() },
     })).status, 403);
@@ -353,14 +370,16 @@ async function run() {
     assert(await page.getByText("DEMO ONLY", { exact: true }).isVisible());
     assert.equal(await page.getByRole("button", { name: /เปิดออเดอร์|ซื้อ|ขาย/ }).count(), 0);
     assert.equal(await page.locator('input[type="password"]').count(), 0);
-    await alerts.getByText("0 รายการ · journal connected", { exact: true }).waitFor();
+    await alerts.getByText("1 รายการ · journal connected", { exact: true }).waitFor();
+    assert(await alerts.getByText("70.00 / 100.00 USD", { exact: true }).isVisible());
+    assert(await alerts.getByText("ถึงระดับเตือน", { exact: true }).isVisible());
     const alertResponse = await http(`${apiOrigin}/owner/alerts`, {
       headers: { Authorization: `Bearer ${originalToken}` },
     });
     assert.equal(alertResponse.status, 200);
     assert.equal(alertResponse.headers.get("cache-control"), "no-store");
     const alertBody = await alertResponse.json();
-    assert.equal(alertBody.protocol, "sochron.operational-alerts.v2");
+    assert.equal(alertBody.protocol, "sochron.operational-alerts.v3");
     assert.equal(alertBody.trading_mode, "demo");
     assert.equal(alertBody.read_only, true);
     assert.equal(alertBody.auto_trading_enabled, false);
@@ -368,12 +387,25 @@ async function run() {
     assert.equal(alertBody.delivery_configured, false);
     assert.equal(alertBody.lifecycle_runtime, "connected");
     assert.equal(alertBody.lifecycle_mutations_enabled, true);
-    assert.deepEqual(alertBody.alerts, []);
+    assert.equal(alertBody.api_budget.state, "warning");
+    assert.equal(alertBody.api_budget.evidence.total_cost, "70.00");
+    assert.equal(alertBody.alerts.length, 1);
+    assert.equal(alertBody.alerts[0].kind, "api_budget");
+    assert.equal(alertBody.alerts[0].detail_code, "api_budget_warning");
     assert.deepEqual(alertBody.coverage.map(item => item.kind), ["order_reject", "no_sl", "risk_halt",
       "unknown_execution", "stale_price", "bridge_disconnected", "storage_limit", "api_budget"]);
-    assert.deepEqual(alertBody.coverage.at(-1), { kind: "api_budget", implementation: "missing",
-      runtime: "awaiting_configuration", api_routes: ["/api/owner/alerts"], sources: ["api_budget"] });
-    checks.push("owner operational alert inventory, durable lifecycle runtime and missing delivery/budget coverage");
+    assert.deepEqual(alertBody.coverage.at(-1), { kind: "api_budget", implementation: "available",
+      runtime: "connected", api_routes: ["/api/owner/alerts", "/api/owner/api-budget"], sources: ["api_budget"] });
+    const budgetResponse = await http(`${apiOrigin}/owner/api-budget`, {
+      headers: { Authorization: `Bearer ${originalToken}` },
+    });
+    assert.equal(budgetResponse.status, 200);
+    assert.equal(budgetResponse.headers.get("cache-control"), "no-store");
+    const budgetBody = await budgetResponse.json();
+    assert.equal(budgetBody.state, "warning");
+    assert(!JSON.stringify(budgetBody).includes("synthetic-browser-provider"));
+    assert(!JSON.stringify(budgetBody).includes(apiBudgetSnapshotPath));
+    checks.push("owner operational alerts, lifecycle and provider-neutral API budget evidence");
     await signals.getByText(signalFixtures[0].signal_id, { exact: true }).waitFor();
     assert(await signals.getByText("BUY", { exact: true }).isVisible());
     assert(await signals.getByText("ยังอยู่ในอายุสัญญาณ", { exact: true }).isVisible());
@@ -556,6 +588,7 @@ async function run() {
     assert(await connectionMap.locator(".connection-row").evaluateAll(rows => rows.length === 10 && rows.every(row => row.scrollWidth <= row.clientWidth)));
     assert(await readiness.locator(".readiness-row").evaluateAll(rows => rows.length === 9 && rows.every(row => row.scrollWidth <= row.clientWidth)));
     assert(await alerts.locator(".alert-coverage-row").evaluateAll(rows => rows.length === 8 && rows.every(row => row.scrollWidth <= row.clientWidth)));
+    assert(await alerts.locator(".budget-ledger").evaluate(element => element.scrollWidth <= element.clientWidth));
     await page.screenshot({ path: join(output, "mobile-synthetic.png"), fullPage: true });
     assert(await history.locator(".history-table-scroll").evaluate(element => element.scrollWidth > element.clientWidth));
     await history.screenshot({ path: join(output, "history-mobile-synthetic.png") });

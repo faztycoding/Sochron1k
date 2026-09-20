@@ -98,6 +98,7 @@ def build_ui_connection_map(
     signal_configured: bool,
     policy_state: str,
     statistics_configured: bool,
+    api_budget_state: str,
 ) -> UiConnectionMap:
     return UiConnectionMap(
         connections=(
@@ -159,12 +160,19 @@ def build_ui_connection_map(
                         _telemetry_runtime(telemetry_state),
                         _execution_runtime(execution_state),
                         execution_evidence_state,
+                        "degraded" if api_budget_state in {"stale", "degraded"}
+                        else "connected" if api_budget_state in {
+                            "connected", "warning", "critical", "exhausted"
+                        }
+                        else "awaiting_source" if api_budget_state == "awaiting_snapshot"
+                        else "awaiting_configuration",
                     }
                     else "awaiting_source"
                     if (
                         execution_evidence_state == "connected"
                         or _telemetry_runtime(telemetry_state) == "awaiting_source"
                         or _execution_runtime(execution_state) == "awaiting_source"
+                        or api_budget_state == "awaiting_snapshot"
                     )
                     else "awaiting_configuration"
                 ),
@@ -172,11 +180,13 @@ def build_ui_connection_map(
                     "/api/owner/alerts",
                     "/api/owner/alerts/{condition_id}/acknowledge",
                     "/api/owner/alerts/{condition_id}/resolve",
+                    "/api/owner/api-budget",
                 ),
-                required_route="provider budget source + external alert delivery",
+                required_route="external alert delivery",
                 sources=(
                     "telemetry_status", "execution_status", "execution_journal",
-                    "bar_history", "policy_status", "alert_lifecycle", "api_budget",
+                    "bar_history", "policy_status", "alert_lifecycle",
+                    "api_budget_snapshot",
                 ),
             ),
             UiConnection(

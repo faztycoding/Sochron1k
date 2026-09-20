@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from . import __version__
 from .alert_lifecycle import AlertLifecycleJournal, load_alert_lifecycle_journal
+from .api_budget import ApiBudgetReader, load_api_budget_reader
 from .bar_history import BarHistory, HistoryUnavailable
 from .bridge_api import router as bridge_router
 from .chart import ChartSettings, ChartStore, load_chart_settings
@@ -69,6 +70,7 @@ def create_app(
     policy_writer_settings: PolicyWriterSettings | None = None,
     demo_owner_decisions: DemoOwnerDecisions | None = None,
     alert_lifecycle: AlertLifecycleJournal | None = None,
+    api_budget: ApiBudgetReader | None = None,
 ) -> FastAPI:
     if (
         bridge_settings is not None
@@ -91,6 +93,7 @@ def create_app(
     app.state.owner_verifier = OwnerVerifier(owner_auth_settings)
     app.state.execution_evidence = execution_evidence
     app.state.alert_lifecycle = alert_lifecycle
+    app.state.api_budget = api_budget or ApiBudgetReader(None)
     app.state.signal_evidence = signal_evidence or (
         SignalEvidenceReader(owner_auth_settings) if owner_auth_settings is not None else None
     )
@@ -160,6 +163,7 @@ def create_app(
             signal_configured=app.state.signal_evidence is not None,
             policy_state=app.state.policy_writer.status().state,
             statistics_configured=app.state.research_statistics is not None,
+            api_budget_state=app.state.api_budget.view().state,
         )
 
     @app.get("/ui/demo-readiness")
@@ -199,4 +203,5 @@ app = create_app(
     policy_writer_settings=load_policy_writer_settings(),
     demo_owner_decisions=load_demo_owner_decisions(),
     alert_lifecycle=load_alert_lifecycle_journal(),
+    api_budget=load_api_budget_reader(),
 )

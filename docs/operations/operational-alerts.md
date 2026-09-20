@@ -1,9 +1,9 @@
 # Operational alerts and owner lifecycle
 
-Status: SCN-032 provides the owner-authenticated detector inventory. SCN-033 can
-add a local durable acknowledgement/resolution workflow. Neither sends an external
-notification, changes a detector source, authorizes a broker operation or satisfies
-the target recovery/observability gate.
+Status: SCN-032 provides the owner-authenticated detector inventory, SCN-033 adds a
+local durable acknowledgement/resolution workflow, and SCN-034 adds provider-neutral
+API-budget evidence. None sends an external notification, changes a detector source,
+authorizes a broker operation or satisfies the target recovery/observability gate.
 
 ## UI and API positions
 
@@ -12,6 +12,7 @@ the target recovery/observability gate.
 | Alert center | `GET /api/owner/alerts` | `GET /owner/alerts` | derive facts and merge retained lifecycle; no write |
 | Acknowledge | `POST /api/owner/alerts/{condition_id}/acknowledge` | same path without `/api` | owner lifecycle write only |
 | Resolve workflow | `POST /api/owner/alerts/{condition_id}/resolve` | same path without `/api` | guarded owner lifecycle write only |
+| API budget | `GET /api/owner/api-budget` | `GET /owner/api-budget` | normalized cost snapshot and owner policy; no write |
 | Connection map | `GET /api/ui/connections` | `GET /ui/connections` | fixed redacted API/source inventory |
 | UI anchor | `#operational-alerts` | n/a | below account telemetry and above the market chart |
 
@@ -29,9 +30,9 @@ committed receipt; reusing it for another mutation conflicts.
 | `risk_halt` | `/api/owner/execution` | durable `risk_state` halt flags |
 | `unknown_execution` | `/api/owner/execution` | entry/management state `unknown` |
 | `stale_price` | `/api/owner/telemetry` | configured telemetry bridge and current heartbeat/price |
-| `bridge_disconnected` | telemetry/executor/policy status routes | configured source status |
+| `bridge_disconnected` | telemetry/executor/policy/budget status routes | configured source status |
 | `storage_limit` | `/api/owner/history/{timeframe}` | `SOCHRON_CHART_HISTORY_DIR` and archive page use |
-| `api_budget` | `/api/owner/alerts` | **not implemented**; owner-selected bounded provider-cost source required |
+| `api_budget` | `/api/owner/api-budget` | `SOCHRON_API_BUDGET_CONFIG_FILE` plus provider collector snapshot |
 
 Journal references and condition identifiers are deterministic hashes. The API
 does not return account reference, server, owner UUID, credentials, raw payload or
@@ -82,6 +83,14 @@ evidence remains visible.
 These fields describe local operator workflow only. `delivery_configured=false`
 still means no email, SMS, chat, webhook or push destination was invoked.
 
+## Configure API-budget evidence
+
+See the [API-budget runbook](api-budget.md). Leaving
+`SOCHRON_API_BUDGET_CONFIG_FILE` empty reports `disabled` and never invents usage.
+The exact currency, monthly limit and warning/critical fractions are owner inputs.
+The provider collector remains missing until one is selected, credentialed and
+tested against its real bill.
+
 ## Recovery and evidence limits
 
 - Stop the API or use a reviewed SQLite online-backup procedure before copying the
@@ -98,17 +107,21 @@ still means no email, SMS, chat, webhook or push destination was invoked.
 
 ```bash
 .venv/bin/python -m pytest -q tests/test_operational_alerts.py
+.venv/bin/python -m pytest -q tests/test_api_budget.py
 npx -y -p node@24.21.0 npm run test --workspace @sochron1k/web -- src/operational-alerts-api.test.ts src/OperationalAlertsPanel.test.tsx
 ```
 
 ## Remaining target work
 
-1. Owner selects the external alert destination and monthly API/provider budget.
-2. Implement bounded delivery/outbox, receipts, retry and escalation using a
+1. Owner selects the external alert destination, runtime billing provider, currency,
+   monthly limit and warning/critical fractions.
+2. Implement the provider-specific credential-isolated collector against the
+   normalized snapshot and compare it with the actual bill.
+3. Implement bounded delivery/outbox, receipts, retry and escalation using a
    separate credential boundary.
-3. Define lifecycle retention plus tested target backup/restore and disk-exhaustion
+4. Define lifecycle retention plus tested target backup/restore and disk-exhaustion
    behavior.
-4. Exercise stale feed, rejected SL, UNKNOWN, risk halt, bridge loss, disk pressure
+5. Exercise stale feed, rejected SL, UNKNOWN, risk halt, bridge loss, disk pressure
    and delivery failure on the selected target; retain timing and receipt evidence.
-5. Keep the SCN-031 recovery/observability gate `not_run` until target restart,
+6. Keep the SCN-031 recovery/observability gate `not_run` until target restart,
    network-loss, restore and delivered-alert evidence all pass.

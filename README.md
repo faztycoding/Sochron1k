@@ -114,8 +114,10 @@ remains empty.
 The authenticated `/api/owner/alerts` panel gathers bounded operational facts for
 rejected/UNKNOWN execution, unconfirmed SL, persistent risk halts, stale or
 disconnected bridges and archive pressure. Its eight-row coverage ledger shows the
-exact API and source position even before sign-in. API-budget input and external
-alert delivery remain explicitly missing; acknowledgement and resolution are not
+exact API and source position even before sign-in. `/api/owner/api-budget` now reads
+one provider-neutral private cost snapshot and shows exact billed/estimated totals,
+limit, remaining amount and freshness; the real provider collector and external
+alert delivery remain explicitly missing. Acknowledgement and resolution are not
 proof that anyone was notified. When `SOCHRON_ALERT_LIFECYCLE_DIR` selects an
 owner-private directory, the panel can durably record owner acknowledgement and
 guarded workflow resolution through the displayed POST routes. Continuing safety
@@ -248,9 +250,10 @@ dataset/split identity, sample size, uncertainty and explicit costs; the UI does
 not fabricate zero results. The implemented owner execution read route is shown as
 real data only when its private journal source validates.
 The adjacent operational-alert route derives a read-only inventory from those
-validated local sources. It still needs the owner-selected provider-budget source,
-external destination/delivery service and target alert exercise before unattended
-Demo operation.
+validated local sources. Its provider-neutral budget contract/read model is ready,
+but it still needs the owner-selected provider collector and actual limit, external
+destination/delivery service and target alert exercise before unattended Demo
+operation.
 The pure `PA01-v1` kernel, native M1-to-M5/H1 aggregation and protocol-v2 policy
 envelope now feed an optional durable producer. The producer binds the exact
 spread, market/session, freshness, news, exposure and pending observations,

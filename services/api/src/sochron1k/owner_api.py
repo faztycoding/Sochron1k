@@ -14,6 +14,7 @@ from .alert_lifecycle import (
     enrich_operational_alert_inventory,
     resolution_is_allowed,
 )
+from .api_budget import ApiBudgetReader, ApiBudgetView
 from .bar_history import HistoryUnavailable
 from .bridge_api import BridgeDep
 from .execution_evidence import (
@@ -78,6 +79,7 @@ def _alert_inventory(request: Request) -> OperationalAlertInventory:
         journal=request.app.state.execution_evidence,
         history=chart.history,
         policy=request.app.state.policy_writer,
+        api_budget=request.app.state.api_budget,
     )
 
 
@@ -123,6 +125,11 @@ def _source_connected(request: Request, source: str) -> bool:
         except HistoryUnavailable:
             return False
         return True
+    if source == "api_budget":
+        budget: ApiBudgetReader = request.app.state.api_budget
+        return budget.view().state in {
+            "connected", "warning", "critical", "exhausted"
+        }
     return False
 
 
@@ -131,6 +138,12 @@ def alerts(owner: OwnerDep, request: Request) -> OperationalAlertInventory:
     return enrich_operational_alert_inventory(
         _alert_inventory(request), owner, request.app.state.alert_lifecycle
     )
+
+
+@router.get("/api-budget")
+def api_budget(owner: OwnerDep, request: Request) -> ApiBudgetView:
+    reader: ApiBudgetReader = request.app.state.api_budget
+    return reader.view()
 
 
 @router.post("/alerts/{condition_id}/acknowledge")

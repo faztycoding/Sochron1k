@@ -8,6 +8,7 @@ from typing import Literal
 
 from pydantic import AwareDatetime, Field, field_validator, model_validator
 
+from .api_budget import ApiBudgetReader, ApiBudgetView, BudgetState
 from .bar_history import BarHistory, HistoryUnavailable
 from .execution_bridge import ExecutionPollingBridge
 from .execution_evidence import ExecutionEvidenceReader
@@ -128,7 +129,7 @@ class AlertCoverage(StrictModel):
 
 
 class OperationalAlertInventory(StrictModel):
-    protocol: Literal["sochron.operational-alerts.v2"] = "sochron.operational-alerts.v2"
+    protocol: Literal["sochron.operational-alerts.v3"] = "sochron.operational-alerts.v3"
     trading_mode: Literal["demo"] = "demo"
     read_only: Literal[True] = True
     auto_trading_enabled: Literal[False] = False
@@ -141,6 +142,7 @@ class OperationalAlertInventory(StrictModel):
     status: Literal["partial", "degraded"]
     generated_at_utc: AwareDatetime
     truncated: bool = False
+    api_budget: ApiBudgetView
     alerts: tuple[OperationalAlert, ...] = ()
     coverage: tuple[AlertCoverage, ...]
 
@@ -209,6 +211,16 @@ def _execution_runtime(state: str) -> CoverageRuntime:
     return "connected" if state == "connected" else "degraded"
 
 
+def _budget_runtime(state: BudgetState) -> CoverageRuntime:
+    if state == "disabled":
+        return "awaiting_configuration"
+    if state == "awaiting_snapshot":
+        return "awaiting_source"
+    if state in {"stale", "degraded"}:
+        return "degraded"
+    return "connected"
+
+
 def build_operational_alert_inventory(
     *,
     telemetry: TelemetryBridge,
@@ -216,6 +228,7 @@ def build_operational_alert_inventory(
     journal: ExecutionEvidenceReader | None,
     history: BarHistory | None,
     policy: PolicyEvidenceWriter,
+    api_budget: ApiBudgetReader,
     now: datetime | None = None,
 ) -> OperationalAlertInventory:
     generated = (now or datetime.now(UTC)).astimezone(UTC)
@@ -231,6 +244,8 @@ def build_operational_alert_inventory(
         else "connected" if policy_status.state == "ready"
         else "degraded"
     )
+    budget_view = api_budget.view(generated)
+    budget_runtime = _budget_runtime(budget_view.state)
 
     observation_time = (
         telemetry_view.observation.received_time_utc
@@ -265,6 +280,41 @@ def build_operational_alert_inventory(
             kind="bridge_disconnected", severity="warning", source="policy_writer",
             source_ref="current", detail_code="policy_writer_degraded",
             observed_at=generated, routes=("/api/policy/v1/status",),
+        ))
+
+    if budget_view.state in {"warning", "critical", "exhausted"}:
+        evidence = budget_view.evidence
+        if evidence is not None:
+            detail = {
+                "warning": "api_budget_warning",
+                "critical": "api_budget_critical",
+                "exhausted": "api_budget_exhausted",
+            }[budget_view.state]
+            alerts.append(_alert(
+                kind="api_budget",
+                severity="warning" if budget_view.state == "warning" else "critical",
+                source="api_budget",
+                source_ref=evidence.source_ref,
+                detail_code=detail,
+                observed_at=evidence.coverage_until_utc,
+                routes=("/api/owner/api-budget",),
+            ))
+    elif budget_view.state in {"stale", "degraded"}:
+        evidence = budget_view.evidence
+        alerts.append(_alert(
+            kind="bridge_disconnected",
+            severity="warning",
+            source="api_budget",
+            source_ref=evidence.source_ref if evidence is not None else "current",
+            detail_code=(
+                "api_budget_stale"
+                if budget_view.state == "stale"
+                else "api_budget_degraded"
+            ),
+            observed_at=(
+                evidence.coverage_until_utc if evidence is not None else generated
+            ),
+            routes=("/api/owner/api-budget",),
         ))
 
     journal_runtime: CoverageRuntime = "awaiting_configuration"
@@ -318,12 +368,14 @@ def build_operational_alert_inventory(
                 ))
 
     combined_bridge_runtime: CoverageRuntime = (
-        "degraded" if "degraded" in {telemetry_runtime, execution_runtime, policy_runtime}
+        "degraded" if "degraded" in {
+            telemetry_runtime, execution_runtime, policy_runtime, budget_runtime
+        }
         else "awaiting_configuration" if "awaiting_configuration" in {
-            telemetry_runtime, execution_runtime, policy_runtime
+            telemetry_runtime, execution_runtime, policy_runtime, budget_runtime
         }
         else "awaiting_source" if "awaiting_source" in {
-            telemetry_runtime, execution_runtime, policy_runtime
+            telemetry_runtime, execution_runtime, policy_runtime, budget_runtime
         }
         else "connected"
     )
@@ -372,8 +424,11 @@ def build_operational_alert_inventory(
                 "/api/owner/telemetry",
                 "/api/executor/v1/status",
                 "/api/policy/v1/status",
+                "/api/owner/api-budget",
             ),
-            sources=("telemetry_bridge", "execution_bridge", "policy_writer"),
+            sources=(
+                "telemetry_bridge", "execution_bridge", "policy_writer", "api_budget"
+            ),
         ),
         AlertCoverage(
             kind="storage_limit",
@@ -384,9 +439,9 @@ def build_operational_alert_inventory(
         ),
         AlertCoverage(
             kind="api_budget",
-            implementation="missing",
-            runtime="awaiting_configuration",
-            api_routes=("/api/owner/alerts",),
+            implementation="available",
+            runtime=budget_runtime,
+            api_routes=("/api/owner/alerts", "/api/owner/api-budget"),
             sources=("api_budget",),
         ),
     )
@@ -402,6 +457,7 @@ def build_operational_alert_inventory(
         status="degraded" if degraded else "partial",
         generated_at_utc=generated,
         truncated=truncated,
+        api_budget=budget_view,
         alerts=tuple(alerts),
         coverage=coverage,
     )

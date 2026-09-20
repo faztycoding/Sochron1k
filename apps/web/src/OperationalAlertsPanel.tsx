@@ -29,7 +29,15 @@ const detailLabels: Record<string, string> = {
   policy_writer_degraded: "Policy writer ผิดปกติ", execution_journal_unavailable: "Execution journal อ่านไม่ได้",
   bar_history_unavailable: "คลังแท่งปิดอ่านไม่ได้", warning_70: "พื้นที่คลังถึง 70%",
   warning_85: "พื้นที่คลังถึง 85%",
+  api_budget_warning: "ยอดใช้รวมถึงระดับเตือน", api_budget_critical: "ยอดใช้รวมถึงระดับวิกฤต",
+  api_budget_exhausted: "ยอดใช้รวมถึงหรือเกินเพดาน", api_budget_stale: "ข้อมูลค่าใช้จ่ายเกินอายุ",
+  api_budget_degraded: "ตรวจสอบข้อมูลค่าใช้จ่ายไม่ได้",
 };
+const budgetStateLabels = {
+  disabled: "รอตั้งงบและ source", awaiting_snapshot: "API พร้อม · รอ provider snapshot",
+  connected: "อยู่ต่ำกว่าระดับเตือน", warning: "ถึงระดับเตือน", critical: "ถึงระดับวิกฤต",
+  exhausted: "ถึงหรือเกินเพดาน", stale: "ข้อมูลค่าใช้จ่ายเก่า", degraded: "source ต้องตรวจสอบ",
+} as const;
 
 function bangkok(value: string) {
   return new Date(value).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" });
@@ -111,12 +119,32 @@ export function OperationalAlertsPanel({ token }: { token: string | null }) {
           <strong>{definition.title}</strong><small>{kind}</small></div></div>
         <div><span className="alert-cell-label">สถานะ source</span>
           <span className={`alert-runtime alert-runtime--${item?.runtime ?? "signed-out"}`}>
-            {definition.implementation === "missing" ? "ยังไม่มี cost source" : item ? runtimeLabels[item.runtime] : "เข้าสู่ระบบเพื่ออ่าน runtime"}
+            {item ? runtimeLabels[item.runtime] : "เข้าสู่ระบบเพื่ออ่าน runtime"}
           </span></div>
         <div className="alert-location"><span className="alert-cell-label">API / แหล่งข้อมูล</span>
           {definition.routes.map(route => <code key={route}>{route}</code>)}<small>{definition.sourceLabel}</small></div>
       </li>;
     })}</ol>
+    {view ? <div className={`budget-ledger budget-ledger--${view.api_budget.state}`}>
+      <div className="budget-ledger-heading"><span>API budget</span>
+        <strong>{budgetStateLabels[view.api_budget.state]}</strong>
+        <code>/api/owner/api-budget</code></div>
+      {view.api_budget.policy ? <>
+        <div><span>ใช้แล้ว / เพดาน</span><strong>{view.api_budget.evidence
+          ? `${view.api_budget.evidence.total_cost} / ${view.api_budget.policy.monthly_limit}`
+          : `— / ${view.api_budget.policy.monthly_limit}`} {view.api_budget.policy.currency}</strong>
+          {view.api_budget.evidence ? <small>{view.api_budget.evidence.usage_percent}% · billed {view.api_budget.evidence.billed_cost} + estimate {view.api_budget.evidence.unbilled_estimate}</small> : <small>รอ collector เขียน snapshot แรก</small>}</div>
+        <div><span>คงเหลือในงบ</span><strong>{view.api_budget.evidence
+          ? view.api_budget.evidence.remaining_amount : "—"} {view.api_budget.policy.currency}</strong>
+          <small>เตือน {view.api_budget.policy.warning_fraction} · วิกฤต {view.api_budget.policy.critical_fraction}</small></div>
+        <div><span>หลักฐานล่าสุด</span>{view.api_budget.evidence ? <>
+          <strong>UTC {view.api_budget.evidence.coverage_until_utc}</strong>
+          <small>กรุงเทพฯ {bangkok(view.api_budget.evidence.coverage_until_utc)} · ref {view.api_budget.evidence.source_ref}</small>
+        </> : <><strong>ยังไม่มี snapshot</strong><small>Provider collector ต้องเขียน normalized private snapshot</small></>}</div>
+      </> : <div className="budget-ledger-empty"><span>สิ่งที่ต้องเชื่อม</span>
+        <strong>private budget config + provider billing collector</strong>
+        <small>ระบบไม่เดางบ ราคา token หรือยอดใช้แทนข้อมูลจาก provider</small></div>}
+    </div> : null}
     {view ? <div className="active-alerts"><div className="active-alerts-heading"><h3>เหตุและประวัติ lifecycle</h3>
       <span>{view.alerts.length} รายการ · journal {view.lifecycle_runtime}{view.truncated ? " · รายการถูกจำกัด" : ""}</span></div>
       {view.alerts.length ? <ul>{view.alerts.map(item => <li className={`active-alert active-alert--${item.severity}`} key={item.id}>

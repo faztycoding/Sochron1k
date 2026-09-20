@@ -219,6 +219,16 @@ closed after acknowledgement because their occurrence is immutable. External
 delivery and API-budget collection remain outside this boundary; see
 [ADR-036](decisions/ADR-036-local-alert-lifecycle-journal.md).
 
+SCN-034 replaces only the missing API-budget source with an optional query-only
+reader. A credential-isolated future provider collector atomically writes one exact
+private normalized snapshot; a separate owner-private config supplies currency,
+monthly limit, warning/critical fractions and maximum evidence age. The API checks
+permissions, schema, billing period, UTC ordering, freshness and exact decimal
+arithmetic on every read. `/owner/api-budget` and the embedded v3 alert view expose
+only a hashed source reference and derived amounts. No provider API, credential,
+purchase, currency conversion or external notification is added; see
+[ADR-037](decisions/ADR-037-provider-neutral-api-budget-snapshot.md).
+
 SCN-015 adds the missing authenticated owner execution projection at
 `/owner/execution`. It reads one explicitly configured, existing private
 ExecutionService SQLite journal through a pinned, bounded, query-only connection.
