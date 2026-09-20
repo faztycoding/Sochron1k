@@ -16,13 +16,36 @@ terminal self-test result or actual Demo observation is claimed.
   it never reads an account or uses the network.
 - `ExecutionProtocol.mqh`: pure SCN-013 parser/encoder for the authenticated
   SCN-012 execution wire contract. It has no network, account, file or trade access.
+- `SochronExecutionInventory.mq5`: separately default-off, read-only Demo account
+  inventory uploader for policy evidence (source version 0.10). It hard-codes
+  algorithmic trading false and never polls a command.
 - `SochronExecutionProtocolSelfTest.mq5`: pure execution-protocol cases that may
   write only two named synthetic JSON fixtures.
 
-This observer cannot send, modify, close or cancel an order and does not manage
-positions. It does not replace the future execution/risk EA. Do not attach it as
-the only safety component to a running experiment or imply it protects positions.
-Keep application Auto Trading off. Compile checks do not authorize broker use.
+Neither observer can send, modify, close or cancel an order or manage positions.
+They do not replace the future execution/risk EA. Do not attach either as the only
+safety component to a running experiment or imply it protects positions. Keep
+application Auto Trading off. Compile checks do not authorize broker use.
+
+## Read-only execution inventory source (SCN-024)
+
+The inventory observer uses only `GET /executor/v1/challenge` and
+`POST /executor/v1/inventory`. It scans current orders and positions twice and can
+publish a complete empty inventory only when no item matches the configured
+symbol/magic. Foreign items remain counted and rejected by policy admission; an
+owned item forces incomplete evidence. This does not reconstruct command, deal or
+SL history.
+
+Run the source-only guard and local API compatibility tests with:
+
+```bash
+.venv/bin/python scripts/check-execution-inventory-source.py
+.venv/bin/pytest -q tests/test_execution_inventory_source.py tests/test_execution_bridge.py tests/test_policy_evidence.py
+```
+
+These checks are not a compiler or actual account evidence. The selected-host
+procedure, API/UI route map and private provisioning boundary are documented in
+[`docs/operations/read-only-execution-inventory.md`](../../docs/operations/read-only-execution-inventory.md).
 
 ## Execution protocol checkpoint (SCN-013)
 

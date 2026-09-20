@@ -493,6 +493,27 @@ def test_unclaimed_dispatch_is_not_exposed_after_inventory_becomes_unsafe(
             waiting.result(timeout=1)
 
 
+def test_policy_snapshot_accepts_read_only_empty_inventory_only(observed_at):
+    bridge = ExecutionPollingBridge(settings(), utc_now=lambda: observed_at)
+    read_only = inventory_frame(bridge, observed_at).model_copy(
+        update={"algo_trading_allowed": False}
+    )
+    bridge.accept_inventory(read_only)
+
+    assert bridge.policy_snapshot().frame == read_only
+    assert bridge.status().state == "stale"
+    assert bridge.status().inventory_fresh is False
+    with pytest.raises(ConnectionError, match="executor inventory is unavailable"):
+        bridge.inventory()
+
+    unsafe_inventory = read_only.inventory.model_copy(update={"foreign_orders": 1})
+    bridge.accept_inventory(
+        read_only.model_copy(update={"sequence": 2, "inventory": unsafe_inventory})
+    )
+    with pytest.raises(ConnectionError, match="policy inventory is unavailable"):
+        bridge.policy_snapshot()
+
+
 def test_execution_service_journals_before_poll_and_applies_returned_snapshot(
     tmp_path, policy, contract, market, intent, risk, observed_at
 ):

@@ -286,6 +286,16 @@ authority. A real news collector, selected-host MQL compilation, target private
 configuration and scheduling remain pending; see
 [ADR-026](decisions/ADR-026-coherent-policy-evidence-handoff.md).
 
+SCN-024 adds a separately default-off read-only MT5 execution-inventory observer.
+It binds one exact Demo identity, scans current orders/positions twice and may
+publish complete empty evidence only when the configured symbol/magic has no
+current effect. The API admits this evidence to the policy writer while algorithmic
+trading is false, but keeps normal executor inventory, command exposure, public
+execution readiness and Auto Trading unavailable. The source never polls commands
+or invokes a broker mutation. Compilation, actual account parity and the narrow
+target loopback route remain pending; see
+[ADR-027](decisions/ADR-027-policy-only-empty-mt5-inventory.md).
+
 | Failure | Required behavior |
 | --- | --- |
 | AI unavailable or invalid | Strategies that require AI enter `WAIT`; position management continues |

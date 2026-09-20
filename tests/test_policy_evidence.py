@@ -144,6 +144,7 @@ def inventory_frame(
     *,
     snapshots: tuple[BrokerSnapshot, ...] = (),
     sequence: int = 1,
+    algo_trading_allowed: bool = True,
 ) -> ExecutionInventoryFrame:
     account = AccountSnapshot(
         account_ref=bridge.settings.identity.account_ref,
@@ -164,7 +165,7 @@ def inventory_frame(
         terminal_build=1,
         terminal_connected=True,
         account_trade_allowed=True,
-        algo_trading_allowed=True,
+        algo_trading_allowed=algo_trading_allowed,
         magic_number=bridge.settings.magic_number,
         observed_at=clock.utc,
         inventory=ExecutorInventory(
@@ -297,6 +298,27 @@ def test_ac03_derives_exposure_and_pending_from_complete_inventory(private_direc
     assert policy.news_blocked is True
     assert policy.has_exposure is True
     assert policy.has_pending is True
+
+
+def test_scn024_ac05_policy_accepts_read_only_inventory_but_execution_stays_unavailable(
+    private_directory, identity
+):
+    clock = Clock()
+    settings = writer_settings(private_directory, identity)
+    writer = PolicyEvidenceWriter(settings, utc_now=clock.now)
+    telemetry, execution = sources(identity, clock)
+    write_news(settings.news_gate_file, clock)
+    telemetry.accept(telemetry_frame(telemetry, clock))
+    execution.accept_inventory(
+        inventory_frame(execution, clock, algo_trading_allowed=False)
+    )
+    assert execution.status().state == "stale"
+    with pytest.raises(ConnectionError, match="inventory is unavailable"):
+        execution.inventory()
+    assert writer.refresh(telemetry, execution) is True
+    policy = PolicyFileSource(settings.output_file).read()
+    assert policy.has_exposure is False and policy.has_pending is False
+    assert writer.status().execution_ready is False
 
 
 def test_ac04_missing_stale_or_malformed_news_never_becomes_clear(private_directory, identity):

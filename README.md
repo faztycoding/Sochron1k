@@ -199,12 +199,14 @@ The [read-only telemetry ingress](docs/operations/local-mt5-bridge.md) now has
 authenticated API and real-loopback HTTP evidence; it defaults to disabled without
 private local configuration. The owner web console now consumes its private view;
 no actual EA connection is verified yet.
-The [MQL5 sources](mt5/ea/README.md) contain the read-only observer and pure
-execution-protocol codec as uncompiled checkpoints.
-Compile/verify the native CopyRates producer against SCN-004/006,
-verify actual Demo data, then implement and compile the default-off mutation EA
-that consumes the SCN-012/013 contract and complete the remaining target recovery
-work. The UI connection rail identifies `/api/policy/v1/status`,
+The [MQL5 sources](mt5/ea/README.md) contain the telemetry observer, read-only
+execution-inventory observer and pure execution-protocol codec as uncompiled
+checkpoints. The [inventory runbook](docs/operations/read-only-execution-inventory.md)
+maps its private `/executor/v1` API to the browser-safe status and owner routes.
+Compile/verify both read-only observers on the selected Demo host, verify actual
+data and the narrow loopback route, then implement and compile the separately
+default-off mutation EA that consumes the SCN-012/013 contract and complete the
+remaining target recovery work. The UI connection rail identifies `/api/policy/v1/status`,
 `/api/owner/signals` and
 `/api/owner/statistics` as implemented read models waiting for their versioned
 strategy and research producers. Statistics remain empty until an evaluation has

@@ -430,6 +430,21 @@ class ExecutionPollingBridge:
             and not frame.inventory.foreign_positions
         )
 
+    def _inventory_policy_usable_locked(self) -> bool:
+        frame = self._inventory_frame
+        age = self._inventory_age_locked()
+        return bool(
+            frame is not None
+            and not self._rejected
+            and age is not None
+            and age <= MAX_EXECUTION_AGE_SECONDS
+            and frame.terminal_connected
+            and frame.account_trade_allowed
+            and frame.inventory.complete
+            and not frame.inventory.foreign_orders
+            and not frame.inventory.foreign_positions
+        )
+
     def status(self) -> ExecutionBridgeStatus:
         with self._condition:
             if self.settings is None:
@@ -460,8 +475,8 @@ class ExecutionPollingBridge:
 
     def policy_snapshot(self) -> ExecutionPolicySnapshot:
         with self._condition:
-            if not self._inventory_usable_locked():
-                raise ConnectionError("fresh complete executor inventory is unavailable")
+            if not self._inventory_policy_usable_locked():
+                raise ConnectionError("fresh complete policy inventory is unavailable")
             return ExecutionPolicySnapshot(
                 frame=self._inventory_frame,
                 active_command=self._active is not None,

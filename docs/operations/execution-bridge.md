@@ -1,9 +1,11 @@
 # Demo execution bridge operations
 
-Status: API-side SCN-012 transport implemented and locally verified with synthetic
-fixtures. No execution EA has consumed it, no broker request has been made, and the
-current Compose topology does not mount its private configuration. It is not a
-Demo release gate or unattended-trading authorization.
+Status: API-side SCN-012 transport is implemented and locally verified with
+synthetic fixtures. SCN-024 adds an uncompiled, default-off MQL source that can
+upload policy-only current-empty inventory while hard-coding algorithmic trading
+false. It has not consumed a command or made a broker request, and the current
+Compose topology does not mount its private configuration or expose its loopback
+route. It is not a Demo release gate or unattended-trading authorization.
 
 ## Internal routes
 
@@ -18,6 +20,12 @@ Demo release gate or unattended-trading authorization.
 All responses use `Cache-Control: no-store`. The public health response still says
 `execution_ready=false` and `auto_trading_enabled=false`. There is no browser or
 owner route that creates an execution command.
+
+The browser-safe route map is in
+[`read-only-execution-inventory.md`](read-only-execution-inventory.md). The
+read-only observer may satisfy the policy writer's empty-account source without
+changing the normal execution status from non-ready. It does not feed the owner
+execution journal panel.
 
 ## Private API configuration
 
@@ -86,9 +94,11 @@ the complete package, recovery schema and unrelated boundaries:
 bash scripts/check-scn-001-local.sh
 ```
 
-These use only synthetic local state. Actual MetaEditor compilation, EA HTTP and
-trade APIs, target-host network loss, terminal restart, broker return codes and an
-owner-authorized Demo open/close remain `NOT RUN`.
+These use only synthetic local state. The SCN-024 source guard additionally checks
+that the observer contains no command polling or named mutation authority. Actual
+MetaEditor compilation, EA HTTP, account reads and trade APIs, target-host network
+loss, terminal restart, broker return codes and an owner-authorized Demo open/close
+remain `NOT RUN`.
 
 ## Inputs still required for a real Demo target
 
