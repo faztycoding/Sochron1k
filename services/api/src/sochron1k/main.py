@@ -23,6 +23,12 @@ from .execution_bridge_api import router as execution_bridge_router
 from .execution_evidence import ExecutionEvidenceReader, load_execution_evidence_reader
 from .owner_api import router as owner_router
 from .owner_auth import OwnerAuthSettings, OwnerVerifier, load_owner_auth_settings
+from .policy_api import router as policy_router
+from .policy_evidence import (
+    PolicyEvidenceWriter,
+    PolicyWriterSettings,
+    load_policy_writer_settings,
+)
 from .research_statistics import ResearchStatisticsReader
 from .signal_evidence import SignalEvidenceReader
 from .telemetry import BridgeSettings, TelemetryBridge, load_bridge_settings
@@ -53,6 +59,7 @@ def create_app(
     execution_evidence: ExecutionEvidenceReader | None = None,
     signal_evidence: SignalEvidenceReader | None = None,
     research_statistics: ResearchStatisticsReader | None = None,
+    policy_writer_settings: PolicyWriterSettings | None = None,
 ) -> FastAPI:
     if (
         bridge_settings is not None
@@ -61,9 +68,17 @@ def create_app(
         == execution_bridge_settings.token.get_secret_value()
     ):
         raise RuntimeError("telemetry and execution bridges require separate credentials")
+    if policy_writer_settings is not None and (
+        bridge_settings is None
+        or execution_bridge_settings is None
+        or bridge_settings.identity != policy_writer_settings.identity
+        or execution_bridge_settings.identity != policy_writer_settings.identity
+    ):
+        raise RuntimeError("policy writer requires matching telemetry and execution identities")
     app = FastAPI(title="Sochron1k API", version=__version__)
     app.state.telemetry_bridge = TelemetryBridge(bridge_settings)
     app.state.execution_bridge = ExecutionPollingBridge(execution_bridge_settings)
+    app.state.policy_writer = PolicyEvidenceWriter(policy_writer_settings)
     app.state.owner_verifier = OwnerVerifier(owner_auth_settings)
     app.state.execution_evidence = execution_evidence
     app.state.signal_evidence = signal_evidence or (
@@ -84,11 +99,14 @@ def create_app(
     app.include_router(chart_owner_router)
     app.include_router(history_router)
     app.include_router(execution_bridge_router)
+    app.include_router(policy_router)
 
     @app.middleware("http")
     async def bridge_no_cache(request: Request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith(("/bridge/", "/executor/", "/owner/", "/auth/", "/ui/")):
+        if request.url.path.startswith(
+            ("/bridge/", "/executor/", "/owner/", "/auth/", "/ui/", "/policy/")
+        ):
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -130,6 +148,7 @@ def create_app(
                 else "awaiting_configuration"
             ),
             signal_configured=app.state.signal_evidence is not None,
+            policy_state=app.state.policy_writer.status().state,
             statistics_configured=app.state.research_statistics is not None,
         )
 
@@ -145,4 +164,5 @@ app = create_app(
     else None,
     load_execution_bridge_settings(),
     load_execution_evidence_reader(),
+    policy_writer_settings=load_policy_writer_settings(),
 )

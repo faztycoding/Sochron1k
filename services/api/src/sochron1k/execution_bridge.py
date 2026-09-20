@@ -282,6 +282,13 @@ class ExecutionBridgeStatus(StrictModel):
     execution_ready: Literal[False] = False
 
 
+class ExecutionPolicySnapshot(StrictModel):
+    """One already-fenced inventory plus current local dispatch occupancy."""
+
+    frame: ExecutionInventoryFrame
+    active_command: StrictBool
+
+
 class ExecutionBridgeDenied(ValueError):
     def __init__(self, code: str) -> None:
         self.code = code
@@ -450,6 +457,15 @@ class ExecutionPollingBridge:
             if not self._inventory_usable_locked():
                 raise ConnectionError("fresh complete executor inventory is unavailable")
             return self._inventory_frame.inventory
+
+    def policy_snapshot(self) -> ExecutionPolicySnapshot:
+        with self._condition:
+            if not self._inventory_usable_locked():
+                raise ConnectionError("fresh complete executor inventory is unavailable")
+            return ExecutionPolicySnapshot(
+                frame=self._inventory_frame,
+                active_command=self._active is not None,
+            )
 
     def _new_dispatch_locked(self, **values) -> _PendingDispatch:
         if not self._inventory_usable_locked():

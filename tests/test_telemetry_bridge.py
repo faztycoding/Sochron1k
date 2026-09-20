@@ -264,6 +264,24 @@ async def test_ac02_ac03_invalid_frame_is_redacted(client, payload, auth, field,
     assert (await client.get("/bridge/v1/status")).json()["state"] == "rejected"
 
 
+def test_scn023_ac02_v2_market_evidence_is_exact_and_v1_remains_compatible(payload):
+    assert TelemetryFrame.model_validate(payload).protocol == "sochron.telemetry.v1"
+    v2 = payload | {
+        "protocol": "sochron.telemetry.v2",
+        "market_open": True,
+        "market_source": "mt5-symbol-trade-session",
+    }
+    assert TelemetryFrame.model_validate(v2).market_open is True
+    for changed in (
+        v2 | {"market_open": None},
+        v2 | {"market_source": "calendar-guess"},
+        payload | {"market_open": False},
+        payload | {"market_source": "mt5-symbol-trade-session"},
+    ):
+        with pytest.raises(ValueError):
+            TelemetryFrame.model_validate(changed)
+
+
 @pytest.mark.anyio
 @pytest.mark.parametrize("field", ["identity", "trade_mode", "observed_at", "contract", "boot_id"])
 async def test_ac02_missing_required_evidence(client, payload, auth, field):

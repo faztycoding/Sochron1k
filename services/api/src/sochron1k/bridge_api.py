@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import ValidationError
 from starlette.requests import ClientDisconnect
 
@@ -116,7 +116,11 @@ async def bounded_json(request: Request, reject: Callable[[], None], max_bytes: 
 
 
 @router.post("/snapshot")
-async def receive_snapshot(request: Request, bridge: AuthenticatedBridge) -> FrameReceipt:
+async def receive_snapshot(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    bridge: AuthenticatedBridge,
+) -> FrameReceipt:
     decoded = await bounded_json(request, bridge.reject, MAX_FRAME_BYTES)
     try:
         frame = TelemetryFrame.model_validate(decoded)
@@ -125,6 +129,12 @@ async def receive_snapshot(request: Request, bridge: AuthenticatedBridge) -> Fra
         bridge.reject()
         raise HTTPException(status_code=422, detail="INVALID_FRAME") from None
     try:
-        return bridge.accept(frame)
+        receipt = bridge.accept(frame)
     except BridgeDenied as error:
         raise HTTPException(status_code=409, detail=error.code) from None
+    background_tasks.add_task(
+        request.app.state.policy_writer.refresh,
+        bridge,
+        request.app.state.execution_bridge,
+    )
+    return receipt

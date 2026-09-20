@@ -16,7 +16,7 @@ from sochron1k.telemetry import BridgeSettings, TelemetryBridge, TelemetryFrame
 ROOT = Path(__file__).resolve().parents[1]
 GUARD = runpy.run_path(str(ROOT / "scripts/check-mt5-source.py"))
 EXECUTION_GUARD = runpy.run_path(str(ROOT / "scripts/check-execution-protocol-source.py"))
-SAMPLE = ROOT / "tests/fixtures/mt5-telemetry-v1.json"
+SAMPLE = ROOT / "tests/fixtures/mt5-telemetry-v2.json"
 FIXTURE_VERIFIER = runpy.run_path(str(ROOT / "scripts/check-mt5-fixture.py"))
 EXECUTION_FIXTURE_VERIFIER = runpy.run_path(
     str(ROOT / "scripts/check-execution-protocol-fixture.py")
@@ -54,9 +54,13 @@ def test_ea06_guard_detects_external_include_and_enabled_default_mutations():
     assert GUARD["findings"](
         source.replace("EnableReadOnlyCharts=false", "EnableReadOnlyCharts=true")
     )
+    assert "SymbolInfoSessionTrade" in source
+    assert "sochron.telemetry.v2" in (ROOT / "mt5/ea/TelemetryProtocol.mqh").read_text()
 
 
-@pytest.mark.parametrize("operation", ["CopyRates", "SeriesInfoInteger", "SymbolInfoInteger"])
+@pytest.mark.parametrize(
+    "operation", ["CopyRates", "SeriesInfoInteger", "SymbolInfoInteger", "SymbolInfoSessionTrade"]
+)
 @pytest.mark.parametrize("name", ["TelemetryProtocol.mqh", "SochronTelemetrySelfTest.mq5"])
 def test_chart_source_guard_denies_terminal_access_in_pure_helpers(operation, name):
     source = (ROOT / "mt5/ea" / name).read_text()

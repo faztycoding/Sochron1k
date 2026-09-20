@@ -71,7 +71,7 @@ operations verification, not an ad hoc public port.
 The authoritative validated schema is `TelemetryFrame` in
 `services/api/src/sochron1k/telemetry.py`. Every frame includes:
 
-- `protocol=sochron.telemetry.v1`, `source=mt5-ea-sampled`, current `boot_id`, and a
+- `protocol=sochron.telemetry.v2`, `source=mt5-ea-sampled`, current `boot_id`, and a
   positive, strictly increasing integer `sequence` (within JSON-safe integer range).
 - `identity` matching all six configured identity fields, explicit `trade_mode=demo`,
   actual `terminal_build`, `terminal_connected`, and `account_trade_allowed` booleans.
@@ -83,6 +83,10 @@ The authoritative validated schema is `TelemetryFrame` in
 - `contract`: exact symbol, digits, tick size, volume min/max/step, stops/freeze
   levels and filling modes (`fok`, `ioc`, `return`, `boc`). This is metadata only,
   not margin sufficiency, profit calculation or a successful execution preflight.
+- `market_open` from the broker symbol's trade-session table at that tick and the
+  fixed `market_source=mt5-symbol-trade-session`. Missing or ambiguous session
+  metadata suppresses the v2 sample. Legacy v1 remains monitor-readable but cannot
+  satisfy the PA01 policy writer.
 
 Obtain the challenge with the executor token before sending. On an API restart,
 discard old queued samples and obtain a new boot ID; never relabel old data as a
@@ -93,8 +97,9 @@ The API owns `received_time_utc` and derives `event_time_utc` from the raw tick
 timestamp and configured offset. Observations must arrive within five seconds and
 cannot be future-dated. A tick up to one second ahead of observation is tolerated
 for terminal clock granularity; a larger lead is rejected. An old tick can be
-stored for diagnosis but remains stale even under a new heartbeat. No market-open
-calendar is inferred. Snapshots are sampled, not a complete tick stream.
+stored for diagnosis but remains stale even under a new heartbeat. The API never
+infers market-open from UTC or tick freshness; v2 carries the MT5-derived session
+observation. Snapshots are sampled, not a complete tick stream.
 
 Exact duplicate sequence/content returns `duplicate=true` without changing receipt
 time or clearing a rejection. Changed duplicates, decreasing sequence, reversed

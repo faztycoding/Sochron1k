@@ -63,7 +63,7 @@ export function SignalPanel({ token }: { token: string | null }) {
   return <section id="signal-evidence" className="panel signal-panel" aria-labelledby="signal-title">
     <div className="panel-heading signal-heading"><div><p>Versioned decision evidence</p>
       <h2 id="signal-title">สัญญาณและเหตุผลที่ยืนยันแล้ว</h2>
-      <p className="owner-subtitle">ตำแหน่ง API: <code>/api/owner/signals</code> · อ่านจาก owner RLS เท่านั้น</p></div>
+      <p className="owner-subtitle">ตำแหน่ง API: <code>/api/policy/v1/status</code> → <code>/api/owner/signals</code> · อ่านสัญญาณจาก owner RLS เท่านั้น</p></div>
       <span className="status-chip status-chip--muted">ไม่ใช่คำสั่งซื้อขาย</span></div>
     {!token ? <div className="owner-empty"><strong>เข้าสู่ระบบเจ้าของเพื่ออ่านสัญญาณ</strong>
       <p>หน้าเว็บไม่สร้าง BUY/SELL/WAIT เอง และไม่มีสิทธิ์ส่งคำสั่งไป MT5</p></div> : null}

@@ -138,8 +138,11 @@ handoff, journals the exact decision before either fixed Supabase RPC and verifi
 the receiver independently before advancing its cursor. It installs as
 `sochron-pa01`, is disabled without private configuration and is not started by
 default Compose. Local crash-after-commit evidence proves read-first recovery
-without a duplicate send. This does not implement the real policy handoff writer,
-target scheduling/recovery, strategy-performance evidence or any trading path.
+without a duplicate send. The disabled-by-default
+[coherent policy writer](docs/operations/policy-evidence-writer.md) now combines
+telemetry v2, complete execution inventory and explicit news-gate coverage into
+that handoff atomically. A real news collector, target configuration/scheduling,
+strategy-performance evidence and every trading path remain missing.
 
 ## Local Supabase foundation
 
@@ -201,7 +204,8 @@ execution-protocol codec as uncompiled checkpoints.
 Compile/verify the native CopyRates producer against SCN-004/006,
 verify actual Demo data, then implement and compile the default-off mutation EA
 that consumes the SCN-012/013 contract and complete the remaining target recovery
-work. The UI connection rail identifies `/api/owner/signals` and
+work. The UI connection rail identifies `/api/policy/v1/status`,
+`/api/owner/signals` and
 `/api/owner/statistics` as implemented read models waiting for their versioned
 strategy and research producers. Statistics remain empty until an evaluation has
 dataset/split identity, sample size, uncertainty and explicit costs; the UI does
@@ -212,8 +216,10 @@ envelope now feed an optional durable producer. The producer binds the exact
 spread, market/session, freshness, news, exposure and pending observations,
 journals before write and independently reads back the immutable Supabase
 snapshot/signal pair. The owner Signals UI therefore has a complete local software
-path, but correctly stays `awaiting_source` until an authoritative policy writer,
-eligible strategy/experiment rows and private producer configuration are present.
-Target scheduling/recovery and the separate statistics evaluator remain missing.
+path. The authoritative handoff writer is implemented locally, but correctly stays
+disabled until its exact MT5 identities, archive, private output and a
+coverage-complete news gate are configured. Signals also require eligible
+strategy/experiment rows and private producer configuration. The news collector,
+target scheduling/recovery and separate statistics evaluator remain missing.
 A real Demo round trip still requires owner inputs and explicit target authorization
 listed in the task contract.

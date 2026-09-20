@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from pydantic import ValidationError
 
 from .bridge_api import bounded_json
@@ -58,7 +58,9 @@ def challenge(bridge: AuthenticatedExecutionBridge) -> ExecutionBridgeChallenge:
 
 @router.post("/inventory")
 async def receive_inventory(
-    request: Request, bridge: AuthenticatedExecutionBridge
+    request: Request,
+    background_tasks: BackgroundTasks,
+    bridge: AuthenticatedExecutionBridge,
 ) -> ExecutionBridgeReceipt:
     decoded = await bounded_json(request, bridge.reject, MAX_EXECUTION_FRAME_BYTES)
     try:
@@ -67,9 +69,15 @@ async def receive_inventory(
         bridge.reject()
         raise HTTPException(status_code=422, detail="INVALID_EXECUTOR_FRAME") from None
     try:
-        return bridge.accept_inventory(frame)
+        receipt = bridge.accept_inventory(frame)
     except ExecutionBridgeDenied as error:
         raise HTTPException(status_code=409, detail=error.code) from None
+    background_tasks.add_task(
+        request.app.state.policy_writer.refresh,
+        request.app.state.telemetry_bridge,
+        bridge,
+    )
+    return receipt
 
 
 @router.get("/commands/next", response_model=ExecutionDispatch | None)

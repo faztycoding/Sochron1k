@@ -23,6 +23,7 @@ from pydantic import (
     StrictBool,
     StrictInt,
     field_validator,
+    model_validator,
 )
 
 from .models import ContractSpec, StrictModel
@@ -100,7 +101,7 @@ class TelemetryContract(ContractSpec):
 
 
 class TelemetryFrame(StrictModel):
-    protocol: Literal["sochron.telemetry.v1"]
+    protocol: Literal["sochron.telemetry.v1", "sochron.telemetry.v2"]
     source: Literal["mt5-ea-sampled"]
     boot_id: UUID
     sequence: StrictInt = Field(ge=1, le=9_007_199_254_740_991)
@@ -117,6 +118,8 @@ class TelemetryFrame(StrictModel):
     free_margin: FiniteDecimal
     bid: FiniteDecimal = Field(gt=0)
     ask: FiniteDecimal = Field(gt=0)
+    market_open: StrictBool | None = None
+    market_source: Literal["mt5-symbol-trade-session"] | None = None
     contract: TelemetryContract
 
     @field_validator("observed_at")
@@ -130,6 +133,17 @@ class TelemetryFrame(StrictModel):
         if value < info.data.get("bid", value):
             raise ValueError("invalid quote")
         return value
+
+    @model_validator(mode="after")
+    def market_evidence_matches_protocol(self):
+        supplied = self.market_open is not None and self.market_source is not None
+        if (self.protocol == "sochron.telemetry.v2") != supplied:
+            raise ValueError("market evidence does not match telemetry protocol")
+        if self.protocol == "sochron.telemetry.v1" and (
+            self.market_open is not None or self.market_source is not None
+        ):
+            raise ValueError("telemetry v1 cannot carry market evidence")
+        return self
 
     @property
     def event_time_utc(self) -> datetime:

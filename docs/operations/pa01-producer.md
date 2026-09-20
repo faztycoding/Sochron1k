@@ -8,11 +8,13 @@ disabled when `SOCHRON_PA01_CONFIG_FILE` is unset, is not in default Compose and
 never creates a command, performs risk admission, calls MT5 or enables Auto
 Trading.
 
-The policy file is an integration contract, not a complete source. The repository
-does not yet contain the writer that combines authoritative quote/session, news
-window and account exposure/pending evidence. Do not hand-edit or hard-code that
-file and then describe the result as actual Demo evidence. Local synthetic checks
-use generated values only.
+SCN-023 now supplies the disabled-by-default writer that combines authenticated
+MT5 quote/session and execution-inventory evidence with an owner-private news gate.
+It remains unusable as actual Demo evidence until that writer is configured with a
+real, coverage-complete news source and actual compiled MT5 adapters. Do not
+hand-edit or hard-code the policy file and describe it as actual Demo evidence.
+Local checks use generated values only. See
+[the policy writer runbook](policy-evidence-writer.md).
 
 Do not point this worker at hosted Supabase without explicit authorization for the
 project and write effect. The service key is a backend credential that bypasses
@@ -137,7 +139,8 @@ access, run `reconcile`, and inspect any PREPARED/QUARANTINED result before anot
 send. The journal is capped at 64 MiB for its main database and reports 70/85%
 warnings; no automatic pruning exists.
 
-Still required before unattended Demo: the real policy handoff writer, target
-scheduler/service definition, target backup/restore and burn-in, hosted project
-authorization/credentials, actual MT5 data parity and all release gates. Statistics
-also remain empty until the separate reproducible evaluation producer exists.
+Still required before unattended Demo: a real news-gate collector, writer/producer
+private target configuration, target scheduler/service definition, target
+backup/restore and burn-in, hosted project authorization/credentials, actual MT5
+data parity and all release gates. Statistics also remain empty until the separate
+reproducible evaluation producer exists.

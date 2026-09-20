@@ -94,6 +94,7 @@ def build_ui_connection_map(
     execution_state: str,
     execution_evidence_state: RuntimeState,
     signal_configured: bool,
+    policy_state: str,
     statistics_configured: bool,
 ) -> UiConnectionMap:
     return UiConnectionMap(
@@ -143,9 +144,15 @@ def build_ui_connection_map(
             UiConnection(
                 id="signals",
                 implementation="available",
-                runtime="awaiting_source" if signal_configured else "awaiting_configuration",
-                current_routes=("/api/owner/signals",),
-                sources=("supabase_signals",),
+                runtime=(
+                    "degraded"
+                    if policy_state == "degraded"
+                    else "awaiting_source"
+                    if signal_configured and policy_state != "disabled"
+                    else "awaiting_configuration"
+                ),
+                current_routes=("/api/policy/v1/status", "/api/owner/signals"),
+                sources=("mt5_policy_evidence", "news_gate", "supabase_signals"),
             ),
             UiConnection(
                 id="statistics",

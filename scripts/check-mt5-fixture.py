@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-GOLDEN = ROOT / "tests/fixtures/mt5-telemetry-v1.json"
+GOLDEN = ROOT / "tests/fixtures/mt5-telemetry-v2.json"
 sys.path.insert(0, str(ROOT / "services/api/src"))
 
 from sochron1k.bridge_api import unique_object  # noqa: E402
@@ -36,7 +36,7 @@ def verify(path: Path, *, chart: bool = False) -> dict:
         "input_sha256": hashlib.sha256(raw).hexdigest(),
         "golden_sha256": hashlib.sha256(golden.read_bytes()).hexdigest(),
         "input_is_committed_golden": path.resolve() == golden.resolve(),
-        "protocol": "sochron.chart.v1" if chart else "sochron.telemetry.v1",
+        "protocol": "sochron.chart.v1" if chart else "sochron.telemetry.v2",
         "limits": "Does not attest compiler/self-test execution or any MT5 account",
     }
 

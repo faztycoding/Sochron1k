@@ -79,9 +79,9 @@ async def test_ui_connection_map_is_redacted_and_truthful_when_unconfigured() ->
         "id": "signals",
         "implementation": "available",
         "runtime": "awaiting_configuration",
-        "current_routes": ["/api/owner/signals"],
+        "current_routes": ["/api/policy/v1/status", "/api/owner/signals"],
         "required_route": None,
-        "sources": ["supabase_signals"],
+        "sources": ["mt5_policy_evidence", "news_gate", "supabase_signals"],
     }
     assert nodes["statistics"] == {
         "id": "statistics",
@@ -131,5 +131,5 @@ async def test_ui_connection_map_separates_configured_from_connected() -> None:
     assert nodes["native_chart"]["runtime"] == "awaiting_source"
     assert nodes["bar_history"]["runtime"] == "awaiting_configuration"
     assert nodes["execution_evidence"]["runtime"] == "awaiting_source"
-    assert nodes["signals"]["runtime"] == "awaiting_source"
+    assert nodes["signals"]["runtime"] == "awaiting_configuration"
     assert nodes["statistics"]["runtime"] == "awaiting_source"

@@ -190,7 +190,7 @@ struct ScSample
   {
    string executor_id,account_ref,server,currency,margin_mode,symbol,observed_at;
    long terminal_build,tick_time_server_msc;
-   bool account_trade_allowed;
+   bool account_trade_allowed,market_open;
    int broker_utc_offset_seconds,digits,stops,freeze;
    double equity,balance,free_margin,bid,ask,tick_size,volume_min,volume_max,volume_step;
    string filling_modes_json;
@@ -198,7 +198,7 @@ struct ScSample
 
 string ScSnapshotJson(const ScSample &s,const string boot,const long sequence)
   {
-   return "{\"protocol\":\"sochron.telemetry.v1\",\"source\":\"mt5-ea-sampled\","
+   return "{\"protocol\":\"sochron.telemetry.v2\",\"source\":\"mt5-ea-sampled\","
       "\"boot_id\":"+ScQuote(boot)+",\"sequence\":"+IntegerToString(sequence)+
       ",\"identity\":{\"executor_id\":"+ScQuote(s.executor_id)+
       ",\"account_ref\":"+ScQuote(s.account_ref)+",\"server\":"+ScQuote(s.server)+
@@ -211,13 +211,26 @@ string ScSnapshotJson(const ScSample &s,const string boot,const long sequence)
       ",\"broker_utc_offset_seconds\":"+IntegerToString(s.broker_utc_offset_seconds)+
       ",\"equity\":"+ScDecimal(s.equity)+",\"balance\":"+ScDecimal(s.balance)+
       ",\"free_margin\":"+ScDecimal(s.free_margin)+",\"bid\":"+ScDecimal(s.bid)+
-      ",\"ask\":"+ScDecimal(s.ask)+",\"contract\":{\"symbol\":"+ScQuote(s.symbol)+
+      ",\"ask\":"+ScDecimal(s.ask)+",\"market_open\":"+ScBool(s.market_open)+
+      ",\"market_source\":\"mt5-symbol-trade-session\",\"contract\":{\"symbol\":"+ScQuote(s.symbol)+
       ",\"digits\":"+IntegerToString(s.digits)+",\"tick_size\":"+ScDecimal(s.tick_size)+
       ",\"volume_min\":"+ScDecimal(s.volume_min)+",\"volume_max\":"+ScDecimal(s.volume_max)+
       ",\"volume_step\":"+ScDecimal(s.volume_step)+
       ",\"stops_level_points\":"+IntegerToString(s.stops)+
       ",\"freeze_level_points\":"+IntegerToString(s.freeze)+
       ",\"filling_modes\":"+s.filling_modes_json+"}}";
+  }
+
+// Session times are broker-day seconds. An overnight session belongs both to
+// its start day (late segment) and to the following day (early carry segment).
+bool ScSessionContains(const int second_of_day,const int from_second,const int to_second,
+                       const bool previous_day)
+  {
+   if(second_of_day<0 || second_of_day>=86400 || from_second<0 || from_second>=86400 ||
+      to_second<0 || to_second>86400 || from_second==to_second) return false;
+   if(from_second<to_second)
+      return !previous_day && second_of_day>=from_second && second_of_day<to_second;
+   return previous_day ? second_of_day<to_second : second_of_day>=from_second;
   }
 
 int ScChartSeconds(const string timeframe)

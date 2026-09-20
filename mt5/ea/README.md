@@ -9,7 +9,8 @@ terminal self-test result or actual Demo observation is claimed.
 ## Files and authority
 
 - `SochronTelemetry.mq5`: opt-in, sampled account/contract/quote observer, with a
-  separately default-off native candlestick producer (source version 0.11).
+  separately default-off native candlestick producer and symbol-session evidence
+  (source version 0.12).
 - `TelemetryProtocol.mqh`: pure JSON encoder and bounded flat-response parser.
 - `SochronTelemetrySelfTest.mq5`: pure protocol tests and synthetic fixture output;
   it never reads an account or uses the network.
@@ -83,8 +84,8 @@ This procedure has **NOT RUN** here. Do not relabel it passed from source checks
    resulting `.ex5` hashes/timestamps. A process exit code or an old `.ex5` alone
    is insufficient. Keep generated binaries untracked.
 4. Run only the pure `SochronTelemetrySelfTest` script first. It requires no token,
-   account access, WebRequest permission or trading operation. Retain its 50-case
-   result. On success it overwrites only its generated
+   account access, WebRequest permission or trading operation. Retain its complete
+   PASS result and case count. On success it overwrites only its generated
    `MQL5/Files/SochronTelemetrySelfTest.json` and
    `MQL5/Files/SochronChartSelfTest.json` with synthetic data.
 5. Compare that generated file to the API golden fixture, using the verifier's
@@ -147,8 +148,14 @@ after-the-fact check and must be measured at AC-07. WebRequest is synchronous, s
 this observer must not be merged into the future position-risk loop without a
 reviewed transport design.
 
-The quote output is sampled, not every tick. It preserves the tick's original timestamp
-even if unchanged for many timers; account values are finite observations, not
+The quote output is sampled, not every tick. Telemetry v2 also records whether the
+sampled broker tick falls inside the symbol's `SymbolInfoSessionTrade` table and
+whether the symbol mode permits new entries; ambiguous session rows suppress the
+sample instead of guessing. The API retains telemetry v1 for monitoring
+compatibility, but the PA01 policy writer accepts only v2 market evidence. This
+source behavior still requires selected-host compilation and actual broker parity.
+It preserves the tick's original timestamp even if unchanged for many timers;
+account values are finite observations, not
 risk approvals. No positions, orders, deals or SL confirmation are invented or
 claimed by this version. Optional chart snapshots are native monitoring windows,
 not complete tick capture or durable research history.

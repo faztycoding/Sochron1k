@@ -1,5 +1,5 @@
 #property strict
-#property version "0.11"
+#property version "0.12"
 #property description "Sochron1k read-only Demo observer; NOT an execution EA"
 
 #include "TelemetryProtocol.mqh"
@@ -127,6 +127,42 @@ void ScAppendMode(string &modes,const string mode)
    modes+=ScQuote(mode);
   }
 
+bool ScSessionDayOpen(const ENUM_DAY_OF_WEEK day,const int second_of_day,
+                      const bool previous_day,bool &open)
+  {
+   for(uint index=0;index<64;index++)
+     {
+      datetime from_time,to_time;
+      ResetLastError();
+      if(!SymbolInfoSessionTrade(ExpectedSymbol,day,index,from_time,to_time))
+         return GetLastError()==0; // No further session is normal; a terminal error is not.
+      long from_second=(long)from_time,to_second=(long)to_time;
+      if(from_second<0 || from_second>=86400 || to_second<0 || to_second>86400 ||
+         from_second==to_second) return false;
+      if(ScSessionContains(second_of_day,(int)from_second,(int)to_second,previous_day))
+         open=true;
+     }
+   return false; // Refuse an unbounded or malformed broker session table.
+  }
+
+bool ScReadMarketOpen(const datetime server_time,bool &open)
+  {
+   open=false;
+   long trade_mode;
+   if(!SymbolInfoInteger(ExpectedSymbol,SYMBOL_TRADE_MODE,trade_mode)) return false;
+   if(trade_mode==SYMBOL_TRADE_MODE_DISABLED || trade_mode==SYMBOL_TRADE_MODE_CLOSEONLY)
+      return true;
+   if(trade_mode!=SYMBOL_TRADE_MODE_LONGONLY && trade_mode!=SYMBOL_TRADE_MODE_SHORTONLY &&
+      trade_mode!=SYMBOL_TRADE_MODE_FULL) return false;
+   MqlDateTime value;
+   if(!TimeToStruct(server_time,value) || value.day_of_week<0 || value.day_of_week>6) return false;
+   int second_of_day=value.hour*3600+value.min*60+value.sec;
+   ENUM_DAY_OF_WEEK current=(ENUM_DAY_OF_WEEK)value.day_of_week;
+   ENUM_DAY_OF_WEEK previous=(ENUM_DAY_OF_WEEK)((value.day_of_week+6)%7);
+   return ScSessionDayOpen(current,second_of_day,false,open) &&
+      ScSessionDayOpen(previous,second_of_day,true,open);
+  }
+
 bool ScReadSample(ScSample &s)
   {
    if(!TerminalInfoInteger(TERMINAL_CONNECTED) || !ScIdentityMatches()) return false;
@@ -173,6 +209,7 @@ bool ScReadSample(ScSample &s)
       !ScAccountDouble(ACCOUNT_BALANCE,s.balance) ||
       !ScAccountDouble(ACCOUNT_MARGIN_FREE,s.free_margin)) return false;
    s.bid=tick.bid; s.ask=tick.ask; s.tick_time_server_msc=tick.time_msc;
+   if(!ScReadMarketOpen(tick.time,s.market_open)) return false;
    s.digits=(int)digits; s.stops=(int)stops; s.freeze=(int)freeze;
    s.broker_utc_offset_seconds=BrokerUtcOffsetSeconds;
    s.observed_at=ScUtc(TimeGMT());

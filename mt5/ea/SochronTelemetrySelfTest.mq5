@@ -48,7 +48,7 @@ void OnStart()
    s.server="Synthetic-Demo"; s.currency="USD"; s.margin_mode="retail_hedging";
    s.symbol="XAUUSD.fixture"; s.observed_at="2026-09-17T00:00:00Z";
    s.terminal_build=1; s.tick_time_server_msc=((long)D'2026.09.17 00:00:00')*1000+7200000;
-   s.account_trade_allowed=false; s.broker_utc_offset_seconds=7200;
+   s.account_trade_allowed=false; s.market_open=true; s.broker_utc_offset_seconds=7200;
    s.digits=2; s.stops=10; s.freeze=0;
    s.equity=1000; s.balance=1000; s.free_margin=1000;
    s.bid=2500; s.ask=2500.2; s.tick_size=0.01;
@@ -60,6 +60,12 @@ void OnStart()
    ScCheck(count>1 && bytes[count-1]==0,"UTF8 terminator");
    ArrayResize(bytes,count-1);
    ScCheck(ArraySize(bytes)==StringLen(packet),"ASCII fixture byte length excludes NUL");
+   ScCheck(ScSessionContains(3600,0,7200,false),"ordinary session inside");
+   ScCheck(!ScSessionContains(7200,0,7200,false),"ordinary session end exclusive");
+   ScCheck(ScSessionContains(23*3600,22*3600,2*3600,false),"overnight start day");
+   ScCheck(ScSessionContains(3600,22*3600,2*3600,true),"overnight carry day");
+   ScCheck(!ScSessionContains(12*3600,22*3600,2*3600,false),"overnight outside");
+   ScCheck(!ScSessionContains(0,0,0,false),"ambiguous zero session refused");
 
    MqlRates rates[2];
    for(int i=0;i<2;i++)

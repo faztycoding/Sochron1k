@@ -270,9 +270,21 @@ before retry, and advances its cursor only after exact read-back. Confirmed or
 malformed conflicts are quarantined. The installed `sochron-pa01` command is inert
 without explicit private configuration and is absent from default Compose. This
 locally closes source read, journal and transport mechanics; it does not implement
-the authoritative policy writer, target scheduler/recovery, research evaluation,
-command/risk/execution path or Auto Trading; see
+target scheduling/recovery, research evaluation, command/risk/execution path or
+Auto Trading; see
 [ADR-025](decisions/ADR-025-durable-pa01-producer.md).
+
+SCN-023 implements the previously missing coherent policy handoff. Telemetry v2
+adds an MT5 symbol-trade-session observation beside the fresh quote while retaining
+v1 monitor compatibility. The API combines that evidence with the existing
+fenced, complete execution inventory and one strict owner-private news-gate
+coverage file at a single UTC cutoff. It derives source IDs and atomically replaces
+the private SCN-022 policy file; missing or malformed sources never become safe
+defaults. `/policy/v1/status` and the Signals connection node expose only redacted
+integration state. The writer has no strategy, Supabase, risk, command or execution
+authority. A real news collector, selected-host MQL compilation, target private
+configuration and scheduling remain pending; see
+[ADR-026](decisions/ADR-026-coherent-policy-evidence-handoff.md).
 
 | Failure | Required behavior |
 | --- | --- |

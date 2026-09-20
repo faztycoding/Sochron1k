@@ -53,6 +53,7 @@ describe("Sochron1k safety console", () => {
     await waitFor(() => expect(screen.getByText("ออนไลน์ · v0.1.0")).toBeVisible());
     expect(screen.getByRole("heading", { name: "แผนที่การเชื่อมต่อ API" })).toBeVisible();
     expect(screen.getByText("/api/owner/telemetry")).toBeVisible();
+    expect(screen.getAllByText("/api/policy/v1/status").length).toBeGreaterThan(0);
     expect(screen.getAllByText("/api/owner/signals").length).toBeGreaterThan(0);
     expect(screen.getAllByText("/api/owner/statistics").length).toBeGreaterThan(0);
     expect(screen.getAllByText("/api/owner/execution").length).toBeGreaterThan(0);

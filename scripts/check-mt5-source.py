@@ -56,6 +56,7 @@ def findings(source: str, *, protocol: bool = False, self_test: bool = False) ->
             "SeriesInfoInteger",
             "SymbolInfoInteger",
             "SymbolInfoDouble",
+            "SymbolInfoSessionTrade",
         }
         if protocol or self_test
         else set()
