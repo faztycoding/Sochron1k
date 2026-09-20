@@ -49,6 +49,7 @@ from .policy_evidence import (
 )
 from .research_statistics import ResearchStatisticsReader
 from .signal_evidence import SignalEvidenceReader
+from .target_evidence import TargetEvidenceReader, load_target_evidence_reader
 from .telemetry import BridgeSettings, TelemetryBridge, load_bridge_settings
 from .ui_connections import UiConnectionMap, build_ui_connection_map
 
@@ -83,6 +84,7 @@ def create_app(
     api_budget: ApiBudgetReader | None = None,
     alert_source_settings: AlertSourceSettings | None = None,
     alert_delivery_status: AlertDeliveryStatusReader | None = None,
+    target_evidence: TargetEvidenceReader | None = None,
 ) -> FastAPI:
     if (
         bridge_settings is not None
@@ -121,6 +123,15 @@ def create_app(
     app.state.api_budget = api_budget or ApiBudgetReader(None)
     app.state.alert_source_authenticator = AlertSourceAuthenticator(alert_source_settings)
     app.state.alert_delivery_status = alert_delivery_status or AlertDeliveryStatusReader(None)
+    app.state.target_evidence = target_evidence or TargetEvidenceReader(None)
+    if app.state.target_evidence.settings is not None and (
+        demo_owner_decisions is None
+        or app.state.target_evidence.settings.decision_revision
+        != demo_owner_decisions.decision_revision
+        or app.state.target_evidence.settings.decision_recorded_at_utc
+        != demo_owner_decisions.recorded_at_utc
+    ):
+        raise RuntimeError("target evidence requires the matching owner decision record")
     app.state.signal_evidence = signal_evidence or (
         SignalEvidenceReader(owner_auth_settings) if owner_auth_settings is not None else None
     )
@@ -147,7 +158,12 @@ def create_app(
         response = await call_next(request)
         if request.url.path.startswith(
             (
-                "/bridge/", "/executor/", "/owner/", "/auth/", "/ui/", "/policy/",
+                "/bridge/",
+                "/executor/",
+                "/owner/",
+                "/auth/",
+                "/ui/",
+                "/policy/",
                 "/internal/",
             )
         ):
@@ -218,6 +234,7 @@ def create_app(
             signal_configured=app.state.signal_evidence is not None,
             policy_state=app.state.policy_writer.status().state,
             statistics_configured=app.state.research_statistics is not None,
+            target_evidence=app.state.target_evidence.view(),
         )
 
     return app
@@ -238,4 +255,5 @@ app = create_app(
     api_budget=load_api_budget_reader(),
     alert_source_settings=load_alert_source_settings(),
     alert_delivery_status=load_alert_delivery_status_reader(),
+    target_evidence=load_target_evidence_reader(),
 )

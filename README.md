@@ -94,6 +94,11 @@ owner decisions, Auth, market data, execution, policy/research, EA build, broker
 round trip, recovery/alerts and explicit authorization. Missing or invalid status
 keeps every row visible and never becomes a positive release state. See the
 [Demo readiness runbook](docs/operations/demo-readiness.md).
+The owner-only `/api/owner/target-evidence` route can now admit one private,
+digest-bound normalized bundle for the three target rows and displays the exact
+API position in that ledger. “รับหลักฐานแล้ว” means only that the fixed files are
+intact, current and revision-bound; it is not a release verdict. No real target
+bundle exists yet. See the [target evidence runbook](docs/operations/target-evidence.md).
 
 The connection map directly below the safety banner now shows which browser API
 feeds every visible area and which upstream source is still missing. It separates
@@ -260,6 +265,12 @@ and its provider-neutral delivery outbox/read-back path is implemented locally, 
 it still needs the owner-selected billing collector and actual limit, a selected
 receipt-capable destination/recipient, escalation policy and target alert exercise
 before unattended Demo operation.
+The normalized target-evidence reader and UI positions are implemented locally,
+but the actual target producer/verifier is not. The selected host must still compile
+and identify the EA, retain MT5-confirmed round-trip/SL evidence, exercise restart,
+network loss, alerts and restore, report p50/p95 latency, and complete burn-in. A
+synthetic admitted bundle cannot satisfy those target gates or operational
+authorization.
 The pure `PA01-v1` kernel, native M1-to-M5/H1 aggregation and protocol-v2 policy
 envelope now feed an optional durable producer. The producer binds the exact
 spread, market/session, freshness, news, exposure and pending observations,

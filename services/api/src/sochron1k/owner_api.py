@@ -35,6 +35,7 @@ from .signal_evidence import (
     SignalEvidenceUnavailable,
     SignalEvidenceView,
 )
+from .target_evidence import TargetEvidenceReader, TargetEvidenceView
 from .telemetry import TelemetryView
 
 
@@ -128,13 +129,9 @@ def _source_connected(request: Request, source: str) -> bool:
         return True
     if source == "api_budget":
         budget: ApiBudgetReader = request.app.state.api_budget
-        return budget.view().state in {
-            "connected", "warning", "critical", "exhausted"
-        }
+        return budget.view().state in {"connected", "warning", "critical", "exhausted"}
     if source == "alert_delivery":
-        return request.app.state.alert_delivery_status.view().state in {
-            "connected", "pending"
-        }
+        return request.app.state.alert_delivery_status.view().state in {"connected", "pending"}
     return False
 
 
@@ -151,10 +148,15 @@ def api_budget(owner: OwnerDep, request: Request) -> ApiBudgetView:
     return reader.view()
 
 
+@router.get("/target-evidence")
+def target_evidence(owner: OwnerDep, request: Request) -> TargetEvidenceView:
+    del owner
+    reader: TargetEvidenceReader = request.app.state.target_evidence
+    return reader.view()
+
+
 @router.post("/alerts/{condition_id}/acknowledge")
-def acknowledge_alert(
-    condition_id: str, owner: OwnerDep, request: Request
-) -> AlertMutationReceipt:
+def acknowledge_alert(condition_id: str, owner: OwnerDep, request: Request) -> AlertMutationReceipt:
     if not re.fullmatch(r"[0-9a-f]{24}", condition_id):
         raise HTTPException(status_code=422, detail="INVALID_CONDITION_ID")
     journal = _lifecycle(request)
@@ -166,9 +168,7 @@ def acknowledge_alert(
     except (AlertLifecycleConflict, AlertLifecycleUnavailable) as error:
         raise _mutation_error(error) from None
     inventory = _alert_inventory(request)
-    alert = next(
-        (item for item in inventory.alerts if item.condition_id == condition_id), None
-    )
+    alert = next((item for item in inventory.alerts if item.condition_id == condition_id), None)
     if alert is None:
         raise HTTPException(status_code=409, detail="ALERT_NOT_ACTIVE")
     try:
@@ -178,9 +178,7 @@ def acknowledge_alert(
 
 
 @router.post("/alerts/{condition_id}/resolve")
-def resolve_alert(
-    condition_id: str, owner: OwnerDep, request: Request
-) -> AlertMutationReceipt:
+def resolve_alert(condition_id: str, owner: OwnerDep, request: Request) -> AlertMutationReceipt:
     if not re.fullmatch(r"[0-9a-f]{24}", condition_id):
         raise HTTPException(status_code=422, detail="INVALID_CONDITION_ID")
     journal = _lifecycle(request)

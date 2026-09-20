@@ -124,8 +124,15 @@ def build_ui_connection_map(
                 id="demo_readiness",
                 implementation="available",
                 runtime="connected",
-                current_routes=("/api/ui/demo-readiness",),
-                sources=("owner_decisions", "runtime_gates", "target_evidence"),
+                current_routes=(
+                    "/api/ui/demo-readiness",
+                    "/api/owner/target-evidence",
+                ),
+                sources=(
+                    "owner_decisions",
+                    "runtime_gates",
+                    "target_evidence_snapshot",
+                ),
             ),
             UiConnection(
                 id="owner_auth",
@@ -167,15 +174,17 @@ def build_ui_connection_map(
                 implementation="partial",
                 runtime=(
                     "degraded"
-                    if "degraded" in {
+                    if "degraded"
+                    in {
                         _telemetry_runtime(telemetry_state),
                         _execution_runtime(execution_state),
                         execution_evidence_state,
-                        "degraded" if api_budget_state in {"stale", "degraded"}
-                        else "connected" if api_budget_state in {
-                            "connected", "warning", "critical", "exhausted"
-                        }
-                        else "awaiting_source" if api_budget_state == "awaiting_snapshot"
+                        "degraded"
+                        if api_budget_state in {"stale", "degraded"}
+                        else "connected"
+                        if api_budget_state in {"connected", "warning", "critical", "exhausted"}
+                        else "awaiting_source"
+                        if api_budget_state == "awaiting_snapshot"
                         else "awaiting_configuration",
                         _alert_delivery_runtime(alert_delivery_state),
                     }
@@ -197,9 +206,14 @@ def build_ui_connection_map(
                 ),
                 required_route="configured receipt-capable alert destination",
                 sources=(
-                    "telemetry_status", "execution_status", "execution_journal",
-                    "bar_history", "policy_status", "alert_lifecycle",
-                    "api_budget_snapshot", "alert_delivery_outbox",
+                    "telemetry_status",
+                    "execution_status",
+                    "execution_journal",
+                    "bar_history",
+                    "policy_status",
+                    "alert_lifecycle",
+                    "api_budget_snapshot",
+                    "alert_delivery_outbox",
                 ),
             ),
             UiConnection(
@@ -218,9 +232,7 @@ def build_ui_connection_map(
             UiConnection(
                 id="statistics",
                 implementation="available",
-                runtime=(
-                    "awaiting_source" if statistics_configured else "awaiting_configuration"
-                ),
+                runtime=("awaiting_source" if statistics_configured else "awaiting_configuration"),
                 current_routes=("/api/owner/statistics",),
                 sources=("supabase_evaluations",),
             ),

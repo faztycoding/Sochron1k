@@ -15,7 +15,7 @@ const connectionFixture = () => ({
     current_routes: connectionDefinitions[id].routes, required_route: connectionDefinitions[id].required,
     sources: connectionDefinitions[id].sources })),
 });
-const readinessFixture = () => ({
+const readinessFixture = (targetState: "not_run" | "evidence_admitted" = "not_run") => ({
   protocol: "sochron.demo-readiness.v1",
   state: "awaiting_owner_inputs",
   demo_only: true,
@@ -26,7 +26,7 @@ const readinessFixture = () => ({
   gates: readinessGateIds.map(id => ({
     id,
     state: id === "operational_authorization" ? "not_authorized" :
-      ["target_artifact", "broker_round_trip", "recovery_observability"].includes(id) ? "not_run" : "missing",
+      ["target_artifact", "broker_round_trip", "recovery_observability"].includes(id) ? targetState : "missing",
     api_routes: readinessGateDefinitions[id].routes,
     sources: readinessGateDefinitions[id].sources,
     next_action: readinessGateDefinitions[id].nextActionCode,
@@ -108,6 +108,23 @@ describe("Sochron1k safety console", () => {
     expect(request.mock.calls.filter(([path]) => path === "/api/health")).toHaveLength(2);
     expect(request.mock.calls.filter(([path]) => path === "/api/ui/connections")).toHaveLength(2);
     expect(request.mock.calls.filter(([path]) => path === "/api/ui/demo-readiness")).toHaveLength(2);
+  });
+
+  it("shows admitted target evidence at its API position without enabling trading", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (path) =>
+      path === "/api/auth/config" ? json({ enabled: false }) : path === "/api/ui/connections" ?
+        json(connectionFixture()) : path === "/api/ui/demo-readiness" ?
+          json(readinessFixture("evidence_admitted")) : json({
+            status: "ok", service: "sochron1k-api", version: "0.1.0", trading_mode: "demo",
+            auto_trading_enabled: false, execution_ready: false,
+          }),
+    );
+
+    render(<App />);
+    await waitFor(() => expect(screen.getAllByText("รับหลักฐานแล้ว")).toHaveLength(3));
+    expect(screen.getAllByText("/api/owner/target-evidence").length).toBeGreaterThan(0);
+    expect(screen.getByText(/ไม่ใช่การอนุมัติ release/)).toBeVisible();
+    expect(screen.queryByRole("button", { name: /ซื้อ|ขาย|เปิดออเดอร์/ })).not.toBeInTheDocument();
   });
 
   it("keeps the required routes visible when the redacted map is invalid", async () => {

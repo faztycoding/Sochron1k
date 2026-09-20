@@ -52,6 +52,9 @@ The outcome is a repeatable research and Demo execution system, not a promise of
 - A provider-neutral delivery worker journals each notification before `PUT` and
   requires an independently readable matching relay receipt. Local synthetic relay
   evidence is not proof that a real provider or human recipient received a message.
+- Normalized target reports are admitted only when their source, target,
+  owner-decision, digest and UTC bindings validate. Admission is not independent
+  proof of the target event and cannot grant release or trading authority.
 - API-budget evidence uses an owner-selected currency, limit and thresholds plus a
   normalized provider snapshot. Planning prices, local call counts and stale
   provider data cannot be presented as current billed usage.
@@ -132,5 +135,6 @@ The following values are not available in the repository and block real Demo int
 - Monthly API budget.
 - Domain and alert destination.
 - Named authority allowed to release a total halt.
+- Owner-approved RPO and RTO targets.
 
 These decisions must be recorded in a versioned task contract or decision record. Credentials must be delivered through an approved secret channel, not through chat or committed files.

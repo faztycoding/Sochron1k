@@ -13,7 +13,8 @@ function fixture() {
     unattended_demo_ready: false,
     gates: readinessGateIds.map(id => ({
       id,
-      state: id === "operational_authorization" ? "not_authorized" : "not_run",
+      state: id === "operational_authorization" ? "not_authorized" :
+        ["target_artifact", "broker_round_trip", "recovery_observability"].includes(id) ? "not_run" : "missing",
       api_routes: readinessGateDefinitions[id].routes,
       sources: readinessGateDefinitions[id].sources,
       next_action: readinessGateDefinitions[id].nextActionCode,
@@ -26,6 +27,19 @@ describe("Demo readiness contract", () => {
     const parsed = parseDemoReadiness(fixture());
     expect(parsed.gates.map(gate => gate.id)).toEqual(readinessGateIds);
     expect(parsed.release_ready).toBe(false);
+  });
+
+  it("accepts admitted target evidence without promoting release", () => {
+    const value = fixture();
+    value.state = "awaiting_runtime";
+    for (const gate of value.gates.slice(5, 8)) gate.state = "evidence_admitted";
+    const parsed = parseDemoReadiness(value);
+    expect(parsed.gates.slice(5, 8).map(gate => gate.state)).toEqual([
+      "evidence_admitted", "evidence_admitted", "evidence_admitted",
+    ]);
+    expect(parsed.gates[5].api_routes).toContain("/api/owner/target-evidence");
+    expect(parsed.release_ready).toBe(false);
+    expect(parsed.round_trip_authorized).toBe(false);
   });
 
   it.each([
@@ -44,6 +58,16 @@ describe("Demo readiness contract", () => {
     ["unknown gate field", () => {
       const value = fixture();
       value.gates[0] = { ...value.gates[0], token: "unsafe" } as typeof value.gates[number];
+      return value;
+    }],
+    ["unknown evidence state", () => {
+      const value = fixture();
+      value.gates[5].state = "evidence_verified";
+      return value;
+    }],
+    ["evidence state on the wrong gate", () => {
+      const value = fixture();
+      value.gates[0].state = "evidence_admitted";
       return value;
     }],
   ])("rejects %s", (_name, makeValue) => {

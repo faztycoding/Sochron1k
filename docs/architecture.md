@@ -186,8 +186,8 @@ grants execution authority.
 SCN-031 adds the separate public `/ui/demo-readiness` ledger. It validates one
 optional owner-private, non-secret decision record but exposes only whether the
 complete record exists. Runtime gates are derived from the existing component
-states; target artifact, broker round trip, recovery and authorization stay
-explicitly unrun or unauthorized because no target-evidence reader exists. Every
+states; target artifact, broker round trip, recovery and authorization default to
+explicitly unrun or unauthorized. Every
 response hard-codes Demo-only, Auto Trading off, not release-ready, not authorized
 and not unattended-ready. The browser validates the fixed order, routes, sources,
 actions and false safety flags before displaying any returned state; see
@@ -240,6 +240,16 @@ credential: it reads only an atomic private status projection and embeds that
 redacted state in `/owner/alerts` v4. No real relay, provider, human recipient,
 escalation or target-host result is implied; see
 [ADR-038](decisions/ADR-038-receipt-capable-alert-relay.md).
+
+SCN-036 adds a separate owner-authenticated, query-only target-evidence reader.
+One private config binds a fixed three-report manifest to the reviewed source
+revision, target artifact hash and exact owner-decision record. Manifest/report
+byte counts and SHA-256 digests, strict schemas, UTC times, freshness, private file
+identity and stable reads fail closed. The redacted `/owner/target-evidence` view
+projects only `not_run`, `evidence_admitted`, `evidence_failed`, stale or degraded
+states into rows 06-08. It cannot create evidence, invoke a verifier, operate MT5,
+authorize a round trip or produce a release verdict; see
+[ADR-039](decisions/ADR-039-normalized-target-evidence-admission.md).
 
 SCN-015 adds the missing authenticated owner execution projection at
 `/owner/execution`. It reads one explicitly configured, existing private

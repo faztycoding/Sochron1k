@@ -71,9 +71,16 @@ async def test_ui_connection_map_is_redacted_and_truthful_when_unconfigured() ->
         "id": "demo_readiness",
         "implementation": "available",
         "runtime": "connected",
-        "current_routes": ["/api/ui/demo-readiness"],
+        "current_routes": [
+            "/api/ui/demo-readiness",
+            "/api/owner/target-evidence",
+        ],
         "required_route": None,
-        "sources": ["owner_decisions", "runtime_gates", "target_evidence"],
+        "sources": [
+            "owner_decisions",
+            "runtime_gates",
+            "target_evidence_snapshot",
+        ],
     }
     for key in ("owner_auth", "market_telemetry", "native_chart", "bar_history"):
         assert nodes[key]["runtime"] == "awaiting_configuration"
@@ -95,7 +102,7 @@ async def test_ui_connection_map_is_redacted_and_truthful_when_unconfigured() ->
             "/api/owner/alerts/{condition_id}/resolve",
             "/api/owner/api-budget",
         ],
-            "required_route": "configured receipt-capable alert destination",
+        "required_route": "configured receipt-capable alert destination",
         "sources": [
             "telemetry_status",
             "execution_status",

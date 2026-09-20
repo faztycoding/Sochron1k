@@ -19,6 +19,8 @@ describe("redacted UI connection map", () => {
   it("accepts the exact Demo-only map", () => {
     const value = fixture();
     expect(parseConnectionMap(value).connections.map(node => node.id)).toEqual(connectionIds);
+    expect(connectionDefinitions.demo_readiness.routes).toContain("/api/owner/target-evidence");
+    expect(connectionDefinitions.demo_readiness.sources).toContain("target_evidence_snapshot");
   });
 
   it.each([

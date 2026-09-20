@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SCN-005/006/007/014/015/016/032/033/034/035: browser/Auth/read models and local alert/budget/delivery evidence; no broker operations.
+// SCN-005/006/007/014/015/016/032/033/034/035/036: browser/Auth/read models and local evidence; no broker operations.
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -109,8 +109,12 @@ async function run() {
     const alertDeliveryStatusDir = join(temporary, "alert-delivery-status");
     const apiBudgetConfigPath = join(temporary, "api-budget-config.json");
     const apiBudgetSnapshotPath = join(temporary, "api-budget-snapshot.json");
+    const demoDecisionPath = join(temporary, "demo-owner-decisions.json");
+    const targetEvidenceConfigPath = join(temporary, "target-evidence-config.json");
+    const targetEvidenceDir = join(temporary, "target-evidence");
     await mkdir(alertLifecycleDir, { mode: 0o700 });
     await mkdir(alertDeliveryStatusDir, { mode: 0o700 });
+    await mkdir(targetEvidenceDir, { mode: 0o700 });
     const fixtureEpoch = Math.floor(Date.now() / 1000);
     async function insertFixture(table, body) {
       const response = await http(`${origin}/rest/v1/${table}?select=id`, { method: "POST",
@@ -173,6 +177,49 @@ async function run() {
       snapshot_file: apiBudgetSnapshotPath, currency: "USD", monthly_limit: "100.00",
       warning_fraction: "0.70", critical_fraction: "0.85", stale_after_seconds: 3600 }),
     { mode: 0o600, flag: "wx" });
+    const decisionRecorded = new Date(Date.now() - 5 * 60 * 1000);
+    const decisionRevision = "browser-owner-plan-v1";
+    const targetSha256 = createHash("sha256").update("synthetic-browser-target").digest("hex");
+    await writeFile(demoDecisionPath, JSON.stringify({ protocol: "sochron.demo-owner-decisions.v1",
+      decision_revision: decisionRevision, recorded_at_utc: decisionRecorded.toISOString(), owner_approved: true,
+      broker_name: "Synthetic Broker", demo_server: "Synthetic-Demo", account_currency: "USD",
+      starting_capital: "100000.00", symbol: "XAUUSD.synthetic", account_mode: "retail_hedging",
+      trading_hours_policy_ref: "browser-hours-v1", overnight_policy: "flat", target_executor: "hostinger_wine",
+      target_region: "synthetic-region", monthly_budget_thb: "1000.00",
+      alert_destination_ref: "synthetic-owner-relay", halt_release_authority_ref: "synthetic-owner",
+      approved_secret_channel_ref: "synthetic-private-channel", rpo_seconds: 300, rto_seconds: 1800,
+      magic_number: 910001 }), { mode: 0o600, flag: "wx" });
+    const targetChecks = {
+      target_artifact: ["metaeditor_compile", "artifact_identity", "target_identity", "demo_only_preflight"],
+      broker_round_trip: ["command_journaled", "order_confirmed", "deal_confirmed", "position_confirmed",
+        "broker_sl_confirmed", "close_confirmed", "no_mismatch"],
+      recovery_observability: ["restart_reconcile", "network_loss_reconcile", "stale_feed_entry_lock",
+        "sl_rejection_emergency", "risk_halt_restart", "journal_failure_entry_lock", "alert_delivery",
+        "backup_restore", "no_unknown_position", "latency_report", "burn_in"],
+    };
+    const targetProduced = new Date();
+    const targetReports = [];
+    for (const [gate, gateChecks] of Object.entries(targetChecks)) {
+      const body = JSON.stringify({ protocol: "sochron.target-gate-report.v1", gate, outcome: "PASS",
+        source_revision: revision, target_sha256: targetSha256, decision_revision: decisionRevision,
+        verifier_sha256: createHash("sha256").update(`browser-verifier:${gate}`).digest("hex"),
+        started_at_utc: new Date(targetProduced.getTime() - 2 * 60 * 1000).toISOString(),
+        finished_at_utc: new Date(targetProduced.getTime() - 60 * 1000).toISOString(),
+        checks: gateChecks.map(id => ({ id, state: "PASS",
+          evidence_sha256: createHash("sha256").update(`browser-evidence:${gate}:${id}`).digest("hex") })) });
+      const reportFile = `${gate}.json`;
+      await writeFile(join(targetEvidenceDir, reportFile), body, { mode: 0o600, flag: "wx" });
+      targetReports.push({ id: gate, report_file: reportFile, report_bytes: Buffer.byteLength(body),
+        report_sha256: createHash("sha256").update(body).digest("hex") });
+    }
+    const targetManifestPath = join(targetEvidenceDir, "manifest.json");
+    await writeFile(targetManifestPath, JSON.stringify({ protocol: "sochron.target-evidence-manifest.v1",
+      source_revision: revision, target_sha256: targetSha256, decision_revision: decisionRevision,
+      produced_at_utc: targetProduced.toISOString(), reports: targetReports }), { mode: 0o600, flag: "wx" });
+    await writeFile(targetEvidenceConfigPath, JSON.stringify({ enabled: true, snapshot_file: targetManifestPath,
+      source_revision: revision, target_sha256: targetSha256, decision_revision: decisionRevision,
+      decision_recorded_at_utc: decisionRecorded.toISOString(), max_age_seconds: 3600 }),
+    { mode: 0o600, flag: "wx" });
     const deliveryUpdated = new Date();
     await writeFile(join(alertDeliveryStatusDir, "delivery-status.json"), JSON.stringify({
       protocol: "sochron.alert-delivery-status.v1", state: "connected",
@@ -200,6 +247,8 @@ async function run() {
       SOCHRON_ALERT_LIFECYCLE_DIR: alertLifecycleDir,
       SOCHRON_API_BUDGET_CONFIG_FILE: apiBudgetConfigPath,
       SOCHRON_ALERT_DELIVERY_STATUS_DIR: alertDeliveryStatusDir,
+      SOCHRON_DEMO_READINESS_CONFIG_FILE: demoDecisionPath,
+      SOCHRON_TARGET_EVIDENCE_CONFIG_FILE: targetEvidenceConfigPath,
     } });
     api = launchApi();
     const port = await new Promise((done, reject) => {
@@ -286,6 +335,7 @@ async function run() {
     assert(await connectionMap.getByText("/api/owner/signals", { exact: true }).isVisible());
     assert(await connectionMap.getByText("/api/owner/statistics", { exact: true }).isVisible());
     assert(await connectionMap.getByText("/api/ui/demo-readiness", { exact: true }).isVisible());
+    assert(await connectionMap.getByText("/api/owner/target-evidence", { exact: true }).isVisible());
     const mapResponse = await http(`${apiOrigin}/ui/connections`);
     assert.equal(mapResponse.status, 200);
     assert.equal(mapResponse.headers.get("cache-control"), "no-store");
@@ -311,6 +361,11 @@ async function run() {
     assert.deepEqual(readinessBody.gates.map(item => item.id), ["owner_decisions", "owner_auth",
       "market_data", "execution_bridge", "policy_research", "target_artifact", "broker_round_trip",
       "recovery_observability", "operational_authorization"]);
+    assert.deepEqual(readinessBody.gates.slice(5, 8).map(item => item.state),
+      ["evidence_admitted", "evidence_admitted", "evidence_admitted"]);
+    assert.equal(await readiness.getByText("รับหลักฐานแล้ว", { exact: true }).count(), 3);
+    assert.equal(await readiness.getByText("/api/owner/target-evidence", { exact: true }).count(), 3);
+    assert(await readiness.getByText(/ไม่ใช่การอนุมัติ release/).isVisible());
     checks.push(stage);
     await page.getByLabel("อีเมลเจ้าของ").waitFor();
     assert((await page.locator("body").ariaSnapshot()).includes("อีเมลเจ้าของ"));
@@ -359,6 +414,9 @@ async function run() {
     assert.equal((await http(`${apiOrigin}/owner/execution`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/alerts`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/api-budget`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
+    assert.equal((await http(`${apiOrigin}/owner/target-evidence`, {
+      headers: { Authorization: `Bearer ${foreignToken}` },
+    })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/alerts/${"a".repeat(24)}/acknowledge`, {
       method: "POST", headers: { Authorization: `Bearer ${foreignToken}`, "Idempotency-Key": randomUUID() },
     })).status, 403);
@@ -423,6 +481,20 @@ async function run() {
     assert(!JSON.stringify(budgetBody).includes(apiBudgetSnapshotPath));
     assert(await alerts.getByText("synthetic-owner-relay", { exact: true }).isVisible());
     assert(await alerts.getByText("1 รายการ", { exact: true }).isVisible());
+    const targetEvidenceResponse = await http(`${apiOrigin}/owner/target-evidence`, {
+      headers: { Authorization: `Bearer ${originalToken}` },
+    });
+    assert.equal(targetEvidenceResponse.status, 200);
+    assert.equal(targetEvidenceResponse.headers.get("cache-control"), "no-store");
+    const targetEvidenceBody = await targetEvidenceResponse.json();
+    assert.equal(targetEvidenceBody.state, "admitted");
+    assert.equal(targetEvidenceBody.auto_trading_enabled, false);
+    assert.equal(targetEvidenceBody.release_ready, false);
+    assert.equal(targetEvidenceBody.round_trip_authorized, false);
+    assert.deepEqual(targetEvidenceBody.gates.map(item => item.state),
+      ["evidence_admitted", "evidence_admitted", "evidence_admitted"]);
+    assert(!JSON.stringify(targetEvidenceBody).includes(targetEvidenceDir));
+    assert(!JSON.stringify(targetEvidenceBody).includes(decisionRevision));
     checks.push("owner operational alerts, lifecycle, delivery status and provider-neutral API budget evidence");
     await signals.getByText(signalFixtures[0].signal_id, { exact: true }).waitFor();
     assert(await signals.getByText("BUY", { exact: true }).isVisible());
@@ -596,6 +668,7 @@ async function run() {
     stage = "desktop and mobile layout";
     await page.screenshot({ path: join(output, "desktop-synthetic.png"), fullPage: true });
     await history.screenshot({ path: join(output, "history-desktop-synthetic.png") });
+    await readiness.screenshot({ path: join(output, "readiness-desktop-synthetic.png") });
     await page.setViewportSize({ width: 390, height: 844 });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     assert(await panel.locator(".account-values dd").evaluateAll(values => values.length === 4 && values.every(value => {
@@ -609,12 +682,14 @@ async function run() {
     assert(await alerts.locator(".budget-ledger").evaluate(element => element.scrollWidth <= element.clientWidth));
     assert(await alerts.locator(".delivery-ledger").evaluate(element => element.scrollWidth <= element.clientWidth));
     await page.screenshot({ path: join(output, "mobile-synthetic.png"), fullPage: true });
+    await readiness.screenshot({ path: join(output, "readiness-mobile-synthetic.png") });
     assert(await history.locator(".history-table-scroll").evaluate(element => element.scrollWidth > element.clientWidth));
     await history.screenshot({ path: join(output, "history-mobile-synthetic.png") });
     stage = "320px page containment and keyboard table scrolling";
     await page.setViewportSize({ width: 320, height: 740 });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     assert(await alerts.evaluate(element => element.scrollWidth <= element.clientWidth));
+    assert(await readiness.evaluate(element => element.scrollWidth <= element.clientWidth));
     await history.getByRole("region", { name: "ตารางประวัติแท่งปิด", exact: true }).focus();
     await page.keyboard.press("ArrowRight");
     await page.waitForFunction(() => document.querySelector("#bar-history .history-table-scroll").scrollLeft > 0);
@@ -689,6 +764,7 @@ async function run() {
     assert.equal((await http(`${apiOrigin}/owner/chart/M5`, { headers: { Authorization: `Bearer ${freshToken}` } })).status, 401);
     assert.equal((await http(`${apiOrigin}/owner/history/M5`, { headers: { Authorization: `Bearer ${freshToken}` } })).status, 401);
     assert.equal((await http(`${apiOrigin}/owner/execution`, { headers: { Authorization: `Bearer ${freshToken}` } })).status, 401);
+    assert.equal((await http(`${apiOrigin}/owner/target-evidence`, { headers: { Authorization: `Bearer ${freshToken}` } })).status, 401);
     assert.equal((await http(`${apiOrigin}/owner/statistics`, { headers: { Authorization: `Bearer ${freshToken}` } })).status, 401);
     checks.push(stage);
 
@@ -780,6 +856,7 @@ async function run() {
     "apps/web/src/OperationalAlertsPanel.test.tsx", "apps/web/src/operational-alerts-api.test.ts",
     "apps/web/src/demo-readiness-api.ts", "apps/web/src/demo-readiness-api.test.ts",
     "apps/web/src/DemoReadinessPanel.tsx", "services/api/src/sochron1k/demo_readiness.py",
+    "services/api/src/sochron1k/target_evidence.py", "tests/test_target_evidence.py",
     "services/api/src/sochron1k/main.py", "services/api/src/sochron1k/ui_connections.py",
     "services/api/src/sochron1k/owner_api.py", "services/api/src/sochron1k/execution_evidence.py",
     "services/api/src/sochron1k/operational_alerts.py", "services/api/src/sochron1k/alert_lifecycle.py",
@@ -796,7 +873,7 @@ async function run() {
     checked_at: new Date().toISOString(), node: process.version, playwright: "1.63.0", chromium: browserVersion,
     python: command(join(root, ".venv/bin/python"), ["--version"]), runtime_images: runtimeImages.sort(),
     production_build_sha256: buildSha256, refresh_diagnostics: refreshDiagnostics,
-    checks, sha256, fixture: "synthetic telemetry, OHLC, execution journal, derived alert inventory, durable alert lifecycle, owner-RLS signals and research evaluations; two generated local Auth users",
+    checks, sha256, fixture: "synthetic telemetry, OHLC, execution journal, normalized target evidence, derived alert inventory, durable alert lifecycle, owner-RLS signals and research evaluations; two generated local Auth users",
     token_refresh: "accelerated browser clock; real refresh-token HTTP exchange; server clock unchanged",
     mt5: "NOT_RUN", hosted_supabase: "NOT_RUN", artifacts: output };
   await writeFile(join(output, "result.json"), JSON.stringify(result, null, 2));

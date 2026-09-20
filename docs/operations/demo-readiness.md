@@ -1,8 +1,9 @@
 # Demo readiness ledger
 
 Status: SCN-031 provides a redacted API/UI inventory of what is configured,
-connected or still unrun. It is not an execution preflight, target evidence store,
-release approval or unattended-Demo gate. Auto Trading remains off.
+connected or still unrun. SCN-036 adds a separate query-only normalized target
+evidence reader. Neither boundary is an execution preflight, release approval or
+unattended-Demo gate. Auto Trading remains off.
 
 ## UI and API positions
 
@@ -10,9 +11,11 @@ release approval or unattended-Demo gate. Auto Trading remains off.
 | --- | --- | --- | --- |
 | Connection map | `GET /api/ui/connections` | `GET /ui/connections` | the readiness read model itself is available |
 | Demo admission ledger | `GET /api/ui/demo-readiness` | `GET /ui/demo-readiness` | nine redacted gate states and their API/source locations |
+| Target evidence detail | `GET /api/owner/target-evidence` | `GET /owner/target-evidence` | owner-authenticated redacted admission state for rows 06-08 |
 | UI anchor | `#demo-readiness` | n/a | full-width ledger after command lifecycle |
 
-Both API responses are public, bounded and `Cache-Control: no-store`. They contain
+The connection/readiness responses are public; target evidence requires the active
+owner session. All three are bounded and `Cache-Control: no-store`. They contain
 no account reference, configured broker/server/symbol value, owner UUID, file path,
 URL, password, token or credential. The browser renders the fixed route inventory
 even when the status response fails validation.
@@ -64,17 +67,22 @@ Missing configuration yields `owner_decisions=missing`; a valid record yields on
   target-release proof.
 - `degraded` stops progression and requires inspection.
 - `not_run` means no admitted target evidence exists.
+- `evidence_admitted` means a fixed normalized report is intact, current and bound;
+  it is not independent proof or release approval.
+- `evidence_failed` means a complete normalized target report contains a failure.
 - `not_authorized` means the required explicit operation was not authorized.
 
-This increment deliberately has no `passed` gate state. EA compile/artifact
-identity, a bounded Demo open-to-close round trip, broker-side SL, target restart
-and network-loss tests, alerts, backup/restore, burn-in and explicit authorization
-remain separate gates.
+This increment deliberately has no `passed` gate state. The target admission schema
+can represent normalized local or future target output, but the current repository
+contains synthetic evidence only. EA compile/artifact identity, a bounded Demo
+open-to-close round trip, broker-side SL, target restart and network-loss tests,
+alerts, backup/restore, burn-in and explicit authorization remain `NOT RUN`. See the
+[target evidence runbook](target-evidence.md).
 
 ## Local verification
 
 ```bash
-.venv/bin/python -m pytest -q tests/test_demo_readiness.py tests/test_api_safety.py
+.venv/bin/python -m pytest -q tests/test_target_evidence.py tests/test_demo_readiness.py tests/test_api_safety.py tests/test_owner_auth.py
 npx -y -p node@24.21.0 npm run test --workspace @sochron1k/web
 ```
 

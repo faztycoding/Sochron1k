@@ -12,9 +12,10 @@ export const readinessGateIds = [
 
 export type ReadinessGateId = typeof readinessGateIds[number];
 export type ReadinessGateState = "missing" | "recorded" | "configured" |
-  "awaiting_source" | "connected" | "degraded" | "not_run" | "not_authorized";
+  "awaiting_source" | "connected" | "degraded" | "not_run" | "not_authorized" |
+  "evidence_admitted" | "evidence_failed";
 export type ReadinessOverallState = "awaiting_owner_inputs" | "awaiting_runtime" |
-  "awaiting_target_evidence" | "degraded";
+  "awaiting_target_evidence" | "awaiting_operational_authorization" | "degraded";
 
 type GateDefinition = {
   title: string;
@@ -75,7 +76,7 @@ export const readinessGateDefinitions: Record<ReadinessGateId, GateDefinition> =
   target_artifact: {
     title: "EA build บนเป้าหมาย",
     detail: "MetaEditor build และ artifact identity ของ executor ที่เลือก",
-    routes: ["/api/ui/demo-readiness"],
+    routes: ["/api/ui/demo-readiness", "/api/owner/target-evidence"],
     sources: ["metaeditor_build_evidence", "target_artifact_identity"],
     sourceLabel: "MetaEditor + target artifact evidence",
     nextAction: "Compile และผูก hash/build กับเครื่องเป้าหมาย",
@@ -84,7 +85,7 @@ export const readinessGateDefinitions: Record<ReadinessGateId, GateDefinition> =
   broker_round_trip: {
     title: "Demo broker round trip",
     detail: "Order, deal, position, close และ broker-side SL ที่ MT5 ยืนยัน",
-    routes: ["/api/owner/execution"],
+    routes: ["/api/owner/execution", "/api/owner/target-evidence"],
     sources: ["mt5_orders_deals_positions", "broker_side_sl"],
     sourceLabel: "MT5 orders/deals/positions/SL",
     nextAction: "ขออนุญาตแล้วรัน open-to-close แบบจำกัดหนึ่งรอบ",
@@ -93,7 +94,7 @@ export const readinessGateDefinitions: Record<ReadinessGateId, GateDefinition> =
   recovery_observability: {
     title: "Recovery และการแจ้งเตือน",
     detail: "Restart, network loss, alerts, backup และ restore บนโฮสต์จริง",
-    routes: ["/api/ui/demo-readiness"],
+    routes: ["/api/ui/demo-readiness", "/api/owner/target-evidence"],
     sources: ["target_fault_evidence", "alerts", "backup_restore"],
     sourceLabel: "Target fault + alert + restore evidence",
     nextAction: "ทดสอบ fault/restart และหลักฐานแจ้งเตือน/กู้คืน",
@@ -131,10 +132,22 @@ export type DemoReadiness = {
 
 const gateStates = new Set<ReadinessGateState>([
   "missing", "recorded", "configured", "awaiting_source", "connected", "degraded",
-  "not_run", "not_authorized",
+  "not_run", "not_authorized", "evidence_admitted", "evidence_failed",
 ]);
+const allowedGateStates: Record<ReadinessGateId, ReadinessGateState[]> = {
+  owner_decisions: ["missing", "recorded"],
+  owner_auth: ["missing", "configured"],
+  market_data: ["missing", "awaiting_source", "connected", "degraded"],
+  execution_bridge: ["missing", "awaiting_source", "connected", "degraded"],
+  policy_research: ["missing", "awaiting_source", "connected", "degraded"],
+  target_artifact: ["not_run", "evidence_admitted", "evidence_failed", "degraded"],
+  broker_round_trip: ["not_run", "evidence_admitted", "evidence_failed", "degraded"],
+  recovery_observability: ["not_run", "evidence_admitted", "evidence_failed", "degraded"],
+  operational_authorization: ["not_authorized"],
+};
 const overallStates = new Set<ReadinessOverallState>([
-  "awaiting_owner_inputs", "awaiting_runtime", "awaiting_target_evidence", "degraded",
+  "awaiting_owner_inputs", "awaiting_runtime", "awaiting_target_evidence",
+  "awaiting_operational_authorization", "degraded",
 ]);
 
 function object(value: unknown): Record<string, unknown> {
@@ -173,6 +186,7 @@ export function parseDemoReadiness(value: unknown): DemoReadiness {
     }
     const definition = readinessGateDefinitions[id as ReadinessGateId];
     if (!gateStates.has(gate.state as ReadinessGateState) ||
+        !allowedGateStates[id as ReadinessGateId].includes(gate.state as ReadinessGateState) ||
         !exactStrings(gate.api_routes, definition.routes) || !exactStrings(gate.sources, definition.sources) ||
         gate.next_action !== definition.nextActionCode) {
       throw new Error("Invalid Demo readiness gate");

@@ -19,6 +19,7 @@ from pydantic import (
 )
 
 from .models import StrictModel
+from .target_evidence import TargetEvidenceReader, TargetEvidenceView
 
 MAX_DECISION_CONFIG_BYTES = 16_384
 SafeText = Annotated[
@@ -45,11 +46,14 @@ GateState = Literal[
     "degraded",
     "not_run",
     "not_authorized",
+    "evidence_admitted",
+    "evidence_failed",
 ]
 OverallState = Literal[
     "awaiting_owner_inputs",
     "awaiting_runtime",
     "awaiting_target_evidence",
+    "awaiting_operational_authorization",
     "degraded",
 ]
 NextAction = Literal[
@@ -82,9 +86,7 @@ class DemoOwnerDecisions(StrictModel):
     overnight_policy: Literal["flat", "allowed_by_versioned_policy"]
     target_executor: Literal["hostinger_wine", "windows_executor"]
     target_region: SafeText
-    monthly_budget_thb: Decimal = Field(
-        gt=0, allow_inf_nan=False, max_digits=12, decimal_places=2
-    )
+    monthly_budget_thb: Decimal = Field(gt=0, allow_inf_nan=False, max_digits=12, decimal_places=2)
     alert_destination_ref: SafeText
     halt_release_authority_ref: SafeText
     approved_secret_channel_ref: SafeText
@@ -203,6 +205,22 @@ def _policy_state(
     return "missing"
 
 
+def _target_states(view: TargetEvidenceView) -> tuple[GateState, GateState, GateState]:
+    if view.state in {"stale", "degraded"}:
+        return "degraded", "degraded", "degraded"
+    states: list[GateState] = []
+    for gate in view.gates:
+        if gate.state == "evidence_admitted":
+            states.append("evidence_admitted")
+        elif gate.state == "evidence_failed":
+            states.append("evidence_failed")
+        else:
+            states.append("not_run")
+    if len(states) != 3:
+        raise ValueError("fixed target evidence gates required")
+    return states[0], states[1], states[2]
+
+
 def build_demo_readiness(
     *,
     owner_decisions_recorded: bool,
@@ -216,7 +234,10 @@ def build_demo_readiness(
     signal_configured: bool,
     policy_state: str,
     statistics_configured: bool,
+    target_evidence: TargetEvidenceView | None = None,
 ) -> DemoReadiness:
+    target_view = target_evidence or TargetEvidenceReader(None).view()
+    artifact_state, round_trip_state, recovery_state = _target_states(target_view)
     gates = (
         DemoReadinessGate(
             id="owner_decisions",
@@ -272,22 +293,22 @@ def build_demo_readiness(
         ),
         DemoReadinessGate(
             id="target_artifact",
-            state="not_run",
-            api_routes=("/api/ui/demo-readiness",),
+            state=artifact_state,
+            api_routes=("/api/ui/demo-readiness", "/api/owner/target-evidence"),
             sources=("metaeditor_build_evidence", "target_artifact_identity"),
             next_action="compile_and_attest_ea",
         ),
         DemoReadinessGate(
             id="broker_round_trip",
-            state="not_run",
-            api_routes=("/api/owner/execution",),
+            state=round_trip_state,
+            api_routes=("/api/owner/execution", "/api/owner/target-evidence"),
             sources=("mt5_orders_deals_positions", "broker_side_sl"),
             next_action="run_bounded_demo_round_trip",
         ),
         DemoReadinessGate(
             id="recovery_observability",
-            state="not_run",
-            api_routes=("/api/ui/demo-readiness",),
+            state=recovery_state,
+            api_routes=("/api/ui/demo-readiness", "/api/owner/target-evidence"),
             sources=("target_fault_evidence", "alerts", "backup_restore"),
             next_action="verify_target_recovery",
         ),
@@ -299,7 +320,7 @@ def build_demo_readiness(
             next_action="grant_explicit_demo_authorization",
         ),
     )
-    if any(gate.state == "degraded" for gate in gates):
+    if any(gate.state in {"degraded", "evidence_failed"} for gate in gates):
         state: OverallState = "degraded"
     elif not owner_decisions_recorded:
         state = "awaiting_owner_inputs"
@@ -310,6 +331,8 @@ def build_demo_readiness(
         or gates[4].state != "connected"
     ):
         state = "awaiting_runtime"
-    else:
+    elif any(gate.state != "evidence_admitted" for gate in gates[5:8]):
         state = "awaiting_target_evidence"
+    else:
+        state = "awaiting_operational_authorization"
     return DemoReadiness(state=state, gates=gates)

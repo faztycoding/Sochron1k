@@ -23,6 +23,10 @@ ruby -ryaml -e '
   raise "web must bind to loopback" unless web.fetch("ports") == ["127.0.0.1:${SOCHRON_WEB_PORT:-8080}:8080"]
   raise "trading mode must be demo" unless api.fetch("environment").fetch("TRADING_MODE") == "demo"
   raise "auto trading must be false" unless api.fetch("environment").fetch("AUTO_TRADING_ENABLED") == "false"
+  environment = api.fetch("environment")
+  raise "target evidence config must remain optional" unless environment.fetch("SOCHRON_TARGET_EVIDENCE_CONFIG_FILE") == "${SOCHRON_TARGET_EVIDENCE_CONFIG_FILE:-}"
+  raise "owner decision config must remain optional" unless environment.fetch("SOCHRON_DEMO_READINESS_CONFIG_FILE") == "${SOCHRON_DEMO_READINESS_CONFIG_FILE:-}"
+  raise "base Compose must not add target evidence mounts" unless api.fetch("volumes") == ["journal_data:/app/data"]
   raise "application network must be internal" unless config.fetch("networks").fetch("app_internal").fetch("internal") == true
   raise "api must join only internal network" unless api.fetch("networks") == ["app_internal"]
   raise "web must join internal and ingress networks" unless web.fetch("networks").sort == %w[app_internal web_ingress]

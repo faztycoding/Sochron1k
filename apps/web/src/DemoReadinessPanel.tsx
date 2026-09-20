@@ -15,18 +15,22 @@ const stateLabels: Record<ReadinessGateState, string> = {
   degraded: "ต้องตรวจสอบ",
   not_run: "ยังไม่ทดสอบ",
   not_authorized: "ยังไม่ได้อนุญาต",
+  evidence_admitted: "รับหลักฐานแล้ว",
+  evidence_failed: "หลักฐานไม่ผ่าน",
 };
 
 const overallLabels: Record<DemoReadiness["state"], string> = {
   awaiting_owner_inputs: "รอข้อมูลจากเจ้าของ",
   awaiting_runtime: "รอเชื่อม runtime",
   awaiting_target_evidence: "รอหลักฐานเครื่องเป้าหมาย",
+  awaiting_operational_authorization: "รออนุญาตใช้งาน Demo",
   degraded: "พบสถานะที่ต้องตรวจสอบ",
 };
 
 function tone(state: ReadinessGateState | null): string {
-  if (state === "connected" || state === "configured" || state === "recorded") return "ready";
-  if (state === "degraded") return "degraded";
+  if (state === "connected" || state === "configured" || state === "recorded" ||
+      state === "evidence_admitted") return "ready";
+  if (state === "degraded" || state === "evidence_failed") return "degraded";
   if (state === "missing") return "missing";
   return "waiting";
 }
@@ -34,7 +38,7 @@ function tone(state: ReadinessGateState | null): string {
 export function DemoReadinessPanel({ state }: { state: DemoReadinessViewState }) {
   const gates = state.kind === "ready" ? new Map(state.data.gates.map(gate => [gate.id, gate])) : null;
   const remaining = state.kind === "ready" ? state.data.gates.filter(gate =>
-    !["connected", "configured", "recorded"].includes(gate.state)).length : readinessGateIds.length;
+    !["connected", "configured", "recorded", "evidence_admitted"].includes(gate.state)).length : readinessGateIds.length;
   const overall = state.kind === "ready" ? overallLabels[state.data.state] :
     state.kind === "loading" ? "กำลังอ่านสถานะ" : "ตรวจสถานะไม่ได้";
 
@@ -74,6 +78,6 @@ export function DemoReadinessPanel({ state }: { state: DemoReadinessViewState })
         </li>;
       })}
     </ol>
-    <p className="readiness-note">สถานะ “ตั้งค่าแล้ว” หรือ “เชื่อมแล้ว” ไม่ใช่หลักฐานว่า EA ผ่าน build, ออเดอร์ถูก fill หรือ SL อยู่ฝั่งโบรกเกอร์ · หน้านี้ไม่มีคำสั่งซื้อขาย</p>
+    <p className="readiness-note">สถานะ “รับหลักฐานแล้ว” หมายถึงไฟล์ normalized ถูกตรวจและผูก revision ครบ ไม่ใช่การอนุมัติ release · หน้านี้ไม่มีคำสั่งซื้อขาย และ Auto Trading ยังปิด</p>
   </section>;
 }
