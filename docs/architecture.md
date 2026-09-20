@@ -227,6 +227,15 @@ feature/signal persistence remain missing, so the owner signal route correctly
 stays `awaiting_source`; see
 [ADR-021](decisions/ADR-021-pa01-v1-deterministic-kernel.md).
 
+SCN-019 adds the pure native M1 aggregation boundary in
+`sochron_worker.pa01_aggregation`. It revalidates one bounded immutable archive at
+an explicit cutoff and emits only complete five-minute and broker-hour buckets.
+Server time, not UTC flooring, defines boundaries; exact child hashes preserve
+provenance and missing minutes never become prices. `ClosedBar` now carries server
+time and its pinned UTC offset so PA01 gap/alignment semantics match the native
+source. No source query, scheduler, persistence or command path exists; see
+[ADR-022](decisions/ADR-022-native-pa01-aggregation.md).
+
 | Failure | Required behavior |
 | --- | --- |
 | AI unavailable or invalid | Strategies that require AI enter `WAIT`; position management continues |

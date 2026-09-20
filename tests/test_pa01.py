@@ -22,6 +22,7 @@ from sochron_worker.pa01 import (
 )
 
 BASE = datetime(2026, 1, 1, tzinfo=UTC)
+EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 D = Decimal
 
 
@@ -46,6 +47,8 @@ def make_bar(
         source_revision="fixture-v1",
         symbol="XAUUSD.fixture",
         timeframe=timeframe,
+        time_server_s=int(opened.timestamp()),
+        broker_utc_offset_seconds=0,
         open_time_utc=opened,
         available_at_utc=opened + timedelta(seconds=seconds + available_delay),
         open=close,
@@ -125,6 +128,7 @@ def test_pa01_symmetric_setup_is_evidence_not_an_order(side):
     assert result.features.adx14 >= 20
     assert D("0.50") <= result.features.stop_distance_atr <= D("2.00")
     assert result.parameter_hash == PARAMETER_HASH
+    assert result.parameter_version == "PA01-v1.0.1"
     assert result.ai_enabled is False
     assert result.execution_parameters.order_created is False
     assert result.execution_parameters.risk_admitted is False
@@ -255,6 +259,31 @@ def test_duplicate_or_revised_as_of_bar_fails_closed():
         evaluate_pa01(context(m5), m5_bars=(*m5, duplicate), h1_bars=h1_structure())
 
 
+def test_broker_server_alignment_accepts_non_hour_utc_offset():
+    server_time = int(BASE.timestamp())
+    offset = 19_800
+    opened = EPOCH + timedelta(seconds=server_time - offset)
+    bar = ClosedBar(
+        evidence_id="shifted-h1",
+        feed_id="fixture-feed",
+        source_revision="fixture-v1",
+        symbol="XAUUSD.fixture",
+        timeframe="H1",
+        time_server_s=server_time,
+        broker_utc_offset_seconds=offset,
+        open_time_utc=opened,
+        available_at_utc=opened + timedelta(seconds=H1_SECONDS + 1),
+        open=D("100"),
+        high=D("101"),
+        low=D("99"),
+        close=D("100"),
+        tick_size=D("0.01"),
+        digits=2,
+    )
+    assert bar.open_time_utc.minute == 30
+    assert bar.time_server_s % H1_SECONDS == 0
+
+
 @pytest.mark.parametrize(
     "change",
     [
@@ -264,12 +293,15 @@ def test_duplicate_or_revised_as_of_bar_fails_closed():
         {"low": D("101"), "close": D("100")},
         {"open": D("100.001")},
         {"gap_reason_before": "unknown"},
+        {"time_server_s": int(BASE.timestamp()) + 60},
+        {"broker_utc_offset_seconds": 1},
     ],
 )
 def test_malformed_forming_or_inexact_bar_is_rejected(change):
     values = dict(
         evidence_id="bar", feed_id="fixture-feed", source_revision="v1", symbol="XAUUSD.fixture",
-        timeframe="M5", open_time_utc=BASE,
+        timeframe="M5", time_server_s=int(BASE.timestamp()), broker_utc_offset_seconds=0,
+        open_time_utc=BASE,
         available_at_utc=BASE + timedelta(seconds=M5_SECONDS + 1),
         open=D("100"), high=D("101"), low=D("99"), close=D("100"), tick_size=D("0.01"), digits=2,
         gap_reason_before="none",

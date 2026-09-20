@@ -14,7 +14,7 @@ from sochron1k.models import StrictModel
 from sochron1k.telemetry import FiniteDecimal
 
 STRATEGY_VERSION = "PA01-v1"
-PARAMETER_VERSION = "PA01-v1.0.0"
+PARAMETER_VERSION = "PA01-v1.0.1"
 M5_SECONDS = 300
 H1_SECONDS = 3600
 MAX_WINDOW = 100
@@ -33,6 +33,7 @@ TARGET_R = Decimal("2")
 EXPIRY_SECONDS = 30
 TIME_EXIT_BARS = 12
 MAX_MARKET_CLOSE_GAP_SECONDS = 72 * 3600
+EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 PARAMETERS = {
     "strategy_version": STRATEGY_VERSION,
@@ -40,6 +41,7 @@ PARAMETERS = {
     "ai_enabled": False,
     "signal_timeframe": "M5",
     "structure_timeframe": "H1",
+    "bar_alignment": "broker-time-server-v1",
     "max_window": MAX_WINDOW,
     "min_m5": MIN_M5,
     "min_h1": MIN_H1,
@@ -115,6 +117,8 @@ class ClosedBar(StrictModel):
     symbol: str = Field(min_length=1, max_length=32, pattern=r"^[^\s]+$")
     price_basis: Literal["bid"] = "bid"
     timeframe: Timeframe
+    time_server_s: StrictInt = Field(gt=0, le=4_102_444_800)
+    broker_utc_offset_seconds: StrictInt = Field(ge=-50_400, le=50_400)
     open_time_utc: AwareDatetime
     available_at_utc: AwareDatetime
     open: FiniteDecimal = Field(gt=0)
@@ -145,9 +149,16 @@ class ClosedBar(StrictModel):
     @model_validator(mode="after")
     def exact_closed_bar(self) -> Self:
         period = M5_SECONDS if self.timeframe == "M5" else H1_SECONDS
-        epoch = int(self.open_time_utc.timestamp())
         close_time = self.open_time_utc + timedelta(seconds=period)
-        if epoch % period or self.available_at_utc < close_time:
+        expected_open = EPOCH + timedelta(
+            seconds=self.time_server_s - self.broker_utc_offset_seconds
+        )
+        if (
+            self.time_server_s % period
+            or self.broker_utc_offset_seconds % 60
+            or self.open_time_utc != expected_open
+            or self.available_at_utc < close_time
+        ):
             raise ValueError("bar is misaligned or not closed")
         if not self.low <= min(self.open, self.close) <= max(self.open, self.close) <= self.high:
             raise ValueError("invalid OHLC range")
@@ -232,7 +243,7 @@ class PA01ExecutionParameters(StrictModel):
 
 class PA01Decision(StrictModel):
     strategy_version: Literal["PA01-v1"] = STRATEGY_VERSION
-    parameter_version: Literal["PA01-v1.0.0"] = PARAMETER_VERSION
+    parameter_version: Literal["PA01-v1.0.1"] = PARAMETER_VERSION
     parameter_hash: str = PARAMETER_HASH
     ai_enabled: Literal[False] = False
     action: DecisionAction
@@ -382,6 +393,8 @@ def _canonical_bar(bar: ClosedBar) -> dict[str, object]:
         "symbol": bar.symbol,
         "price_basis": bar.price_basis,
         "timeframe": bar.timeframe,
+        "time_server_s": bar.time_server_s,
+        "broker_utc_offset_seconds": bar.broker_utc_offset_seconds,
         "open_time_utc": bar.open_time_utc.isoformat(),
         "available_at_utc": bar.available_at_utc.isoformat(),
         "open": _decimal_text(bar.open),
@@ -403,15 +416,18 @@ def _digest(value: object) -> str:
 def _as_of(
     bars: tuple[ClosedBar, ...], context: PA01Context, timeframe: Timeframe
 ) -> tuple[ClosedBar, ...]:
+    if not isinstance(bars, tuple) or any(not isinstance(bar, ClosedBar) for bar in bars):
+        raise EvidenceUnavailable()
+    checked = tuple(ClosedBar.model_validate(bar.model_dump()) for bar in bars)
     selected = tuple(
         sorted(
             (
                 bar
-                for bar in bars
+                for bar in checked
                 if bar.available_at_utc <= context.cutoff_utc
                 and bar.close_time_utc <= context.cutoff_utc
             ),
-            key=lambda bar: (bar.open_time_utc, bar.available_at_utc, bar.evidence_id),
+            key=lambda bar: (bar.time_server_s, bar.available_at_utc, bar.evidence_id),
         )
     )
     if any(
@@ -421,12 +437,14 @@ def _as_of(
         for bar in selected
     ):
         raise EvidenceUnavailable()
-    times = [bar.open_time_utc for bar in selected]
+    times = [bar.time_server_s for bar in selected]
     if len(set(times)) != len(times) or len({bar.evidence_id for bar in selected}) != len(selected):
         raise EvidenceUnavailable()
     if selected:
-        grid = {(bar.tick_size, bar.digits) for bar in selected}
-        revisions = {(bar.open_time_utc, bar.source_revision) for bar in selected}
+        grid = {
+            (bar.tick_size, bar.digits, bar.broker_utc_offset_seconds) for bar in selected
+        }
+        revisions = {(bar.time_server_s, bar.source_revision) for bar in selected}
         if len(grid) != 1 or len(revisions) != len(selected):
             raise EvidenceUnavailable()
     return selected[-MAX_WINDOW:]
@@ -434,7 +452,7 @@ def _as_of(
 
 def _has_gap(bars: tuple[ClosedBar, ...], seconds: int) -> bool:
     for previous, current in pairwise(bars):
-        elapsed = int((current.open_time_utc - previous.open_time_utc).total_seconds())
+        elapsed = current.time_server_s - previous.time_server_s
         if elapsed == seconds:
             if current.gap_reason_before != "none":
                 raise EvidenceUnavailable()
@@ -470,6 +488,9 @@ def evaluate_pa01(
 ) -> PA01Decision:
     """Evaluate one as-of cutoff. The caller owns scheduling, persistence and admission."""
     try:
+        if not isinstance(context, PA01Context):
+            raise EvidenceUnavailable()
+        context = PA01Context.model_validate(context.model_dump())
         m5 = _as_of(m5_bars, context, "M5")
         h1 = _as_of(h1_bars, context, "H1")
         if len(m5) < 2:
@@ -479,7 +500,9 @@ def evaluate_pa01(
         data_cutoff = max(bar.available_at_utc for bar in m5 + h1)
         confirmed = data_cutoff
         expires = confirmed + timedelta(seconds=EXPIRY_SECONDS)
-        grids = {(bar.tick_size, bar.digits) for bar in m5 + h1}
+        grids = {
+            (bar.tick_size, bar.digits, bar.broker_utc_offset_seconds) for bar in m5 + h1
+        }
         if len(grids) != 1:
             raise EvidenceUnavailable()
         tick_size = m5[-1].tick_size
@@ -489,7 +512,12 @@ def evaluate_pa01(
             raise EvidenceUnavailable()
         dataset_hash = _digest([_canonical_bar(bar) for bar in m5 + h1])
         setup_id = "setup-" + _digest(
-            [STRATEGY_VERSION, context.symbol, latest.open_time_utc.isoformat()]
+            [
+                STRATEGY_VERSION,
+                context.feed_id,
+                context.symbol,
+                latest.time_server_s,
+            ]
         )[:32]
 
         structure, swing_highs, swing_lows = _structure(h1)

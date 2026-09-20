@@ -90,8 +90,9 @@ history routes exist. The authenticated `/api/owner/execution` read model and UI
 panel now exist but remain empty until an existing private ExecutionService journal
 is explicitly connected. The authenticated `/api/owner/signals` read model and UI
 panel now consume the existing owner-RLS Supabase relations, but remain empty until
-a reviewed strategy producer writes versioned evidence. Statistics remain marked
-as not implemented.
+a reviewed strategy producer writes versioned evidence. The authenticated
+`/api/owner/statistics` read model and UI panel also exist, but remain empty until a
+research evaluator persists versioned metrics, uncertainty and costs.
 The execution view opens no trading path and preserves confirmed Order/Deal/Position/
 SL evidence and `UNKNOWN` exactly. Its public status model is redacted and always
 preserves Demo-only, Auto Trading off and execution-not-ready. See the
@@ -199,7 +200,9 @@ not fabricate zero results. The implemented owner execution read route is shown 
 real data only when its private journal source validates.
 The first pure `PA01-v1` decision kernel is implemented with as-of M5/H1 evidence,
 delayed pivots and fixed indicator initialization, but it is not yet a running
-producer: M1 aggregation, scheduling and atomic feature/signal persistence are the
-next source-side boundary.
+producer. Pure native M1-to-M5/H1 aggregation now follows broker-server candle
+boundaries and omits incomplete buckets without inventing prices. A bounded source
+reader, durable scheduling and atomic feature/signal persistence remain the next
+source-side boundary.
 A real Demo round trip still requires owner inputs and explicit target authorization
 listed in the task contract.
