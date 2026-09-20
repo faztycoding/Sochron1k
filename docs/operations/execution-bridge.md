@@ -22,7 +22,10 @@ authorization.
 
 All responses use `Cache-Control: no-store`. The public health response still says
 `execution_ready=false` and `auto_trading_enabled=false`. There is no browser or
-owner route that creates an execution command.
+owner route that creates an execution command. SCN-037 adds only the separately
+authenticated `/internal/v1/demo-round-trip/*` boundary for one fixed,
+owner-authorized Demo lifecycle; browser nginx blocks `/api/internal/`. See
+[`bounded-demo-round-trip.md`](bounded-demo-round-trip.md).
 
 The browser-safe route map is in
 [`read-only-execution-inventory.md`](read-only-execution-inventory.md). The

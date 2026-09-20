@@ -58,10 +58,10 @@ export const readinessGateDefinitions: Record<ReadinessGateId, GateDefinition> =
   execution_bridge: {
     title: "Execution และ journal",
     detail: "Inventory จาก MT5 และหลักฐานคำสั่งแบบ durable",
-    routes: ["/api/executor/v1/status", "/api/owner/execution"],
-    sources: ["mt5_execution", "local_execution_journal"],
-    sourceLabel: "MT5 execution EA + SQLite journal",
-    nextAction: "ตั้งค่า Demo executor และเชื่อม journal แบบ read-only",
+    routes: ["/api/executor/v1/status", "/api/owner/execution", "/api/internal/v1/demo-round-trip/status"],
+    sources: ["mt5_execution", "local_execution_journal", "bounded_demo_round_trip_admission"],
+    sourceLabel: "MT5 execution EA + SQLite journal + bounded internal admission",
+    nextAction: "ตั้งค่า Demo executor, journal และสิทธิ์ round trip แบบจำกัดหนึ่งรอบ",
     nextActionCode: "connect_demo_executor",
   },
   policy_research: {

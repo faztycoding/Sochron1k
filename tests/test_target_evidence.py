@@ -170,6 +170,7 @@ def build(target_view):
         history_configured=True,
         execution_state="connected",
         execution_evidence_state="connected",
+        demo_round_trip_state="armed",
         signal_configured=True,
         policy_state="ready",
         statistics_configured=True,

@@ -21,6 +21,8 @@ describe("redacted UI connection map", () => {
     expect(parseConnectionMap(value).connections.map(node => node.id)).toEqual(connectionIds);
     expect(connectionDefinitions.demo_readiness.routes).toContain("/api/owner/target-evidence");
     expect(connectionDefinitions.demo_readiness.sources).toContain("target_evidence_snapshot");
+    expect(connectionDefinitions.execution_evidence.routes).toContain("/api/internal/v1/demo-round-trip/status");
+    expect(connectionDefinitions.execution_evidence.sources).toContain("bounded_demo_round_trip_admission");
   });
 
   it.each([

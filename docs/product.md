@@ -55,6 +55,9 @@ The outcome is a repeatable research and Demo execution system, not a promise of
 - Normalized target reports are admitted only when their source, target,
   owner-decision, digest and UTC bindings validate. Admission is not independent
   proof of the target event and cannot grant release or trading authority.
+- A separately authenticated one-round-trip controller may connect the durable
+  service to the Demo executor only for fixed reviewed command identifiers. It is
+  not an unattended signal dispatcher, browser control or release authorization.
 - API-budget evidence uses an owner-selected currency, limit and thresholds plus a
   normalized provider snapshot. Planning prices, local call counts and stale
   provider data cannot be presented as current billed usage.
@@ -136,5 +139,7 @@ The following values are not available in the repository and block real Demo int
 - Domain and alert destination.
 - Named authority allowed to release a total halt.
 - Owner-approved RPO and RTO targets.
+- Exact source revision, experiment/signal/strategy identifiers and three fixed
+  command identifiers for the first separately authorized bounded Demo round trip.
 
 These decisions must be recorded in a versioned task contract or decision record. Credentials must be delivered through an approved secret channel, not through chat or committed files.

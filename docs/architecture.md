@@ -423,6 +423,18 @@ uncertain. This is an uncompiled source checkpoint: MetaEditor, terminal locking
 durability, broker behavior and Demo round trip are still unverified. See
 [ADR-031](decisions/ADR-031-default-off-mt5-demo-mutation-boundary.md).
 
+SCN-037 closes the local API runtime gap only for one explicitly authorized Demo
+round trip. A private config binds the deployed source and owner-decision revisions,
+exact Demo identity, experiment/signal/strategy, experiment capital and fixed
+entry/cancel/close command IDs. The controller creates the risk baseline once from
+fresh empty executor inventory, invokes the existing startup admission and delegates
+all open/cancel/close/reconcile behavior to `ExecutionService`. Its internal routes
+are separately authenticated and blocked by browser ingress. Entry authorization
+expires, while risk-reducing management and query-only reconciliation remain
+available. This is local mechanism evidence, not actual authorization, broker
+evidence, Auto Trading or unattended readiness; see
+[ADR-040](decisions/ADR-040-bounded-demo-round-trip-admission.md).
+
 | Failure | Required behavior |
 | --- | --- |
 | AI unavailable or invalid | Strategies that require AI enter `WAIT`; position management continues |

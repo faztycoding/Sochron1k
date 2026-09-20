@@ -1756,6 +1756,61 @@ class Journal:
             )
             connection.commit()
 
+    def initialize_risk_state(self, state: RiskState) -> bool:
+        """Create one risk baseline without any overwrite or halt-release path."""
+        state = RiskState.model_validate(state.model_dump())
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = self._risk_row(
+                connection.execute(
+                    "SELECT * FROM risk_state WHERE account_ref=? AND experiment_id=?",
+                    (state.account_ref, state.experiment_id),
+                ).fetchone()
+            )
+            if existing is not None:
+                if existing == state:
+                    connection.commit()
+                    return False
+                raise RiskStateConflict()
+            if connection.execute(
+                "SELECT 1 FROM exposure_slots WHERE account_ref=? LIMIT 1",
+                (state.account_ref,),
+            ).fetchone() or connection.execute(
+                """
+                SELECT 1 FROM commands
+                WHERE account_ref=? AND state NOT IN ('closed','rejected','expired','cancelled')
+                LIMIT 1
+                """,
+                (state.account_ref,),
+            ).fetchone():
+                raise RiskStateConflict()
+            connection.execute(
+                """
+                INSERT INTO risk_state(
+                    account_ref, experiment_id, bangkok_day, daily_baseline,
+                    experiment_baseline, daily_halt, total_halt, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    state.account_ref,
+                    state.experiment_id,
+                    state.bangkok_day.isoformat(),
+                    str(state.daily_baseline),
+                    str(state.experiment_baseline),
+                    int(state.daily_halt),
+                    int(state.total_halt),
+                    state.updated_at.isoformat(),
+                ),
+            )
+            connection.commit()
+            return True
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
     def latch_halts(
         self,
         account_ref: str,

@@ -88,9 +88,17 @@ async def test_ui_connection_map_is_redacted_and_truthful_when_unconfigured() ->
         "id": "execution_evidence",
         "implementation": "available",
         "runtime": "awaiting_configuration",
-        "current_routes": ["/api/executor/v1/status", "/api/owner/execution"],
+        "current_routes": [
+            "/api/executor/v1/status",
+            "/api/owner/execution",
+            "/api/internal/v1/demo-round-trip/status",
+        ],
         "required_route": None,
-        "sources": ["mt5_execution"],
+        "sources": [
+            "mt5_execution",
+            "local_execution_journal",
+            "bounded_demo_round_trip_admission",
+        ],
     }
     assert nodes["operational_alerts"] == {
         "id": "operational_alerts",

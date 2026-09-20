@@ -86,6 +86,30 @@ def _execution_evidence_runtime(bridge_state: str, evidence_state: RuntimeState)
     return "awaiting_configuration"
 
 
+def _demo_round_trip_runtime(state: str) -> RuntimeState:
+    if state == "disabled":
+        return "awaiting_configuration"
+    if state in {"awaiting_baseline", "awaiting_startup"}:
+        return "awaiting_source"
+    if state in {"armed", "entry_recorded", "complete"}:
+        return "connected"
+    return "degraded"
+
+
+def _bounded_execution_runtime(
+    bridge_state: str, evidence_state: RuntimeState, demo_round_trip_state: str
+) -> RuntimeState:
+    evidence = _execution_evidence_runtime(bridge_state, evidence_state)
+    admission = _demo_round_trip_runtime(demo_round_trip_state)
+    if "degraded" in {evidence, admission}:
+        return "degraded"
+    if evidence == "connected" and admission == "connected":
+        return "connected"
+    if evidence != "awaiting_configuration" or admission != "awaiting_configuration":
+        return "awaiting_source"
+    return "awaiting_configuration"
+
+
 def _alert_delivery_runtime(state: str) -> RuntimeState:
     if state == "disabled":
         return "awaiting_configuration"
@@ -105,6 +129,7 @@ def build_ui_connection_map(
     history_configured: bool,
     execution_state: str,
     execution_evidence_state: RuntimeState,
+    demo_round_trip_state: str,
     signal_configured: bool,
     policy_state: str,
     statistics_configured: bool,
@@ -165,9 +190,19 @@ def build_ui_connection_map(
             UiConnection(
                 id="execution_evidence",
                 implementation="available",
-                runtime=_execution_evidence_runtime(execution_state, execution_evidence_state),
-                current_routes=("/api/executor/v1/status", "/api/owner/execution"),
-                sources=("mt5_execution",),
+                runtime=_bounded_execution_runtime(
+                    execution_state, execution_evidence_state, demo_round_trip_state
+                ),
+                current_routes=(
+                    "/api/executor/v1/status",
+                    "/api/owner/execution",
+                    "/api/internal/v1/demo-round-trip/status",
+                ),
+                sources=(
+                    "mt5_execution",
+                    "local_execution_journal",
+                    "bounded_demo_round_trip_admission",
+                ),
             ),
             UiConnection(
                 id="operational_alerts",

@@ -12,6 +12,7 @@ unattended-Demo gate. Auto Trading remains off.
 | Connection map | `GET /api/ui/connections` | `GET /ui/connections` | the readiness read model itself is available |
 | Demo admission ledger | `GET /api/ui/demo-readiness` | `GET /ui/demo-readiness` | nine redacted gate states and their API/source locations |
 | Target evidence detail | `GET /api/owner/target-evidence` | `GET /owner/target-evidence` | owner-authenticated redacted admission state for rows 06-08 |
+| Bounded round-trip status | blocked (`/api/internal/` returns 404) | `GET /internal/v1/demo-round-trip/status` | redacted private command-admission runtime state shown in the execution row |
 | UI anchor | `#demo-readiness` | n/a | full-width ledger after command lifecycle |
 
 The connection/readiness responses are public; target evidence requires the active
@@ -78,6 +79,11 @@ contains synthetic evidence only. EA compile/artifact identity, a bounded Demo
 open-to-close round trip, broker-side SL, target restart and network-loss tests,
 alerts, backup/restore, burn-in and explicit authorization remain `NOT RUN`. See the
 [target evidence runbook](target-evidence.md).
+
+SCN-037 now provides the internal one-round-trip mechanism needed to produce future
+broker evidence, but it is disabled without exact private authorization and does
+not alter the false release flags. See the
+[bounded round-trip runbook](bounded-demo-round-trip.md).
 
 ## Local verification
 

@@ -216,7 +216,7 @@ export function App() {
               <div><span>ต่อไม้</span><strong>0.25%</strong><small>ของ Equity ล่าสุด</small></div>
               <div><span>หยุดรายวัน</span><strong>0.75%</strong><small>จากต้นวันไทย</small></div>
               <div><span>หยุดการทดลอง</span><strong>2.00%</strong><small>ไม่รีเซ็ตอัตโนมัติ</small></div>
-              <div><span>Exposure</span><strong>1</strong><small>position หรือ pending</small></div>
+              <div><span>Exposure สูงสุด</span><strong>1</strong><small>position หรือ pending</small></div>
             </div>
             <p className="policy-note">AI ไม่มีสิทธิ์แก้เพดาน ปลด halt หรือเพิ่มล็อต</p>
           </article>

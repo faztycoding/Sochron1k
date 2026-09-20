@@ -183,12 +183,26 @@ def _market_state(
     return "missing"
 
 
-def _execution_state(bridge_state: str, evidence_state: str) -> GateState:
-    if bridge_state in {"stale", "rejected"} or evidence_state == "degraded":
+def _execution_state(
+    bridge_state: str, evidence_state: str, demo_round_trip_state: str
+) -> GateState:
+    if (
+        bridge_state in {"stale", "rejected"}
+        or evidence_state == "degraded"
+        or demo_round_trip_state in {"expired", "degraded"}
+    ):
         return "degraded"
-    if bridge_state == "connected" and evidence_state == "connected":
+    if (
+        bridge_state == "connected"
+        and evidence_state == "connected"
+        and demo_round_trip_state in {"armed", "entry_recorded", "complete"}
+    ):
         return "connected"
-    if bridge_state != "disabled" or evidence_state != "awaiting_configuration":
+    if (
+        bridge_state != "disabled"
+        or evidence_state != "awaiting_configuration"
+        or demo_round_trip_state != "disabled"
+    ):
         return "awaiting_source"
     return "missing"
 
@@ -231,6 +245,7 @@ def build_demo_readiness(
     history_configured: bool,
     execution_state: str,
     execution_evidence_state: str,
+    demo_round_trip_state: str,
     signal_configured: bool,
     policy_state: str,
     statistics_configured: bool,
@@ -271,9 +286,19 @@ def build_demo_readiness(
         ),
         DemoReadinessGate(
             id="execution_bridge",
-            state=_execution_state(execution_state, execution_evidence_state),
-            api_routes=("/api/executor/v1/status", "/api/owner/execution"),
-            sources=("mt5_execution", "local_execution_journal"),
+            state=_execution_state(
+                execution_state, execution_evidence_state, demo_round_trip_state
+            ),
+            api_routes=(
+                "/api/executor/v1/status",
+                "/api/owner/execution",
+                "/api/internal/v1/demo-round-trip/status",
+            ),
+            sources=(
+                "mt5_execution",
+                "local_execution_journal",
+                "bounded_demo_round_trip_admission",
+            ),
             next_action="connect_demo_executor",
         ),
         DemoReadinessGate(

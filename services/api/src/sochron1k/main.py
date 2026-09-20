@@ -32,6 +32,12 @@ from .demo_readiness import (
     build_demo_readiness,
     load_demo_owner_decisions,
 )
+from .demo_round_trip import (
+    DemoRoundTripController,
+    DemoRoundTripSettings,
+    load_demo_round_trip_settings,
+)
+from .demo_round_trip_api import router as demo_round_trip_router
 from .execution_bridge import (
     ExecutionBridgeSettings,
     ExecutionPollingBridge,
@@ -85,6 +91,8 @@ def create_app(
     alert_source_settings: AlertSourceSettings | None = None,
     alert_delivery_status: AlertDeliveryStatusReader | None = None,
     target_evidence: TargetEvidenceReader | None = None,
+    demo_round_trip_settings: DemoRoundTripSettings | None = None,
+    runtime_source_revision: str | None = None,
 ) -> FastAPI:
     if (
         bridge_settings is not None
@@ -113,12 +121,57 @@ def create_app(
         or execution_bridge_settings.identity != policy_writer_settings.identity
     ):
         raise RuntimeError("policy writer requires matching telemetry and execution identities")
+    if demo_round_trip_settings is not None:
+        if runtime_source_revision != demo_round_trip_settings.source_revision:
+            raise RuntimeError("Demo round trip requires the exact runtime source revision")
+        if (
+            execution_bridge_settings is None
+            or execution_bridge_settings.identity != demo_round_trip_settings.identity
+        ):
+            raise RuntimeError("Demo round trip requires the matching execution identity")
+        if demo_owner_decisions is None or (
+            demo_owner_decisions.decision_revision
+            != demo_round_trip_settings.decision_revision
+            or demo_owner_decisions.recorded_at_utc
+            > demo_round_trip_settings.authorized_at_utc
+            or demo_owner_decisions.demo_server != demo_round_trip_settings.identity.server
+            or demo_owner_decisions.account_currency
+            != demo_round_trip_settings.identity.currency
+            or demo_owner_decisions.symbol != demo_round_trip_settings.identity.symbol
+            or demo_owner_decisions.account_mode
+            != demo_round_trip_settings.identity.margin_mode
+            or demo_owner_decisions.starting_capital
+            != demo_round_trip_settings.experiment_baseline
+            or demo_owner_decisions.magic_number != execution_bridge_settings.magic_number
+        ):
+            raise RuntimeError("Demo round trip requires the matching owner decision record")
+        round_trip_token = demo_round_trip_settings.token.get_secret_value()
+        shared_tokens = [execution_bridge_settings.token.get_secret_value()]
+        if bridge_settings is not None:
+            shared_tokens.append(bridge_settings.token.get_secret_value())
+        if alert_source_settings is not None:
+            shared_tokens.append(alert_source_settings.token.get_secret_value())
+        if round_trip_token in shared_tokens:
+            raise RuntimeError("Demo round trip requires a separate service credential")
     app = FastAPI(title="Sochron1k API", version=__version__)
     app.state.telemetry_bridge = TelemetryBridge(bridge_settings)
     app.state.execution_bridge = ExecutionPollingBridge(execution_bridge_settings)
+    app.state.demo_round_trip = (
+        DemoRoundTripController(demo_round_trip_settings, app.state.execution_bridge)
+        if demo_round_trip_settings is not None
+        else None
+    )
     app.state.policy_writer = PolicyEvidenceWriter(policy_writer_settings)
     app.state.owner_verifier = OwnerVerifier(owner_auth_settings)
-    app.state.execution_evidence = execution_evidence
+    if execution_evidence is not None and app.state.demo_round_trip is not None and (
+        execution_evidence.path != app.state.demo_round_trip.journal.path
+    ):
+        raise RuntimeError("execution evidence and Demo round trip must share one journal")
+    app.state.execution_evidence = execution_evidence or (
+        ExecutionEvidenceReader(app.state.demo_round_trip.journal.path)
+        if app.state.demo_round_trip is not None
+        else None
+    )
     app.state.alert_lifecycle = alert_lifecycle
     app.state.api_budget = api_budget or ApiBudgetReader(None)
     app.state.alert_source_authenticator = AlertSourceAuthenticator(alert_source_settings)
@@ -152,6 +205,7 @@ def create_app(
     app.include_router(execution_bridge_router)
     app.include_router(policy_router)
     app.include_router(alert_delivery_router)
+    app.include_router(demo_round_trip_router)
 
     @app.middleware("http")
     async def bridge_no_cache(request: Request, call_next):
@@ -203,9 +257,14 @@ def create_app(
             history_configured=chart.history is not None,
             execution_state=app.state.execution_bridge.status().state,
             execution_evidence_state=(
-                execution_evidence.runtime_state()
-                if execution_evidence is not None
+                app.state.execution_evidence.runtime_state()
+                if app.state.execution_evidence is not None
                 else "awaiting_configuration"
+            ),
+            demo_round_trip_state=(
+                app.state.demo_round_trip.status().state
+                if app.state.demo_round_trip is not None
+                else "disabled"
             ),
             signal_configured=app.state.signal_evidence is not None,
             policy_state=app.state.policy_writer.status().state,
@@ -227,9 +286,14 @@ def create_app(
             history_configured=chart.history is not None,
             execution_state=app.state.execution_bridge.status().state,
             execution_evidence_state=(
-                execution_evidence.runtime_state()
-                if execution_evidence is not None
+                app.state.execution_evidence.runtime_state()
+                if app.state.execution_evidence is not None
                 else "awaiting_configuration"
+            ),
+            demo_round_trip_state=(
+                app.state.demo_round_trip.status().state
+                if app.state.demo_round_trip is not None
+                else "disabled"
             ),
             signal_configured=app.state.signal_evidence is not None,
             policy_state=app.state.policy_writer.status().state,
@@ -256,4 +320,6 @@ app = create_app(
     alert_source_settings=load_alert_source_settings(),
     alert_delivery_status=load_alert_delivery_status_reader(),
     target_evidence=load_target_evidence_reader(),
+    demo_round_trip_settings=load_demo_round_trip_settings(),
+    runtime_source_revision=os.environ.get("SOCHRON_SOURCE_REVISION"),
 )

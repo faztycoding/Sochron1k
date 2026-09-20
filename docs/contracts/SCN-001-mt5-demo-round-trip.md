@@ -8,7 +8,7 @@
 | Version | 1.1 |
 | Owner | Project owner; technical implementer not yet named |
 | Parent project | Sochron1k |
-| Current state | Local safety core and default-off MT5 mutation source implemented; BLOCKED for a real Demo send pending compilation/target evidence, owner inputs, credentials, and explicit target authorization |
+| Current state | Local safety core, default-off MT5 mutation source and bounded internal round-trip admission implemented; BLOCKED for a real Demo send pending compilation/target evidence, owner inputs, credentials, and explicit target authorization |
 | Done scope | Implementation verified first, then Demo operation verified as a separate gate |
 | Risk tier | High assurance |
 | Evidence base | Blueprint v1.1 and repository base revisions `776859c`, `e9a1972` |
@@ -24,8 +24,11 @@ monitoring console, Supabase foundation and API/web topology. SCN-004 adds the
 source-only read observer; SCN-012 adds the disabled execution polling bridge and
 synthetic timeout/replay recovery. SCN-028 adds the separate default-off Demo
 mutation source with a local ledger, broker preflight and cumulative
-reconciliation. All MQL components remain uncompiled and target-host evidence is
-absent. No Demo operation has been attempted or authorized by this contract alone.
+reconciliation. SCN-037 adds a separately authenticated, fixed-command internal
+controller that constructs `ExecutionService` only when exact private Demo
+authorization is configured. All MQL components remain uncompiled and target-host
+evidence is absent. No Demo operation has been attempted or authorized by this
+contract alone.
 
 ## Scope
 
