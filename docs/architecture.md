@@ -203,9 +203,10 @@ API also validates every returned owner UUID and removes owner/internal database
 identifiers from its bounded response. It preserves BUY, SELL, WAIT, BLOCK and
 expiry exactly, enforces causal formed/confirmed/data-cutoff times, and exposes no
 write, promotion, command, risk or execution authority. Empty data remains
-`awaiting_source`. The producer remains unimplemented; a pure PA01 calculator and
-an atomic persistence receiver exist but are not scheduled or connected, so this
-read boundary is not strategy or Demo-release evidence; see
+`awaiting_source`. The optional SCN-022 PA01 producer can now feed this read model
+from a verified native archive and explicit policy-evidence handoff, but it remains
+disabled and unscheduled without private configuration. The read boundary is not
+strategy-performance or Demo-release evidence; see
 [ADR-019](decisions/ADR-019-owner-signal-read-model.md).
 
 SCN-017 adds the authenticated owner research-evaluation projection at
@@ -224,8 +225,9 @@ The pure kernel consumes explicit as-of closed M5/H1 evidence, calculates the
 versioned EMA/ATR/ADX and delayed L2/R2 pivots, and returns BUY, SELL, WAIT or BLOCK
 with stable evidence hashes. It has no clock-now, I/O, persistence, AI, risk,
 command or execution authority. Aggregation and the atomic persistence destination
-now exist as separate boundaries; source reads, a durable producer and scheduling
-remain missing, so the owner signal route correctly stays `awaiting_source`; see
+now exist as separate boundaries. SCN-022 later adds bounded source reads and a
+durable optional producer, while the authoritative policy writer and target
+scheduling remain separate gaps; see
 [ADR-021](decisions/ADR-021-pa01-v1-deterministic-kernel.md).
 
 SCN-019 adds the pure native M1 aggregation boundary in
@@ -258,6 +260,19 @@ immutable snapshot while retaining protocol-v1 read/store compatibility and the
 same backend-only grants. It still has no source reader, clock scheduler, durable
 producer journal or HTTP transport; see
 [ADR-024](decisions/ADR-024-pa01-policy-context-envelope.md).
+
+SCN-022 adds the optional source-side producer without widening trading authority.
+It reads a bounded, query-only view of the immutable native M1 archive and one
+owner-only policy-evidence handoff, then reuses SCN-019 aggregation and the SCN-021
+envelope. A private SQLite journal records the canonical decision before either
+fixed Supabase RPC, changes every ambiguous write to `UNKNOWN`, reads the receiver
+before retry, and advances its cursor only after exact read-back. Confirmed or
+malformed conflicts are quarantined. The installed `sochron-pa01` command is inert
+without explicit private configuration and is absent from default Compose. This
+locally closes source read, journal and transport mechanics; it does not implement
+the authoritative policy writer, target scheduler/recovery, research evaluation,
+command/risk/execution path or Auto Trading; see
+[ADR-025](decisions/ADR-025-durable-pa01-producer.md).
 
 | Failure | Required behavior |
 | --- | --- |

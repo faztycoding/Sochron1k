@@ -9,7 +9,15 @@ from decimal import Decimal, localcontext
 from itertools import pairwise
 from typing import Literal, Self
 
-from pydantic import AwareDatetime, Field, StrictBool, StrictInt, field_validator, model_validator
+from pydantic import (
+    AwareDatetime,
+    Field,
+    StrictBool,
+    StrictInt,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 from sochron1k.models import StrictModel
 from sochron1k.telemetry import FiniteDecimal
 
@@ -212,6 +220,10 @@ class PivotEvidence(StrictModel):
     formed_at_utc: AwareDatetime
     confirmed_at_utc: AwareDatetime
 
+    @field_serializer("price", when_used="json")
+    def canonical_price(self, value: Decimal) -> str:
+        return _decimal_text(value)
+
 
 class PA01Features(StrictModel):
     structure: Structure
@@ -226,6 +238,21 @@ class PA01Features(StrictModel):
     stop_distance_atr: Decimal | None
     latest_swing_highs: tuple[PivotEvidence, ...] = ()
     latest_swing_lows: tuple[PivotEvidence, ...] = ()
+
+    @field_serializer(
+        "ema20",
+        "ema50",
+        "previous_ema20",
+        "atr14",
+        "adx14",
+        "spread_cap",
+        "proposed_stop",
+        "stop_distance_at_close",
+        "stop_distance_atr",
+        when_used="json",
+    )
+    def canonical_decimal(self, value: Decimal | None) -> str | None:
+        return _decimal_text(value) if value is not None else None
 
 
 class PA01ExecutionParameters(StrictModel):

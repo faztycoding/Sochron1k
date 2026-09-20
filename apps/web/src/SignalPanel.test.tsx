@@ -37,7 +37,7 @@ describe("owner signal panel", () => {
   it("shows the producer dependency instead of a fabricated signal", async () => {
     const value = fixture(); value.status.state = "awaiting_source"; value.status.returned_count = 0; value.signals = [];
     vi.spyOn(globalThis, "fetch").mockResolvedValue(json(value)); render(<SignalPanel token="owner-token" />);
-    expect(await screen.findByText("API พร้อม · รอ Strategy producer")).toBeVisible();
+    expect(await screen.findByText("API และ PA01 producer พร้อม · รอหลักฐานต้นทาง")).toBeVisible();
     expect(screen.queryByText("WAIT")).not.toBeInTheDocument();
   });
   it("clears malformed evidence and offers a read-only retry", async () => {

@@ -20,6 +20,8 @@ from sochron1k.bar_history import MAX_DATABASE_BYTES, ArchivedBar
 from sochron1k.chart import EPOCH, ChartSettings
 from sochron1k.telemetry import DemoIdentity
 
+from .pa01_aggregation import MAX_SOURCE_ROWS, NativeM1Evidence
+
 MAX_ROWS = 100
 MAX_PAYLOAD_BYTES = 8192
 MAX_BATCH_BYTES = 240_000
@@ -379,6 +381,76 @@ class NativeArchiveSource:
                 result = ExportBatch(
                     self.archive_id, self.binding_json, after, next_cursor, tuple(exported)
                 )
+            return result
+        except OSError, sqlite3.Error, ValueError, TypeError, KeyError, RecursionError:
+            raise SourceUnavailable() from None
+
+    def read_pa01(
+        self, cutoff_utc: datetime, *, limit: int = MAX_SOURCE_ROWS
+    ) -> tuple[NativeM1Evidence, ...]:
+        """Read the newest bounded M1 evidence available at one explicit cutoff."""
+        try:
+            if (
+                not isinstance(cutoff_utc, datetime)
+                or cutoff_utc.tzinfo is None
+                or cutoff_utc.utcoffset() is None
+                or type(limit) is not int
+                or not 1 <= limit <= MAX_SOURCE_ROWS
+            ):
+                raise SourceUnavailable()
+            cutoff = cutoff_utc.astimezone(UTC)
+            cutoff_text = cutoff.isoformat(timespec="microseconds")
+            latest_open_server_s = int(cutoff.timestamp()) + self._offset - 60
+            with self._connect() as db:
+                self._metadata(db)
+                rows = db.execute(
+                    """
+                    SELECT c.time_server_s,c.first_receipt,
+                           substr(c.payload,1,8193) AS payload,
+                           substr(c.digest,1,65) AS digest,
+                           substr(r.received_at,1,128) AS received_at
+                    FROM closed_bars c
+                    LEFT JOIN receipts r ON r.receipt_id=c.first_receipt
+                    WHERE c.timeframe='M1'
+                      AND c.time_server_s<=?
+                      AND r.received_at<=?
+                    ORDER BY c.time_server_s DESC
+                    LIMIT ?
+                    """,
+                    (latest_open_server_s, cutoff_text, limit),
+                ).fetchall()
+                verified = [self._bar(row) for row in reversed(rows)]
+                binding = _json(self.binding_json, 4096)
+                identity = DemoIdentity.model_validate(binding["identity"])
+                result = tuple(
+                    NativeM1Evidence(
+                        archive_id=UUID(self.archive_id),
+                        symbol=identity.symbol,
+                        time_server_s=bar.time_server_s,
+                        broker_utc_offset_seconds=self._offset,
+                        offset_valid_from_server_s=self._chart.offset_valid_from_server_s,
+                        offset_valid_until_server_s=self._chart.offset_valid_until_server_s,
+                        open_time_utc=bar.open_time_utc,
+                        confirmed_by_server_s=bar.confirmed_by_server_s,
+                        source_observed_at_utc=bar.source_observed_at,
+                        first_received_at_utc=bar.first_received_at,
+                        available_at_utc=bar.first_received_at,
+                        first_receipt=bar.first_receipt,
+                        terminal_build=bar.terminal_build,
+                        open=bar.open,
+                        high=bar.high,
+                        low=bar.low,
+                        close=bar.close,
+                        tick_volume=bar.tick_volume,
+                        spread_points=bar.spread_points,
+                        tick_size=bar.tick_size,
+                        digits=bar.digits,
+                    )
+                    for _, payload, _ in verified
+                    for bar in (ArchivedBar.model_validate_json(payload),)
+                )
+            if any(row.available_at_utc > cutoff or row.close_time_utc > cutoff for row in result):
+                raise SourceUnavailable()
             return result
         except OSError, sqlite3.Error, ValueError, TypeError, KeyError, RecursionError:
             raise SourceUnavailable() from None

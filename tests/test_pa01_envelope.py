@@ -125,6 +125,31 @@ def test_envelope_is_deterministic_complete_and_receiver_shaped(aggregation):
     assert first.snapshot.values.execution_parameters.order_created is False
     assert first.snapshot.values.execution_parameters.risk_admitted is False
 
+    features = payload["snapshot"]["values"]["features"]
+    decimal_values = [
+        features[name]
+        for name in (
+            "ema20",
+            "ema50",
+            "previous_ema20",
+            "atr14",
+            "adx14",
+            "spread_cap",
+            "proposed_stop",
+            "stop_distance_at_close",
+            "stop_distance_atr",
+        )
+        if features[name] is not None
+    ]
+    decimal_values.extend(
+        pivot["price"]
+        for name in ("latest_swing_highs", "latest_swing_lows")
+        for pivot in features[name]
+    )
+    assert decimal_values
+    assert all(len(value) <= 40 for value in decimal_values)
+    assert all(not ("." in value and value.endswith("0")) for value in decimal_values)
+
 
 def test_full_policy_context_changes_identity_and_recomputes_block(aggregation):
     admitted = build_pa01_decision_envelope(aggregation, policy(aggregation), code_hash=CODE_HASH)

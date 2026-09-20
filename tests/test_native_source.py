@@ -74,6 +74,21 @@ def test_exact_committed_pages_no_create_or_table_writes(setup_chart, archive):
     assert first.wire_rows()[0]["bar"]["close"] == "2500.2000000000"
 
 
+def test_pa01_projection_uses_only_closed_rows_available_at_cutoff(setup_chart, archive):
+    attach(setup_chart, archive)
+    accept(setup_chart)
+    reader = source(setup_chart, archive)
+    cutoff = setup_chart[0].utc
+    rows = reader.read_pa01(cutoff)
+    assert len(rows) == 2
+    assert [row.time_server_s for row in rows] == sorted(row.time_server_s for row in rows)
+    assert all(row.available_at_utc == cutoff for row in rows)
+    assert all(row.close_time_utc <= cutoff for row in rows)
+    assert all(row.symbol == setup_chart[1].settings.identity.symbol for row in rows)
+    assert reader.read_pa01(cutoff - timedelta(microseconds=1)) == ()
+    assert reader.read_pa01(cutoff, limit=1) == rows[-1:]
+
+
 def test_receipt_order_keeps_late_older_bars_and_filters_other_timeframes(setup_chart, archive):
     record_packet(setup_chart, archive, packet(setup_chart))
     reader = source(setup_chart, archive)

@@ -132,6 +132,15 @@ verification. Recovery commands capture/verify three databases and create isolat
 inspection bundles without enabling execution. Actual-target/off-host recovery,
 external reconciliation and Demo release gates remain pending.
 
+The optional [durable PA01 producer](docs/operations/pa01-producer.md) now reads a
+bounded immutable native archive plus one explicit owner-only policy-evidence
+handoff, journals the exact decision before either fixed Supabase RPC and verifies
+the receiver independently before advancing its cursor. It installs as
+`sochron-pa01`, is disabled without private configuration and is not started by
+default Compose. Local crash-after-commit evidence proves read-first recovery
+without a duplicate send. This does not implement the real policy handoff writer,
+target scheduling/recovery, strategy-performance evidence or any trading path.
+
 ## Local Supabase foundation
 
 The pinned Supabase CLI, local configuration, initial migration, and pgTAP authorization tests are committed. The browser role is read-only and owner-scoped; anonymous access and browser writes are denied. No hosted project is linked and no remote database has been changed.
@@ -198,16 +207,13 @@ strategy and research producers. Statistics remain empty until an evaluation has
 dataset/split identity, sample size, uncertainty and explicit costs; the UI does
 not fabricate zero results. The implemented owner execution read route is shown as
 real data only when its private journal source validates.
-The first pure `PA01-v1` decision kernel is implemented with as-of M5/H1 evidence,
-delayed pivots and fixed indicator initialization, but it is not yet a running
-producer. Pure native M1-to-M5/H1 aggregation now follows broker-server candle
-boundaries and omits incomplete buckets without inventing prices. The backend-only
-Supabase receiver now atomically insert-or-verifies an immutable linked PA01 feature
-snapshot/signal pair and provides independent UNKNOWN read-back. Protocol v2 also
-binds the exact spread, market/session, freshness, news, exposure and pending
-observations to each deterministic decision while retaining v1 evidence. Bounded
-native/context readers, a durable local producer journal, scheduling and the HTTP
-adapter that invokes this receiver remain the next source-side boundary; the owner
-signal UI therefore still correctly waits for source data.
+The pure `PA01-v1` kernel, native M1-to-M5/H1 aggregation and protocol-v2 policy
+envelope now feed an optional durable producer. The producer binds the exact
+spread, market/session, freshness, news, exposure and pending observations,
+journals before write and independently reads back the immutable Supabase
+snapshot/signal pair. The owner Signals UI therefore has a complete local software
+path, but correctly stays `awaiting_source` until an authoritative policy writer,
+eligible strategy/experiment rows and private producer configuration are present.
+Target scheduling/recovery and the separate statistics evaluator remain missing.
 A real Demo round trip still requires owner inputs and explicit target authorization
 listed in the task contract.

@@ -13,6 +13,7 @@ dependencies = [
 [project.scripts]
 sochron-sync = "sochron_worker.__main__:cli"
 sochron-recovery = "sochron_worker.recovery_cli:cli"
+sochron-pa01 = "sochron_worker.pa01_cli:cli"
 
 [build-system]
 requires = ["hatchling==1.32.0"]

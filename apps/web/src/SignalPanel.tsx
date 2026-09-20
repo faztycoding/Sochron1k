@@ -71,7 +71,7 @@ export function SignalPanel({ token }: { token: string | null }) {
     {error ? <div className="owner-empty"><p role="alert">{error}</p>
       <button className="quiet-button" type="button" onClick={() => setRetry(value => value + 1)}>ลองอ่านสัญญาณอีกครั้ง</button></div> : null}
     {view?.status.state === "awaiting_source" ? <div className="empty-state"><div className="empty-glyph" aria-hidden="true">↔</div>
-      <strong>API พร้อม · รอ Strategy producer</strong><p>ต้องมีบริการคำนวณ PA01 จากแท่งปิดและเขียนหลักฐานลง Supabase ก่อน ส่วนนี้จึงจะแสดงรายการจริง</p></div> : null}
+      <strong>API และ PA01 producer พร้อม · รอหลักฐานต้นทาง</strong><p>เชื่อม policy evidence จากราคา ตลาด ข่าว และสถานะบัญชี แล้วตั้งค่า worker ให้เขียนหลักฐานลง Supabase ก่อน</p></div> : null}
     {view?.status.state === "available" ? <><div className="signal-summary"><span>ล่าสุด {view.status.returned_count} รายการ · จำกัด {view.status.limit}</span>
       <span>อ่านเมื่อ UTC {view.read_at_utc}</span></div><div className="signal-list">
         {view.signals.map(signal => <SignalCard key={signal.signal_id} signal={signal} now={now} />)}
