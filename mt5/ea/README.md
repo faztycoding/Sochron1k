@@ -61,6 +61,12 @@ commands require both fields as `null`. The pure codec checks their shape and
 relation only. A future mutation EA must still calculate current broker loss with
 `OrderCalcProfit` before `OrderCheck`/`OrderSend`.
 
+SCN-027 adds typed cumulative deal, entry, management, rejection, inventory and
+snapshot-outcome encoders. The synthetic inventory now covers a closed parent and
+its close result; the synthetic outcome covers a protected filled entry. These are
+hand-authored/MQL-source compatibility checkpoints. The codec still has no account,
+history, network, file or trade access and therefore does not observe these states.
+
 Local source and hand-authored golden-fixture checks:
 
 ```bash

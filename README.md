@@ -209,7 +209,9 @@ default-off mutation EA that consumes the SCN-012/013 contract and complete the
 remaining target recovery work. The current 24-field execution command already
 persists `risk_limit` and `cost_budget` before dispatch so that EA can deny adverse
 broker-side loss with `OrderCalcProfit`; this is a contract checkpoint, not a
-working mutation path. The UI connection rail identifies `/api/policy/v1/status`,
+working mutation path. Its pure MQL codec can now return cumulative entry,
+management and restart-inventory evidence, but no committed EA populates that
+evidence from MT5 yet. The UI connection rail identifies `/api/policy/v1/status`,
 `/api/owner/signals` and
 `/api/owner/statistics` as implemented read models waiting for their versioned
 strategy and research producers. Statistics remain empty until an evaluation has

@@ -219,6 +219,17 @@ def test_execution_protocol_guard_detects_terminal_or_mutation_access(identifier
     )
 
 
+@pytest.mark.parametrize(
+    "identifier",
+    sorted(EXECUTION_GUARD["REQUIRED_TYPED_EVIDENCE"]),
+)
+def test_execution_protocol_guard_detects_removed_cumulative_evidence(identifier):
+    source = (ROOT / "mt5/ea/ExecutionProtocol.mqh").read_text()
+    changed = source.replace(identifier, "Removed" + identifier)
+    assert changed != source
+    assert EXECUTION_GUARD["findings"](changed)
+
+
 def test_execution_protocol_guard_rejects_imports_unreviewed_include_and_secret_input():
     source = (ROOT / "mt5/ea/ExecutionProtocol.mqh").read_text()
     self_test = (ROOT / "mt5/ea/SochronExecutionProtocolSelfTest.mq5").read_text()
@@ -258,3 +269,20 @@ def test_execution_protocol_golden_verifier_is_exact_and_provenance_explicit(tmp
     generated.write_text('{"protocol":"x","protocol":"y"}')
     with pytest.raises(ValueError):
         EXECUTION_FIXTURE_VERIFIER["verify"](generated, kind=kind)
+
+
+def test_execution_goldens_cover_cumulative_entry_and_management_evidence():
+    inventory = json.loads((ROOT / "tests/fixtures/mt5-execution-inventory-v1.json").read_bytes())
+    outcome = json.loads((ROOT / "tests/fixtures/mt5-execution-outcome-v1.json").read_bytes())
+    entry = inventory["inventory"]["snapshots"][0]
+    management = inventory["inventory"]["management_snapshots"][0]
+    assert entry["terminal_state"] == management["terminal_state"] == "closed"
+    assert management["target"] == entry
+    assert management["target_command_id"] == entry["command_id"]
+    assert len(entry["deals"]) == len(management["deals"]) == 1
+    assert management["observed_at"] == inventory["observed_at"]
+    assert entry["deals"][0]["occurred_at"] <= inventory["observed_at"]
+    assert management["deals"][0]["occurred_at"] <= inventory["observed_at"]
+    assert outcome["status"] == "snapshot"
+    assert outcome["snapshot"]["stop_loss_confirmed"] is True
+    assert outcome["management_snapshot"] is outcome["rejection"] is outcome["uncertain"] is None

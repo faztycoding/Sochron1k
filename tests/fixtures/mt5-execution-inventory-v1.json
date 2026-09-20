@@ -16,7 +16,7 @@
   "account_trade_allowed": false,
   "algo_trading_allowed": false,
   "magic_number": 910001,
-  "observed_at": "2026-09-20T00:00:00Z",
+  "observed_at": "2026-09-20T00:01:01Z",
   "inventory": {
     "executor_id": "synthetic-executor",
     "generation": "synthetic-generation-1",
@@ -28,15 +28,89 @@
       "trade_mode": "demo",
       "can_trade": false,
       "equity": "1000.0000000000",
-      "checked_at": "2026-09-20T00:00:00Z"
+      "checked_at": "2026-09-20T00:01:01Z"
     },
     "symbol": "XAUUSD.fixture",
-    "observed_at": "2026-09-20T00:00:00Z",
+    "observed_at": "2026-09-20T00:01:01Z",
     "complete": true,
     "foreign_orders": 0,
     "foreign_positions": 0,
-    "snapshots": [],
-    "management_snapshots": [],
+    "snapshots": [
+      {
+        "command_id": "synthetic-command-1",
+        "order_ticket": "7001",
+        "position_id": "8001",
+        "requested_volume": "0.1000000000",
+        "filled_volume": "0.1000000000",
+        "remaining_volume": "0.0000000000",
+        "cancelled_volume": "0.0000000000",
+        "closed_volume": "0.1000000000",
+        "deals": [
+          {
+            "deal_ticket": "7101",
+            "volume": "0.1000000000",
+            "price": "2500.2000000000",
+            "profit": "0.0000000000",
+            "commission": "-0.2500000000",
+            "swap": "0.0000000000",
+            "fee": "0.0000000000",
+            "occurred_at": "2026-09-20T00:00:01Z"
+          }
+        ],
+        "stop_loss_confirmed": false,
+        "terminal_state": "closed"
+      }
+    ],
+    "management_snapshots": [
+      {
+        "command_id": "synthetic-close-1",
+        "target_command_id": "synthetic-command-1",
+        "operation": "close",
+        "broker_order_ticket": "7001",
+        "position_id": "8001",
+        "requested_volume": "0.1000000000",
+        "completed_volume": "0.1000000000",
+        "remaining_volume": "0.0000000000",
+        "deals": [
+          {
+            "deal_ticket": "7201",
+            "volume": "0.1000000000",
+            "price": "2501.2000000000",
+            "profit": "10.0000000000",
+            "commission": "-0.2500000000",
+            "swap": "0.0000000000",
+            "fee": "0.0000000000",
+            "occurred_at": "2026-09-20T00:01:01Z"
+          }
+        ],
+        "terminal_state": "closed",
+        "target": {
+          "command_id": "synthetic-command-1",
+          "order_ticket": "7001",
+          "position_id": "8001",
+          "requested_volume": "0.1000000000",
+          "filled_volume": "0.1000000000",
+          "remaining_volume": "0.0000000000",
+          "cancelled_volume": "0.0000000000",
+          "closed_volume": "0.1000000000",
+          "deals": [
+            {
+              "deal_ticket": "7101",
+              "volume": "0.1000000000",
+              "price": "2500.2000000000",
+              "profit": "0.0000000000",
+              "commission": "-0.2500000000",
+              "swap": "0.0000000000",
+              "fee": "0.0000000000",
+              "occurred_at": "2026-09-20T00:00:01Z"
+            }
+          ],
+          "stop_loss_confirmed": false,
+          "terminal_state": "closed"
+        },
+        "observed_at": "2026-09-20T00:01:01Z"
+      }
+    ],
     "rejections": []
   }
 }

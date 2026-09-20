@@ -8,17 +8,32 @@
   "target_command_id": null,
   "operation": "open",
   "observed_at": "2026-09-20T00:00:01Z",
-  "status": "rejected",
-  "snapshot": null,
-  "management_snapshot": null,
-  "rejection": {
+  "status": "snapshot",
+  "snapshot": {
     "command_id": "synthetic-command-1",
-    "target_command_id": null,
-    "operation": "open",
-    "retcode": 10006,
-    "retcode_external": 0,
-    "request_id": 7,
-    "observed_at": "2026-09-20T00:00:01Z"
+    "order_ticket": "7001",
+    "position_id": "8001",
+    "requested_volume": "0.1000000000",
+    "filled_volume": "0.1000000000",
+    "remaining_volume": "0.0000000000",
+    "cancelled_volume": "0.0000000000",
+    "closed_volume": "0.0000000000",
+    "deals": [
+      {
+        "deal_ticket": "7101",
+        "volume": "0.1000000000",
+        "price": "2500.2000000000",
+        "profit": "0.0000000000",
+        "commission": "-0.2500000000",
+        "swap": "0.0000000000",
+        "fee": "0.0000000000",
+        "occurred_at": "2026-09-20T00:00:01Z"
+      }
+    ],
+    "stop_loss_confirmed": true,
+    "terminal_state": null
   },
+  "management_snapshot": null,
+  "rejection": null,
   "uncertain": null
 }

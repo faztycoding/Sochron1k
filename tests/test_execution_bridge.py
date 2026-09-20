@@ -158,6 +158,17 @@ def test_settings_default_disabled_and_private_file(monkeypatch, tmp_path):
         load_execution_bridge_settings()
 
 
+def test_settings_reject_identity_that_mql_command_cannot_parse():
+    original = settings()
+    with pytest.raises(ValueError, match="execution command identity is not MQL-safe"):
+        ExecutionBridgeSettings(
+            identity=original.identity.model_copy(update={"executor_id": "unsafe executor"}),
+            token=SecretStr(TOKEN),
+            magic_number=original.magic_number,
+            response_timeout_seconds=original.response_timeout_seconds,
+        )
+
+
 def test_execution_credential_cannot_reuse_telemetry_credential():
     execution = settings()
     telemetry = BridgeSettings(
@@ -283,6 +294,45 @@ def test_inventory_replay_and_generation_fencing(observed_at):
     assert bridge.status().state == "connected"
 
 
+def test_inventory_rejects_generation_that_mql_command_cannot_parse(observed_at):
+    bridge = ExecutionPollingBridge(settings(), utc_now=lambda: observed_at)
+    frame = inventory_frame(bridge, observed_at)
+    unsafe = frame.model_copy(
+        update={
+            "inventory": frame.inventory.model_copy(update={"generation": "unsafe generation"})
+        }
+    )
+    with pytest.raises(ValueError):
+        bridge.accept_inventory(unsafe)
+    assert bridge.status().state == "awaiting_inventory"
+
+
+def test_inventory_rejects_evidence_from_after_observation(intent, observed_at):
+    bridge = ExecutionPollingBridge(settings(), utc_now=lambda: observed_at)
+    snapshot = filled_snapshot(intent, Decimal("0.10"))
+    future_deal = snapshot.deals[0].model_copy(
+        update={"occurred_at": observed_at + timedelta(microseconds=1)}
+    )
+    frame = inventory_frame(bridge, observed_at).model_copy(
+        update={
+            "inventory": inventory_frame(bridge, observed_at).inventory.model_copy(
+                update={"snapshots": (snapshot.model_copy(update={"deals": (future_deal,)}),)}
+            )
+        }
+    )
+    with pytest.raises(ValueError, match="inventory envelope mismatch"):
+        bridge.accept_inventory(frame)
+    assert bridge.status().state == "awaiting_inventory"
+
+
+def test_dispatch_rejects_unsafe_identifier_before_poll_exposure(intent, observed_at):
+    bridge = ExecutionPollingBridge(settings(), utc_now=lambda: observed_at)
+    bridge.accept_inventory(inventory_frame(bridge, observed_at))
+    with pytest.raises(ValueError):
+        bridge.send(intent, Decimal("0.10"), RISK_LIMIT, COST_BUDGET, "unsafe attempt")
+    assert bridge.next_command() is None
+
+
 def test_entry_poll_round_trip_and_exact_outcome_replay(intent, observed_at):
     bridge = ExecutionPollingBridge(settings(), utc_now=lambda: observed_at)
     bridge.accept_inventory(inventory_frame(bridge, observed_at))
@@ -307,6 +357,18 @@ def test_entry_poll_round_trip_and_exact_outcome_replay(intent, observed_at):
             ExecutionDispatch.model_validate(
                 command.model_dump() | {"cost_budget": RISK_LIMIT}
             )
+        future = filled_snapshot(intent, volume)
+        future = future.model_copy(
+            update={
+                "deals": (
+                    future.deals[0].model_copy(
+                        update={"occurred_at": observed_at + timedelta(microseconds=1)}
+                    ),
+                )
+            }
+        )
+        with pytest.raises(ValueError, match="outcome evidence binding mismatch"):
+            snapshot_outcome(bridge, command, future, observed_at)
         outcome = snapshot_outcome(bridge, command, filled_snapshot(intent, volume), observed_at)
         assert bridge.accept_outcome(outcome).duplicate is False
         assert waiting.result(timeout=1) == outcome.snapshot

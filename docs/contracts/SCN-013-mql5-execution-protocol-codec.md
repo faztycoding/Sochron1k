@@ -3,7 +3,9 @@
 > Current evolution: SCN-026 extends the original 22-field envelope documented
 > below with required nullable `risk_limit` and `cost_budget` fields. The current
 > parser therefore accepts exactly 24 fields; this file retains the original
-> SCN-013 acceptance baseline.
+> SCN-013 acceptance baseline. SCN-027 further adds typed cumulative entry,
+> management, inventory and snapshot-outcome encoders without changing the pure
+> no-authority boundary.
 
 2026-09-20, High assurance, base
 `1c886e3d9b2c01905206d436a9d501f79557bf2f`. Local source-only work under the

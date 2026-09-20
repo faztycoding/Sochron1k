@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import secrets
 import stat
 import threading
@@ -43,6 +44,7 @@ from .telemetry import DemoIdentity
 MAX_EXECUTION_FRAME_BYTES = 262_144
 MAX_EXECUTION_AGE_SECONDS = 5.0
 MAX_EXECUTION_INVENTORY_ITEMS = 32
+WIRE_IDENTIFIER_PATTERN = r"^[A-Za-z0-9_.:-]+$"
 
 
 class ExecutionBridgeSettings(StrictModel):
@@ -62,6 +64,17 @@ class ExecutionBridgeSettings(StrictModel):
         ):
             raise ValueError("use a separately generated URL-safe executor credential")
         return value
+
+    @model_validator(mode="after")
+    def command_identity_is_mql_safe(self):
+        values = (
+            self.identity.executor_id,
+            self.identity.account_ref,
+            self.identity.symbol,
+        )
+        if any(re.fullmatch(WIRE_IDENTIFIER_PATTERN, value) is None for value in values):
+            raise ValueError("execution command identity is not MQL-safe")
+        return self
 
 
 def load_execution_bridge_settings() -> ExecutionBridgeSettings | None:
@@ -113,6 +126,22 @@ class ExecutionInventoryFrame(StrictModel):
         entry_ids = [item.command_id for item in self.inventory.snapshots]
         management_ids = [item.command_id for item in self.inventory.management_snapshots]
         rejection_ids = [item.command_id for item in self.inventory.rejections]
+        evidence_times = [
+            deal.occurred_at
+            for snapshot in self.inventory.snapshots
+            for deal in snapshot.deals
+            if deal.occurred_at is not None
+        ]
+        evidence_times.extend(
+            item.observed_at for item in self.inventory.management_snapshots
+        )
+        evidence_times.extend(
+            deal.occurred_at
+            for item in self.inventory.management_snapshots
+            for deal in (*item.deals, *item.target.deals)
+            if deal.occurred_at is not None
+        )
+        evidence_times.extend(item.observed_at for item in self.inventory.rejections)
         if (
             self.inventory.executor_id != self.identity.executor_id
             or self.inventory.symbol != self.identity.symbol
@@ -124,6 +153,7 @@ class ExecutionInventoryFrame(StrictModel):
             or account.can_trade != self.account_trade_allowed
             or self.inventory.observed_at != self.observed_at
             or account.checked_at != self.observed_at
+            or not re.fullmatch(WIRE_IDENTIFIER_PATTERN, self.inventory.generation)
             or len(self.inventory.snapshots) > MAX_EXECUTION_INVENTORY_ITEMS
             or len(self.inventory.management_snapshots) > MAX_EXECUTION_INVENTORY_ITEMS
             or len(self.inventory.rejections) > MAX_EXECUTION_INVENTORY_ITEMS
@@ -132,6 +162,7 @@ class ExecutionInventoryFrame(StrictModel):
             or len(set(rejection_ids)) != len(rejection_ids)
             or set(entry_ids) & set(management_ids)
             or set(rejection_ids) & (set(entry_ids) | set(management_ids))
+            or any(value > self.observed_at for value in evidence_times)
         ):
             raise ValueError("inventory envelope mismatch")
         return self
@@ -141,15 +172,27 @@ class ExecutionDispatch(StrictModel):
     protocol: Literal["sochron.execution.command.v1"] = "sochron.execution.command.v1"
     boot_id: UUID
     dispatch_sequence: StrictInt = Field(ge=1, le=9_007_199_254_740_991)
-    attempt_id: str = Field(min_length=1, max_length=128)
-    generation: str = Field(min_length=1, max_length=128)
+    attempt_id: str = Field(
+        min_length=1, max_length=128, pattern=WIRE_IDENTIFIER_PATTERN
+    )
+    generation: str = Field(
+        min_length=1, max_length=128, pattern=WIRE_IDENTIFIER_PATTERN
+    )
     magic_number: StrictInt = Field(gt=0, le=2_147_483_647)
-    command_id: str = Field(min_length=1, max_length=128)
-    target_command_id: str | None = Field(default=None, min_length=1, max_length=128)
+    command_id: str = Field(
+        min_length=1, max_length=128, pattern=WIRE_IDENTIFIER_PATTERN
+    )
+    target_command_id: str | None = Field(
+        default=None, min_length=1, max_length=128, pattern=WIRE_IDENTIFIER_PATTERN
+    )
     fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
-    account_ref: str = Field(min_length=1, max_length=128)
-    experiment_id: str = Field(min_length=1, max_length=128)
-    symbol: str = Field(min_length=1, max_length=32)
+    account_ref: str = Field(
+        min_length=1, max_length=128, pattern=WIRE_IDENTIFIER_PATTERN
+    )
+    experiment_id: str = Field(
+        min_length=1, max_length=128, pattern=WIRE_IDENTIFIER_PATTERN
+    )
+    symbol: str = Field(min_length=1, max_length=32, pattern=WIRE_IDENTIFIER_PATTERN)
     operation: Literal["open", "cancel", "close"]
     volume: Decimal = Field(gt=0, allow_inf_nan=False, max_digits=24, decimal_places=10)
     risk_limit: Decimal | None = Field(
@@ -169,8 +212,12 @@ class ExecutionDispatch(StrictModel):
     take_profit: Decimal | None = Field(
         default=None, gt=0, allow_inf_nan=False, max_digits=24, decimal_places=10
     )
-    broker_order_ticket: str | None = Field(default=None, min_length=1, max_length=128)
-    position_id: str | None = Field(default=None, min_length=1, max_length=128)
+    broker_order_ticket: str | None = Field(
+        default=None, min_length=1, max_length=128, pattern=WIRE_IDENTIFIER_PATTERN
+    )
+    position_id: str | None = Field(
+        default=None, min_length=1, max_length=128, pattern=WIRE_IDENTIFIER_PATTERN
+    )
     reason: str | None = Field(default=None, min_length=1, max_length=64)
 
     @model_validator(mode="after")
@@ -244,6 +291,10 @@ class ExecutionOutcomeFrame(StrictModel):
                     and self.management_snapshot is None
                     and self.snapshot.command_id == self.command_id
                     and self.target_command_id is None
+                    and all(
+                        deal.occurred_at is None or deal.occurred_at <= self.observed_at
+                        for deal in self.snapshot.deals
+                    )
                 )
             else:
                 item = self.management_snapshot
@@ -254,6 +305,10 @@ class ExecutionOutcomeFrame(StrictModel):
                     and item.target_command_id == self.target_command_id
                     and item.operation.value == self.operation
                     and 0 <= (self.observed_at - item.observed_at).total_seconds() <= 5
+                    and all(
+                        deal.occurred_at is None or deal.occurred_at <= item.observed_at
+                        for deal in (*item.deals, *item.target.deals)
+                    )
                 )
         elif self.status == "rejected":
             valid = (

@@ -33,6 +33,11 @@ commands carry both as `null`. These values are persisted beside the API dispatc
 attempt before the command is exposed. They are account-currency authorization,
 not evidence that broker loss has already been calculated.
 
+The pure SCN-027 codec can now encode cumulative entry/deal/SL evidence and
+management evidence with its updated target into snapshot outcomes and restart
+inventory. This is a schema boundary only: no committed EA currently reads MT5
+history or populates those structures.
+
 ## Private API configuration
 
 Create an owner-only regular JSON file (mode `0600` or `0400`) outside the

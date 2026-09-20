@@ -53,6 +53,61 @@ string ScxCloseCommandFixture()
       "\"reason\":\"owner_request\"}";
   }
 
+void ScxEntryEvidenceFixture(ScxBrokerEvidence &entry,const bool closed)
+  {
+   ZeroMemory(entry);
+   entry.command_id="synthetic-command-1";
+   entry.order_ticket="7001";
+   entry.position_id="8001";
+   entry.has_position_id=true;
+   entry.requested_volume=0.10;
+   entry.filled_volume=0.10;
+   entry.remaining_volume=0;
+   entry.cancelled_volume=0;
+   entry.closed_volume=closed ? 0.10 : 0;
+   entry.stop_loss_confirmed=!closed;
+   entry.has_terminal_state=closed;
+   entry.terminal_state=closed ? "closed" : "";
+   ArrayResize(entry.deals,1);
+   entry.deals[0].deal_ticket="7101";
+   entry.deals[0].volume=0.10;
+   entry.deals[0].price=2500.20;
+   entry.deals[0].profit=0;
+   entry.deals[0].commission=-0.25;
+   entry.deals[0].swap=0;
+   entry.deals[0].fee=0;
+   entry.deals[0].occurred_at="2026-09-20T00:00:01Z";
+   entry.deals[0].has_occurred_at=true;
+  }
+
+void ScxManagementEvidenceFixture(ScxManagementEvidence &management)
+  {
+   ZeroMemory(management);
+   management.command_id="synthetic-close-1";
+   management.target_command_id="synthetic-command-1";
+   management.operation="close";
+   management.broker_order_ticket="7001";
+   management.position_id="8001";
+   management.has_position_id=true;
+   management.requested_volume=0.10;
+   management.completed_volume=0.10;
+   management.remaining_volume=0;
+   management.terminal_state="closed";
+   management.has_terminal_state=true;
+   management.observed_at="2026-09-20T00:01:01Z";
+   ArrayResize(management.deals,1);
+   management.deals[0].deal_ticket="7201";
+   management.deals[0].volume=0.10;
+   management.deals[0].price=2501.20;
+   management.deals[0].profit=10;
+   management.deals[0].commission=-0.25;
+   management.deals[0].swap=0;
+   management.deals[0].fee=0;
+   management.deals[0].occurred_at=management.observed_at;
+   management.deals[0].has_occurred_at=true;
+   ScxEntryEvidenceFixture(management.target,true);
+  }
+
 void OnStart()
   {
    string boot="11111111-2222-4333-8444-555555555555",response;
@@ -116,26 +171,70 @@ void OnStart()
    ScxCheck(!ScxNoEffectRetcode(10009) && !ScxNoEffectRetcode(10012) &&
       !ScxNoEffectRetcode(10036) && !ScxNoEffectRetcode(10039),"ambiguous codes denied");
 
+   ScxBrokerEvidence entry;
+   ScxEntryEvidenceFixture(entry,false);
+   string entry_json;
+   ScxCheck(ScxBrokerEvidenceJson(entry,entry_json) &&
+      StringFind(entry_json,"\"stop_loss_confirmed\":true")>=0,
+      "cumulative entry evidence");
+   entry.remaining_volume=0.01;
+   ScxCheck(!ScxBrokerEvidenceJson(entry,entry_json),"entry volume conservation");
+   entry.remaining_volume=0;
+   entry.deals[0].occurred_at="2026-09-20T00:00:01+07:00";
+   ScxCheck(!ScxBrokerEvidenceJson(entry,entry_json),"entry deal UTC required");
+   entry.deals[0].occurred_at="2026-09-20T00:00:01Z";
+   ScxManagementEvidence management;
+   ScxManagementEvidenceFixture(management);
+   string management_json;
+   ScxCheck(ScxManagementEvidenceJson(management,management_json) &&
+      StringFind(management_json,"\"terminal_state\":\"closed\"")>=0,
+      "cumulative management evidence");
+   management.remaining_volume=0.01;
+   ScxCheck(!ScxManagementEvidenceJson(management,management_json),
+      "management volume conservation");
+   management.remaining_volume=0;
+
    ScxInventorySample inventory;
    inventory.executor_id="synthetic-executor"; inventory.account_ref="123456789";
    inventory.server="Synthetic-Demo"; inventory.currency="USD";
    inventory.margin_mode="retail_hedging"; inventory.symbol="XAUUSD.fixture";
    inventory.generation="synthetic-generation-1";
-   inventory.observed_at="2026-09-20T00:00:00Z";
+   inventory.observed_at="2026-09-20T00:01:01Z";
    inventory.terminal_build=1; inventory.magic_number=910001;
    inventory.foreign_orders=0; inventory.foreign_positions=0;
    inventory.terminal_connected=true; inventory.account_trade_allowed=false;
    inventory.algo_trading_allowed=false; inventory.complete=true; inventory.equity=1000;
-   string inventory_packet,outcome_packet,uncertain;
-   ScxCheck(ScxInventoryJson(inventory,boot,1,inventory_packet),"inventory fixture");
+   ScxRejectionEvidence no_rejection,prior_rejection;
+   prior_rejection.command_id="synthetic-command-3";
+   prior_rejection.target_command_id="synthetic-command-1";
+   prior_rejection.operation="close";
+   prior_rejection.observed_at="2026-09-20T00:01:01Z";
+   prior_rejection.retcode=10006; prior_rejection.retcode_external=0;
+   prior_rejection.request_id=9; prior_rejection.has_target=true;
+   string inventory_packet,outcome_packet,rejection_packet,uncertain;
+   ScxCheck(ScxInventoryEvidenceJson(inventory,boot,1,true,management.target,true,management,
+      true,prior_rejection,uncertain),"cumulative inventory evidence categories");
+   prior_rejection.command_id=management.command_id;
+   ScxCheck(!ScxInventoryEvidenceJson(inventory,boot,1,true,management.target,true,management,
+      true,prior_rejection,uncertain),"inventory command namespace collision");
+   ScxCheck(ScxInventoryEvidenceJson(inventory,boot,1,true,management.target,true,management,
+      false,no_rejection,inventory_packet),"inventory evidence fixture");
    ScxCheck(StringFind(inventory_packet,"\"trade_mode\":\"demo\"")>=0,
       "inventory Demo only");
    ScxCheck(StringFind(inventory_packet,"\"algo_trading_allowed\":false")>=0,
       "fixture trading disabled");
 
    ScxCheck(ScxCommandJson(good,command),"reload command");
+   ScxCheck(ScxEntrySnapshotOutcomeJson(command,"2026-09-20T00:00:01Z",entry,
+      outcome_packet),"entry snapshot outcome fixture");
+   ScxCheck(ScxManagementSnapshotOutcomeJson(close,management.observed_at,management,
+      uncertain),"management snapshot outcome");
+   entry.command_id="another-command";
+   ScxCheck(!ScxEntrySnapshotOutcomeJson(command,"2026-09-20T00:00:01Z",entry,
+      uncertain),"snapshot command binding");
+   entry.command_id="synthetic-command-1";
    ScxCheck(ScxRejectionJson(command,"2026-09-20T00:00:01Z",10006,0,7,
-      outcome_packet),"rejection fixture");
+      rejection_packet),"rejection fixture");
    ScxCheck(!ScxRejectionJson(command,"2026-09-20T00:00:01Z",10012,0,7,
       uncertain),"timeout is not rejection");
    ScxCheck(!ScxRejectionJson(command,"2026-09-20T00:00:01Z",10006,

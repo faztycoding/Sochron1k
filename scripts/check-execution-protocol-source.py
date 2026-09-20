@@ -48,6 +48,15 @@ SELF_TEST_OUTPUTS = {
     "SochronExecutionInventorySelfTest.json",
     "SochronExecutionOutcomeSelfTest.json",
 }
+REQUIRED_TYPED_EVIDENCE = {
+    "ScxDealEvidenceJson",
+    "ScxBrokerEvidenceJson",
+    "ScxManagementEvidenceJson",
+    "ScxRejectionEvidenceJson",
+    "ScxInventoryEvidenceJson",
+    "ScxEntrySnapshotOutcomeJson",
+    "ScxManagementSnapshotOutcomeJson",
+}
 TOKEN = re.compile(r'//[^\n]*|/\*[\s\S]*?\*/|"(?:\\.|[^"\\])*"|\b[A-Za-z_]\w*\b')
 
 
@@ -73,6 +82,9 @@ def findings(source: str, *, self_test: bool = False) -> list[str]:
     }
     for name in sorted(identifiers & FORBIDDEN_PURE):
         issues.append(f"forbidden identifier: {name}")
+    if not self_test:
+        for name in sorted(REQUIRED_TYPED_EVIDENCE - identifiers):
+            issues.append(f"missing typed cumulative evidence boundary: {name}")
     file_identifiers = {
         "FileOpen",
         "FileReadArray",

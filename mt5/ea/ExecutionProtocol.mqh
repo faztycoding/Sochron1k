@@ -6,6 +6,7 @@
 
 #define SCX_MAX_COMMAND_BYTES 16384
 #define SCX_ALL_COMMAND_FIELDS 16777215
+#define SCX_MAX_DEALS 32
 
 struct ScxCommand
   {
@@ -29,6 +30,39 @@ struct ScxInventorySample
    long terminal_build,magic_number,foreign_orders,foreign_positions;
    bool terminal_connected,account_trade_allowed,algo_trading_allowed,complete;
    double equity;
+  };
+
+struct ScxDealEvidence
+  {
+   string deal_ticket,occurred_at;
+   double volume,price,profit,commission,swap,fee;
+   bool has_occurred_at;
+  };
+
+struct ScxBrokerEvidence
+  {
+   string command_id,order_ticket,position_id,terminal_state;
+   double requested_volume,filled_volume,remaining_volume;
+   double cancelled_volume,closed_volume;
+   bool has_position_id,stop_loss_confirmed,has_terminal_state;
+   ScxDealEvidence deals[];
+  };
+
+struct ScxManagementEvidence
+  {
+   string command_id,target_command_id,operation,broker_order_ticket;
+   string position_id,terminal_state,observed_at;
+   double requested_volume,completed_volume,remaining_volume;
+   bool has_position_id,has_terminal_state;
+   ScxDealEvidence deals[];
+   ScxBrokerEvidence target;
+  };
+
+struct ScxRejectionEvidence
+  {
+   string command_id,target_command_id,operation,observed_at;
+   long retcode,retcode_external,request_id;
+   bool has_target;
   };
 
 bool ScxSafeIdentifier(const string value,const int maximum)
@@ -446,6 +480,288 @@ bool ScxNoEffectRetcode(const long retcode)
 
 string ScxNullableString(const bool present,const string value)
   { return present ? ScQuote(value) : "null"; }
+
+bool ScxDecimalEqual(const double left,const double right)
+  {
+   if(!MathIsValidNumber(left) || !MathIsValidNumber(right)) return false;
+   return MathAbs(left-right)<=0.00000000005;
+  }
+
+bool ScxEntryTerminalState(const string value)
+  {
+   return value=="rejected" || value=="cancelled" || value=="closed" ||
+      value=="expired";
+  }
+
+bool ScxManagementTerminalState(const string value)
+  { return value=="rejected" || value=="cancelled" || value=="closed"; }
+
+bool ScxDealEvidenceJson(const ScxDealEvidence &deal,string &packet)
+  {
+   packet="";
+   datetime occurred;
+   if(!ScxSafeIdentifier(deal.deal_ticket,128) ||
+      !MathIsValidNumber(deal.volume) || deal.volume<=0 ||
+      !MathIsValidNumber(deal.price) || deal.price<=0 ||
+      !MathIsValidNumber(deal.profit) || !MathIsValidNumber(deal.commission) ||
+      !MathIsValidNumber(deal.swap) || !MathIsValidNumber(deal.fee) ||
+      (deal.has_occurred_at && !ScxUtcTimestamp(deal.occurred_at,occurred)) ||
+      (!deal.has_occurred_at && deal.occurred_at!="")) return false;
+   packet="{\"deal_ticket\":"+ScQuote(deal.deal_ticket)+
+      ",\"volume\":"+ScDecimal(deal.volume)+",\"price\":"+
+      ScDecimal(deal.price)+",\"profit\":"+ScDecimal(deal.profit)+
+      ",\"commission\":"+ScDecimal(deal.commission)+",\"swap\":"+
+      ScDecimal(deal.swap)+",\"fee\":"+ScDecimal(deal.fee)+
+      ",\"occurred_at\":"+ScxNullableString(deal.has_occurred_at,deal.occurred_at)+"}";
+   return StringLen(packet)<=2048;
+  }
+
+bool ScxDealsJson(const ScxDealEvidence &deals[],string &packet,double &total)
+  {
+   packet="["; total=0;
+   int count=ArraySize(deals);
+   if(count<0 || count>SCX_MAX_DEALS) return false;
+   for(int i=0;i<count;i++)
+     {
+      for(int j=0;j<i;j++) if(deals[j].deal_ticket==deals[i].deal_ticket) return false;
+      string item;
+      if(!ScxDealEvidenceJson(deals[i],item)) return false;
+      if(i>0) packet+=",";
+      packet+=item;
+      total+=deals[i].volume;
+      if(!MathIsValidNumber(total) || StringLen(packet)>131072) return false;
+     }
+   packet+="]";
+   return true;
+  }
+
+bool ScxBrokerEvidenceJson(const ScxBrokerEvidence &snapshot,string &packet)
+  {
+   packet="";
+   if(!ScxSafeIdentifier(snapshot.command_id,128) ||
+      !ScxSafeIdentifier(snapshot.order_ticket,128) ||
+      (snapshot.has_position_id && !ScxSafeIdentifier(snapshot.position_id,128)) ||
+      (!snapshot.has_position_id && snapshot.position_id!="") ||
+      (snapshot.has_terminal_state && !ScxEntryTerminalState(snapshot.terminal_state)) ||
+      (!snapshot.has_terminal_state && snapshot.terminal_state!="")) return false;
+   double values[5]={snapshot.requested_volume,snapshot.filled_volume,
+      snapshot.remaining_volume,snapshot.cancelled_volume,snapshot.closed_volume};
+   if(!MathIsValidNumber(values[0]) || values[0]<=0) return false;
+   for(int i=1;i<5;i++) if(!MathIsValidNumber(values[i]) || values[i]<0) return false;
+   if(!ScxDecimalEqual(snapshot.filled_volume+snapshot.remaining_volume+
+      snapshot.cancelled_volume,snapshot.requested_volume) ||
+      snapshot.closed_volume>snapshot.filled_volume ||
+      (snapshot.filled_volume>0 && !snapshot.has_position_id) ||
+      (snapshot.stop_loss_confirmed &&
+       snapshot.filled_volume-snapshot.closed_volume<=0)) return false;
+   string deals;
+   double dealt=0;
+   if(!ScxDealsJson(snapshot.deals,deals,dealt) ||
+      !ScxDecimalEqual(dealt,snapshot.filled_volume)) return false;
+   if(snapshot.has_terminal_state)
+     {
+      if(snapshot.terminal_state=="rejected" &&
+         (!ScxDecimalEqual(snapshot.filled_volume,0) ||
+          !ScxDecimalEqual(snapshot.cancelled_volume,0) ||
+          !ScxDecimalEqual(snapshot.closed_volume,0) ||
+          !ScxDecimalEqual(snapshot.remaining_volume,snapshot.requested_volume) ||
+          ArraySize(snapshot.deals)!=0 || snapshot.has_position_id)) return false;
+      if((snapshot.terminal_state=="cancelled" || snapshot.terminal_state=="expired") &&
+         (!ScxDecimalEqual(snapshot.filled_volume,0) ||
+          !ScxDecimalEqual(snapshot.closed_volume,0) ||
+          !ScxDecimalEqual(snapshot.remaining_volume,0) ||
+          !ScxDecimalEqual(snapshot.cancelled_volume,snapshot.requested_volume) ||
+          ArraySize(snapshot.deals)!=0 || snapshot.has_position_id)) return false;
+      if(snapshot.terminal_state=="closed" &&
+         (snapshot.filled_volume<=0 ||
+          !ScxDecimalEqual(snapshot.closed_volume,snapshot.filled_volume) ||
+          !ScxDecimalEqual(snapshot.remaining_volume,0) ||
+          snapshot.stop_loss_confirmed)) return false;
+     }
+   else if(snapshot.remaining_volume<=0 &&
+           snapshot.filled_volume-snapshot.closed_volume<=0) return false;
+   packet="{\"command_id\":"+ScQuote(snapshot.command_id)+
+      ",\"order_ticket\":"+ScQuote(snapshot.order_ticket)+
+      ",\"position_id\":"+ScxNullableString(snapshot.has_position_id,snapshot.position_id)+
+      ",\"requested_volume\":"+ScDecimal(snapshot.requested_volume)+
+      ",\"filled_volume\":"+ScDecimal(snapshot.filled_volume)+
+      ",\"remaining_volume\":"+ScDecimal(snapshot.remaining_volume)+
+      ",\"cancelled_volume\":"+ScDecimal(snapshot.cancelled_volume)+
+      ",\"closed_volume\":"+ScDecimal(snapshot.closed_volume)+
+      ",\"deals\":"+deals+",\"stop_loss_confirmed\":"+
+      ScBool(snapshot.stop_loss_confirmed)+",\"terminal_state\":"+
+      ScxNullableString(snapshot.has_terminal_state,snapshot.terminal_state)+"}";
+   return StringLen(packet)<=196608;
+  }
+
+bool ScxManagementEvidenceJson(const ScxManagementEvidence &snapshot,string &packet)
+  {
+   packet="";
+   datetime observed;
+   if(!ScxSafeIdentifier(snapshot.command_id,128) ||
+      !ScxSafeIdentifier(snapshot.target_command_id,128) ||
+      snapshot.command_id==snapshot.target_command_id ||
+      (snapshot.operation!="cancel" && snapshot.operation!="close") ||
+      !ScxSafeIdentifier(snapshot.broker_order_ticket,128) ||
+      (snapshot.has_position_id && !ScxSafeIdentifier(snapshot.position_id,128)) ||
+      (!snapshot.has_position_id && snapshot.position_id!="") ||
+      (snapshot.operation=="close" && !snapshot.has_position_id) ||
+      (snapshot.has_terminal_state &&
+       !ScxManagementTerminalState(snapshot.terminal_state)) ||
+      (!snapshot.has_terminal_state && snapshot.terminal_state!="") ||
+      !ScxUtcTimestamp(snapshot.observed_at,observed) ||
+      !MathIsValidNumber(snapshot.requested_volume) || snapshot.requested_volume<=0 ||
+      !MathIsValidNumber(snapshot.completed_volume) || snapshot.completed_volume<0 ||
+      !MathIsValidNumber(snapshot.remaining_volume) || snapshot.remaining_volume<0 ||
+      !ScxDecimalEqual(snapshot.completed_volume+snapshot.remaining_volume,
+                       snapshot.requested_volume)) return false;
+   string deals,target;
+   double dealt=0;
+   if(!ScxDealsJson(snapshot.deals,deals,dealt) ||
+      !ScxBrokerEvidenceJson(snapshot.target,target) ||
+      snapshot.target.command_id!=snapshot.target_command_id) return false;
+   if(snapshot.operation=="cancel")
+     {
+      if(ArraySize(snapshot.deals)!=0 || !snapshot.has_terminal_state ||
+         (snapshot.terminal_state!="cancelled" && snapshot.terminal_state!="rejected"))
+         return false;
+     }
+   else if(!ScxDecimalEqual(dealt,snapshot.completed_volume)) return false;
+   if(snapshot.has_terminal_state && snapshot.terminal_state=="rejected" &&
+      (!ScxDecimalEqual(snapshot.completed_volume,0) ||
+       !ScxDecimalEqual(snapshot.remaining_volume,snapshot.requested_volume) ||
+       ArraySize(snapshot.deals)!=0)) return false;
+   if(snapshot.has_terminal_state &&
+      (snapshot.terminal_state=="closed" || snapshot.terminal_state=="cancelled") &&
+      (!ScxDecimalEqual(snapshot.completed_volume,snapshot.requested_volume) ||
+       !ScxDecimalEqual(snapshot.remaining_volume,0))) return false;
+   if(!snapshot.has_terminal_state &&
+      (snapshot.operation!="close" || snapshot.completed_volume<=0 ||
+       snapshot.remaining_volume<=0)) return false;
+   packet="{\"command_id\":"+ScQuote(snapshot.command_id)+
+      ",\"target_command_id\":"+ScQuote(snapshot.target_command_id)+
+      ",\"operation\":"+ScQuote(snapshot.operation)+
+      ",\"broker_order_ticket\":"+ScQuote(snapshot.broker_order_ticket)+
+      ",\"position_id\":"+ScxNullableString(snapshot.has_position_id,snapshot.position_id)+
+      ",\"requested_volume\":"+ScDecimal(snapshot.requested_volume)+
+      ",\"completed_volume\":"+ScDecimal(snapshot.completed_volume)+
+      ",\"remaining_volume\":"+ScDecimal(snapshot.remaining_volume)+
+      ",\"deals\":"+deals+",\"terminal_state\":"+
+      ScxNullableString(snapshot.has_terminal_state,snapshot.terminal_state)+
+      ",\"target\":"+target+",\"observed_at\":"+
+      ScQuote(snapshot.observed_at)+"}";
+   return StringLen(packet)<=245760;
+  }
+
+bool ScxRejectionEvidenceJson(const ScxRejectionEvidence &rejection,string &packet)
+  {
+   packet="";
+   datetime observed;
+   if(!ScxSafeIdentifier(rejection.command_id,128) ||
+      (rejection.has_target &&
+       (!ScxSafeIdentifier(rejection.target_command_id,128) ||
+        rejection.target_command_id==rejection.command_id)) ||
+      (!rejection.has_target && rejection.target_command_id!="") ||
+      ((rejection.operation=="open")==rejection.has_target) ||
+      (rejection.operation!="open" && rejection.operation!="cancel" &&
+       rejection.operation!="close") || !ScxUtcTimestamp(rejection.observed_at,observed) ||
+      !ScxNoEffectRetcode(rejection.retcode) ||
+      rejection.retcode_external<-2147483648 ||
+      rejection.retcode_external>2147483647 || rejection.request_id<0 ||
+      rejection.request_id>4294967295) return false;
+   packet="{\"command_id\":"+ScQuote(rejection.command_id)+
+      ",\"target_command_id\":"+
+      ScxNullableString(rejection.has_target,rejection.target_command_id)+
+      ",\"operation\":"+ScQuote(rejection.operation)+",\"retcode\":"+
+      IntegerToString(rejection.retcode)+",\"retcode_external\":"+
+      IntegerToString(rejection.retcode_external)+",\"request_id\":"+
+      IntegerToString(rejection.request_id)+",\"observed_at\":"+
+      ScQuote(rejection.observed_at)+"}";
+   return StringLen(packet)<=4096;
+  }
+
+bool ScxInventoryEvidenceJson(const ScxInventorySample &sample,const string boot,
+                              const long sequence,const bool has_entry,
+                              const ScxBrokerEvidence &entry,const bool has_management,
+                              const ScxManagementEvidence &management,
+                              const bool has_rejection,
+                              const ScxRejectionEvidence &rejection,string &packet)
+  {
+   if(!ScxInventoryJson(sample,boot,sequence,packet)) return false;
+   string entry_json="",management_json="",rejection_json="";
+   if(has_entry && !ScxBrokerEvidenceJson(entry,entry_json)) return false;
+   if(has_management)
+     {
+      if(!has_entry || !ScxManagementEvidenceJson(management,management_json) ||
+         management.target_command_id!=entry.command_id ||
+         management.target.command_id!=entry.command_id) return false;
+     }
+   if(has_rejection)
+     {
+      if(!ScxRejectionEvidenceJson(rejection,rejection_json) ||
+         (rejection.operation=="open" && has_entry) ||
+         (rejection.operation!="open" &&
+          (!has_entry || rejection.target_command_id!=entry.command_id))) return false;
+     }
+   if(has_entry && has_management && entry.command_id==management.command_id) return false;
+   if(has_entry && has_rejection && entry.command_id==rejection.command_id) return false;
+   if(has_management && has_rejection &&
+      management.command_id==rejection.command_id) return false;
+   string entries=has_entry ? "["+entry_json+"]" : "[]";
+   string managements=has_management ? "["+management_json+"]" : "[]";
+   string rejections=has_rejection ? "["+rejection_json+"]" : "[]";
+   if(StringReplace(packet,"\"snapshots\":[]","\"snapshots\":"+entries)!=1 ||
+      StringReplace(packet,"\"management_snapshots\":[]",
+                    "\"management_snapshots\":"+managements)!=1 ||
+      StringReplace(packet,"\"rejections\":[]","\"rejections\":"+rejections)!=1)
+      return false;
+   return StringLen(packet)<=262144;
+  }
+
+bool ScxEntrySnapshotOutcomeJson(const ScxCommand &command,const string observed_at,
+                                 const ScxBrokerEvidence &snapshot,string &packet)
+  {
+   packet="";
+   datetime observed;
+   string body;
+   if(!ScxCommandValid(command) || command.operation!="open" ||
+      snapshot.command_id!=command.command_id ||
+      !ScxUtcTimestamp(observed_at,observed) ||
+      !ScxBrokerEvidenceJson(snapshot,body)) return false;
+   packet="{\"protocol\":\"sochron.execution.outcome.v1\",\"boot_id\":"+
+      ScQuote(command.boot_id)+",\"dispatch_sequence\":"+
+      IntegerToString(command.dispatch_sequence)+",\"attempt_id\":"+
+      ScQuote(command.attempt_id)+",\"generation\":"+ScQuote(command.generation)+
+      ",\"command_id\":"+ScQuote(command.command_id)+
+      ",\"target_command_id\":null,\"operation\":\"open\",\"observed_at\":"+
+      ScQuote(observed_at)+",\"status\":\"snapshot\",\"snapshot\":"+body+
+      ",\"management_snapshot\":null,\"rejection\":null,\"uncertain\":null}";
+   return StringLen(packet)<=262144;
+  }
+
+bool ScxManagementSnapshotOutcomeJson(const ScxCommand &command,const string observed_at,
+                                      const ScxManagementEvidence &snapshot,string &packet)
+  {
+   packet="";
+   datetime observed;
+   string body;
+   if(!ScxCommandValid(command) || command.operation=="open" ||
+      snapshot.command_id!=command.command_id ||
+      snapshot.target_command_id!=command.target_command_id ||
+      snapshot.operation!=command.operation || !ScxUtcTimestamp(observed_at,observed) ||
+      !ScxManagementEvidenceJson(snapshot,body) || snapshot.observed_at!=observed_at)
+      return false;
+   packet="{\"protocol\":\"sochron.execution.outcome.v1\",\"boot_id\":"+
+      ScQuote(command.boot_id)+",\"dispatch_sequence\":"+
+      IntegerToString(command.dispatch_sequence)+",\"attempt_id\":"+
+      ScQuote(command.attempt_id)+",\"generation\":"+ScQuote(command.generation)+
+      ",\"command_id\":"+ScQuote(command.command_id)+",\"target_command_id\":"+
+      ScQuote(command.target_command_id)+",\"operation\":"+ScQuote(command.operation)+
+      ",\"observed_at\":"+ScQuote(observed_at)+
+      ",\"status\":\"snapshot\",\"snapshot\":null,\"management_snapshot\":"+
+      body+",\"rejection\":null,\"uncertain\":null}";
+   return StringLen(packet)<=262144;
+  }
 
 bool ScxRejectionJson(const ScxCommand &command,const string observed_at,const long retcode,
                       const long retcode_external,const long request_id,string &packet)

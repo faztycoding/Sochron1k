@@ -317,6 +317,14 @@ mutation; the future default-off EA must still use current MT5 contract data wit
 and broker-side SL confirmation. See
 [ADR-029](decisions/ADR-029-durable-broker-risk-authorization.md).
 
+SCN-027 completes the pure MQL return-wire boundary before broker authority is
+introduced. Typed deal, entry and management structures encode cumulative
+snapshots and bounded restart inventory; Python and MQL now share one safe
+identifier alphabet and reject future-dated nested evidence. The codec remains
+free of terminal, network, file and trade access, so it cannot itself establish
+an order, fill, position or SL state. See
+[ADR-030](decisions/ADR-030-typed-cumulative-mql-evidence.md).
+
 | Failure | Required behavior |
 | --- | --- |
 | AI unavailable or invalid | Strategies that require AI enter `WAIT`; position management continues |
