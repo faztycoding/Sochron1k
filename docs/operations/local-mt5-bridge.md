@@ -118,10 +118,11 @@ build, Demo currency/capital, exact symbol, margin mode and broker timestamp off
 Do not send the account password in chat. Account reference and credential must be
 configured locally through the approved secret channel.
 
-Still required: compiled EA, actual read-only round trip, real owner configuration,
-actual persistent capture/synchronization and raw ticks, execution fencing, command/SL/reconciliation and
-recovery gates, one separately authorized Demo open/close, alerts/restore and
-target-host burn-in. Local ingress success does not satisfy those gates.
+Still required: compiled EAs, actual read-only round trip, real owner configuration,
+actual persistent capture/synchronization and raw ticks, target evidence for the
+implemented execution fencing/command/SL/reconciliation source, recovery gates,
+one separately authorized Demo open/close, alerts/restore and target-host burn-in.
+Local ingress success does not satisfy those gates.
 
 ## Native chart channel (SCN-006)
 

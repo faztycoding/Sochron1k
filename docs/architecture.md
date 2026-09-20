@@ -311,10 +311,10 @@ dispatch now persists the admitted account-currency `risk_limit` and exact
 volume-derived `cost_budget` one-to-one with its dispatch attempt before exposure
 to the polling adapter. The 24-field MQL command requires both values for entries
 and explicit nulls for management. Startup and recovery reject missing, malformed
-or inconsistent authorization. This does not calculate broker P/L or authorize a
-mutation; the future default-off EA must still use current MT5 contract data with
+or inconsistent authorization. This checkpoint does not calculate broker P/L or
+authorize a mutation; the later SCN-028 default-off source performs current-MT5
 `OrderCalcProfit`, then `OrderCheck`, one `OrderSend`, transaction reconciliation
-and broker-side SL confirmation. See
+and broker-side SL confirmation, subject to its separate target gates. See
 [ADR-029](decisions/ADR-029-durable-broker-risk-authorization.md).
 
 SCN-027 completes the pure MQL return-wire boundary before broker authority is

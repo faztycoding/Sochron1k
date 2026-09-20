@@ -79,9 +79,10 @@ Windows `localhost` behavior must be measured on the actual layout.
 
 ## What remains for the full execution path
 
-This observer cannot satisfy order execution or recovery. A separate default-off
-EA still needs an exclusive executor lock, durable local attempt ledger, command
-polling, immediate Demo/risk preflight, `OrderCheck`, the exact broker mutation,
-`OnTradeTransaction` reconciliation, cumulative order/deal/position/SL inventory,
-`UNKNOWN` recovery, restart tests and an explicitly authorized bounded Demo dry
-run. Auto Trading stays off until those gates pass.
+This observer cannot satisfy order execution or recovery. SCN-028 now provides a
+separate default-off source EA with the executor lock, attempt ledger, command
+polling, Demo/risk preflight, `OrderCheck`, one broker-mutation call site,
+`OnTradeTransaction` scheduling, cumulative inventory and `UNKNOWN` recovery
+design. That EA is still uncompiled and untested on a terminal. Selected-host
+restart/fault tests and an explicitly authorized bounded Demo dry run remain
+required. Auto Trading stays off until those gates pass.

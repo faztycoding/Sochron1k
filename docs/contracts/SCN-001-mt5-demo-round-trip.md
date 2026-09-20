@@ -8,7 +8,7 @@
 | Version | 1.1 |
 | Owner | Project owner; technical implementer not yet named |
 | Parent project | Sochron1k |
-| Current state | Local entry/startup/position-management safety core implemented and under verification; BLOCKED for a real Demo send pending the MT5 adapter, owner inputs, credentials, and explicit target authorization |
+| Current state | Local safety core and default-off MT5 mutation source implemented; BLOCKED for a real Demo send pending compilation/target evidence, owner inputs, credentials, and explicit target authorization |
 | Done scope | Implementation verified first, then Demo operation verified as a separate gate |
 | Risk tier | High assurance |
 | Evidence base | Blueprint v1.1 and repository base revisions `776859c`, `e9a1972` |
@@ -19,7 +19,13 @@ Prove the first end-to-end execution slice: read XAU/USD Demo market and contrac
 
 ## Current behavior
 
-The repository contains a pinned Python runtime contract, FastAPI health boundary, Pydantic execution schemas, deterministic risk sizing and halt latching, a SQLite WAL command journal, isolated executor simulator, explicit startup admission, durable local cancel/close reconciliation and final-trade audit, targeted pytest/Hypothesis checks, a responsive local monitoring console, a Supabase schema with local pgTAP checks, and an API/web container topology with local arm64 runtime evidence. SCN-004 adds disabled-by-default, authenticated read-only telemetry ingress with local Python/HTTP evidence and a source-only MQL5 observer checkpoint. SCN-012 adds the disabled-by-default API-side execution polling adapter, typed no-effect rejection evidence and synthetic timeout/replay recovery. The observer remains uncompiled; the MQL5 mutation consumer and target-host evidence are not implemented. No Demo operation has been attempted or authorized by this contract alone.
+The repository contains the pinned local safety core, durable simulator/journal,
+monitoring console, Supabase foundation and API/web topology. SCN-004 adds the
+source-only read observer; SCN-012 adds the disabled execution polling bridge and
+synthetic timeout/replay recovery. SCN-028 adds the separate default-off Demo
+mutation source with a local ledger, broker preflight and cumulative
+reconciliation. All MQL components remain uncompiled and target-host evidence is
+absent. No Demo operation has been attempted or authorized by this contract alone.
 
 ## Scope
 
