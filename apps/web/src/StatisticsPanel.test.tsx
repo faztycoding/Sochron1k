@@ -38,7 +38,8 @@ describe("owner statistics panel", () => {
   it("shows validated evidence dependency rather than zero performance", async () => {
     const value = fixture(); value.status.state = "awaiting_source"; value.status.returned_count = 0; value.evaluations = [];
     vi.spyOn(globalThis, "fetch").mockResolvedValue(json(value)); render(<StatisticsPanel token="owner-token" />);
-    expect(await screen.findByText("API และตัวประเมินพร้อม · รอชุดหลักฐาน")).toBeVisible();
+    expect(await screen.findByText("API, Tick Replay และตัวประเมินพร้อม · รอข้อมูลย้อนหลัง")).toBeVisible();
+    expect(screen.getByText(/bars, Bid\/Ask ticks และ policy observations/)).toBeVisible();
     expect(screen.queryByText("0%")).not.toBeInTheDocument();
   });
   it("clears malformed evidence and retries read-only", async () => {

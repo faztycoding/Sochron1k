@@ -8,14 +8,19 @@ evaluation. It is disabled unless `SOCHRON_RESEARCH_EVALUATION_CONFIG_FILE`
 names an owner-private configuration file.
 
 This operator does not turn bars into trades, resolve ambiguous OHLC paths,
-choose cost assumptions, promote a strategy or operate MT5. A passing synthetic
-run proves the calculation/publication path only. The Statistics UI remains
-`awaiting_source` until a separately validated non-synthetic bundle is published.
+choose cost assumptions, promote a strategy or operate MT5. The separate offline
+[`sochron-pa01-backtest`](pa01-tick-replay-backtest.md) command now creates its
+bundle from strict point-in-time bars, ordered Bid/Ask ticks and policy evidence.
+A passing synthetic run proves the calculation/publication path only. The
+Statistics UI remains `awaiting_source` until a validated non-synthetic replay is
+evaluated and published.
 
 ## Data path and UI position
 
 ```text
-labelled setup-to-flat bundle
+historical PA01 replay artifact
+  -> offline PA01 tick replay
+  -> labelled setup-to-flat bundle
   -> pure evaluator
   -> private research-evaluation.sqlite3
   -> backend-only Supabase RPC
@@ -46,6 +51,7 @@ The `dataset_hash` is SHA-256 over canonical JSON after removing only the
 keys are sorted and separators are `,` and `:` without whitespace. The producer
 rejects a pretty-printed, noncanonical or mismatched file. An upstream labeller or
 backtest must create this artifact; editing a completed bundle is a new dataset.
+For PA01, use the repository's replay operator rather than authoring labels.
 
 ## Private configuration
 

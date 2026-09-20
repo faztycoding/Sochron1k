@@ -16,6 +16,7 @@ sochron-recovery = "sochron_worker.recovery_cli:cli"
 sochron-pa01 = "sochron_worker.pa01_cli:cli"
 sochron-news-gate = "sochron_worker.news_gate_cli:cli"
 sochron-research-evaluation = "sochron_worker.research_evaluation_cli:cli"
+sochron-pa01-backtest = "sochron_worker.pa01_backtest_cli:cli"
 
 [build-system]
 requires = ["hatchling==1.32.0"]

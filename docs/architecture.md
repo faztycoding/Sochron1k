@@ -224,10 +224,20 @@ one canonical labelled setup-to-flat bundle, derives costs, metrics, mark-to-mar
 drawdown and a seeded moving-block bootstrap interval, then journals the exact
 envelope before a backend-only Supabase insert-or-verify RPC. Ambiguous, rejected,
 WAIT and counterfactual records remain visible in provenance but cannot affect the
-trade metrics. Producer rows are owner-bound, fingerprinted and immutable. No real
-research bundle or raw-data backtest producer exists yet, so the UI correctly stays
-`awaiting_source` until that evidence is supplied; see
+trade metrics. Producer rows are owner-bound, fingerprinted and immutable. SCN-030
+now creates the PA01 bundle by rerunning the pinned kernel at every eligible M5
+boundary and resolving entry/SL/TP/time-exit against ordered Bid/Ask ticks. No real
+historical replay artifact exists yet, so the UI correctly stays `awaiting_source`
+until that evidence is supplied; see
 [ADR-032](decisions/ADR-032-reproducible-evaluation-envelope.md).
+
+SCN-030 adds the explicit offline `sochron-pa01-backtest` boundary. Its canonical
+input binds strategy parameters, code/source hashes, split/window, M5/H1
+availability, complete policy observations, executable quotes and cost/contract
+assumptions. It rejects incomplete schedules, stale or reordered ticks, OHLC/tick
+disagreement and understated spread, then emits only the SCN-029 bundle. It has no
+data-acquisition, network, publication, promotion, risk or execution authority;
+see [ADR-033](decisions/ADR-033-pa01-point-in-time-tick-replay.md).
 
 SCN-018 fixes the first PA01 calculation boundary in `sochron_worker.pa01`.
 The pure kernel consumes explicit as-of closed M5/H1 evidence, calculates the

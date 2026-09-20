@@ -50,7 +50,7 @@ export const connectionDefinitions: Record<ConnectionId, Definition> = {
   signals: { title: "สัญญาณ", result: "เหตุผล กลยุทธ์ และเวลายืนยัน", routes: ["/api/policy/v1/status", "/api/owner/signals"],
     required: null, sources: ["mt5_policy_evidence", "news_gate", "supabase_signals"], sourceLabel: "MT5 quote/session + execution inventory + News Gate → Policy Writer → Supabase", implementation: "available" },
   statistics: { title: "สถิติ", result: "ผลลัพธ์ ต้นทุน และความไม่แน่นอน", routes: ["/api/owner/statistics"],
-    required: null, sources: ["supabase_evaluations"], sourceLabel: "Supabase evaluations · รอ validated evidence bundle", implementation: "available" },
+    required: null, sources: ["supabase_evaluations"], sourceLabel: "PA01 Tick Replay → Research Evaluator → Supabase evaluations · รอ historical replay input", implementation: "available" },
 };
 
 const implementations = new Set<ImplementationState>(["available", "partial", "missing"]);

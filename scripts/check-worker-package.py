@@ -619,6 +619,11 @@ def verify(output):
             in archive.read("sochron1k-0.1.0.dist-info/entry_points.txt").decode(),
             "research evaluation entry point mismatch",
         )
+        require(
+            "sochron-pa01-backtest = sochron_worker.pa01_backtest_cli:cli"
+            in archive.read("sochron1k-0.1.0.dist-info/entry_points.txt").decode(),
+            "PA01 backtest entry point mismatch",
+        )
     with tarfile.open(sdist) as archive:
         prefix = "sochron1k-0.1.0/"
         members = {m.name.removeprefix(prefix) for m in archive.getmembers() if m.isfile()}
@@ -701,10 +706,12 @@ import sochron1k, sochron_worker
 import sochron_worker.news_gate
 import sochron_worker.pa01_envelope
 import sochron_worker.pa01_journal
+import sochron_worker.pa01_backtest
 import sochron_worker.research_evaluation
 import sochron_worker.research_evaluation_journal
 assert all(pathlib.Path(p.__file__).is_relative_to(sys.prefix)
            for p in (sochron1k, sochron_worker, sochron_worker.news_gate,
+                     sochron_worker.pa01_backtest,
                      sochron_worker.pa01_envelope,
                      sochron_worker.pa01_journal,
                      sochron_worker.research_evaluation,
@@ -776,6 +783,24 @@ print(json.dumps(values))
             "installed research evaluation default-disabled boundary",
         )
         check("installed research evaluation command is inert without private configuration")
+        invalid_backtest = run(
+            [str(environment / "bin/sochron-pa01-backtest")],
+            cwd=directory,
+            env={"PATH": os.defpath},
+            expected=2,
+        )
+        require(
+            json.loads(invalid_backtest.stdout)
+            == {
+                "state": "PA01_BACKTEST_INVALID",
+                "promotion_decided": False,
+                "execution_ready": False,
+                "auto_trading_enabled": False,
+            }
+            and not invalid_backtest.stderr,
+            "installed PA01 backtest explicit-action boundary",
+        )
+        check("installed PA01 backtest performs no default work")
         recovery = exercise(environment / "bin/sochron-sync", python, directory, digest(wheel))
         startup = exercise_startup(python, directory)
     return dict(
@@ -807,6 +832,7 @@ print(json.dumps(values))
                 ROOT / "tests/test_bar_history.py",
                 ROOT / "tests/test_telemetry_bridge.py",
                 ROOT / "tests/test_research_evaluation_producer.py",
+                ROOT / "tests/test_pa01_backtest.py",
                 ROOT / "tests/fixtures/mt5-telemetry-v1.json",
             ]
         },

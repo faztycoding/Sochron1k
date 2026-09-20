@@ -66,7 +66,7 @@ export function StatisticsPanel({ token }: { token: string | null }) {
     {token && !view && !error ? <p role="status">กำลังอ่าน evaluation ที่บันทึกแล้ว…</p> : null}
     {error ? <div className="owner-empty"><p role="alert">{error}</p><button className="quiet-button" type="button" onClick={() => setRetry(value => value + 1)}>ลองอ่านสถิติอีกครั้ง</button></div> : null}
     {view?.status.state === "awaiting_source" ? <div className="empty-state"><div className="empty-glyph" aria-hidden="true">%</div>
-      <strong>API และตัวประเมินพร้อม · รอชุดหลักฐาน</strong><p>ต้องส่ง labelled-trade bundle ที่ตรวจสอบแล้ว เพื่อสร้าง evaluation ซึ่งระบุ dataset, split, sample size, uncertainty และต้นทุนครบ</p></div> : null}
+      <strong>API, Tick Replay และตัวประเมินพร้อม · รอข้อมูลย้อนหลัง</strong><p>ต้องจัดเตรียม bars, Bid/Ask ticks และ policy observations แบบ point-in-time ให้ replay สร้าง bundle ก่อนบันทึก evaluation ที่ระบุ dataset, split, sample size, uncertainty และต้นทุนครบ</p></div> : null}
     {view?.status.state === "available" ? <><div className="signal-summary"><span>ล่าสุด {view.status.returned_count} รายการ · จำกัด {view.status.limit}</span>
       <span>อ่านเมื่อ UTC {view.read_at_utc}</span></div><div className="statistics-list">{view.evaluations.map(item =>
         <EvaluationCard key={`${item.strategy.version_id}:${item.dataset_hash}:${item.split}:${item.data_cutoff_utc}`} item={item} />)}</div></> : null}
