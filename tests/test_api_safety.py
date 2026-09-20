@@ -62,6 +62,7 @@ async def test_ui_connection_map_is_redacted_and_truthful_when_unconfigured() ->
         "native_chart",
         "bar_history",
         "execution_evidence",
+        "operational_alerts",
         "signals",
         "statistics",
     ]
@@ -83,6 +84,21 @@ async def test_ui_connection_map_is_redacted_and_truthful_when_unconfigured() ->
         "current_routes": ["/api/executor/v1/status", "/api/owner/execution"],
         "required_route": None,
         "sources": ["mt5_execution"],
+    }
+    assert nodes["operational_alerts"] == {
+        "id": "operational_alerts",
+        "implementation": "partial",
+        "runtime": "awaiting_configuration",
+        "current_routes": ["/api/owner/alerts"],
+        "required_route": "provider budget source + external alert delivery",
+        "sources": [
+            "telemetry_status",
+            "execution_status",
+            "execution_journal",
+            "bar_history",
+            "policy_status",
+            "api_budget",
+        ],
     }
     assert nodes["signals"] == {
         "id": "signals",
@@ -140,5 +156,6 @@ async def test_ui_connection_map_separates_configured_from_connected() -> None:
     assert nodes["native_chart"]["runtime"] == "awaiting_source"
     assert nodes["bar_history"]["runtime"] == "awaiting_configuration"
     assert nodes["execution_evidence"]["runtime"] == "awaiting_source"
+    assert nodes["operational_alerts"]["runtime"] == "awaiting_source"
     assert nodes["signals"]["runtime"] == "awaiting_configuration"
     assert nodes["statistics"]["runtime"] == "awaiting_source"

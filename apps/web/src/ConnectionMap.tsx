@@ -18,7 +18,7 @@ const runtimeLabels: Record<RuntimeState, string> = {
 function nodeLabel(node: ConnectionNode | null, state: ConnectionViewState["kind"]): string {
   if (state === "loading") return "กำลังตรวจ";
   if (!node) return "ตรวจสถานะไม่ได้";
-  if (node.implementation === "partial") return `${runtimeLabels[node.runtime]} · ยังขาดหน้าข้อมูลเจ้าของ`;
+  if (node.implementation === "partial") return `${runtimeLabels[node.runtime]} · ยังมีส่วนที่ต้องสร้าง`;
   return runtimeLabels[node.runtime];
 }
 

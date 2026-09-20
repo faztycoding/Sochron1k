@@ -111,6 +111,13 @@ costs from a strict labelled-trade bundle. The offline
 now build that bundle by rerunning PA01 against point-in-time M5/H1 bars and ordered
 Bid/Ask ticks. No non-synthetic replay input is present, so the panel correctly
 remains empty.
+The authenticated `/api/owner/alerts` panel gathers bounded operational facts for
+rejected/UNKNOWN execution, unconfirmed SL, persistent risk halts, stale or
+disconnected bridges and archive pressure. Its eight-row coverage ledger shows the
+exact API and source position even before sign-in. API-budget input and external
+alert delivery remain explicitly missing; acknowledgement and resolution are not
+implemented, so this panel is not proof that anyone was notified. See the
+[operational alert runbook](docs/operations/operational-alerts.md).
 The execution view opens no trading path and preserves confirmed Order/Deal/Position/
 SL evidence and `UNKNOWN` exactly. Its public status model is redacted and always
 preserves Demo-only, Auto Trading off and execution-not-ready. See the
@@ -237,6 +244,10 @@ strategy and research producers. Statistics remain empty until an evaluation has
 dataset/split identity, sample size, uncertainty and explicit costs; the UI does
 not fabricate zero results. The implemented owner execution read route is shown as
 real data only when its private journal source validates.
+The adjacent operational-alert route derives a read-only inventory from those
+validated local sources. It still needs the owner-selected provider-budget source,
+external destination/delivery service and target alert exercise before unattended
+Demo operation.
 The pure `PA01-v1` kernel, native M1-to-M5/H1 aggregation and protocol-v2 policy
 envelope now feed an optional durable producer. The producer binds the exact
 spread, market/session, freshness, news, exposure and pending observations,

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SCN-005/006/007/014/015/016: browser/Auth/read models, synthetic data, no broker operations.
+// SCN-005/006/007/014/015/016/032: browser/Auth/read models, synthetic data, no broker operations.
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -249,6 +249,7 @@ async function run() {
     const connectionMap = page.getByRole("region", { name: "แผนที่การเชื่อมต่อ API" });
     await connectionMap.getByText("/api/owner/telemetry", { exact: true }).waitFor();
     assert(await connectionMap.getByText("/api/owner/execution", { exact: true }).isVisible());
+    assert(await connectionMap.getByText("/api/owner/alerts", { exact: true }).isVisible());
     assert(await connectionMap.getByText("/api/owner/signals", { exact: true }).isVisible());
     assert(await connectionMap.getByText("/api/owner/statistics", { exact: true }).isVisible());
     assert(await connectionMap.getByText("/api/ui/demo-readiness", { exact: true }).isVisible());
@@ -260,7 +261,8 @@ async function run() {
     assert.equal(mapBody.auto_trading_enabled, false);
     assert.equal(mapBody.execution_ready, false);
     assert.deepEqual(mapBody.connections.map(item => item.id), ["core_api", "demo_readiness", "owner_auth",
-      "market_telemetry", "native_chart", "bar_history", "execution_evidence", "signals", "statistics"]);
+      "market_telemetry", "native_chart", "bar_history", "execution_evidence", "operational_alerts",
+      "signals", "statistics"]);
     const readiness = page.getByRole("region", { name: "สิ่งที่ต้องครบก่อนใช้งานเดโม่" });
     await readiness.getByText("Demo broker round trip", { exact: true }).waitFor();
     assert(await readiness.getByText("EA build บนเป้าหมาย", { exact: true }).isVisible());
@@ -287,6 +289,9 @@ async function run() {
     const signals = page.locator("#signal-evidence");
     const statistics = page.locator("#research-statistics");
     const execution = page.locator("#execution-evidence");
+    const alerts = page.locator("#operational-alerts");
+    assert.equal(await alerts.locator(".alert-coverage-row").count(), 8);
+    assert(await alerts.getByText("api_budget", { exact: true }).isVisible());
     async function login(user) {
       await page.getByLabel("อีเมลเจ้าของ").fill(user.email);
       await page.getByLabel("รหัสผ่าน", { exact: true }).fill(user.password);
@@ -310,6 +315,7 @@ async function run() {
       assert.equal(await signals.getByText(signalFixtures[0].signal_id, { exact: true }).count(), 0);
       assert.equal(await statistics.getByText(evaluationFixtures[0].version_id, { exact: true }).count(), 0);
       assert.equal(await execution.getByText("browser-command-confirmed", { exact: true }).count(), 0);
+      assert.equal(await alerts.locator(".active-alerts").count(), 0);
     }
     stage = "foreign user denial";
     const foreignToken = await login(users[1]);
@@ -318,6 +324,7 @@ async function run() {
     assert.equal((await http(`${apiOrigin}/owner/chart/M5`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/history/M5`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/execution`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
+    assert.equal((await http(`${apiOrigin}/owner/alerts`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/signals`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/statistics`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     const foreignRows = await (await http(`${origin}/rest/v1/signals?select=signal_id`, {
@@ -338,6 +345,25 @@ async function run() {
     assert(await page.getByText("DEMO ONLY", { exact: true }).isVisible());
     assert.equal(await page.getByRole("button", { name: /เปิดออเดอร์|ซื้อ|ขาย/ }).count(), 0);
     assert.equal(await page.locator('input[type="password"]').count(), 0);
+    await alerts.getByText("0 รายการ", { exact: true }).waitFor();
+    const alertResponse = await http(`${apiOrigin}/owner/alerts`, {
+      headers: { Authorization: `Bearer ${originalToken}` },
+    });
+    assert.equal(alertResponse.status, 200);
+    assert.equal(alertResponse.headers.get("cache-control"), "no-store");
+    const alertBody = await alertResponse.json();
+    assert.equal(alertBody.protocol, "sochron.operational-alerts.v1");
+    assert.equal(alertBody.trading_mode, "demo");
+    assert.equal(alertBody.read_only, true);
+    assert.equal(alertBody.auto_trading_enabled, false);
+    assert.equal(alertBody.execution_ready, false);
+    assert.equal(alertBody.delivery_configured, false);
+    assert.deepEqual(alertBody.alerts, []);
+    assert.deepEqual(alertBody.coverage.map(item => item.kind), ["order_reject", "no_sl", "risk_halt",
+      "unknown_execution", "stale_price", "bridge_disconnected", "storage_limit", "api_budget"]);
+    assert.deepEqual(alertBody.coverage.at(-1), { kind: "api_budget", implementation: "missing",
+      runtime: "awaiting_configuration", api_routes: ["/api/owner/alerts"], sources: ["api_budget"] });
+    checks.push("owner operational alert inventory and missing delivery/budget coverage");
     await signals.getByText(signalFixtures[0].signal_id, { exact: true }).waitFor();
     assert(await signals.getByText("BUY", { exact: true }).isVisible());
     assert(await signals.getByText("ยังอยู่ในอายุสัญญาณ", { exact: true }).isVisible());
@@ -488,14 +514,16 @@ async function run() {
       return range.getClientRects().length === 1 && value.scrollWidth <= value.clientWidth;
     })));
     assert(await chart.locator(".chart-values dd").evaluateAll(values => values.length === 4 && values.every(value => value.scrollWidth <= value.clientWidth)));
-    assert(await connectionMap.locator(".connection-row").evaluateAll(rows => rows.length === 9 && rows.every(row => row.scrollWidth <= row.clientWidth)));
+    assert(await connectionMap.locator(".connection-row").evaluateAll(rows => rows.length === 10 && rows.every(row => row.scrollWidth <= row.clientWidth)));
     assert(await readiness.locator(".readiness-row").evaluateAll(rows => rows.length === 9 && rows.every(row => row.scrollWidth <= row.clientWidth)));
+    assert(await alerts.locator(".alert-coverage-row").evaluateAll(rows => rows.length === 8 && rows.every(row => row.scrollWidth <= row.clientWidth)));
     await page.screenshot({ path: join(output, "mobile-synthetic.png"), fullPage: true });
     assert(await history.locator(".history-table-scroll").evaluate(element => element.scrollWidth > element.clientWidth));
     await history.screenshot({ path: join(output, "history-mobile-synthetic.png") });
     stage = "320px page containment and keyboard table scrolling";
     await page.setViewportSize({ width: 320, height: 740 });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    assert(await alerts.evaluate(element => element.scrollWidth <= element.clientWidth));
     await history.getByRole("region", { name: "ตารางประวัติแท่งปิด", exact: true }).focus();
     await page.keyboard.press("ArrowRight");
     await page.waitForFunction(() => document.querySelector("#bar-history .history-table-scroll").scrollLeft > 0);
@@ -657,10 +685,13 @@ async function run() {
     "apps/web/src/owner-api.ts", "apps/web/src/owner-auth.ts", "apps/web/src/App.tsx",
     "apps/web/src/App.test.tsx", "apps/web/src/connection-api.ts",
     "apps/web/src/connection-api.test.ts", "apps/web/src/ConnectionMap.tsx",
+    "apps/web/src/OperationalAlertsPanel.tsx", "apps/web/src/operational-alerts-api.ts",
+    "apps/web/src/OperationalAlertsPanel.test.tsx", "apps/web/src/operational-alerts-api.test.ts",
     "apps/web/src/demo-readiness-api.ts", "apps/web/src/demo-readiness-api.test.ts",
     "apps/web/src/DemoReadinessPanel.tsx", "services/api/src/sochron1k/demo_readiness.py",
     "services/api/src/sochron1k/main.py", "services/api/src/sochron1k/ui_connections.py",
     "services/api/src/sochron1k/owner_api.py", "services/api/src/sochron1k/execution_evidence.py",
+    "services/api/src/sochron1k/operational_alerts.py", "tests/test_operational_alerts.py",
     "tests/test_api_safety.py", "tests/test_demo_readiness.py", "tests/test_execution_evidence.py", "tests/test_signal_evidence.py",
     "tests/test_research_statistics.py",
     "services/api/src/sochron1k/owner_auth.py", "services/api/src/sochron1k/telemetry.py", "tests/fixtures/mt5-telemetry-v1.json"];
@@ -673,7 +704,7 @@ async function run() {
     checked_at: new Date().toISOString(), node: process.version, playwright: "1.63.0", chromium: browserVersion,
     python: command(join(root, ".venv/bin/python"), ["--version"]), runtime_images: runtimeImages.sort(),
     production_build_sha256: buildSha256, refresh_diagnostics: refreshDiagnostics,
-    checks, sha256, fixture: "synthetic telemetry, OHLC, execution journal, owner-RLS signals and research evaluations; two generated local Auth users",
+    checks, sha256, fixture: "synthetic telemetry, OHLC, execution journal, derived alert inventory, owner-RLS signals and research evaluations; two generated local Auth users",
     token_refresh: "accelerated browser clock; real refresh-token HTTP exchange; server clock unchanged",
     mt5: "NOT_RUN", hosted_supabase: "NOT_RUN", artifacts: output };
   await writeFile(join(output, "result.json"), JSON.stringify(result, null, 2));

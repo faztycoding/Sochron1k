@@ -14,6 +14,7 @@ ConnectionId = Literal[
     "native_chart",
     "bar_history",
     "execution_evidence",
+    "operational_alerts",
     "signals",
     "statistics",
 ]
@@ -148,6 +149,31 @@ def build_ui_connection_map(
                 runtime=_execution_evidence_runtime(execution_state, execution_evidence_state),
                 current_routes=("/api/executor/v1/status", "/api/owner/execution"),
                 sources=("mt5_execution",),
+            ),
+            UiConnection(
+                id="operational_alerts",
+                implementation="partial",
+                runtime=(
+                    "degraded"
+                    if "degraded" in {
+                        _telemetry_runtime(telemetry_state),
+                        _execution_runtime(execution_state),
+                        execution_evidence_state,
+                    }
+                    else "awaiting_source"
+                    if (
+                        execution_evidence_state == "connected"
+                        or _telemetry_runtime(telemetry_state) == "awaiting_source"
+                        or _execution_runtime(execution_state) == "awaiting_source"
+                    )
+                    else "awaiting_configuration"
+                ),
+                current_routes=("/api/owner/alerts",),
+                required_route="provider budget source + external alert delivery",
+                sources=(
+                    "telemetry_status", "execution_status", "execution_journal",
+                    "bar_history", "policy_status", "api_budget",
+                ),
             ),
             UiConnection(
                 id="signals",

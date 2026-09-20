@@ -4,6 +4,7 @@ import { OwnerPanel } from "./OwnerPanel";
 import type { OwnerAuth } from "./owner-auth";
 import { parseConfig, parseTelemetry, quoteIsFresh } from "./owner-api";
 import { disabledHistory, historyFixture } from "./test/history-fixture";
+import { alertDefinitions, alertKinds } from "./operational-alerts-api";
 
 const config = { enabled: true, supabase_url: "https://auth.fixture.invalid", public_key: "sb_publishable_" + "fixture".repeat(4) };
 const fixture = () => ({
@@ -23,6 +24,12 @@ const emptySignals = () => ({ trading_mode: "demo", read_only: true, source: "su
 const emptyStatistics = () => ({ trading_mode: "demo", read_only: true, source: "supabase-evaluations",
   read_at_utc: "2026-09-17T00:00:00Z", status: { state: "awaiting_source", returned_count: 0, limit: 30,
     auto_trading_enabled: false, execution_ready: false, promotion_decided: false }, evaluations: [] });
+const emptyAlerts = () => ({ protocol: "sochron.operational-alerts.v1", trading_mode: "demo", read_only: true,
+  auto_trading_enabled: false, execution_ready: false, delivery_configured: false, status: "partial",
+  generated_at_utc: "2026-09-17T00:00:00Z", truncated: false, alerts: [],
+  coverage: alertKinds.map(kind => ({ kind, implementation: alertDefinitions[kind].implementation,
+    runtime: "awaiting_configuration", api_routes: alertDefinitions[kind].routes,
+    sources: alertDefinitions[kind].sources })) });
 function setup(privateResponse: () => Promise<Response> = async () => json(fixture()),
   historyResponse: () => Promise<Response> = async () => json(disabledHistory())) {
   let callback: (token: string | null) => void = () => {};
@@ -38,6 +45,7 @@ function setup(privateResponse: () => Promise<Response> = async () => json(fixtu
         snapshot_age_seconds: null, latest_bar_age_seconds: null, execution_ready: false }) :
       String(path).startsWith("/api/owner/history/") ? historyResponse() :
       String(path) === "/api/owner/execution" ? json(disabledExecution()) :
+      String(path) === "/api/owner/alerts" ? json(emptyAlerts()) :
       String(path) === "/api/owner/signals" ? json(emptySignals()) :
       String(path) === "/api/owner/statistics" ? json(emptyStatistics()) : privateResponse());
   const factory = vi.fn(async () => auth);

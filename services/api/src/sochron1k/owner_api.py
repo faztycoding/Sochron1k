@@ -12,6 +12,7 @@ from .execution_evidence import (
     disabled_execution_evidence,
 )
 from .models import StrictModel
+from .operational_alerts import OperationalAlertInventory, build_operational_alert_inventory
 from .owner_auth import OwnerAuthDenied, OwnerVerifier
 from .research_statistics import (
     ResearchStatisticsReader,
@@ -57,6 +58,18 @@ def telemetry(owner: OwnerDep, bridge: BridgeDep) -> TelemetryView:
 def execution(owner: OwnerDep, request: Request) -> ExecutionEvidenceView:
     reader: ExecutionEvidenceReader | None = request.app.state.execution_evidence
     return reader.view() if reader is not None else disabled_execution_evidence()
+
+
+@router.get("/alerts")
+def alerts(owner: OwnerDep, request: Request) -> OperationalAlertInventory:
+    chart = request.app.state.chart_store
+    return build_operational_alert_inventory(
+        telemetry=request.app.state.telemetry_bridge,
+        execution=request.app.state.execution_bridge,
+        journal=request.app.state.execution_evidence,
+        history=chart.history,
+        policy=request.app.state.policy_writer,
+    )
 
 
 @router.get("/signals")

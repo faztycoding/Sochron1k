@@ -75,6 +75,8 @@ describe("Sochron1k safety console", () => {
     expect(screen.getAllByText("/api/owner/signals").length).toBeGreaterThan(0);
     expect(screen.getAllByText("/api/owner/statistics").length).toBeGreaterThan(0);
     expect(screen.getAllByText("/api/owner/execution").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("/api/owner/alerts").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "ศูนย์แจ้งเตือนและตำแหน่ง API" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "สิ่งที่ต้องครบก่อนใช้งานเดโม่" })).toBeVisible();
     expect(screen.getByText("EA build บนเป้าหมาย")).toBeVisible();
     expect(screen.getAllByText("/api/ui/demo-readiness").length).toBeGreaterThan(0);

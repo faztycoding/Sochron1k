@@ -65,6 +65,12 @@ class HistoryView(StrictModel):
     execution_ready: Literal[False] = False
 
 
+class HistoryStorageStatus(StrictModel):
+    state: Literal["normal", "warning_70", "warning_85"]
+    database_bytes: StrictInt = Field(ge=0)
+    quota_bytes: StrictInt = Field(gt=0)
+
+
 def _utc(value: datetime) -> str:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError("aware time required")
@@ -431,4 +437,24 @@ class BarHistory:
         except (OSError, sqlite3.Error, ValueError) as error:
             if isinstance(error, BridgeDenied):
                 raise
+            raise HistoryUnavailable() from None
+
+    def storage_status(self) -> HistoryStorageStatus:
+        """Read current SQLite page usage without modifying or compacting the archive."""
+        try:
+            with self._connect() as db:
+                db.execute("BEGIN")
+                size = (
+                    db.execute("PRAGMA page_count").fetchone()[0]
+                    * db.execute("PRAGMA page_size").fetchone()[0]
+                )
+                state = (
+                    "warning_85" if size >= MAX_DATABASE_BYTES * 0.85
+                    else "warning_70" if size >= MAX_DATABASE_BYTES * 0.70
+                    else "normal"
+                )
+                return HistoryStorageStatus(
+                    state=state, database_bytes=size, quota_bytes=MAX_DATABASE_BYTES
+                )
+        except (OSError, sqlite3.Error, ValueError):
             raise HistoryUnavailable() from None

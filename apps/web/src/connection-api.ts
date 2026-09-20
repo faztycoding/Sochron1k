@@ -1,6 +1,6 @@
 export const connectionIds = [
   "core_api", "demo_readiness", "owner_auth", "market_telemetry", "native_chart", "bar_history",
-  "execution_evidence", "signals", "statistics",
+  "execution_evidence", "operational_alerts", "signals", "statistics",
 ] as const;
 
 export type ConnectionId = typeof connectionIds[number];
@@ -49,6 +49,10 @@ export const connectionDefinitions: Record<ConnectionId, Definition> = {
     required: null, sources: ["local_bar_archive"], sourceLabel: "Local bar archive", implementation: "available" },
   execution_evidence: { title: "คำสั่งและการป้องกันสถานะ", result: "Order / Deal / Position / SL ที่ยืนยันแล้ว", routes: ["/api/executor/v1/status", "/api/owner/execution"],
     required: null, sources: ["mt5_execution"], sourceLabel: "MT5 Execution EA", implementation: "available" },
+  operational_alerts: { title: "ศูนย์แจ้งเตือน", result: "เหตุสำคัญและ coverage ของ source", routes: ["/api/owner/alerts"],
+    required: "provider budget source + external alert delivery",
+    sources: ["telemetry_status", "execution_status", "execution_journal", "bar_history", "policy_status", "api_budget"],
+    sourceLabel: "Runtime states + local journals · ยังไม่ส่งแจ้งเตือนภายนอก", implementation: "partial" },
   signals: { title: "สัญญาณ", result: "เหตุผล กลยุทธ์ และเวลายืนยัน", routes: ["/api/policy/v1/status", "/api/owner/signals"],
     required: null, sources: ["mt5_policy_evidence", "news_gate", "supabase_signals"], sourceLabel: "MT5 quote/session + execution inventory + News Gate → Policy Writer → Supabase", implementation: "available" },
   statistics: { title: "สถิติ", result: "ผลลัพธ์ ต้นทุน และความไม่แน่นอน", routes: ["/api/owner/statistics"],

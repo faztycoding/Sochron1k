@@ -507,6 +507,9 @@ def test_ac06_storage_warning_thresholds(setup_chart, archive, monkeypatch, frac
     monkeypatch.setattr(bar_history, "MAX_DATABASE_BYTES", int(size / fraction))
     view = archive.read("M1")
     assert view.storage == expected and view.quota_bytes == int(size / fraction)
+    status = archive.storage_status()
+    assert status.state == expected
+    assert status.database_bytes == size and status.quota_bytes == int(size / fraction)
 
 
 @pytest.mark.anyio

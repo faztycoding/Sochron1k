@@ -48,6 +48,7 @@ The outcome is a repeatable research and Demo execution system, not a promise of
 - Feed-to-UI latency is measured as p50 and p95; the initial display target is approximately one second when new data is available.
 - Price is treated as stale after an initial five-second threshold only while the market is expected to be active; the threshold remains an experiment parameter.
 - Alerts, backups, restore, and reconciliation are exercised before unattended operation.
+- The local owner alert inventory may show derived conditions before delivery is configured; a visible row is not evidence that an external alert was sent or acknowledged.
 - RPO and RTO are not yet set. They are required before the unattended-Demo release gate.
 
 ## Core journeys

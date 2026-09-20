@@ -175,7 +175,8 @@ It is uncompiled and has no executor lock, ledger, preflight, inventory scan,
 
 SCN-014 adds a public redacted UI integration read model at `/ui/connections`.
 It reports implementation and runtime state separately for the core API, owner Auth,
-telemetry, chart, history, execution evidence, signals and statistics. The response
+telemetry, chart, history, execution evidence, operational alerts, signals and
+statistics. The response
 contains only fixed route/source identifiers and safe state enums; it never exposes
 owner, account, broker-value, credential or filesystem data. The browser validates
 the exact map and renders the route rail even if its status request fails. The map
@@ -191,6 +192,18 @@ response hard-codes Demo-only, Auto Trading off, not release-ready, not authoriz
 and not unattended-ready. The browser validates the fixed order, routes, sources,
 actions and false safety flags before displaying any returned state; see
 [ADR-034](decisions/ADR-034-redacted-demo-readiness-ledger.md).
+
+SCN-032 adds the authenticated `/owner/alerts` aggregation boundary. It derives a
+bounded operational inventory at read time from bridge status, the validated
+query-only execution-journal projection, policy status and bar-archive page use.
+The fixed coverage ledger includes rejected commands, unconfirmed SL, risk halt,
+UNKNOWN execution, stale price, disconnected sources, storage pressure and API
+budget. Account/server/path values are excluded and fact references are hashes.
+The boundary is deliberately not a notification-delivery or mutable alert-history
+service: external delivery is false, API-budget coverage is missing and
+acknowledgement/resolution are null. Consequently it cannot clear the SCN-031
+recovery/observability gate; see
+[ADR-035](decisions/ADR-035-derived-operational-alert-inventory.md).
 
 SCN-015 adds the missing authenticated owner execution projection at
 `/owner/execution`. It reads one explicitly configured, existing private

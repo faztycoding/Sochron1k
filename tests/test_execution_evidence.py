@@ -214,6 +214,47 @@ def test_ac05_ac06_unknown_and_confirmed_rejection_remain_distinct(
     if command.rejection is not None:
         assert command.rejection.operation == "open"
         assert command.rejection.retcode == 10006
+    facts = ExecutionEvidenceReader(path).operational_facts()
+    assert facts.state == "available"
+    assert [(item.kind, item.detail_code) for item in facts.facts] == [
+        (
+            "unknown_execution"
+            if behavior is SimulatorBehavior.ACCEPT_THEN_TIMEOUT
+            else "order_reject",
+            "entry_unknown"
+            if behavior is SimulatorBehavior.ACCEPT_THEN_TIMEOUT
+            else "entry_rejected",
+        )
+    ]
+    assert len(facts.facts[0].source_ref) == 16
+    assert intent.account_ref not in facts.model_dump_json()
+
+
+def test_scn032_no_sl_and_persistent_halt_facts_are_bounded_and_redacted(
+    tmp_path, policy, account, contract, market, intent, risk, observed_at
+) -> None:
+    journal, path = private_journal(tmp_path)
+    result = populate_fill(
+        journal, policy, account, contract, market, intent, risk, observed_at,
+        behavior=SimulatorBehavior.REJECT_SL,
+    )
+    persistent = journal.risk_state(intent.account_ref, intent.experiment_id)
+    assert persistent is not None
+    journal.save_risk_state(
+        persistent.model_copy(update={"daily_halt": True, "total_halt": True})
+    )
+    secure_journal_files(path)
+
+    view = ExecutionEvidenceReader(path).operational_facts()
+
+    assert result.state.value == "protection_failed"
+    assert view.state == "available" and view.truncated is False
+    assert {(item.kind, item.detail_code) for item in view.facts} == {
+        ("no_sl", "open_volume_without_confirmed_sl"),
+        ("risk_halt", "daily_and_total_halt"),
+    }
+    encoded = view.model_dump_json()
+    assert intent.account_ref not in encoded and intent.experiment_id not in encoded
 
 
 def test_ac06_management_outcome_is_bound_to_parent(
@@ -274,6 +315,9 @@ def test_ac06_management_outcome_is_bound_to_parent(
     assert management.outcome is not None
     assert management.outcome.completed_volume == opened.volume
     assert len(management.outcome.deals) == 1
+    assert all(
+        item.kind != "no_sl" for item in ExecutionEvidenceReader(path).operational_facts().facts
+    )
 
 
 def test_ac03_read_does_not_change_database_or_sidecars(tmp_path) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import sqlite3
 import stat
@@ -28,6 +29,7 @@ MAX_DATABASE_BYTES = 256 * 1024 * 1024
 MAX_COMMANDS = 50
 MAX_MANAGEMENT = 100
 MAX_DEALS = 1_000
+MAX_OPERATIONAL_FACTS = 100
 
 
 class ExecutionEvidenceUnavailable(RuntimeError):
@@ -136,6 +138,33 @@ class ExecutionEvidenceView(StrictModel):
     commands: tuple[CommandEvidence, ...] = ()
 
 
+class ExecutionOperationalFact(StrictModel):
+    kind: Literal["order_reject", "no_sl", "risk_halt", "unknown_execution"]
+    source_ref: str = Field(min_length=16, max_length=16, pattern=r"^[0-9a-f]{16}$")
+    observed_at_utc: AwareDatetime
+    detail_code: Literal[
+        "entry_rejected",
+        "management_rejected",
+        "entry_unknown",
+        "management_unknown",
+        "open_volume_without_confirmed_sl",
+        "daily_halt",
+        "total_halt",
+        "daily_and_total_halt",
+    ]
+
+    @field_validator("observed_at_utc")
+    @classmethod
+    def normalize_observed_time(cls, value: datetime) -> datetime:
+        return value.astimezone(UTC)
+
+
+class ExecutionOperationalView(StrictModel):
+    state: Literal["available", "unavailable"]
+    facts: tuple[ExecutionOperationalFact, ...] = ()
+    truncated: bool = False
+
+
 REQUIRED_COLUMNS = {
     "commands": {
         "command_id", "account_ref", "experiment_id", "payload_json", "volume", "state",
@@ -162,6 +191,9 @@ REQUIRED_COLUMNS = {
     "executor_rejections": {
         "command_id", "target_command_id", "operation", "retcode", "retcode_external",
         "observed_at",
+    },
+    "risk_state": {
+        "account_ref", "experiment_id", "daily_halt", "total_halt", "updated_at",
     },
 }
 
@@ -627,6 +659,143 @@ class ExecutionEvidenceReader:
                     state="unavailable", reason="source_unavailable", total_commands=0
                 )
             )
+        self._runtime = "connected"
+        return result
+
+    @staticmethod
+    def _safe_reference(*values: object) -> str:
+        payload = "\x1f".join(str(value) for value in values)
+        return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+    def _operational_facts(self) -> ExecutionOperationalView:
+        with self._connect() as db:
+            self._validate_database(db)
+            db.execute("BEGIN")
+            facts: list[ExecutionOperationalFact] = []
+            truncated = False
+
+            entry_rows = db.execute(
+                """
+                SELECT command_id,state,updated_at FROM commands
+                WHERE state IN ('unknown','rejected')
+                ORDER BY updated_at DESC,command_id DESC LIMIT ?
+                """,
+                (MAX_OPERATIONAL_FACTS + 1,),
+            ).fetchall()
+            management_rows = db.execute(
+                """
+                SELECT command_id,state,updated_at FROM management_commands
+                WHERE state IN ('unknown','rejected')
+                ORDER BY updated_at DESC,command_id DESC LIMIT ?
+                """,
+                (MAX_OPERATIONAL_FACTS + 1,),
+            ).fetchall()
+            no_sl_rows = db.execute(
+                """
+                SELECT c.command_id,c.updated_at,o.filled_volume,o.sl_confirmed,
+                       COALESCE(l.closed_volume,'0') AS closed_volume
+                FROM commands c JOIN broker_orders o USING(command_id)
+                LEFT JOIN broker_order_lifecycle l USING(command_id)
+                WHERE c.state IN ('partially_filled','filled','protection_failed','closing')
+                  AND o.sl_confirmed<>1
+                ORDER BY c.updated_at DESC,c.command_id DESC LIMIT ?
+                """,
+                (MAX_OPERATIONAL_FACTS + 1,),
+            ).fetchall()
+            risk_rows = db.execute(
+                """
+                SELECT account_ref,experiment_id,daily_halt,total_halt,updated_at
+                FROM risk_state WHERE daily_halt<>0 OR total_halt<>0
+                ORDER BY updated_at DESC,account_ref,experiment_id LIMIT ?
+                """,
+                (MAX_OPERATIONAL_FACTS + 1,),
+            ).fetchall()
+            groups = (entry_rows, management_rows, no_sl_rows, risk_rows)
+            if any(len(rows) > MAX_OPERATIONAL_FACTS for rows in groups):
+                truncated = True
+            entry_rows, management_rows, no_sl_rows, risk_rows = (
+                rows[:MAX_OPERATIONAL_FACTS] for rows in groups
+            )
+
+            for scope, rows in (("entry", entry_rows), ("management", management_rows)):
+                for row in rows:
+                    state = CommandState(row["state"])
+                    if state not in {CommandState.UNKNOWN, CommandState.REJECTED}:
+                        raise ExecutionEvidenceUnavailable()
+                    facts.append(
+                        ExecutionOperationalFact(
+                            kind=(
+                                "unknown_execution"
+                                if state is CommandState.UNKNOWN
+                                else "order_reject"
+                            ),
+                            source_ref=self._safe_reference(scope, row["command_id"]),
+                            observed_at_utc=_utc(row["updated_at"]),
+                            detail_code=f"{scope}_{state.value}",
+                        )
+                    )
+
+            for row in no_sl_rows:
+                if row["sl_confirmed"] != 0:
+                    raise ExecutionEvidenceUnavailable()
+                filled = _decimal(row["filled_volume"])
+                closed = _decimal(row["closed_volume"])
+                if filled <= closed:
+                    continue
+                facts.append(
+                    ExecutionOperationalFact(
+                        kind="no_sl",
+                        source_ref=self._safe_reference("no-sl", row["command_id"]),
+                        observed_at_utc=_utc(row["updated_at"]),
+                        detail_code="open_volume_without_confirmed_sl",
+                    )
+                )
+
+            for row in risk_rows:
+                if row["daily_halt"] not in (0, 1) or row["total_halt"] not in (0, 1):
+                    raise ExecutionEvidenceUnavailable()
+                daily, total = bool(row["daily_halt"]), bool(row["total_halt"])
+                detail = (
+                    "daily_and_total_halt" if daily and total
+                    else "total_halt" if total
+                    else "daily_halt"
+                )
+                facts.append(
+                    ExecutionOperationalFact(
+                        kind="risk_halt",
+                        source_ref=self._safe_reference(
+                            "risk", row["account_ref"], row["experiment_id"]
+                        ),
+                        observed_at_utc=_utc(row["updated_at"]),
+                        detail_code=detail,
+                    )
+                )
+
+            facts.sort(
+                key=lambda item: (
+                    -item.observed_at_utc.timestamp(), item.kind, item.source_ref
+                )
+            )
+            if len(facts) > MAX_OPERATIONAL_FACTS:
+                facts = facts[:MAX_OPERATIONAL_FACTS]
+                truncated = True
+            return ExecutionOperationalView(
+                state="available", facts=tuple(facts), truncated=truncated
+            )
+
+    def operational_facts(self) -> ExecutionOperationalView:
+        try:
+            result = self._operational_facts()
+        except (
+            OSError,
+            sqlite3.Error,
+            ExecutionEvidenceUnavailable,
+            ValidationError,
+            ValueError,
+            KeyError,
+        ):
+            self._runtime = "degraded"
+            return ExecutionOperationalView(state="unavailable")
         self._runtime = "connected"
         return result
 
