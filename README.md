@@ -87,6 +87,14 @@ npx -y -p node@24.21.0 npm run dev --workspace @sochron1k/web
 
 The console is deliberately monitoring-only. It shows the local API state, fixed risk policy, command lifecycle, and outstanding release gates without inventing broker values or exposing an order-entry control.
 
+The release-gate area is now driven by the redacted
+`GET /api/ui/demo-readiness` contract instead of hard-coded blocker text. Its nine
+rows show the exact browser API, upstream evidence class and next safe action for
+owner decisions, Auth, market data, execution, policy/research, EA build, broker
+round trip, recovery/alerts and explicit authorization. Missing or invalid status
+keeps every row visible and never becomes a positive release state. See the
+[Demo readiness runbook](docs/operations/demo-readiness.md).
+
 The connection map directly below the safety banner now shows which browser API
 feeds every visible area and which upstream source is still missing. It separates
 implemented API code from runtime connectivity. Account/price, chart and closed-bar

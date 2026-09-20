@@ -1,5 +1,5 @@
 export const connectionIds = [
-  "core_api", "owner_auth", "market_telemetry", "native_chart", "bar_history",
+  "core_api", "demo_readiness", "owner_auth", "market_telemetry", "native_chart", "bar_history",
   "execution_evidence", "signals", "statistics",
 ] as const;
 
@@ -37,6 +37,8 @@ type Definition = {
 export const connectionDefinitions: Record<ConnectionId, Definition> = {
   core_api: { title: "ภาพรวมระบบ", result: "สถานะ API และโหมด Demo", routes: ["/api/health", "/api/ui/connections"],
     required: null, sources: ["fastapi"], sourceLabel: "FastAPI", implementation: "available" },
+  demo_readiness: { title: "Gate ความพร้อม Demo", result: "ข้อมูลที่ขาด runtime และหลักฐานเป้าหมาย", routes: ["/api/ui/demo-readiness"],
+    required: null, sources: ["owner_decisions", "runtime_gates", "target_evidence"], sourceLabel: "Redacted owner decisions + component states + target gates", implementation: "available" },
   owner_auth: { title: "เข้าสู่ระบบเจ้าของ", result: "Session และสิทธิ์อ่านข้อมูลส่วนตัว", routes: ["/api/auth/config", "/api/owner/session"],
     required: null, sources: ["supabase_auth"], sourceLabel: "Supabase Auth", implementation: "available" },
   market_telemetry: { title: "บัญชีและราคาปัจจุบัน", result: "Equity, Balance, Bid และ Ask", routes: ["/api/owner/telemetry"],

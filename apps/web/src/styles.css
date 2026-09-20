@@ -307,6 +307,31 @@ h1 { margin: 0; font-size: clamp(24px, 3vw, 36px); line-height: 1.15; letter-spa
 .lifecycle small { color: var(--muted); }
 .evidence-footnote { margin: 0; padding-top: 15px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; text-align: center; }
 
+.readiness-panel { margin-top: 18px; padding: 0; overflow: hidden; scroll-margin-top: 20px; }
+.readiness-heading { align-items: center; padding: 22px; }
+.readiness-overall { display: grid; justify-items: end; gap: 3px; text-align: right; }
+.readiness-overall strong { color: var(--amber); font-size: 14px; }
+.readiness-overall span { color: var(--muted); font-size: 12px; }
+.readiness-key, .readiness-row { display: grid; grid-template-columns: minmax(190px, 1fr) minmax(120px, 0.55fr) minmax(240px, 1.35fr) minmax(190px, 1fr); gap: 20px; }
+.readiness-key { padding: 9px 22px; border-top: 1px solid var(--line); background: var(--surface-deep); color: var(--muted); font-size: 11px; }
+.readiness-list { list-style: none; margin: 0; padding: 0; }
+.readiness-row { align-items: center; min-height: 106px; padding: 16px 22px; border-top: 1px solid rgba(48, 57, 70, 0.7); }
+.readiness-name { min-width: 0; display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: start; gap: 10px; }
+.readiness-name div { min-width: 0; display: grid; gap: 5px; }
+.readiness-name strong { font-size: 14px; }
+.readiness-name small, .readiness-location small { color: var(--muted); line-height: 1.45; }
+.readiness-number { color: var(--gold); font: 600 10px "Inter", sans-serif; padding-top: 4px; }
+.readiness-state { display: inline-block; border-left: 2px solid var(--line); padding-left: 10px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.readiness-state--ready { color: var(--green); border-color: var(--green); }
+.readiness-state--waiting { color: var(--amber); border-color: var(--amber); }
+.readiness-state--degraded, .readiness-state--missing { color: var(--red); border-color: var(--red); }
+.readiness-location { min-width: 0; display: grid; gap: 4px; }
+.readiness-location code { width: fit-content; max-width: 100%; overflow-wrap: anywhere; color: #cad2dc; font: 500 12px "Inter", sans-serif; }
+.readiness-action { color: #d8dde3; font-size: 13px; line-height: 1.5; }
+.readiness-cell-label { display: none; }
+.readiness-note { margin: 0; padding: 13px 22px; border-top: 1px solid var(--line); color: var(--muted); background: var(--surface-deep); font-size: 12px; line-height: 1.55; }
+.broker-proof-section { margin-top: 18px; }
+
 .blocker-list { list-style: none; margin: 20px 0 0; padding: 0; display: grid; gap: 10px; }
 .blocker-list li { display: flex; align-items: start; gap: 10px; color: #d8dde3; }
 .blocker-list li span { color: var(--red); font: 600 17px "Inter", sans-serif; }
@@ -360,6 +385,10 @@ button:disabled { cursor: wait; opacity: 0.6; }
   .connection-key { display: none; }
   .connection-row { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px 22px; padding-block: 18px; }
   .connection-cell-label { display: block; margin-bottom: 2px; color: var(--muted); font-size: 10px; }
+  .readiness-key { display: none; }
+  .readiness-row { grid-template-columns: minmax(0, 1.2fr) minmax(120px, 0.6fr); align-items: start; gap: 16px 22px; }
+  .readiness-location, .readiness-action { grid-column: span 1; }
+  .readiness-cell-label { display: block; margin-bottom: 4px; color: var(--muted); font-size: 10px; }
 }
 
 @media (max-width: 620px) {
@@ -376,6 +405,11 @@ button:disabled { cursor: wait; opacity: 0.6; }
   .connection-rail::before { left: 26px; }
   .connection-node { left: 16px; top: 19px; }
   .connection-note { padding-inline: 18px; }
+  .readiness-heading { padding: 18px; align-items: start; flex-direction: column; }
+  .readiness-overall { justify-items: start; text-align: left; }
+  .readiness-row { grid-template-columns: 1fr; min-height: 0; padding: 17px 18px; gap: 13px; }
+  .readiness-location, .readiness-action { grid-column: auto; }
+  .readiness-note { padding-inline: 18px; }
   .risk-matrix { grid-template-columns: 1fr; }
   .risk-matrix div { min-height: 88px; }
   .lifecycle { grid-template-columns: 1fr; gap: 12px; }

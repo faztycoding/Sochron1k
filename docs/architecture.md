@@ -182,6 +182,16 @@ the exact map and renders the route rail even if its status request fails. The m
 does not create missing owner execution, signal or statistics read models and never
 grants execution authority.
 
+SCN-031 adds the separate public `/ui/demo-readiness` ledger. It validates one
+optional owner-private, non-secret decision record but exposes only whether the
+complete record exists. Runtime gates are derived from the existing component
+states; target artifact, broker round trip, recovery and authorization stay
+explicitly unrun or unauthorized because no target-evidence reader exists. Every
+response hard-codes Demo-only, Auto Trading off, not release-ready, not authorized
+and not unattended-ready. The browser validates the fixed order, routes, sources,
+actions and false safety flags before displaying any returned state; see
+[ADR-034](decisions/ADR-034-redacted-demo-readiness-ledger.md).
+
 SCN-015 adds the missing authenticated owner execution projection at
 `/owner/execution`. It reads one explicitly configured, existing private
 ExecutionService SQLite journal through a pinned, bounded, query-only connection.

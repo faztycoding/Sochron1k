@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConnectionMap, type ConnectionViewState } from "./ConnectionMap";
 import { parseConnectionMap } from "./connection-api";
+import { DemoReadinessPanel, type DemoReadinessViewState } from "./DemoReadinessPanel";
+import { parseDemoReadiness } from "./demo-readiness-api";
 import { OwnerPanel } from "./OwnerPanel";
 import { readJSON } from "./owner-api";
 
@@ -26,13 +28,6 @@ const lifecycle = [
   ["Queued", "บันทึกแล้ว"],
   ["Sent", "รอ MT5"],
   ["Confirmed", "ยืนยันจากโบรกเกอร์"],
-] as const;
-
-const blockers = [
-  "ยังไม่กำหนดบัญชี MT5 Demo และ server",
-  "ยังไม่มี MT5 EA build ที่ผ่าน MetaEditor",
-  "ยังไม่มี broker-side SL evidence",
-  "ยังไม่ผ่าน VPS restart และ network-loss gate",
 ] as const;
 
 function parseHealth(value: unknown): Health {
@@ -61,12 +56,14 @@ export function App() {
   const [ownerConnection, setOwnerConnection] = useState("รอเข้าสู่ระบบเจ้าของ");
   const [connection, setConnection] = useState<ConnectionState>({ kind: "loading" });
   const [connectionMap, setConnectionMap] = useState<ConnectionViewState>({ kind: "loading" });
+  const [demoReadiness, setDemoReadiness] = useState<DemoReadinessViewState>({ kind: "loading" });
   const checkGeneration = useRef(0);
 
   const checkHealth = useCallback(async () => {
     const generation = ++checkGeneration.current;
     setConnection({ kind: "loading" });
     setConnectionMap({ kind: "loading" });
+    setDemoReadiness({ kind: "loading" });
     const healthRequest = (async () => {
       const response = await fetch("/api/health", { cache: "no-store", redirect: "error", headers: { Accept: "application/json" } });
       if (!response.ok) {
@@ -76,13 +73,19 @@ export function App() {
     })();
     const mapRequest = readJSON("/api/ui/connections", new AbortController().signal, undefined, 32768)
       .then(parseConnectionMap);
-    const [healthResult, mapResult] = await Promise.allSettled([healthRequest, mapRequest]);
+    const readinessRequest = readJSON("/api/ui/demo-readiness", new AbortController().signal, undefined, 32768)
+      .then(parseDemoReadiness);
+    const [healthResult, mapResult, readinessResult] = await Promise.allSettled([
+      healthRequest, mapRequest, readinessRequest,
+    ]);
     if (generation !== checkGeneration.current) return;
     const checkedAt = new Date();
     setConnection(healthResult.status === "fulfilled" ?
       { kind: "ready", health: healthResult.value, checkedAt } : { kind: "error", checkedAt });
     setConnectionMap(mapResult.status === "fulfilled" ?
       { kind: "ready", data: mapResult.value } : { kind: "error" });
+    setDemoReadiness(readinessResult.status === "fulfilled" ?
+      { kind: "ready", data: readinessResult.value } : { kind: "error" });
   }, []);
 
   useEffect(() => {
@@ -239,20 +242,9 @@ export function App() {
           <p className="evidence-footnote">HTTP สำเร็จไม่เท่ากับ fill · UNKNOWN ต้อง reconcile ก่อน retry · protected เมื่อ MT5 ยืนยัน SL เท่านั้น</p>
         </section>
 
-        <section className="lower-grid">
-          <article className="panel">
-            <div className="panel-heading">
-              <div>
-                <p>Release blockers</p>
-                <h2>สิ่งที่ต้องผ่านก่อนเปิดเดโม่</h2>
-              </div>
-              <span className="count-badge">4 รายการ</span>
-            </div>
-            <ul className="blocker-list">
-              {blockers.map((blocker) => <li key={blocker}><span aria-hidden="true">×</span>{blocker}</li>)}
-            </ul>
-          </article>
+        <DemoReadinessPanel state={demoReadiness} />
 
+        <section className="broker-proof-section">
           <article className="panel account-panel">
             <div className="panel-heading">
               <div>

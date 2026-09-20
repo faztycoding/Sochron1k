@@ -8,6 +8,7 @@ from .models import StrictModel
 
 ConnectionId = Literal[
     "core_api",
+    "demo_readiness",
     "owner_auth",
     "market_telemetry",
     "native_chart",
@@ -105,6 +106,13 @@ def build_ui_connection_map(
                 runtime="connected",
                 current_routes=("/api/health", "/api/ui/connections"),
                 sources=("fastapi",),
+            ),
+            UiConnection(
+                id="demo_readiness",
+                implementation="available",
+                runtime="connected",
+                current_routes=("/api/ui/demo-readiness",),
+                sources=("owner_decisions", "runtime_gates", "target_evidence"),
             ),
             UiConnection(
                 id="owner_auth",

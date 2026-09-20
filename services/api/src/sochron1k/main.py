@@ -14,6 +14,12 @@ from .chart import ChartSettings, ChartStore, load_chart_settings
 from .chart_api import bridge_router as chart_bridge_router
 from .chart_api import history_router
 from .chart_api import owner_router as chart_owner_router
+from .demo_readiness import (
+    DemoOwnerDecisions,
+    DemoReadiness,
+    build_demo_readiness,
+    load_demo_owner_decisions,
+)
 from .execution_bridge import (
     ExecutionBridgeSettings,
     ExecutionPollingBridge,
@@ -60,6 +66,7 @@ def create_app(
     signal_evidence: SignalEvidenceReader | None = None,
     research_statistics: ResearchStatisticsReader | None = None,
     policy_writer_settings: PolicyWriterSettings | None = None,
+    demo_owner_decisions: DemoOwnerDecisions | None = None,
 ) -> FastAPI:
     if (
         bridge_settings is not None
@@ -152,6 +159,28 @@ def create_app(
             statistics_configured=app.state.research_statistics is not None,
         )
 
+    @app.get("/ui/demo-readiness")
+    def ui_demo_readiness() -> DemoReadiness:
+        chart = app.state.chart_store
+        chart_states = tuple(chart.view(timeframe).state for timeframe in ("M1", "M5", "M15", "H1"))
+        return build_demo_readiness(
+            owner_decisions_recorded=demo_owner_decisions is not None,
+            owner_auth_configured=owner_auth_settings is not None,
+            telemetry_state=app.state.telemetry_bridge.status().state,
+            chart_enabled=chart.enabled,
+            chart_states=chart_states,
+            history_configured=chart.history is not None,
+            execution_state=app.state.execution_bridge.status().state,
+            execution_evidence_state=(
+                execution_evidence.runtime_state()
+                if execution_evidence is not None
+                else "awaiting_configuration"
+            ),
+            signal_configured=app.state.signal_evidence is not None,
+            policy_state=app.state.policy_writer.status().state,
+            statistics_configured=app.state.research_statistics is not None,
+        )
+
     return app
 
 
@@ -165,4 +194,5 @@ app = create_app(
     load_execution_bridge_settings(),
     load_execution_evidence_reader(),
     policy_writer_settings=load_policy_writer_settings(),
+    demo_owner_decisions=load_demo_owner_decisions(),
 )

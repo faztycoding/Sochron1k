@@ -56,6 +56,7 @@ async def test_ui_connection_map_is_redacted_and_truthful_when_unconfigured() ->
     nodes = {node["id"]: node for node in body["connections"]}
     assert list(nodes) == [
         "core_api",
+        "demo_readiness",
         "owner_auth",
         "market_telemetry",
         "native_chart",
@@ -65,6 +66,14 @@ async def test_ui_connection_map_is_redacted_and_truthful_when_unconfigured() ->
         "statistics",
     ]
     assert nodes["core_api"]["runtime"] == "connected"
+    assert nodes["demo_readiness"] == {
+        "id": "demo_readiness",
+        "implementation": "available",
+        "runtime": "connected",
+        "current_routes": ["/api/ui/demo-readiness"],
+        "required_route": None,
+        "sources": ["owner_decisions", "runtime_gates", "target_evidence"],
+    }
     for key in ("owner_auth", "market_telemetry", "native_chart", "bar_history"):
         assert nodes[key]["runtime"] == "awaiting_configuration"
     assert nodes["execution_evidence"] == {

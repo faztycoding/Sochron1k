@@ -251,6 +251,7 @@ async function run() {
     assert(await connectionMap.getByText("/api/owner/execution", { exact: true }).isVisible());
     assert(await connectionMap.getByText("/api/owner/signals", { exact: true }).isVisible());
     assert(await connectionMap.getByText("/api/owner/statistics", { exact: true }).isVisible());
+    assert(await connectionMap.getByText("/api/ui/demo-readiness", { exact: true }).isVisible());
     const mapResponse = await http(`${apiOrigin}/ui/connections`);
     assert.equal(mapResponse.status, 200);
     assert.equal(mapResponse.headers.get("cache-control"), "no-store");
@@ -258,8 +259,23 @@ async function run() {
     assert.equal(mapBody.demo_only, true);
     assert.equal(mapBody.auto_trading_enabled, false);
     assert.equal(mapBody.execution_ready, false);
-    assert.deepEqual(mapBody.connections.map(item => item.id), ["core_api", "owner_auth",
+    assert.deepEqual(mapBody.connections.map(item => item.id), ["core_api", "demo_readiness", "owner_auth",
       "market_telemetry", "native_chart", "bar_history", "execution_evidence", "signals", "statistics"]);
+    const readiness = page.getByRole("region", { name: "สิ่งที่ต้องครบก่อนใช้งานเดโม่" });
+    await readiness.getByText("Demo broker round trip", { exact: true }).waitFor();
+    assert(await readiness.getByText("EA build บนเป้าหมาย", { exact: true }).isVisible());
+    const readinessResponse = await http(`${apiOrigin}/ui/demo-readiness`);
+    assert.equal(readinessResponse.status, 200);
+    assert.equal(readinessResponse.headers.get("cache-control"), "no-store");
+    const readinessBody = await readinessResponse.json();
+    assert.equal(readinessBody.demo_only, true);
+    assert.equal(readinessBody.auto_trading_enabled, false);
+    assert.equal(readinessBody.release_ready, false);
+    assert.equal(readinessBody.round_trip_authorized, false);
+    assert.equal(readinessBody.unattended_demo_ready, false);
+    assert.deepEqual(readinessBody.gates.map(item => item.id), ["owner_decisions", "owner_auth",
+      "market_data", "execution_bridge", "policy_research", "target_artifact", "broker_round_trip",
+      "recovery_observability", "operational_authorization"]);
     checks.push(stage);
     await page.getByLabel("อีเมลเจ้าของ").waitFor();
     assert((await page.locator("body").ariaSnapshot()).includes("อีเมลเจ้าของ"));
@@ -472,7 +488,8 @@ async function run() {
       return range.getClientRects().length === 1 && value.scrollWidth <= value.clientWidth;
     })));
     assert(await chart.locator(".chart-values dd").evaluateAll(values => values.length === 4 && values.every(value => value.scrollWidth <= value.clientWidth)));
-    assert(await connectionMap.locator(".connection-row").evaluateAll(rows => rows.length === 8 && rows.every(row => row.scrollWidth <= row.clientWidth)));
+    assert(await connectionMap.locator(".connection-row").evaluateAll(rows => rows.length === 9 && rows.every(row => row.scrollWidth <= row.clientWidth)));
+    assert(await readiness.locator(".readiness-row").evaluateAll(rows => rows.length === 9 && rows.every(row => row.scrollWidth <= row.clientWidth)));
     await page.screenshot({ path: join(output, "mobile-synthetic.png"), fullPage: true });
     assert(await history.locator(".history-table-scroll").evaluate(element => element.scrollWidth > element.clientWidth));
     await history.screenshot({ path: join(output, "history-mobile-synthetic.png") });
@@ -640,9 +657,11 @@ async function run() {
     "apps/web/src/owner-api.ts", "apps/web/src/owner-auth.ts", "apps/web/src/App.tsx",
     "apps/web/src/App.test.tsx", "apps/web/src/connection-api.ts",
     "apps/web/src/connection-api.test.ts", "apps/web/src/ConnectionMap.tsx",
+    "apps/web/src/demo-readiness-api.ts", "apps/web/src/demo-readiness-api.test.ts",
+    "apps/web/src/DemoReadinessPanel.tsx", "services/api/src/sochron1k/demo_readiness.py",
     "services/api/src/sochron1k/main.py", "services/api/src/sochron1k/ui_connections.py",
     "services/api/src/sochron1k/owner_api.py", "services/api/src/sochron1k/execution_evidence.py",
-    "tests/test_api_safety.py", "tests/test_execution_evidence.py", "tests/test_signal_evidence.py",
+    "tests/test_api_safety.py", "tests/test_demo_readiness.py", "tests/test_execution_evidence.py", "tests/test_signal_evidence.py",
     "tests/test_research_statistics.py",
     "services/api/src/sochron1k/owner_auth.py", "services/api/src/sochron1k/telemetry.py", "tests/fixtures/mt5-telemetry-v1.json"];
   const sha256 = {};
