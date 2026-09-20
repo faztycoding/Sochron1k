@@ -205,6 +205,20 @@ acknowledgement/resolution are null. Consequently it cannot clear the SCN-031
 recovery/observability gate; see
 [ADR-035](decisions/ADR-035-derived-operational-alert-inventory.md).
 
+SCN-033 adds an optional owner-private SQLite lifecycle journal beside that
+detector. `GET /owner/alerts` remains a derived inventory and never creates state;
+only the owner-authenticated `/{condition_id}/acknowledge` and
+`/{condition_id}/resolve` POST routes mutate the lifecycle journal. Each mutation
+uses a UUID idempotency key and commits its retained receipt with the lifecycle
+transition before success is returned. A stable redacted condition hash joins
+polling observations to the journal without storing account/server identity.
+Resolution is a notification-workflow action: continuing no-SL, UNKNOWN, halt,
+stale, disconnected and storage conditions are rejected until the applicable
+source is healthy and no longer emits the condition. Rejection events may be
+closed after acknowledgement because their occurrence is immutable. External
+delivery and API-budget collection remain outside this boundary; see
+[ADR-036](decisions/ADR-036-local-alert-lifecycle-journal.md).
+
 SCN-015 adds the missing authenticated owner execution projection at
 `/owner/execution`. It reads one explicitly configured, existing private
 ExecutionService SQLite journal through a pinned, bounded, query-only connection.

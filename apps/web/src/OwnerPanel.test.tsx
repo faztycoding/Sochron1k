@@ -24,8 +24,9 @@ const emptySignals = () => ({ trading_mode: "demo", read_only: true, source: "su
 const emptyStatistics = () => ({ trading_mode: "demo", read_only: true, source: "supabase-evaluations",
   read_at_utc: "2026-09-17T00:00:00Z", status: { state: "awaiting_source", returned_count: 0, limit: 30,
     auto_trading_enabled: false, execution_ready: false, promotion_decided: false }, evaluations: [] });
-const emptyAlerts = () => ({ protocol: "sochron.operational-alerts.v1", trading_mode: "demo", read_only: true,
-  auto_trading_enabled: false, execution_ready: false, delivery_configured: false, status: "partial",
+const emptyAlerts = () => ({ protocol: "sochron.operational-alerts.v2", trading_mode: "demo", read_only: true,
+  auto_trading_enabled: false, execution_ready: false, delivery_configured: false,
+  lifecycle_runtime: "awaiting_configuration", lifecycle_mutations_enabled: false, status: "partial",
   generated_at_utc: "2026-09-17T00:00:00Z", truncated: false, alerts: [],
   coverage: alertKinds.map(kind => ({ kind, implementation: alertDefinitions[kind].implementation,
     runtime: "awaiting_configuration", api_routes: alertDefinitions[kind].routes,

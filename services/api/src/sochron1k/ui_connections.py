@@ -168,11 +168,15 @@ def build_ui_connection_map(
                     )
                     else "awaiting_configuration"
                 ),
-                current_routes=("/api/owner/alerts",),
+                current_routes=(
+                    "/api/owner/alerts",
+                    "/api/owner/alerts/{condition_id}/acknowledge",
+                    "/api/owner/alerts/{condition_id}/resolve",
+                ),
                 required_route="provider budget source + external alert delivery",
                 sources=(
                     "telemetry_status", "execution_status", "execution_journal",
-                    "bar_history", "policy_status", "api_budget",
+                    "bar_history", "policy_status", "alert_lifecycle", "api_budget",
                 ),
             ),
             UiConnection(

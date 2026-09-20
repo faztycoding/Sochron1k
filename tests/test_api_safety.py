@@ -89,7 +89,11 @@ async def test_ui_connection_map_is_redacted_and_truthful_when_unconfigured() ->
         "id": "operational_alerts",
         "implementation": "partial",
         "runtime": "awaiting_configuration",
-        "current_routes": ["/api/owner/alerts"],
+        "current_routes": [
+            "/api/owner/alerts",
+            "/api/owner/alerts/{condition_id}/acknowledge",
+            "/api/owner/alerts/{condition_id}/resolve",
+        ],
         "required_route": "provider budget source + external alert delivery",
         "sources": [
             "telemetry_status",
@@ -97,6 +101,7 @@ async def test_ui_connection_map_is_redacted_and_truthful_when_unconfigured() ->
             "execution_journal",
             "bar_history",
             "policy_status",
+            "alert_lifecycle",
             "api_budget",
         ],
     }

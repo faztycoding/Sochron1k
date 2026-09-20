@@ -116,7 +116,10 @@ rejected/UNKNOWN execution, unconfirmed SL, persistent risk halts, stale or
 disconnected bridges and archive pressure. Its eight-row coverage ledger shows the
 exact API and source position even before sign-in. API-budget input and external
 alert delivery remain explicitly missing; acknowledgement and resolution are not
-implemented, so this panel is not proof that anyone was notified. See the
+proof that anyone was notified. When `SOCHRON_ALERT_LIFECYCLE_DIR` selects an
+owner-private directory, the panel can durably record owner acknowledgement and
+guarded workflow resolution through the displayed POST routes. Continuing safety
+conditions cannot be closed; the mutation never changes MT5 or its source. See the
 [operational alert runbook](docs/operations/operational-alerts.md).
 The execution view opens no trading path and preserves confirmed Order/Deal/Position/
 SL evidence and `UNKNOWN` exactly. Its public status model is redacted and always

@@ -50,7 +50,14 @@
 .active-alert small { grid-column: 2; color: var(--muted); }
 .alert-severity { width: fit-content; border: 1px solid currentColor; border-radius: 999px; padding: 3px 6px; color: var(--amber); font-size: 10px; }
 .active-alert--critical .alert-severity { color: var(--red); }
+.alert-lifecycle { grid-column: 2; width: fit-content; margin-top: 3px; color: var(--amber); font-size: 11px; }
+.alert-lifecycle--cleared, .alert-lifecycle--resolved { color: var(--green); }
+.alert-lifecycle--unavailable { color: var(--red); }
 .alert-time { align-content: center; display: grid; gap: 3px; color: var(--muted); text-align: right; font-size: 11px; overflow-wrap: anywhere; }
+.alert-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 7px; }
+.alert-actions button { border: 1px solid rgba(214, 180, 106, 0.5); border-radius: 6px; padding: 6px 9px; color: var(--gold-soft); background: transparent; font: 600 11px "Sarabun", sans-serif; cursor: pointer; }
+.alert-actions button:hover:not(:disabled) { border-color: var(--gold); background: rgba(214, 180, 106, 0.08); }
+.alert-actions button:disabled { cursor: wait; opacity: 0.55; }
 .alerts-panel > .owner-empty { margin: 22px; }
 .alerts-panel > .owner-message, .alerts-panel > [role="status"] { margin-inline: 22px; }
 .alerts-note { margin: 0; padding: 13px 22px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; line-height: 1.55; }
@@ -62,6 +69,7 @@
   .alert-cell-label { display: block; margin-bottom: 3px; color: var(--muted); font-size: 10px; }
   .active-alert { grid-template-columns: 1fr; }
   .alert-time { text-align: left; }
+  .alert-actions { justify-content: flex-start; }
 }
 
 @media (max-width: 480px) {
@@ -71,7 +79,7 @@
   .active-alerts { padding: 18px; }
   .active-alerts-heading { align-items: start; flex-direction: column; }
   .active-alert > div:first-child { grid-template-columns: 1fr; }
-  .active-alert small { grid-column: auto; }
+  .active-alert small, .alert-lifecycle { grid-column: auto; }
   .alerts-note { padding-inline: 18px; }
 }
 

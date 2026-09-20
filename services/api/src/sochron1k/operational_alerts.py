@@ -6,7 +6,7 @@ import hashlib
 from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import AwareDatetime, Field, field_validator
+from pydantic import AwareDatetime, Field, field_validator, model_validator
 
 from .bar_history import BarHistory, HistoryUnavailable
 from .execution_bridge import ExecutionPollingBridge
@@ -48,10 +48,19 @@ KINDS: tuple[AlertKind, ...] = (
     "api_budget",
 )
 SEVERITY_ORDER = {"critical": 0, "warning": 1, "info": 2}
+MAX_ALERTS = 64
+LIFECYCLE_ORDER = {
+    "active": 0,
+    "acknowledged": 1,
+    "cleared": 2,
+    "unavailable": 3,
+    "resolved": 4,
+}
 
 
 class OperationalAlert(StrictModel):
     id: str = Field(min_length=24, max_length=24, pattern=r"^[0-9a-f]{24}$")
+    condition_id: str = Field(min_length=24, max_length=24, pattern=r"^[0-9a-f]{24}$")
     kind: AlertKind
     severity: Literal["critical", "warning", "info"]
     source: AlertSource
@@ -59,13 +68,55 @@ class OperationalAlert(StrictModel):
     detail_code: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9_]+$")
     observed_at_utc: AwareDatetime
     evidence_routes: tuple[str, ...]
-    acknowledged_by: None = None
-    resolved_at_utc: None = None
+    lifecycle_state: Literal[
+        "active", "acknowledged", "cleared", "resolved", "unavailable"
+    ] = "active"
+    acknowledge_allowed: bool = False
+    resolve_allowed: bool = False
+    acknowledged_by: Literal["owner"] | None = None
+    acknowledged_at_utc: AwareDatetime | None = None
+    resolved_at_utc: AwareDatetime | None = None
 
     @field_validator("observed_at_utc")
     @classmethod
     def normalize_time(cls, value: datetime) -> datetime:
         return value.astimezone(UTC)
+
+    @field_validator("acknowledged_at_utc", "resolved_at_utc")
+    @classmethod
+    def normalize_optional_time(cls, value: datetime | None) -> datetime | None:
+        return value.astimezone(UTC) if value is not None else None
+
+    @model_validator(mode="after")
+    def coherent_lifecycle(self) -> OperationalAlert:
+        acknowledged = self.acknowledged_at_utc is not None
+        resolved = self.resolved_at_utc is not None
+        if acknowledged != (self.acknowledged_by == "owner"):
+            raise ValueError("incoherent acknowledgement")
+        if resolved and (
+            not acknowledged or self.resolved_at_utc < self.acknowledged_at_utc
+        ):
+            raise ValueError("incoherent resolution")
+        if self.lifecycle_state == "active" and (acknowledged or resolved):
+            raise ValueError("active alert cannot have lifecycle evidence")
+        if self.lifecycle_state in {"acknowledged", "cleared"} and (
+            not acknowledged or resolved
+        ):
+            raise ValueError("incoherent open lifecycle")
+        if self.lifecycle_state == "resolved" and not resolved:
+            raise ValueError("resolved evidence required")
+        if self.acknowledge_allowed and self.lifecycle_state != "active":
+            raise ValueError("acknowledge action is not eligible")
+        if self.resolve_allowed and not (
+            self.lifecycle_state == "cleared"
+            or (self.lifecycle_state == "acknowledged" and self.kind == "order_reject")
+        ):
+            raise ValueError("resolve action is not eligible")
+        if self.lifecycle_state == "unavailable" and (
+            self.acknowledge_allowed or self.resolve_allowed
+        ):
+            raise ValueError("unavailable lifecycle cannot mutate")
+        return self
 
 
 class AlertCoverage(StrictModel):
@@ -77,12 +128,16 @@ class AlertCoverage(StrictModel):
 
 
 class OperationalAlertInventory(StrictModel):
-    protocol: Literal["sochron.operational-alerts.v1"] = "sochron.operational-alerts.v1"
+    protocol: Literal["sochron.operational-alerts.v2"] = "sochron.operational-alerts.v2"
     trading_mode: Literal["demo"] = "demo"
     read_only: Literal[True] = True
     auto_trading_enabled: Literal[False] = False
     execution_ready: Literal[False] = False
     delivery_configured: Literal[False] = False
+    lifecycle_runtime: Literal[
+        "awaiting_configuration", "connected", "degraded"
+    ] = "awaiting_configuration"
+    lifecycle_mutations_enabled: bool = False
     status: Literal["partial", "degraded"]
     generated_at_utc: AwareDatetime
     truncated: bool = False
@@ -94,11 +149,24 @@ class OperationalAlertInventory(StrictModel):
     def normalize_generated_time(cls, value: datetime) -> datetime:
         return value.astimezone(UTC)
 
+    @model_validator(mode="after")
+    def coherent_lifecycle_runtime(self) -> OperationalAlertInventory:
+        if self.lifecycle_mutations_enabled != (self.lifecycle_runtime == "connected"):
+            raise ValueError("incoherent lifecycle runtime")
+        return self
+
 
 def _alert_id(
     kind: AlertKind, source: AlertSource, source_ref: str, observed: datetime
 ) -> str:
     payload = "\x1f".join((kind, source, source_ref, observed.astimezone(UTC).isoformat()))
+    return hashlib.sha256(payload.encode()).hexdigest()[:24]
+
+
+def _condition_id(
+    kind: AlertKind, source: AlertSource, source_ref: str, detail_code: str
+) -> str:
+    payload = "\x1f".join((kind, source, source_ref, detail_code))
     return hashlib.sha256(payload.encode()).hexdigest()[:24]
 
 
@@ -114,6 +182,7 @@ def _alert(
 ) -> OperationalAlert:
     return OperationalAlert(
         id=_alert_id(kind, source, source_ref, observed_at),
+        condition_id=_condition_id(kind, source, source_ref, detail_code),
         kind=kind,
         severity=severity,
         source=source,
@@ -322,8 +391,12 @@ def build_operational_alert_inventory(
         ),
     )
     alerts.sort(key=lambda item: (
-        SEVERITY_ORDER[item.severity], -item.observed_at_utc.timestamp(), item.kind, item.id
+        LIFECYCLE_ORDER[item.lifecycle_state], SEVERITY_ORDER[item.severity],
+        -item.observed_at_utc.timestamp(), item.kind, item.id
     ))
+    if len(alerts) > MAX_ALERTS:
+        alerts = alerts[:MAX_ALERTS]
+        truncated = True
     degraded = any(item.runtime == "degraded" for item in coverage)
     return OperationalAlertInventory(
         status="degraded" if degraded else "partial",

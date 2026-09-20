@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SCN-005/006/007/014/015/016/032: browser/Auth/read models, synthetic data, no broker operations.
+// SCN-005/006/007/014/015/016/032/033: browser/Auth/read models and local alert lifecycle; no broker operations.
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -105,6 +105,8 @@ async function run() {
     const bridgePath = join(temporary, "bridge.json");
     const chartPath = join(temporary, "chart.json");
     const executionPath = join(temporary, "execution.sqlite3");
+    const alertLifecycleDir = join(temporary, "alert-lifecycle");
+    await mkdir(alertLifecycleDir, { mode: 0o700 });
     const fixtureEpoch = Math.floor(Date.now() / 1000);
     async function insertFixture(table, body) {
       const response = await http(`${origin}/rest/v1/${table}?select=id`, { method: "POST",
@@ -169,6 +171,7 @@ async function run() {
       SOCHRON_OWNER_AUTH_CONFIG_FILE: authPath, SOCHRON_BRIDGE_CONFIG_FILE: bridgePath,
       SOCHRON_CHART_CONFIG_FILE: chartPath, SOCHRON_CHART_HISTORY_DIR: temporary,
       SOCHRON_EXECUTION_JOURNAL_PATH: executionPath,
+      SOCHRON_ALERT_LIFECYCLE_DIR: alertLifecycleDir,
     } });
     api = launchApi();
     const port = await new Promise((done, reject) => {
@@ -250,6 +253,8 @@ async function run() {
     await connectionMap.getByText("/api/owner/telemetry", { exact: true }).waitFor();
     assert(await connectionMap.getByText("/api/owner/execution", { exact: true }).isVisible());
     assert(await connectionMap.getByText("/api/owner/alerts", { exact: true }).isVisible());
+    assert(await connectionMap.getByText("/api/owner/alerts/{condition_id}/acknowledge", { exact: true }).isVisible());
+    assert(await connectionMap.getByText("/api/owner/alerts/{condition_id}/resolve", { exact: true }).isVisible());
     assert(await connectionMap.getByText("/api/owner/signals", { exact: true }).isVisible());
     assert(await connectionMap.getByText("/api/owner/statistics", { exact: true }).isVisible());
     assert(await connectionMap.getByText("/api/ui/demo-readiness", { exact: true }).isVisible());
@@ -325,6 +330,9 @@ async function run() {
     assert.equal((await http(`${apiOrigin}/owner/history/M5`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/execution`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/alerts`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
+    assert.equal((await http(`${apiOrigin}/owner/alerts/${"a".repeat(24)}/acknowledge`, {
+      method: "POST", headers: { Authorization: `Bearer ${foreignToken}`, "Idempotency-Key": randomUUID() },
+    })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/signals`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     assert.equal((await http(`${apiOrigin}/owner/statistics`, { headers: { Authorization: `Bearer ${foreignToken}` } })).status, 403);
     const foreignRows = await (await http(`${origin}/rest/v1/signals?select=signal_id`, {
@@ -345,25 +353,27 @@ async function run() {
     assert(await page.getByText("DEMO ONLY", { exact: true }).isVisible());
     assert.equal(await page.getByRole("button", { name: /เปิดออเดอร์|ซื้อ|ขาย/ }).count(), 0);
     assert.equal(await page.locator('input[type="password"]').count(), 0);
-    await alerts.getByText("0 รายการ", { exact: true }).waitFor();
+    await alerts.getByText("0 รายการ · journal connected", { exact: true }).waitFor();
     const alertResponse = await http(`${apiOrigin}/owner/alerts`, {
       headers: { Authorization: `Bearer ${originalToken}` },
     });
     assert.equal(alertResponse.status, 200);
     assert.equal(alertResponse.headers.get("cache-control"), "no-store");
     const alertBody = await alertResponse.json();
-    assert.equal(alertBody.protocol, "sochron.operational-alerts.v1");
+    assert.equal(alertBody.protocol, "sochron.operational-alerts.v2");
     assert.equal(alertBody.trading_mode, "demo");
     assert.equal(alertBody.read_only, true);
     assert.equal(alertBody.auto_trading_enabled, false);
     assert.equal(alertBody.execution_ready, false);
     assert.equal(alertBody.delivery_configured, false);
+    assert.equal(alertBody.lifecycle_runtime, "connected");
+    assert.equal(alertBody.lifecycle_mutations_enabled, true);
     assert.deepEqual(alertBody.alerts, []);
     assert.deepEqual(alertBody.coverage.map(item => item.kind), ["order_reject", "no_sl", "risk_halt",
       "unknown_execution", "stale_price", "bridge_disconnected", "storage_limit", "api_budget"]);
     assert.deepEqual(alertBody.coverage.at(-1), { kind: "api_budget", implementation: "missing",
       runtime: "awaiting_configuration", api_routes: ["/api/owner/alerts"], sources: ["api_budget"] });
-    checks.push("owner operational alert inventory and missing delivery/budget coverage");
+    checks.push("owner operational alert inventory, durable lifecycle runtime and missing delivery/budget coverage");
     await signals.getByText(signalFixtures[0].signal_id, { exact: true }).waitFor();
     assert(await signals.getByText("BUY", { exact: true }).isVisible());
     assert(await signals.getByText("ยังอยู่ในอายุสัญญาณ", { exact: true }).isVisible());
@@ -496,6 +506,35 @@ async function run() {
     await page.unroute("**/api/owner/history/**");
     await historyAction(() => history.getByRole("button", { name: "ลองอ่านหน้าเดิมอีกครั้ง", exact: true }).click());
     assert.equal(await history.locator("tbody tr").count(), 20);
+    checks.push(stage);
+
+    stage = "durable alert acknowledgement and guarded resolution";
+    feedEnabled = false;
+    await panel.getByText("ข้อมูลเก่า — ห้ามใช้เป็นราคาปัจจุบัน", { exact: true }).waitFor();
+    const staleAlert = alerts.locator("li.active-alert").filter({ hasText: "ราคาหรือ heartbeat เก่า" });
+    await staleAlert.getByRole("button", { name: "รับทราบ", exact: true }).waitFor({ timeout: 15000 });
+    await staleAlert.getByRole("button", { name: "รับทราบ", exact: true }).click();
+    await staleAlert.getByText("รับทราบแล้ว · เหตุยัง active", { exact: true }).waitFor();
+    assert.equal(await staleAlert.getByRole("button", { name: "ปิด workflow", exact: true }).count(), 0);
+    let lifecycleBody = await (await http(`${apiOrigin}/owner/alerts`, {
+      headers: { Authorization: `Bearer ${originalToken}` },
+    })).json();
+    let lifecycleAlert = lifecycleBody.alerts.find(item => item.kind === "stale_price");
+    assert.equal(lifecycleAlert.lifecycle_state, "acknowledged");
+    assert.equal(lifecycleAlert.acknowledged_by, "owner");
+    assert.equal(lifecycleAlert.resolved_at_utc, null);
+    feedEnabled = true;
+    await connected.waitFor();
+    await staleAlert.getByRole("button", { name: "ปิด workflow", exact: true }).waitFor({ timeout: 15000 });
+    await staleAlert.getByRole("button", { name: "ปิด workflow", exact: true }).click();
+    await staleAlert.getByText("ปิด workflow แล้ว", { exact: true }).waitFor();
+    lifecycleBody = await (await http(`${apiOrigin}/owner/alerts`, {
+      headers: { Authorization: `Bearer ${originalToken}` },
+    })).json();
+    lifecycleAlert = lifecycleBody.alerts.find(item => item.kind === "stale_price");
+    assert.equal(lifecycleAlert.lifecycle_state, "resolved");
+    assert.match(lifecycleAlert.resolved_at_utc, /(Z|\+00:00)$/);
+    assert.equal(lifecycleBody.delivery_configured, false);
     checks.push(stage);
 
     stage = "no persistent browser session";
@@ -691,7 +730,8 @@ async function run() {
     "apps/web/src/DemoReadinessPanel.tsx", "services/api/src/sochron1k/demo_readiness.py",
     "services/api/src/sochron1k/main.py", "services/api/src/sochron1k/ui_connections.py",
     "services/api/src/sochron1k/owner_api.py", "services/api/src/sochron1k/execution_evidence.py",
-    "services/api/src/sochron1k/operational_alerts.py", "tests/test_operational_alerts.py",
+    "services/api/src/sochron1k/operational_alerts.py", "services/api/src/sochron1k/alert_lifecycle.py",
+    "tests/test_operational_alerts.py",
     "tests/test_api_safety.py", "tests/test_demo_readiness.py", "tests/test_execution_evidence.py", "tests/test_signal_evidence.py",
     "tests/test_research_statistics.py",
     "services/api/src/sochron1k/owner_auth.py", "services/api/src/sochron1k/telemetry.py", "tests/fixtures/mt5-telemetry-v1.json"];
@@ -704,7 +744,7 @@ async function run() {
     checked_at: new Date().toISOString(), node: process.version, playwright: "1.63.0", chromium: browserVersion,
     python: command(join(root, ".venv/bin/python"), ["--version"]), runtime_images: runtimeImages.sort(),
     production_build_sha256: buildSha256, refresh_diagnostics: refreshDiagnostics,
-    checks, sha256, fixture: "synthetic telemetry, OHLC, execution journal, derived alert inventory, owner-RLS signals and research evaluations; two generated local Auth users",
+    checks, sha256, fixture: "synthetic telemetry, OHLC, execution journal, derived alert inventory, durable alert lifecycle, owner-RLS signals and research evaluations; two generated local Auth users",
     token_refresh: "accelerated browser clock; real refresh-token HTTP exchange; server clock unchanged",
     mt5: "NOT_RUN", hosted_supabase: "NOT_RUN", artifacts: output };
   await writeFile(join(output, "result.json"), JSON.stringify(result, null, 2));

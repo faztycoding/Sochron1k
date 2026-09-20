@@ -83,12 +83,7 @@ export function parseTelemetry(value: unknown): Telemetry {
 export class ApiError extends Error {
   constructor(readonly status: number) { super("API request failed"); }
 }
-export async function readJSON(path: string, signal: AbortSignal, token?: string, maxBytes = 65536): Promise<unknown> {
-  const response = await fetch(path, {
-    signal: AbortSignal.any([signal, AbortSignal.timeout(6000)]), cache: "no-store",
-    credentials: "omit", redirect: "error",
-    headers: { Accept: "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-  });
+async function responseJSON(response: Response, maxBytes: number): Promise<unknown> {
   if (!response.ok) throw new ApiError(response.status);
   const reader = response.body?.getReader();
   if (!reader) throw new Error("Missing response");
@@ -105,6 +100,24 @@ export async function readJSON(path: string, signal: AbortSignal, token?: string
     }
     return JSON.parse(body + decoder.decode());
   } finally { await reader.cancel(); }
+}
+
+export async function readJSON(path: string, signal: AbortSignal, token?: string, maxBytes = 65536): Promise<unknown> {
+  return responseJSON(await fetch(path, {
+    signal: AbortSignal.any([signal, AbortSignal.timeout(6000)]), cache: "no-store",
+    credentials: "omit", redirect: "error",
+    headers: { Accept: "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  }), maxBytes);
+}
+
+export async function postJSON(
+  path: string, signal: AbortSignal, token: string, idempotencyKey: string, maxBytes = 65536,
+): Promise<unknown> {
+  return responseJSON(await fetch(path, {
+    method: "POST", signal: AbortSignal.any([signal, AbortSignal.timeout(6000)]), cache: "no-store",
+    credentials: "omit", redirect: "error",
+    headers: { Accept: "application/json", Authorization: `Bearer ${token}`, "Idempotency-Key": idempotencyKey },
+  }), maxBytes);
 }
 
 export function quoteIsFresh(data: Telemetry, elapsedSeconds: number): boolean {

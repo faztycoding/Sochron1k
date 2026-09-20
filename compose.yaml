@@ -11,6 +11,7 @@ services:
       APP_TIMEZONE: Asia/Bangkok
       AUTO_TRADING_ENABLED: "false"
       TRADING_MODE: demo
+      SOCHRON_ALERT_LIFECYCLE_DIR: ${SOCHRON_ALERT_LIFECYCLE_DIR:-}
     user: "10001:10001"
     init: true
     read_only: true

@@ -7,19 +7,30 @@ export type AlertKind = typeof alertKinds[number];
 export type AlertSource = "telemetry_bridge" | "execution_bridge" | "execution_journal" |
   "policy_writer" | "bar_history" | "api_budget";
 export type CoverageRuntime = "connected" | "awaiting_configuration" | "awaiting_source" | "degraded";
+export type LifecycleState = "active" | "acknowledged" | "cleared" | "resolved" | "unavailable";
+export type LifecycleRuntime = "awaiting_configuration" | "connected" | "degraded";
 
 export type OperationalAlert = {
-  id: string; kind: AlertKind; severity: "critical" | "warning" | "info";
+  id: string; condition_id: string; kind: AlertKind; severity: "critical" | "warning" | "info";
   source: AlertSource; source_ref: string; detail_code: string; observed_at_utc: string;
-  evidence_routes: string[]; acknowledged_by: null; resolved_at_utc: null;
+  evidence_routes: string[]; lifecycle_state: LifecycleState; acknowledge_allowed: boolean;
+  resolve_allowed: boolean; acknowledged_by: "owner" | null; acknowledged_at_utc: string | null;
+  resolved_at_utc: string | null;
 };
 export type AlertCoverage = { kind: AlertKind; implementation: "available" | "missing";
   runtime: CoverageRuntime; api_routes: string[]; sources: AlertSource[] };
 export type OperationalAlertInventory = {
-  protocol: "sochron.operational-alerts.v1"; trading_mode: "demo"; read_only: true;
+  protocol: "sochron.operational-alerts.v2"; trading_mode: "demo"; read_only: true;
   auto_trading_enabled: false; execution_ready: false; delivery_configured: false;
+  lifecycle_runtime: LifecycleRuntime; lifecycle_mutations_enabled: boolean;
   status: "partial" | "degraded"; generated_at_utc: string; truncated: boolean;
   alerts: OperationalAlert[]; coverage: AlertCoverage[];
+};
+
+export type AlertMutationReceipt = {
+  protocol: "sochron.alert-mutation.v1"; action: "acknowledge" | "resolve";
+  condition_id: string; lifecycle_state: "acknowledged" | "resolved";
+  acknowledged_at_utc: string; resolved_at_utc: string | null;
 };
 
 type AlertDefinition = { title: string; routes: string[]; sources: AlertSource[];
@@ -46,12 +57,18 @@ export const alertDefinitions: Record<AlertKind, AlertDefinition> = {
     sources: ["api_budget"], sourceLabel: "ยังไม่มี provider cost source", implementation: "missing" },
 };
 
-const alertKeys = ["id", "kind", "severity", "source", "source_ref", "detail_code", "observed_at_utc",
-  "evidence_routes", "acknowledged_by", "resolved_at_utc"];
+const alertKeys = ["id", "condition_id", "kind", "severity", "source", "source_ref", "detail_code",
+  "observed_at_utc", "evidence_routes", "lifecycle_state", "acknowledge_allowed", "resolve_allowed",
+  "acknowledged_by", "acknowledged_at_utc", "resolved_at_utc"];
 const coverageKeys = ["kind", "implementation", "runtime", "api_routes", "sources"];
 const inventoryKeys = ["protocol", "trading_mode", "read_only", "auto_trading_enabled", "execution_ready",
-  "delivery_configured", "status", "generated_at_utc", "truncated", "alerts", "coverage"];
+  "delivery_configured", "lifecycle_runtime", "lifecycle_mutations_enabled", "status", "generated_at_utc",
+  "truncated", "alerts", "coverage"];
+const receiptKeys = ["protocol", "action", "condition_id", "lifecycle_state", "acknowledged_at_utc",
+  "resolved_at_utc"];
 const runtimes = new Set<CoverageRuntime>(["connected", "awaiting_configuration", "awaiting_source", "degraded"]);
+const lifecycleStates = new Set<LifecycleState>(["active", "acknowledged", "cleared", "resolved", "unavailable"]);
+const lifecycleRuntimes = new Set<LifecycleRuntime>(["awaiting_configuration", "connected", "degraded"]);
 const severities = new Set(["critical", "warning", "info"]);
 const sourceRoutes: Record<AlertSource, string[]> = {
   telemetry_bridge: ["/api/owner/telemetry"], execution_bridge: ["/api/executor/v1/status"],
@@ -86,6 +103,7 @@ const detailRules: Record<string, { kind: AlertKind; source: AlertSource; severi
   warning_85: { kind: "storage_limit", source: "bar_history", severity: "warning" },
 };
 const severityOrder = { critical: 0, warning: 1, info: 2 } as const;
+const lifecycleOrder = { active: 0, acknowledged: 1, cleared: 2, unavailable: 3, resolved: 4 } as const;
 
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid alert inventory");
@@ -106,11 +124,14 @@ function utc(value: unknown): value is string {
 
 export function parseOperationalAlerts(value: unknown): OperationalAlertInventory {
   const data = object(value); exactKeys(data, inventoryKeys);
-  if (data.protocol !== "sochron.operational-alerts.v1" || data.trading_mode !== "demo" ||
+  if (data.protocol !== "sochron.operational-alerts.v2" || data.trading_mode !== "demo" ||
       data.read_only !== true || data.auto_trading_enabled !== false || data.execution_ready !== false ||
       data.delivery_configured !== false || !["partial", "degraded"].includes(String(data.status)) ||
+      !lifecycleRuntimes.has(data.lifecycle_runtime as LifecycleRuntime) ||
+      typeof data.lifecycle_mutations_enabled !== "boolean" ||
+      data.lifecycle_mutations_enabled !== (data.lifecycle_runtime === "connected") ||
       !utc(data.generated_at_utc) || typeof data.truncated !== "boolean" || !Array.isArray(data.alerts) ||
-      data.alerts.length > 110 || !Array.isArray(data.coverage) || data.coverage.length !== alertKinds.length) {
+      data.alerts.length > 64 || !Array.isArray(data.coverage) || data.coverage.length !== alertKinds.length) {
     throw new Error("Invalid alert inventory");
   }
   const coverage = data.coverage.map((raw, index) => {
@@ -125,10 +146,13 @@ export function parseOperationalAlerts(value: unknown): OperationalAlertInventor
     return item as AlertCoverage;
   });
   const ids = new Set<string>();
+  const conditions = new Set<string>();
   const alerts = data.alerts.map(raw => {
     const item = object(raw); exactKeys(item, alertKeys);
     const rule = typeof item.detail_code === "string" ? detailRules[item.detail_code] : undefined;
     if (typeof item.id !== "string" || !/^[0-9a-f]{24}$/.test(item.id) || ids.has(item.id) ||
+        typeof item.condition_id !== "string" || !/^[0-9a-f]{24}$/.test(item.condition_id) ||
+        conditions.has(item.condition_id) ||
         !alertKinds.includes(item.kind as AlertKind) || !severities.has(String(item.severity)) ||
         !Object.hasOwn(sourceRoutes, String(item.source)) ||
         typeof item.source_ref !== "string" || !/^[a-z0-9_-]{1,32}$/.test(item.source_ref) ||
@@ -136,16 +160,36 @@ export function parseOperationalAlerts(value: unknown): OperationalAlertInventor
         item.kind !== rule.kind || item.source !== rule.source || item.severity !== rule.severity ||
         !utc(item.observed_at_utc) ||
         !exactStrings(item.evidence_routes, sourceRoutes[item.source as AlertSource]) ||
-        item.acknowledged_by !== null || item.resolved_at_utc !== null) throw new Error("Invalid operational alert");
+        !lifecycleStates.has(item.lifecycle_state as LifecycleState) ||
+        typeof item.acknowledge_allowed !== "boolean" || typeof item.resolve_allowed !== "boolean" ||
+        ![null, "owner"].includes(item.acknowledged_by as null | "owner") ||
+        !(item.acknowledged_at_utc === null || utc(item.acknowledged_at_utc)) ||
+        !(item.resolved_at_utc === null || utc(item.resolved_at_utc))) throw new Error("Invalid operational alert");
     if (item.source === "execution_journal" && !/^[0-9a-f]{16}$/.test(item.source_ref)) {
       throw new Error("Invalid journal alert reference");
     }
+    const acknowledged = item.acknowledged_at_utc !== null;
+    const resolved = item.resolved_at_utc !== null;
+    const state = item.lifecycle_state as LifecycleState;
+    if (acknowledged !== (item.acknowledged_by === "owner") ||
+        (resolved && (!acknowledged || Date.parse(String(item.resolved_at_utc)) < Date.parse(String(item.acknowledged_at_utc)))) ||
+        (state === "active" && (acknowledged || resolved)) ||
+        (["acknowledged", "cleared"].includes(state) && (!acknowledged || resolved)) ||
+        (state === "resolved" && !resolved) ||
+        (item.acknowledge_allowed && state !== "active") ||
+        (item.resolve_allowed && !(state === "cleared" || (state === "acknowledged" && item.kind === "order_reject"))) ||
+        (state === "unavailable" && (item.acknowledge_allowed || item.resolve_allowed)) ||
+        (data.lifecycle_runtime !== "connected" && (item.acknowledge_allowed || item.resolve_allowed))) {
+      throw new Error("Invalid alert lifecycle");
+    }
     ids.add(item.id);
+    conditions.add(item.condition_id);
     return item as OperationalAlert;
   });
-  const degraded = coverage.some(item => item.runtime === "degraded");
+  const degraded = coverage.some(item => item.runtime === "degraded") || data.lifecycle_runtime === "degraded";
   if ((data.status === "degraded") !== degraded) throw new Error("Invalid alert inventory status");
   const expectedOrder = [...alerts].sort((left, right) =>
+    lifecycleOrder[left.lifecycle_state] - lifecycleOrder[right.lifecycle_state] ||
     severityOrder[left.severity] - severityOrder[right.severity] ||
     Date.parse(right.observed_at_utc) - Date.parse(left.observed_at_utc) ||
     left.kind.localeCompare(right.kind) || left.id.localeCompare(right.id));
@@ -153,4 +197,18 @@ export function parseOperationalAlerts(value: unknown): OperationalAlertInventor
     throw new Error("Invalid alert order");
   }
   return { ...data, alerts, coverage } as OperationalAlertInventory;
+}
+
+export function parseAlertMutationReceipt(value: unknown): AlertMutationReceipt {
+  const data = object(value); exactKeys(data, receiptKeys);
+  if (data.protocol !== "sochron.alert-mutation.v1" ||
+      !["acknowledge", "resolve"].includes(String(data.action)) ||
+      typeof data.condition_id !== "string" || !/^[0-9a-f]{24}$/.test(data.condition_id) ||
+      !utc(data.acknowledged_at_utc) || !(data.resolved_at_utc === null || utc(data.resolved_at_utc)) ||
+      (data.action === "acknowledge" && (data.lifecycle_state !== "acknowledged" || data.resolved_at_utc !== null)) ||
+      (data.action === "resolve" && (data.lifecycle_state !== "resolved" || !utc(data.resolved_at_utc))) ||
+      (data.resolved_at_utc !== null && Date.parse(data.resolved_at_utc as string) < Date.parse(data.acknowledged_at_utc))) {
+    throw new Error("Invalid alert mutation receipt");
+  }
+  return data as AlertMutationReceipt;
 }
