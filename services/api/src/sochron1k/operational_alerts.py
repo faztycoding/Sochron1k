@@ -8,6 +8,7 @@ from typing import Literal
 
 from pydantic import AwareDatetime, Field, field_validator, model_validator
 
+from .alert_delivery_status import AlertDeliveryStatusReader, AlertDeliveryView
 from .api_budget import ApiBudgetReader, ApiBudgetView, BudgetState
 from .bar_history import BarHistory, HistoryUnavailable
 from .execution_bridge import ExecutionPollingBridge
@@ -33,6 +34,7 @@ AlertSource = Literal[
     "policy_writer",
     "bar_history",
     "api_budget",
+    "alert_delivery",
 ]
 CoverageRuntime = Literal[
     "connected", "awaiting_configuration", "awaiting_source", "degraded"
@@ -129,12 +131,12 @@ class AlertCoverage(StrictModel):
 
 
 class OperationalAlertInventory(StrictModel):
-    protocol: Literal["sochron.operational-alerts.v3"] = "sochron.operational-alerts.v3"
+    protocol: Literal["sochron.operational-alerts.v4"] = "sochron.operational-alerts.v4"
     trading_mode: Literal["demo"] = "demo"
     read_only: Literal[True] = True
     auto_trading_enabled: Literal[False] = False
     execution_ready: Literal[False] = False
-    delivery_configured: Literal[False] = False
+    delivery_configured: bool = False
     lifecycle_runtime: Literal[
         "awaiting_configuration", "connected", "degraded"
     ] = "awaiting_configuration"
@@ -143,6 +145,7 @@ class OperationalAlertInventory(StrictModel):
     generated_at_utc: AwareDatetime
     truncated: bool = False
     api_budget: ApiBudgetView
+    delivery: AlertDeliveryView
     alerts: tuple[OperationalAlert, ...] = ()
     coverage: tuple[AlertCoverage, ...]
 
@@ -155,6 +158,8 @@ class OperationalAlertInventory(StrictModel):
     def coherent_lifecycle_runtime(self) -> OperationalAlertInventory:
         if self.lifecycle_mutations_enabled != (self.lifecycle_runtime == "connected"):
             raise ValueError("incoherent lifecycle runtime")
+        if self.delivery_configured != self.delivery.configured:
+            raise ValueError("incoherent delivery configuration")
         return self
 
 
@@ -221,6 +226,16 @@ def _budget_runtime(state: BudgetState) -> CoverageRuntime:
     return "connected"
 
 
+def _delivery_runtime(state: str) -> CoverageRuntime:
+    if state == "disabled":
+        return "awaiting_configuration"
+    if state == "awaiting_worker":
+        return "awaiting_source"
+    if state in {"connected", "pending"}:
+        return "connected"
+    return "degraded"
+
+
 def build_operational_alert_inventory(
     *,
     telemetry: TelemetryBridge,
@@ -229,6 +244,7 @@ def build_operational_alert_inventory(
     history: BarHistory | None,
     policy: PolicyEvidenceWriter,
     api_budget: ApiBudgetReader,
+    alert_delivery: AlertDeliveryStatusReader | None = None,
     now: datetime | None = None,
 ) -> OperationalAlertInventory:
     generated = (now or datetime.now(UTC)).astimezone(UTC)
@@ -246,6 +262,12 @@ def build_operational_alert_inventory(
     )
     budget_view = api_budget.view(generated)
     budget_runtime = _budget_runtime(budget_view.state)
+    delivery_view = (
+        alert_delivery.view(generated)
+        if alert_delivery is not None
+        else AlertDeliveryStatusReader(None).view(generated)
+    )
+    delivery_runtime = _delivery_runtime(delivery_view.state)
 
     observation_time = (
         telemetry_view.observation.received_time_utc
@@ -317,6 +339,30 @@ def build_operational_alert_inventory(
             routes=("/api/owner/api-budget",),
         ))
 
+    if delivery_view.state in {
+        "unknown", "quarantined", "retry_exhausted", "stale", "degraded"
+    }:
+        detail = {
+            "unknown": "alert_delivery_unknown",
+            "quarantined": "alert_delivery_quarantined",
+            "retry_exhausted": "alert_delivery_retry_exhausted",
+            "stale": "alert_delivery_stale",
+            "degraded": "alert_delivery_degraded",
+        }[delivery_view.state]
+        alerts.append(_alert(
+            kind="bridge_disconnected",
+            severity=(
+                "critical"
+                if delivery_view.state in {"unknown", "quarantined", "retry_exhausted"}
+                else "warning"
+            ),
+            source="alert_delivery",
+            source_ref=delivery_view.destination_ref or "current",
+            detail_code=detail,
+            observed_at=delivery_view.updated_at_utc or generated,
+            routes=("/api/owner/alerts",),
+        ))
+
     journal_runtime: CoverageRuntime = "awaiting_configuration"
     truncated = False
     if journal is not None:
@@ -369,13 +415,16 @@ def build_operational_alert_inventory(
 
     combined_bridge_runtime: CoverageRuntime = (
         "degraded" if "degraded" in {
-            telemetry_runtime, execution_runtime, policy_runtime, budget_runtime
+            telemetry_runtime, execution_runtime, policy_runtime, budget_runtime,
+            delivery_runtime,
         }
         else "awaiting_configuration" if "awaiting_configuration" in {
-            telemetry_runtime, execution_runtime, policy_runtime, budget_runtime
+            telemetry_runtime, execution_runtime, policy_runtime, budget_runtime,
+            delivery_runtime,
         }
         else "awaiting_source" if "awaiting_source" in {
-            telemetry_runtime, execution_runtime, policy_runtime, budget_runtime
+            telemetry_runtime, execution_runtime, policy_runtime, budget_runtime,
+            delivery_runtime,
         }
         else "connected"
     )
@@ -427,7 +476,8 @@ def build_operational_alert_inventory(
                 "/api/owner/api-budget",
             ),
             sources=(
-                "telemetry_bridge", "execution_bridge", "policy_writer", "api_budget"
+                "telemetry_bridge", "execution_bridge", "policy_writer", "api_budget",
+                "alert_delivery",
             ),
         ),
         AlertCoverage(
@@ -452,12 +502,16 @@ def build_operational_alert_inventory(
     if len(alerts) > MAX_ALERTS:
         alerts = alerts[:MAX_ALERTS]
         truncated = True
-    degraded = any(item.runtime == "degraded" for item in coverage)
+    degraded = any(item.runtime == "degraded" for item in coverage) or delivery_view.state in {
+        "unknown", "quarantined", "retry_exhausted", "stale", "degraded"
+    }
     return OperationalAlertInventory(
         status="degraded" if degraded else "partial",
+        delivery_configured=delivery_view.configured,
         generated_at_utc=generated,
         truncated=truncated,
         api_budget=budget_view,
+        delivery=delivery_view,
         alerts=tuple(alerts),
         coverage=coverage,
     )

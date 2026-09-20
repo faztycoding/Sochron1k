@@ -5,12 +5,14 @@ export const alertKinds = [
 
 export type AlertKind = typeof alertKinds[number];
 export type AlertSource = "telemetry_bridge" | "execution_bridge" | "execution_journal" |
-  "policy_writer" | "bar_history" | "api_budget";
+  "policy_writer" | "bar_history" | "api_budget" | "alert_delivery";
 export type CoverageRuntime = "connected" | "awaiting_configuration" | "awaiting_source" | "degraded";
 export type LifecycleState = "active" | "acknowledged" | "cleared" | "resolved" | "unavailable";
 export type LifecycleRuntime = "awaiting_configuration" | "connected" | "degraded";
 export type ApiBudgetState = "disabled" | "awaiting_snapshot" | "connected" | "warning" |
   "critical" | "exhausted" | "stale" | "degraded";
+export type AlertDeliveryState = "disabled" | "awaiting_worker" | "connected" | "pending" |
+  "unknown" | "quarantined" | "retry_exhausted" | "stale" | "degraded";
 
 export type ApiBudgetView = {
   protocol: "sochron.api-budget-view.v1"; trading_mode: "demo"; read_only: true;
@@ -24,6 +26,14 @@ export type ApiBudgetView = {
     usage_percent: string };
 };
 
+export type AlertDeliveryView = {
+  protocol: "sochron.alert-delivery-view.v1"; state: AlertDeliveryState; configured: boolean;
+  destination_ref: string | null; updated_at_utc: string | null;
+  pending_deliveries: number; unknown_deliveries: number; verified_deliveries: number;
+  quarantined_deliveries: number; last_delivery_ref: string | null;
+  last_verified_at_utc: string | null;
+};
+
 export type OperationalAlert = {
   id: string; condition_id: string; kind: AlertKind; severity: "critical" | "warning" | "info";
   source: AlertSource; source_ref: string; detail_code: string; observed_at_utc: string;
@@ -34,11 +44,12 @@ export type OperationalAlert = {
 export type AlertCoverage = { kind: AlertKind; implementation: "available" | "missing";
   runtime: CoverageRuntime; api_routes: string[]; sources: AlertSource[] };
 export type OperationalAlertInventory = {
-  protocol: "sochron.operational-alerts.v3"; trading_mode: "demo"; read_only: true;
-  auto_trading_enabled: false; execution_ready: false; delivery_configured: false;
+  protocol: "sochron.operational-alerts.v4"; trading_mode: "demo"; read_only: true;
+  auto_trading_enabled: false; execution_ready: false; delivery_configured: boolean;
   lifecycle_runtime: LifecycleRuntime; lifecycle_mutations_enabled: boolean;
   status: "partial" | "degraded"; generated_at_utc: string; truncated: boolean;
-  api_budget: ApiBudgetView; alerts: OperationalAlert[]; coverage: AlertCoverage[];
+  api_budget: ApiBudgetView; delivery: AlertDeliveryView;
+  alerts: OperationalAlert[]; coverage: AlertCoverage[];
 };
 
 export type AlertMutationReceipt = {
@@ -63,8 +74,8 @@ export const alertDefinitions: Record<AlertKind, AlertDefinition> = {
     sources: ["telemetry_bridge"], sourceLabel: "MT5 telemetry status", implementation: "available" },
   bridge_disconnected: { title: "Bridge / source ใช้งานไม่ได้",
     routes: ["/api/owner/alerts", "/api/owner/telemetry", "/api/executor/v1/status", "/api/policy/v1/status", "/api/owner/api-budget"],
-    sources: ["telemetry_bridge", "execution_bridge", "policy_writer", "api_budget"],
-    sourceLabel: "Telemetry + execution + policy + budget status", implementation: "available" },
+    sources: ["telemetry_bridge", "execution_bridge", "policy_writer", "api_budget", "alert_delivery"],
+    sourceLabel: "Telemetry + execution + policy + budget + delivery status", implementation: "available" },
   storage_limit: { title: "พื้นที่คลังใกล้เพดาน", routes: ["/api/owner/alerts", "/api/owner/history/{timeframe}"],
     sources: ["bar_history"], sourceLabel: "Local bar archive page usage", implementation: "available" },
   api_budget: { title: "งบ API ใกล้เพดาน", routes: ["/api/owner/alerts", "/api/owner/api-budget"],
@@ -77,7 +88,7 @@ const alertKeys = ["id", "condition_id", "kind", "severity", "source", "source_r
 const coverageKeys = ["kind", "implementation", "runtime", "api_routes", "sources"];
 const inventoryKeys = ["protocol", "trading_mode", "read_only", "auto_trading_enabled", "execution_ready",
   "delivery_configured", "lifecycle_runtime", "lifecycle_mutations_enabled", "status", "generated_at_utc",
-  "truncated", "api_budget", "alerts", "coverage"];
+  "truncated", "api_budget", "delivery", "alerts", "coverage"];
 const receiptKeys = ["protocol", "action", "condition_id", "lifecycle_state", "acknowledged_at_utc",
   "resolved_at_utc"];
 const runtimes = new Set<CoverageRuntime>(["connected", "awaiting_configuration", "awaiting_source", "degraded"]);
@@ -88,6 +99,7 @@ const sourceRoutes: Record<AlertSource, string[]> = {
   telemetry_bridge: ["/api/owner/telemetry"], execution_bridge: ["/api/executor/v1/status"],
   execution_journal: ["/api/owner/execution"], policy_writer: ["/api/policy/v1/status"],
   bar_history: ["/api/owner/history/{timeframe}"], api_budget: ["/api/owner/api-budget"],
+  alert_delivery: ["/api/owner/alerts"],
 };
 const details = new Set([
   "entry_rejected", "management_rejected", "entry_unknown", "management_unknown",
@@ -97,6 +109,8 @@ const details = new Set([
   "bar_history_unavailable", "warning_70", "warning_85",
   "api_budget_warning", "api_budget_critical", "api_budget_exhausted",
   "api_budget_stale", "api_budget_degraded",
+  "alert_delivery_unknown", "alert_delivery_quarantined", "alert_delivery_retry_exhausted",
+  "alert_delivery_stale", "alert_delivery_degraded",
 ]);
 const detailRules: Record<string, { kind: AlertKind; source: AlertSource; severity: "critical" | "warning" }> = {
   entry_rejected: { kind: "order_reject", source: "execution_journal", severity: "warning" },
@@ -122,6 +136,11 @@ const detailRules: Record<string, { kind: AlertKind; source: AlertSource; severi
   api_budget_exhausted: { kind: "api_budget", source: "api_budget", severity: "critical" },
   api_budget_stale: { kind: "bridge_disconnected", source: "api_budget", severity: "warning" },
   api_budget_degraded: { kind: "bridge_disconnected", source: "api_budget", severity: "warning" },
+  alert_delivery_unknown: { kind: "bridge_disconnected", source: "alert_delivery", severity: "critical" },
+  alert_delivery_quarantined: { kind: "bridge_disconnected", source: "alert_delivery", severity: "critical" },
+  alert_delivery_retry_exhausted: { kind: "bridge_disconnected", source: "alert_delivery", severity: "critical" },
+  alert_delivery_stale: { kind: "bridge_disconnected", source: "alert_delivery", severity: "warning" },
+  alert_delivery_degraded: { kind: "bridge_disconnected", source: "alert_delivery", severity: "warning" },
 };
 const severityOrder = { critical: 0, warning: 1, info: 2 } as const;
 const lifecycleOrder = { active: 0, acknowledged: 1, cleared: 2, unavailable: 3, resolved: 4 } as const;
@@ -179,6 +198,53 @@ const budgetEvidenceKeys = ["source_ref", "period_start_utc", "period_end_utc", 
 const budgetStates = new Set<ApiBudgetState>([
   "disabled", "awaiting_snapshot", "connected", "warning", "critical", "exhausted", "stale", "degraded",
 ]);
+const deliveryKeys = ["protocol", "state", "configured", "destination_ref", "updated_at_utc",
+  "pending_deliveries", "unknown_deliveries", "verified_deliveries", "quarantined_deliveries",
+  "last_delivery_ref", "last_verified_at_utc"];
+const deliveryStates = new Set<AlertDeliveryState>([
+  "disabled", "awaiting_worker", "connected", "pending", "unknown", "quarantined",
+  "retry_exhausted", "stale", "degraded",
+]);
+
+export function parseAlertDelivery(value: unknown): AlertDeliveryView {
+  const data = object(value); exactKeys(data, deliveryKeys);
+  const counts = [data.pending_deliveries, data.unknown_deliveries, data.verified_deliveries,
+    data.quarantined_deliveries];
+  if (data.protocol !== "sochron.alert-delivery-view.v1" ||
+      !deliveryStates.has(data.state as AlertDeliveryState) || typeof data.configured !== "boolean" ||
+      !(data.destination_ref === null || (typeof data.destination_ref === "string" &&
+        /^[a-z0-9][a-z0-9_-]{0,63}$/.test(data.destination_ref))) ||
+      !(data.updated_at_utc === null || utc(data.updated_at_utc)) ||
+      counts.some((item, index) => typeof item !== "number" || !Number.isSafeInteger(item) ||
+        item < 0 || item > (index < 2 ? 1 : 1_000_000)) ||
+      !(data.last_delivery_ref === null || (typeof data.last_delivery_ref === "string" &&
+        /^[0-9a-f]{32}$/.test(data.last_delivery_ref))) ||
+      !(data.last_verified_at_utc === null || utc(data.last_verified_at_utc))) {
+    throw new Error("Invalid alert delivery view");
+  }
+  const state = data.state as AlertDeliveryState;
+  if ((state === "disabled") !== (data.configured === false) ||
+      (!data.configured && (data.destination_ref !== null || data.updated_at_utc !== null ||
+        counts.some(item => item !== 0) || data.last_delivery_ref !== null ||
+        data.last_verified_at_utc !== null)) ||
+      (state === "awaiting_worker" && (data.destination_ref !== null || data.updated_at_utc !== null ||
+        counts.some(item => item !== 0))) ||
+      (["connected", "pending", "unknown", "quarantined", "retry_exhausted", "stale"]
+        .includes(state) && (data.destination_ref === null || data.updated_at_utc === null)) ||
+      (state === "connected" && (data.pending_deliveries !== 0 || data.unknown_deliveries !== 0)) ||
+      (state === "pending" && (data.pending_deliveries !== 1 || data.unknown_deliveries !== 0)) ||
+      (["unknown", "retry_exhausted"].includes(state) &&
+        (data.pending_deliveries !== 1 || data.unknown_deliveries !== 1)) ||
+      (state === "quarantined" && (data.pending_deliveries !== 0 ||
+        data.unknown_deliveries !== 0 || data.quarantined_deliveries === 0)) ||
+      ((Number(data.verified_deliveries) > 0) !==
+        (data.last_delivery_ref !== null && data.last_verified_at_utc !== null)) ||
+      (data.updated_at_utc !== null && data.last_verified_at_utc !== null &&
+        Date.parse(data.last_verified_at_utc as string) > Date.parse(data.updated_at_utc as string))) {
+    throw new Error("Invalid alert delivery state");
+  }
+  return data as AlertDeliveryView;
+}
 
 export function parseApiBudget(value: unknown): ApiBudgetView {
   const data = object(value); exactKeys(data, budgetKeys);
@@ -246,18 +312,24 @@ export function parseApiBudget(value: unknown): ApiBudgetView {
 
 export function parseOperationalAlerts(value: unknown): OperationalAlertInventory {
   const data = object(value); exactKeys(data, inventoryKeys);
-  if (data.protocol !== "sochron.operational-alerts.v3" || data.trading_mode !== "demo" ||
+  if (data.protocol !== "sochron.operational-alerts.v4" || data.trading_mode !== "demo" ||
       data.read_only !== true || data.auto_trading_enabled !== false || data.execution_ready !== false ||
-      data.delivery_configured !== false || !["partial", "degraded"].includes(String(data.status)) ||
+      typeof data.delivery_configured !== "boolean" || !["partial", "degraded"].includes(String(data.status)) ||
       !lifecycleRuntimes.has(data.lifecycle_runtime as LifecycleRuntime) ||
       typeof data.lifecycle_mutations_enabled !== "boolean" ||
       data.lifecycle_mutations_enabled !== (data.lifecycle_runtime === "connected") ||
-      !utc(data.generated_at_utc) || typeof data.truncated !== "boolean" || !data.api_budget ||
+      !utc(data.generated_at_utc) || typeof data.truncated !== "boolean" || !data.api_budget || !data.delivery ||
       !Array.isArray(data.alerts) ||
       data.alerts.length > 64 || !Array.isArray(data.coverage) || data.coverage.length !== alertKinds.length) {
     throw new Error("Invalid alert inventory");
   }
   const apiBudget = parseApiBudget(data.api_budget);
+  const delivery = parseAlertDelivery(data.delivery);
+  if (data.delivery_configured !== delivery.configured ||
+      (delivery.updated_at_utc !== null &&
+        Date.parse(delivery.updated_at_utc) > Date.parse(data.generated_at_utc as string))) {
+    throw new Error("Invalid delivery projection");
+  }
   const coverage = data.coverage.map((raw, index) => {
     const item = object(raw); exactKeys(item, coverageKeys);
     const kind = alertKinds[index]; const definition = alertDefinitions[kind];
@@ -310,7 +382,10 @@ export function parseOperationalAlerts(value: unknown): OperationalAlertInventor
     conditions.add(item.condition_id);
     return item as OperationalAlert;
   });
-  const degraded = coverage.some(item => item.runtime === "degraded") || data.lifecycle_runtime === "degraded";
+  const degradedDelivery = ["unknown", "quarantined", "retry_exhausted", "stale", "degraded"]
+    .includes(delivery.state);
+  const degraded = coverage.some(item => item.runtime === "degraded") ||
+    data.lifecycle_runtime === "degraded" || degradedDelivery;
   if ((data.status === "degraded") !== degraded) throw new Error("Invalid alert inventory status");
   const expectedOrder = [...alerts].sort((left, right) =>
     lifecycleOrder[left.lifecycle_state] - lifecycleOrder[right.lifecycle_state] ||
@@ -325,7 +400,7 @@ export function parseOperationalAlerts(value: unknown): OperationalAlertInventor
     apiBudget.state === "awaiting_snapshot" ? "awaiting_source" :
     ["stale", "degraded"].includes(apiBudget.state) ? "degraded" : "connected";
   if (budgetCoverage.runtime !== expectedBudgetRuntime) throw new Error("Invalid budget coverage state");
-  return { ...data, api_budget: apiBudget, alerts, coverage } as OperationalAlertInventory;
+  return { ...data, api_budget: apiBudget, delivery, alerts, coverage } as OperationalAlertInventory;
 }
 
 export function parseAlertMutationReceipt(value: unknown): AlertMutationReceipt {

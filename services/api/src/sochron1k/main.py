@@ -8,6 +8,16 @@ from fastapi import FastAPI, Request
 from pydantic import BaseModel
 
 from . import __version__
+from .alert_delivery_api import router as alert_delivery_router
+from .alert_delivery_source import (
+    AlertSourceAuthenticator,
+    AlertSourceSettings,
+    load_alert_source_settings,
+)
+from .alert_delivery_status import (
+    AlertDeliveryStatusReader,
+    load_alert_delivery_status_reader,
+)
 from .alert_lifecycle import AlertLifecycleJournal, load_alert_lifecycle_journal
 from .api_budget import ApiBudgetReader, load_api_budget_reader
 from .bar_history import BarHistory, HistoryUnavailable
@@ -71,6 +81,8 @@ def create_app(
     demo_owner_decisions: DemoOwnerDecisions | None = None,
     alert_lifecycle: AlertLifecycleJournal | None = None,
     api_budget: ApiBudgetReader | None = None,
+    alert_source_settings: AlertSourceSettings | None = None,
+    alert_delivery_status: AlertDeliveryStatusReader | None = None,
 ) -> FastAPI:
     if (
         bridge_settings is not None
@@ -79,6 +91,19 @@ def create_app(
         == execution_bridge_settings.token.get_secret_value()
     ):
         raise RuntimeError("telemetry and execution bridges require separate credentials")
+    if alert_source_settings is not None and (
+        (
+            bridge_settings is not None
+            and alert_source_settings.token.get_secret_value()
+            == bridge_settings.token.get_secret_value()
+        )
+        or (
+            execution_bridge_settings is not None
+            and alert_source_settings.token.get_secret_value()
+            == execution_bridge_settings.token.get_secret_value()
+        )
+    ):
+        raise RuntimeError("alert source requires a separate service credential")
     if policy_writer_settings is not None and (
         bridge_settings is None
         or execution_bridge_settings is None
@@ -94,6 +119,8 @@ def create_app(
     app.state.execution_evidence = execution_evidence
     app.state.alert_lifecycle = alert_lifecycle
     app.state.api_budget = api_budget or ApiBudgetReader(None)
+    app.state.alert_source_authenticator = AlertSourceAuthenticator(alert_source_settings)
+    app.state.alert_delivery_status = alert_delivery_status or AlertDeliveryStatusReader(None)
     app.state.signal_evidence = signal_evidence or (
         SignalEvidenceReader(owner_auth_settings) if owner_auth_settings is not None else None
     )
@@ -113,12 +140,16 @@ def create_app(
     app.include_router(history_router)
     app.include_router(execution_bridge_router)
     app.include_router(policy_router)
+    app.include_router(alert_delivery_router)
 
     @app.middleware("http")
     async def bridge_no_cache(request: Request, call_next):
         response = await call_next(request)
         if request.url.path.startswith(
-            ("/bridge/", "/executor/", "/owner/", "/auth/", "/ui/", "/policy/")
+            (
+                "/bridge/", "/executor/", "/owner/", "/auth/", "/ui/", "/policy/",
+                "/internal/",
+            )
         ):
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -164,6 +195,7 @@ def create_app(
             policy_state=app.state.policy_writer.status().state,
             statistics_configured=app.state.research_statistics is not None,
             api_budget_state=app.state.api_budget.view().state,
+            alert_delivery_state=app.state.alert_delivery_status.view().state,
         )
 
     @app.get("/ui/demo-readiness")
@@ -204,4 +236,6 @@ app = create_app(
     demo_owner_decisions=load_demo_owner_decisions(),
     alert_lifecycle=load_alert_lifecycle_journal(),
     api_budget=load_api_budget_reader(),
+    alert_source_settings=load_alert_source_settings(),
+    alert_delivery_status=load_alert_delivery_status_reader(),
 )

@@ -49,6 +49,9 @@ The outcome is a repeatable research and Demo execution system, not a promise of
 - Price is treated as stale after an initial five-second threshold only while the market is expected to be active; the threshold remains an experiment parameter.
 - Alerts, backups, restore, and reconciliation are exercised before unattended operation.
 - The local owner alert inventory may show derived conditions before delivery is configured. Local acknowledgement/resolution is a separate durable owner workflow; neither a visible row nor that workflow is evidence that an external alert was sent or the source recovered.
+- A provider-neutral delivery worker journals each notification before `PUT` and
+  requires an independently readable matching relay receipt. Local synthetic relay
+  evidence is not proof that a real provider or human recipient received a message.
 - API-budget evidence uses an owner-selected currency, limit and thresholds plus a
   normalized provider snapshot. Planning prices, local call counts and stale
   provider data cannot be presented as current billed usage.

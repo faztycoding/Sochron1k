@@ -224,10 +224,22 @@ reader. A credential-isolated future provider collector atomically writes one ex
 private normalized snapshot; a separate owner-private config supplies currency,
 monthly limit, warning/critical fractions and maximum evidence age. The API checks
 permissions, schema, billing period, UTC ordering, freshness and exact decimal
-arithmetic on every read. `/owner/api-budget` and the embedded v3 alert view expose
+arithmetic on every read. `/owner/api-budget` and the embedded alert view expose
 only a hashed source reference and derived amounts. No provider API, credential,
 purchase, currency conversion or external notification is added; see
 [ADR-037](decisions/ADR-037-provider-neutral-api-budget-snapshot.md).
+
+SCN-035 adds a separately authenticated `/internal/v1/alerts` projection for one
+explicit delivery worker. The browser proxy rejects that route. The installed
+`sochron-alert-delivery` command records one immutable notification and destination
+binding in a private SQLite outbox before any network write, commits `UNKNOWN`
+before `PUT`, and requires a separate matching `GET` receipt before `VERIFIED`.
+A confirmed missing receipt permits only a later same-ID retry; conflict quarantines
+the intent and bounded attempts stop automatically. The API receives no destination
+credential: it reads only an atomic private status projection and embeds that
+redacted state in `/owner/alerts` v4. No real relay, provider, human recipient,
+escalation or target-host result is implied; see
+[ADR-038](decisions/ADR-038-receipt-capable-alert-relay.md).
 
 SCN-015 adds the missing authenticated owner execution projection at
 `/owner/execution`. It reads one explicitly configured, existing private

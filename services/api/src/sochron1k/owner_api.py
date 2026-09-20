@@ -80,6 +80,7 @@ def _alert_inventory(request: Request) -> OperationalAlertInventory:
         history=chart.history,
         policy=request.app.state.policy_writer,
         api_budget=request.app.state.api_budget,
+        alert_delivery=request.app.state.alert_delivery_status,
     )
 
 
@@ -129,6 +130,10 @@ def _source_connected(request: Request, source: str) -> bool:
         budget: ApiBudgetReader = request.app.state.api_budget
         return budget.view().state in {
             "connected", "warning", "critical", "exhausted"
+        }
+    if source == "alert_delivery":
+        return request.app.state.alert_delivery_status.view().state in {
+            "connected", "pending"
         }
     return False
 

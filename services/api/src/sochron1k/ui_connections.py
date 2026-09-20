@@ -86,6 +86,16 @@ def _execution_evidence_runtime(bridge_state: str, evidence_state: RuntimeState)
     return "awaiting_configuration"
 
 
+def _alert_delivery_runtime(state: str) -> RuntimeState:
+    if state == "disabled":
+        return "awaiting_configuration"
+    if state == "awaiting_worker":
+        return "awaiting_source"
+    if state in {"connected", "pending"}:
+        return "connected"
+    return "degraded"
+
+
 def build_ui_connection_map(
     *,
     owner_auth_configured: bool,
@@ -99,6 +109,7 @@ def build_ui_connection_map(
     policy_state: str,
     statistics_configured: bool,
     api_budget_state: str,
+    alert_delivery_state: str,
 ) -> UiConnectionMap:
     return UiConnectionMap(
         connections=(
@@ -166,6 +177,7 @@ def build_ui_connection_map(
                         }
                         else "awaiting_source" if api_budget_state == "awaiting_snapshot"
                         else "awaiting_configuration",
+                        _alert_delivery_runtime(alert_delivery_state),
                     }
                     else "awaiting_source"
                     if (
@@ -173,6 +185,7 @@ def build_ui_connection_map(
                         or _telemetry_runtime(telemetry_state) == "awaiting_source"
                         or _execution_runtime(execution_state) == "awaiting_source"
                         or api_budget_state == "awaiting_snapshot"
+                        or _alert_delivery_runtime(alert_delivery_state) == "awaiting_source"
                     )
                     else "awaiting_configuration"
                 ),
@@ -182,11 +195,11 @@ def build_ui_connection_map(
                     "/api/owner/alerts/{condition_id}/resolve",
                     "/api/owner/api-budget",
                 ),
-                required_route="external alert delivery",
+                required_route="configured receipt-capable alert destination",
                 sources=(
                     "telemetry_status", "execution_status", "execution_journal",
                     "bar_history", "policy_status", "alert_lifecycle",
-                    "api_budget_snapshot",
+                    "api_budget_snapshot", "alert_delivery_outbox",
                 ),
             ),
             UiConnection(

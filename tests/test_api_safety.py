@@ -95,7 +95,7 @@ async def test_ui_connection_map_is_redacted_and_truthful_when_unconfigured() ->
             "/api/owner/alerts/{condition_id}/resolve",
             "/api/owner/api-budget",
         ],
-        "required_route": "external alert delivery",
+            "required_route": "configured receipt-capable alert destination",
         "sources": [
             "telemetry_status",
             "execution_status",
@@ -104,6 +104,7 @@ async def test_ui_connection_map_is_redacted_and_truthful_when_unconfigured() ->
             "policy_status",
             "alert_lifecycle",
             "api_budget_snapshot",
+            "alert_delivery_outbox",
         ],
     }
     assert nodes["signals"] == {

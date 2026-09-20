@@ -117,10 +117,23 @@ async def test_scn033_owner_inventory_is_redacted_and_mutations_need_configurati
     assert disabled.status_code == 503 and disabled.json()["detail"] == "ALERT_LIFECYCLE_DISABLED"
     assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
     body = response.json()
-    assert body["protocol"] == "sochron.operational-alerts.v3"
+    assert body["protocol"] == "sochron.operational-alerts.v4"
     assert body["trading_mode"] == "demo" and body["read_only"] is True
     assert body["auto_trading_enabled"] is False and body["execution_ready"] is False
     assert body["delivery_configured"] is False and body["status"] == "partial"
+    assert body["delivery"] == {
+        "protocol": "sochron.alert-delivery-view.v1",
+        "state": "disabled",
+        "configured": False,
+        "destination_ref": None,
+        "updated_at_utc": None,
+        "pending_deliveries": 0,
+        "unknown_deliveries": 0,
+        "verified_deliveries": 0,
+        "quarantined_deliveries": 0,
+        "last_delivery_ref": None,
+        "last_verified_at_utc": None,
+    }
     assert body["lifecycle_runtime"] == "awaiting_configuration"
     assert body["lifecycle_mutations_enabled"] is False
     assert body["api_budget"]["state"] == "disabled"

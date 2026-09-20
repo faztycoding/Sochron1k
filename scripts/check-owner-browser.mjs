@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SCN-005/006/007/014/015/016/032/033/034: browser/Auth/read models and local alert/budget evidence; no broker operations.
+// SCN-005/006/007/014/015/016/032/033/034/035: browser/Auth/read models and local alert/budget/delivery evidence; no broker operations.
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -106,9 +106,11 @@ async function run() {
     const chartPath = join(temporary, "chart.json");
     const executionPath = join(temporary, "execution.sqlite3");
     const alertLifecycleDir = join(temporary, "alert-lifecycle");
+    const alertDeliveryStatusDir = join(temporary, "alert-delivery-status");
     const apiBudgetConfigPath = join(temporary, "api-budget-config.json");
     const apiBudgetSnapshotPath = join(temporary, "api-budget-snapshot.json");
     await mkdir(alertLifecycleDir, { mode: 0o700 });
+    await mkdir(alertDeliveryStatusDir, { mode: 0o700 });
     const fixtureEpoch = Math.floor(Date.now() / 1000);
     async function insertFixture(table, body) {
       const response = await http(`${origin}/rest/v1/${table}?select=id`, { method: "POST",
@@ -171,6 +173,15 @@ async function run() {
       snapshot_file: apiBudgetSnapshotPath, currency: "USD", monthly_limit: "100.00",
       warning_fraction: "0.70", critical_fraction: "0.85", stale_after_seconds: 3600 }),
     { mode: 0o600, flag: "wx" });
+    const deliveryUpdated = new Date();
+    await writeFile(join(alertDeliveryStatusDir, "delivery-status.json"), JSON.stringify({
+      protocol: "sochron.alert-delivery-status.v1", state: "connected",
+      destination_ref: "synthetic-owner-relay", updated_at_utc: deliveryUpdated.toISOString(),
+      heartbeat_expires_at_utc: new Date(deliveryUpdated.getTime() + 600000).toISOString(),
+      pending_deliveries: 0, unknown_deliveries: 0, verified_deliveries: 1,
+      quarantined_deliveries: 0, last_delivery_ref: "a".repeat(32),
+      last_verified_at_utc: new Date(deliveryUpdated.getTime() - 1000).toISOString(),
+    }), { mode: 0o600, flag: "wx" });
     const seeded = JSON.parse(command(join(root, ".venv/bin/python"),
       ["tests/fixtures/execution_evidence_seed.py", executionPath],
       { PYTHONPATH: join(root, "services/api/src") }));
@@ -188,6 +199,7 @@ async function run() {
       SOCHRON_EXECUTION_JOURNAL_PATH: executionPath,
       SOCHRON_ALERT_LIFECYCLE_DIR: alertLifecycleDir,
       SOCHRON_API_BUDGET_CONFIG_FILE: apiBudgetConfigPath,
+      SOCHRON_ALERT_DELIVERY_STATUS_DIR: alertDeliveryStatusDir,
     } });
     api = launchApi();
     const port = await new Promise((done, reject) => {
@@ -379,12 +391,16 @@ async function run() {
     assert.equal(alertResponse.status, 200);
     assert.equal(alertResponse.headers.get("cache-control"), "no-store");
     const alertBody = await alertResponse.json();
-    assert.equal(alertBody.protocol, "sochron.operational-alerts.v3");
+    assert.equal(alertBody.protocol, "sochron.operational-alerts.v4");
     assert.equal(alertBody.trading_mode, "demo");
     assert.equal(alertBody.read_only, true);
     assert.equal(alertBody.auto_trading_enabled, false);
     assert.equal(alertBody.execution_ready, false);
-    assert.equal(alertBody.delivery_configured, false);
+    assert.equal(alertBody.delivery_configured, true);
+    assert.equal(alertBody.delivery.state, "connected");
+    assert.equal(alertBody.delivery.destination_ref, "synthetic-owner-relay");
+    assert.equal(alertBody.delivery.verified_deliveries, 1);
+    assert(!JSON.stringify(alertBody.delivery).includes(alertDeliveryStatusDir));
     assert.equal(alertBody.lifecycle_runtime, "connected");
     assert.equal(alertBody.lifecycle_mutations_enabled, true);
     assert.equal(alertBody.api_budget.state, "warning");
@@ -405,7 +421,9 @@ async function run() {
     assert.equal(budgetBody.state, "warning");
     assert(!JSON.stringify(budgetBody).includes("synthetic-browser-provider"));
     assert(!JSON.stringify(budgetBody).includes(apiBudgetSnapshotPath));
-    checks.push("owner operational alerts, lifecycle and provider-neutral API budget evidence");
+    assert(await alerts.getByText("synthetic-owner-relay", { exact: true }).isVisible());
+    assert(await alerts.getByText("1 รายการ", { exact: true }).isVisible());
+    checks.push("owner operational alerts, lifecycle, delivery status and provider-neutral API budget evidence");
     await signals.getByText(signalFixtures[0].signal_id, { exact: true }).waitFor();
     assert(await signals.getByText("BUY", { exact: true }).isVisible());
     assert(await signals.getByText("ยังอยู่ในอายุสัญญาณ", { exact: true }).isVisible());
@@ -566,7 +584,7 @@ async function run() {
     lifecycleAlert = lifecycleBody.alerts.find(item => item.kind === "stale_price");
     assert.equal(lifecycleAlert.lifecycle_state, "resolved");
     assert.match(lifecycleAlert.resolved_at_utc, /(Z|\+00:00)$/);
-    assert.equal(lifecycleBody.delivery_configured, false);
+    assert.equal(lifecycleBody.delivery_configured, true);
     checks.push(stage);
 
     stage = "no persistent browser session";
@@ -589,6 +607,7 @@ async function run() {
     assert(await readiness.locator(".readiness-row").evaluateAll(rows => rows.length === 9 && rows.every(row => row.scrollWidth <= row.clientWidth)));
     assert(await alerts.locator(".alert-coverage-row").evaluateAll(rows => rows.length === 8 && rows.every(row => row.scrollWidth <= row.clientWidth)));
     assert(await alerts.locator(".budget-ledger").evaluate(element => element.scrollWidth <= element.clientWidth));
+    assert(await alerts.locator(".delivery-ledger").evaluate(element => element.scrollWidth <= element.clientWidth));
     await page.screenshot({ path: join(output, "mobile-synthetic.png"), fullPage: true });
     assert(await history.locator(".history-table-scroll").evaluate(element => element.scrollWidth > element.clientWidth));
     await history.screenshot({ path: join(output, "history-mobile-synthetic.png") });

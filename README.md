@@ -116,9 +116,14 @@ rejected/UNKNOWN execution, unconfirmed SL, persistent risk halts, stale or
 disconnected bridges and archive pressure. Its eight-row coverage ledger shows the
 exact API and source position even before sign-in. `/api/owner/api-budget` now reads
 one provider-neutral private cost snapshot and shows exact billed/estimated totals,
-limit, remaining amount and freshness; the real provider collector and external
-alert delivery remain explicitly missing. Acknowledgement and resolution are not
-proof that anyone was notified. When `SOCHRON_ALERT_LIFECYCLE_DIR` selects an
+limit, remaining amount and freshness; the real provider collector remains missing.
+The installed [`sochron-alert-delivery`](docs/operations/alert-delivery.md) worker
+now provides a disabled-by-default durable outbox and receipt-capable relay boundary.
+Its status ledger sits below API Budget and distinguishes configuration, pending,
+`UNKNOWN`, quarantine and verified relay receipts. A real relay/provider/recipient
+and target exercise are still missing; acknowledgement, resolution and an HTTP
+response are not proof that anyone was notified. When
+`SOCHRON_ALERT_LIFECYCLE_DIR` selects an
 owner-private directory, the panel can durably record owner acknowledgement and
 guarded workflow resolution through the displayed POST routes. Continuing safety
 conditions cannot be closed; the mutation never changes MT5 or its source. See the
@@ -251,9 +256,10 @@ not fabricate zero results. The implemented owner execution read route is shown 
 real data only when its private journal source validates.
 The adjacent operational-alert route derives a read-only inventory from those
 validated local sources. Its provider-neutral budget contract/read model is ready,
-but it still needs the owner-selected provider collector and actual limit, external
-destination/delivery service and target alert exercise before unattended Demo
-operation.
+and its provider-neutral delivery outbox/read-back path is implemented locally, but
+it still needs the owner-selected billing collector and actual limit, a selected
+receipt-capable destination/recipient, escalation policy and target alert exercise
+before unattended Demo operation.
 The pure `PA01-v1` kernel, native M1-to-M5/H1 aggregation and protocol-v2 policy
 envelope now feed an optional durable producer. The producer binds the exact
 spread, market/session, freshness, news, exposure and pending observations,

@@ -17,6 +17,7 @@ const sourceLabels = {
   telemetry_bridge: "Telemetry bridge", execution_bridge: "Execution bridge",
   execution_journal: "Execution journal", policy_writer: "Policy writer",
   bar_history: "Bar history", api_budget: "API budget",
+  alert_delivery: "Alert delivery outbox",
 } as const;
 const detailLabels: Record<string, string> = {
   entry_rejected: "คำสั่งเปิดถูกปฏิเสธ", management_rejected: "คำสั่งจัดการถูกปฏิเสธ",
@@ -32,11 +33,23 @@ const detailLabels: Record<string, string> = {
   api_budget_warning: "ยอดใช้รวมถึงระดับเตือน", api_budget_critical: "ยอดใช้รวมถึงระดับวิกฤต",
   api_budget_exhausted: "ยอดใช้รวมถึงหรือเกินเพดาน", api_budget_stale: "ข้อมูลค่าใช้จ่ายเกินอายุ",
   api_budget_degraded: "ตรวจสอบข้อมูลค่าใช้จ่ายไม่ได้",
+  alert_delivery_unknown: "ผลการส่งแจ้งเตือนยังไม่ทราบ",
+  alert_delivery_quarantined: "Receipt แจ้งเตือนขัดแย้งและถูกกักไว้",
+  alert_delivery_retry_exhausted: "ครบจำนวนลองส่งแจ้งเตือน",
+  alert_delivery_stale: "Heartbeat ของ delivery worker เกินอายุ",
+  alert_delivery_degraded: "ตรวจสอบหลักฐาน delivery ไม่ได้",
 };
 const budgetStateLabels = {
   disabled: "รอตั้งงบและ source", awaiting_snapshot: "API พร้อม · รอ provider snapshot",
   connected: "อยู่ต่ำกว่าระดับเตือน", warning: "ถึงระดับเตือน", critical: "ถึงระดับวิกฤต",
   exhausted: "ถึงหรือเกินเพดาน", stale: "ข้อมูลค่าใช้จ่ายเก่า", degraded: "source ต้องตรวจสอบ",
+} as const;
+const deliveryStateLabels = {
+  disabled: "รอเลือกปลายทาง", awaiting_worker: "ตั้งค่าแล้ว · รอ worker",
+  connected: "worker พร้อม · receipt ปกติ", pending: "มีรายการรอส่ง",
+  unknown: "ผลการส่งยังไม่ทราบ", quarantined: "receipt ขัดแย้ง · หยุดส่ง",
+  retry_exhausted: "ครบจำนวนลองส่ง · ต้องตรวจ", stale: "heartbeat worker เก่า",
+  degraded: "หลักฐาน delivery ใช้ไม่ได้",
 } as const;
 
 function bangkok(value: string) {
@@ -145,6 +158,23 @@ export function OperationalAlertsPanel({ token }: { token: string | null }) {
         <strong>private budget config + provider billing collector</strong>
         <small>ระบบไม่เดางบ ราคา token หรือยอดใช้แทนข้อมูลจาก provider</small></div>}
     </div> : null}
+    <div className={`delivery-ledger delivery-ledger--${view?.delivery.state ?? "signed-out"}`}>
+      <div className="delivery-ledger-heading"><span>External alert delivery</span>
+        <strong>{view ? deliveryStateLabels[view.delivery.state] : "เข้าสู่ระบบเพื่ออ่านสถานะ"}</strong>
+        <code>private /internal/v1/alerts</code></div>
+      <div><span>ปลายทาง</span><strong>{view?.delivery.destination_ref ?? "ยังไม่บันทึกปลายทาง"}</strong>
+        <small>worker: <code>sochron-alert-delivery</code> · credential ไม่อยู่ใน browser</small></div>
+      <div><span>Outbox ปัจจุบัน</span><strong>{view
+        ? `${view.delivery.pending_deliveries} pending · ${view.delivery.unknown_deliveries} unknown`
+        : "รอยืนยันเจ้าของ"}</strong>
+        <small>{view ? `${view.delivery.quarantined_deliveries} quarantined · อัปเดต ${view.delivery.updated_at_utc ?? "—"}`
+          : "PUT แล้วต้อง GET receipt ก่อนนับว่าส่งสำเร็จ"}</small></div>
+      <div><span>Receipt ที่ยืนยันแล้ว</span><strong>{view
+        ? `${view.delivery.verified_deliveries} รายการ` : "—"}</strong>
+        <small>{view?.delivery.last_verified_at_utc
+          ? `UTC ${view.delivery.last_verified_at_utc} · ref ${view.delivery.last_delivery_ref}`
+          : "ยังไม่มี relay receipt · ไม่อ้างว่าผู้รับเห็นข้อความ"}</small></div>
+    </div>
     {view ? <div className="active-alerts"><div className="active-alerts-heading"><h3>เหตุและประวัติ lifecycle</h3>
       <span>{view.alerts.length} รายการ · journal {view.lifecycle_runtime}{view.truncated ? " · รายการถูกจำกัด" : ""}</span></div>
       {view.alerts.length ? <ul>{view.alerts.map(item => <li className={`active-alert active-alert--${item.severity}`} key={item.id}>
@@ -167,6 +197,6 @@ export function OperationalAlertsPanel({ token }: { token: string | null }) {
       </li>)}</ul> : <p className="owner-hint">ยังไม่พบเหตุจาก source ที่เชื่อมอยู่ ข้อความนี้ไม่ครอบคลุม source ที่ยังไม่ได้ตั้งค่า</p>}
     </div> : <div className="owner-empty"><strong>เข้าสู่ระบบเจ้าของเพื่อดูเหตุที่ตรวจพบ</strong>
       <p>รายการ coverage ด้านบนแสดงตำแหน่งเชื่อมต่อได้เสมอ แต่ไม่สร้างเหตุจำลองระหว่างที่ยังไม่ยืนยันสิทธิ์</p></div>}
-    <p className="alerts-note">ยังไม่มีการส่งอีเมล/ข้อความ · การรับทราบ/ปิดเหตุเป็น workflow ภายในของ owner ไม่ได้ยืนยันว่า MT5 หรือ source ฟื้นแล้ว · server ไม่อนุญาตให้ปิด safety condition ขณะยัง active · Auto Trading ปิด</p>
+    <p className="alerts-note">Relay receipt ยืนยันเพียงว่าปลายทางเก็บ notification แล้ว ไม่ยืนยันว่ามนุษย์อ่านข้อความ · การรับทราบ/ปิดเหตุเป็น workflow ภายในของ owner ไม่ได้ยืนยันว่า MT5 หรือ source ฟื้นแล้ว · server ไม่อนุญาตให้ปิด safety condition ขณะยัง active · Auto Trading ปิด</p>
   </section>;
 }

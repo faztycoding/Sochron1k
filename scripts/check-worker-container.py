@@ -189,6 +189,29 @@ def main():
             "Id"
         ]
         require(invoke("run", "--once")["state"] == "DISABLED", "default not disabled")
+        disabled_alert_delivery = json.loads(
+            run(
+                *base,
+                "run",
+                "--rm",
+                "--no-deps",
+                "-T",
+                "--entrypoint",
+                "sochron-alert-delivery",
+                "worker",
+                "run",
+                "--once",
+            )
+        )
+        require(
+            disabled_alert_delivery
+            == {
+                "state": "DISABLED",
+                "execution_ready": False,
+                "auto_trading_enabled": False,
+            },
+            "alert delivery default not disabled",
+        )
         run(*base, "up", "--detach", "--no-build")
         default = inspect(container("worker"))
         hardening(default)

@@ -7,8 +7,8 @@ const json = (value: unknown) => new Response(JSON.stringify(value));
 function fixture(state: "active" | "acknowledged" = "active") {
   const acknowledged = state === "acknowledged";
   return {
-    protocol: "sochron.operational-alerts.v3", trading_mode: "demo", read_only: true,
-    auto_trading_enabled: false, execution_ready: false, delivery_configured: false,
+    protocol: "sochron.operational-alerts.v4", trading_mode: "demo", read_only: true,
+    auto_trading_enabled: false, execution_ready: false, delivery_configured: true,
     lifecycle_runtime: "connected", lifecycle_mutations_enabled: true,
     status: "partial", generated_at_utc: "2026-09-20T04:00:00Z", truncated: false,
     api_budget: { protocol: "sochron.api-budget-view.v1", trading_mode: "demo", read_only: true,
@@ -21,6 +21,11 @@ function fixture(state: "active" | "acknowledged" = "active") {
         coverage_until_utc: "2026-09-20T03:58:00Z", billed_cost: "60.00",
         unbilled_estimate: "5.00", total_cost: "65.00", remaining_amount: "35.00",
         usage_percent: "65.0000" } },
+    delivery: { protocol: "sochron.alert-delivery-view.v1", state: "connected", configured: true,
+      destination_ref: "owner-primary", updated_at_utc: "2026-09-20T04:00:00Z",
+      pending_deliveries: 0, unknown_deliveries: 0, verified_deliveries: 1,
+      quarantined_deliveries: 0, last_delivery_ref: "a".repeat(32),
+      last_verified_at_utc: "2026-09-20T03:59:30Z" },
     alerts: [{ id: "0123456789abcdef01234567", condition_id: "fedcba9876543210fedcba98",
       kind: "unknown_execution", severity: "critical", source: "execution_journal",
       source_ref: "0123456789abcdef", detail_code: "entry_unknown",
@@ -41,7 +46,7 @@ describe("owner operational alert panel", () => {
     render(<OperationalAlertsPanel token={null} />);
     expect(screen.getAllByText("/api/owner/alerts").length).toBeGreaterThanOrEqual(alertKinds.length);
     for (const kind of alertKinds) expect(screen.getByText(kind)).toBeVisible();
-    expect(screen.getByText(/ยังไม่มีการส่งอีเมล\/ข้อความ/)).toBeVisible();
+    expect(screen.getByText(/PUT แล้วต้อง GET receipt/)).toBeVisible();
     expect(screen.queryByText("ผลคำสั่งเปิดยังไม่ทราบ")).not.toBeInTheDocument();
   });
 
@@ -54,6 +59,8 @@ describe("owner operational alert panel", () => {
     expect(screen.getByText("ยังไม่รับทราบ")).toBeVisible();
     expect(screen.getByText("65.00 / 100.00 USD")).toBeVisible();
     expect(screen.getByText(/กรุงเทพฯ .*ref 0123456789abcdef/)).toBeVisible();
+    expect(screen.getByText("owner-primary")).toBeVisible();
+    expect(screen.getByText("1 รายการ")).toBeVisible();
     expect(fetch.mock.calls[0][0]).toBe("/api/owner/alerts");
     expect(fetch.mock.calls[0][1]?.headers).toMatchObject({ Authorization: "Bearer owner-token" });
     expect(screen.getByRole("button", { name: "รับทราบ" })).toBeVisible();

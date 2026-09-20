@@ -7,13 +7,21 @@ function disabledBudget() {
     generated_at_utc: "2026-09-20T04:00:00Z", policy: null, evidence: null };
 }
 
+function disabledDelivery() {
+  return { protocol: "sochron.alert-delivery-view.v1", state: "disabled", configured: false,
+    destination_ref: null, updated_at_utc: null, pending_deliveries: 0, unknown_deliveries: 0,
+    verified_deliveries: 0, quarantined_deliveries: 0, last_delivery_ref: null,
+    last_verified_at_utc: null };
+}
+
 function fixture() {
   return {
-    protocol: "sochron.operational-alerts.v3", trading_mode: "demo", read_only: true,
+    protocol: "sochron.operational-alerts.v4", trading_mode: "demo", read_only: true,
     auto_trading_enabled: false, execution_ready: false, delivery_configured: false,
     lifecycle_runtime: "connected", lifecycle_mutations_enabled: true,
     status: "partial", generated_at_utc: "2026-09-20T04:00:00Z", truncated: false,
     api_budget: disabledBudget(),
+    delivery: disabledDelivery(),
     alerts: [{ id: "0123456789abcdef01234567", condition_id: "fedcba9876543210fedcba98",
       kind: "unknown_execution", severity: "critical", source: "execution_journal",
       source_ref: "0123456789abcdef", detail_code: "entry_unknown",
@@ -31,6 +39,7 @@ describe("operational alert inventory contract", () => {
     const parsed = parseOperationalAlerts(fixture());
     expect(parsed.coverage.map(item => item.kind)).toEqual(alertKinds);
     expect(parsed.alerts[0].acknowledge_allowed).toBe(true);
+    expect(parsed.delivery.state).toBe("disabled");
   });
 
   it("accepts coherent acknowledgement, cleared and resolution evidence", () => {
@@ -52,6 +61,14 @@ describe("operational alert inventory contract", () => {
   it.each([
     ["Auto Trading", (value: ReturnType<typeof fixture>) => { value.auto_trading_enabled = true; }],
     ["delivery claim", (value: ReturnType<typeof fixture>) => { value.delivery_configured = true; }],
+    ["delivery contradiction", (value: ReturnType<typeof fixture>) => {
+      Object.assign(value.delivery, { state: "unknown", configured: true });
+    }],
+    ["empty delivery quarantine", (value: ReturnType<typeof fixture>) => {
+      value.delivery_configured = true;
+      Object.assign(value.delivery, { state: "quarantined", configured: true,
+        destination_ref: "owner-primary", updated_at_utc: "2026-09-20T04:00:00Z" });
+    }],
     ["runtime mutation mismatch", (value: ReturnType<typeof fixture>) => { value.lifecycle_mutations_enabled = false; }],
     ["fabricated acknowledgement", (value: ReturnType<typeof fixture>) => {
       (value.alerts[0] as { acknowledged_by: unknown }).acknowledged_by = "owner";

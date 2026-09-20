@@ -42,5 +42,6 @@ is a source-health failure, not a fabricated over-budget claim.
   atomically publishes this schema; it does not require changing the browser model.
 - Actual provider accuracy, delivery latency and price interpretation remain target
   evidence and must be tested after the owner selects the provider and budget.
-- External alert delivery remains a separate missing boundary, so this decision
-  cannot clear unattended-Demo readiness.
+- External alert delivery is a separate boundary. SCN-035 later implements its
+  local provider-neutral outbox/read-back contract, but a real recipient and target
+  exercise are still missing, so neither decision clears unattended-Demo readiness.

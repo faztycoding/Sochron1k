@@ -46,5 +46,16 @@ if rg --ignore-case --quiet 'TRADING_MODE: live|AUTO_TRADING_ENABLED: "?true|0\.
   exit 1
 fi
 
+python3 - <<'PY'
+from pathlib import Path
+
+nginx = Path("apps/web/nginx.conf").read_text()
+deny = "location ^~ /api/internal/"
+proxy = "location /api/"
+if deny not in nginx or "return 404;" not in nginx[nginx.index(deny):nginx.index(proxy)]:
+    raise SystemExit("FAIL browser ingress does not deny the private alert source")
+print("PASS private alert source denied at browser ingress")
+PY
+
 python3 scripts/check-no-secrets.py
 printf 'PASS SCN-003 static container topology on Node.js %s\n' "$expected_node"

@@ -1,9 +1,11 @@
 # Operational alerts and owner lifecycle
 
 Status: SCN-032 provides the owner-authenticated detector inventory, SCN-033 adds a
-local durable acknowledgement/resolution workflow, and SCN-034 adds provider-neutral
-API-budget evidence. None sends an external notification, changes a detector source,
-authorizes a broker operation or satisfies the target recovery/observability gate.
+local durable acknowledgement/resolution workflow, SCN-034 adds provider-neutral
+API-budget evidence, and SCN-035 adds a disabled-by-default receipt-capable delivery
+worker. No real recipient/provider or target delivery has been selected or tested;
+none of these boundaries authorizes a broker operation or satisfies the target
+recovery/observability gate.
 
 ## UI and API positions
 
@@ -13,6 +15,8 @@ authorizes a broker operation or satisfies the target recovery/observability gat
 | Acknowledge | `POST /api/owner/alerts/{condition_id}/acknowledge` | same path without `/api` | owner lifecycle write only |
 | Resolve workflow | `POST /api/owner/alerts/{condition_id}/resolve` | same path without `/api` | guarded owner lifecycle write only |
 | API budget | `GET /api/owner/api-budget` | `GET /owner/api-budget` | normalized cost snapshot and owner policy; no write |
+| Delivery status | embedded in `GET /api/owner/alerts` | normalized private worker status | outbox/receipt projection; no destination credential |
+| Worker source | blocked at browser ingress | `GET /internal/v1/alerts` | separate service-authenticated redacted facts |
 | Connection map | `GET /api/ui/connections` | `GET /ui/connections` | fixed redacted API/source inventory |
 | UI anchor | `#operational-alerts` | n/a | below account telemetry and above the market chart |
 
@@ -80,8 +84,11 @@ cannot resolve while currently detected. `order_reject` is an immutable occurred
 event and may resolve after acknowledgement even while its retained execution
 evidence remains visible.
 
-These fields describe local operator workflow only. `delivery_configured=false`
-still means no email, SMS, chat, webhook or push destination was invoked.
+These fields describe local operator workflow only. `delivery_configured` says only
+whether a status directory was selected. `disabled`, `awaiting_worker`, `pending`,
+`UNKNOWN` and verified relay receipts remain distinct. See the
+[alert-delivery runbook](alert-delivery.md); no email, SMS, chat, webhook or human
+recipient is claimed without selected-provider evidence.
 
 ## Configure API-budget evidence
 
@@ -117,8 +124,8 @@ npx -y -p node@24.21.0 npm run test --workspace @sochron1k/web -- src/operationa
    monthly limit and warning/critical fractions.
 2. Implement the provider-specific credential-isolated collector against the
    normalized snapshot and compare it with the actual bill.
-3. Implement bounded delivery/outbox, receipts, retry and escalation using a
-   separate credential boundary.
+3. Select and provision the receipt-capable relay/provider and recipient; exercise
+   the implemented durable outbox/read-back path, then add tested escalation rules.
 4. Define lifecycle retention plus tested target backup/restore and disk-exhaustion
    behavior.
 5. Exercise stale feed, rejected SL, UNKNOWN, risk halt, bridge loss, disk pressure
