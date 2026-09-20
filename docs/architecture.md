@@ -248,6 +248,17 @@ command, risk, MT5, promotion or Auto Trading authority. It is not a producer an
 does not query native bars or schedule work; see
 [ADR-023](decisions/ADR-023-pa01-decision-receiver.md).
 
+SCN-021 closes the reproducibility gap between that receiver and the pure kernel.
+`sochron_worker.pa01_envelope` revalidates the aggregation, reruns PA01 and binds
+the registered code hash to the exact spread, market/session, price-freshness,
+news, exposure and pending-order observations used at the decision cutoff. The
+resulting policy context has source IDs/times, a deterministic hash and a stable
+evidence link in the signal. Receiver protocol v2 stores that context beside the
+immutable snapshot while retaining protocol-v1 read/store compatibility and the
+same backend-only grants. It still has no source reader, clock scheduler, durable
+producer journal or HTTP transport; see
+[ADR-024](decisions/ADR-024-pa01-policy-context-envelope.md).
+
 | Failure | Required behavior |
 | --- | --- |
 | AI unavailable or invalid | Strategies that require AI enter `WAIT`; position management continues |

@@ -203,9 +203,11 @@ delayed pivots and fixed indicator initialization, but it is not yet a running
 producer. Pure native M1-to-M5/H1 aggregation now follows broker-server candle
 boundaries and omits incomplete buckets without inventing prices. The backend-only
 Supabase receiver now atomically insert-or-verifies an immutable linked PA01 feature
-snapshot/signal pair and provides independent UNKNOWN read-back. A bounded source
-reader, durable local producer journal, scheduling and the adapter that invokes this
-receiver remain the next source-side boundary; the owner signal UI therefore still
-correctly waits for source data.
+snapshot/signal pair and provides independent UNKNOWN read-back. Protocol v2 also
+binds the exact spread, market/session, freshness, news, exposure and pending
+observations to each deterministic decision while retaining v1 evidence. Bounded
+native/context readers, a durable local producer journal, scheduling and the HTTP
+adapter that invokes this receiver remain the next source-side boundary; the owner
+signal UI therefore still correctly waits for source data.
 A real Demo round trip still requires owner inputs and explicit target authorization
 listed in the task contract.

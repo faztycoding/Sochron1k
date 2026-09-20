@@ -105,5 +105,28 @@ if rg --ignore-case --quiet 'security definer|insert into public\.(commands|risk
   exit 1
 fi
 
+envelope_migration="supabase/migrations/20260920005057_pa01_policy_context_envelope.sql"
+# SCN-021 source tripwires; pgTAP and independent sessions prove exact behavior.
+for requirement in \
+  'ADD COLUMN decision_protocol text' \
+  'ADD COLUMN policy_context jsonb' \
+  'CREATE TRIGGER pa01_policy_context_guard' \
+  'CREATE TRIGGER pa01_policy_signal_guard' \
+  'PA01_POLICY_CONTEXT_INVALID' \
+  'PA01_POLICY_SIGNAL_INVALID' \
+  "'sochron.pa01.decision.v1','sochron.pa01.decision.v2'" \
+  'REVOKE ALL ON FUNCTION sochron_private.guard_pa01_policy_context()' \
+  'REVOKE ALL ON FUNCTION public.sochron_store_pa01_decision(uuid,bigint,bigint,jsonb)'; do
+  if ! rg --fixed-strings --quiet "$requirement" "$envelope_migration"; then
+    printf 'FAIL missing PA01 envelope source guard: %s\n' "$requirement" >&2
+    exit 1
+  fi
+done
+if rg --ignore-case --quiet 'security definer|insert into public\.(commands|risk_events|orders|positions|deals)' \
+  "$envelope_migration"; then
+  printf 'FAIL PA01 envelope adds privileged or execution-authority behavior\n' >&2
+  exit 1
+fi
+
 python3 scripts/check-no-secrets.py
-printf 'PASS SCN-002/008/020 static Supabase guards on CLI %s and Node.js %s\n' "$expected_cli" "$expected_node"
+printf 'PASS SCN-002/008/020/021 static Supabase guards on CLI %s and Node.js %s\n' "$expected_cli" "$expected_node"

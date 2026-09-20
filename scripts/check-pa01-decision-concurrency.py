@@ -1,4 +1,4 @@
-"""SCN-020 forward migration and overlapping PA01 decision writers.
+"""SCN-020/021 forward migration and overlapping PA01 decision writers.
 
 Uses only the guarded local Supabase Postgres container. Each invocation creates a
 random disposable database, applies repository migrations, observes real lock
@@ -23,6 +23,7 @@ MIGRATIONS = [
     ROOT / "supabase/migrations/20260916224038_owner_session_validation.sql",
     ROOT / "supabase/migrations/20260917050541_native_m1_receiver.sql",
     ROOT / "supabase/migrations/20260920000837_pa01_decision_receiver.sql",
+    ROOT / "supabase/migrations/20260920005057_pa01_policy_context_envelope.sql",
 ]
 OWNER = "10000000-0000-0000-0000-000000000001"
 PARAMETER_HASH = "62c226e9eb3aefc003f122ac2e072dc335b293dc77bfbf3cde4b6e572e84e822"
@@ -47,9 +48,12 @@ def command(database: str) -> list[str]:
 
 
 def sql(database: str, query: str) -> str:
-    return subprocess.run(
-        command(database), input=query, text=True, capture_output=True, timeout=60, check=True
-    ).stdout.strip()
+    reply = subprocess.run(
+        command(database), input=query, text=True, capture_output=True, timeout=60
+    )
+    if reply.returncode:
+        raise AssertionError(reply.stderr.strip())
+    return reply.stdout.strip()
 
 
 def literal(value: object) -> str:
@@ -130,6 +134,56 @@ def decision(label: str) -> dict[str, object]:
     }
 
 
+def envelope(label: str) -> dict[str, object]:
+    payload = decision(label)
+    payload["protocol"] = "sochron.pa01.decision.v2"
+    snapshot = payload["snapshot"]
+    signal = payload["signal"]
+    assert isinstance(snapshot, dict) and isinstance(signal, dict)
+    context_hash = hashlib.sha256(f"policy:{label}".encode()).hexdigest()
+    context_id = f"pa01-policy:{context_hash[:32]}"
+    snapshot["decision_protocol"] = "sochron.pa01.decision.v2"
+    snapshot["policy_context"] = {
+        "schema": "sochron.pa01.policy-context.v1",
+        "evidence_id": context_id,
+        "kernel_decision_id": f"kernel-decision-{label}",
+        "market_data_cutoff_utc": "2026-09-19T00:05:02Z",
+        "context_hash": context_hash,
+        "cutoff_utc": "2026-09-19T00:05:02Z",
+        "symbol": "XAUUSD.fixture",
+        "feed_id": "mt5-copyrates:80000000-0000-4000-8000-000000000001",
+        "spread_price": "0.01",
+        "market_open": True,
+        "price_stale": False,
+        "news_blocked": False,
+        "has_exposure": False,
+        "has_pending": False,
+        "ai_enabled": False,
+        "observations": {
+            "quote": {
+                "evidence_id": f"quote:{label}",
+                "observed_at_utc": "2026-09-19T00:05:02Z",
+            },
+            "market": {
+                "evidence_id": f"market:{label}",
+                "observed_at_utc": "2026-09-19T00:05:01Z",
+            },
+            "news": {
+                "evidence_id": f"news:{label}",
+                "observed_at_utc": "2026-09-19T00:05:00Z",
+            },
+            "account": {
+                "evidence_id": f"account:{label}",
+                "observed_at_utc": "2026-09-19T00:05:01Z",
+            },
+        },
+    }
+    evidence = signal["evidence_ids"]
+    assert isinstance(evidence, list)
+    evidence.append(context_id)
+    return payload
+
+
 def send(payload: dict[str, object]) -> str:
     return f"select public.sochron_store_pa01_decision('{OWNER}',1,1,{literal(payload)});"
 
@@ -139,7 +193,7 @@ def read(signal_id: str) -> str:
 
 
 def race(database: str, label: str, *, changed: bool) -> None:
-    original = decision(label)
+    original = envelope(label)
     alternate = copy.deepcopy(original)
     if changed:
         alternate_signal = alternate["signal"]
@@ -216,6 +270,7 @@ def race(database: str, label: str, *, changed: bool) -> None:
 
         stored = json.loads(sql(database, "set role service_role; " + read(f"decision-{label}")))
         assert stored["found"] is True
+        assert stored["protocol"] == "sochron.pa01.decision.v2"
         assert stored["signal"]["setup_id"] == f"setup-{label}"
         assert (
             sql(
@@ -302,19 +357,59 @@ def main() -> None:
         assert after_signal["feature_snapshot_id"] is None
         assert after_signal["producer_revision"] is None
         assert after_signal["decision_fingerprint"] is None
+        pre_v2 = decision("pre-v2")
+        sql(database, "set role service_role; " + send(pre_v2))
+        before_v2_snapshot = json.loads(
+            sql(
+                database,
+                "select to_jsonb(row) from public.feature_snapshots row "
+                "where snapshot_id='snapshot-pre-v2';",
+            )
+        )
+        before_v2_signal = json.loads(
+            sql(
+                database,
+                "select to_jsonb(row) from public.signals row where signal_id='decision-pre-v2';",
+            )
+        )
+        sql(database, "begin;" + MIGRATIONS[4].read_text() + "commit;")
+        after_v2_snapshot = json.loads(
+            sql(
+                database,
+                "select to_jsonb(row) from public.feature_snapshots row "
+                "where snapshot_id='snapshot-pre-v2';",
+            )
+        )
+        after_v2_signal = json.loads(
+            sql(
+                database,
+                "select to_jsonb(row) from public.signals row where signal_id='decision-pre-v2';",
+            )
+        )
+        assert all(after_v2_snapshot[key] == value for key, value in before_v2_snapshot.items())
+        assert all(after_v2_signal[key] == value for key, value in before_v2_signal.items())
+        assert after_v2_snapshot["decision_protocol"] is None
+        assert after_v2_snapshot["policy_context"] is None
+        pre_v2_read = json.loads(sql(database, "set role service_role; " + read("decision-pre-v2")))
+        assert pre_v2_read["protocol"] == "sochron.pa01.decision.v1"
         sql(
             database,
-            "set role service_role; update public.feature_snapshots set feed_id='legacy-updated';"
-            "update public.signals set setup_id='legacy-updated';"
+            "set role service_role; update public.feature_snapshots set feed_id='legacy-updated' "
+            "where snapshot_id='legacy-snapshot';"
+            "update public.signals set setup_id='legacy-updated' "
+            "where signal_id='legacy-signal';"
             "delete from public.signals where signal_id='legacy-signal';"
             "delete from public.feature_snapshots where snapshot_id='legacy-snapshot';",
         )
-        print("PASS forward migration: legacy rows unchanged and legacy-only CRUD preserved")
+        print(
+            "PASS forward migration: legacy and protocol-v1 producer rows unchanged; "
+            "legacy-only CRUD preserved"
+        )
 
         race(database, "race-match", changed=False)
         race(database, "race-conflict", changed=True)
 
-        lost = decision("lost-response")
+        lost = envelope("lost-response")
         sql(database, "set role service_role; " + send(lost))  # Deliberately discard response.
         reconciled = json.loads(
             sql(database, "set role service_role; " + read("decision-lost-response"))
@@ -329,7 +424,7 @@ def main() -> None:
                 "(select count(*) from public.signals "
                 "where producer_revision is not null)::text;",
             )
-            == "3:3"
+            == "4:4"
         )
         assert sql(database, "select count(*) from public.commands;") == "0"
         assert sql(database, "select count(*) from public.risk_events;") == "0"

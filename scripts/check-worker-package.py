@@ -677,8 +677,9 @@ def verify(output):
                 "-c",
                 """
 import importlib.metadata as m, importlib.util, json, pathlib, sys
-import sochron1k, sochron_worker
-assert all(pathlib.Path(p.__file__).is_relative_to(sys.prefix) for p in (sochron1k, sochron_worker))
+import sochron1k, sochron_worker, sochron_worker.pa01_envelope
+assert all(pathlib.Path(p.__file__).is_relative_to(sys.prefix)
+           for p in (sochron1k, sochron_worker, sochron_worker.pa01_envelope))
 assert importlib.util.find_spec('pytest') is None
 assert importlib.util.find_spec('hatchling') is None
 values = {d.metadata['Name'].lower().replace('_','-'):d.version for d in m.distributions()}
