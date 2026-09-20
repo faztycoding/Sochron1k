@@ -614,6 +614,11 @@ def verify(output):
             in archive.read("sochron1k-0.1.0.dist-info/entry_points.txt").decode(),
             "News Gate entry point mismatch",
         )
+        require(
+            "sochron-research-evaluation = sochron_worker.research_evaluation_cli:cli"
+            in archive.read("sochron1k-0.1.0.dist-info/entry_points.txt").decode(),
+            "research evaluation entry point mismatch",
+        )
     with tarfile.open(sdist) as archive:
         prefix = "sochron1k-0.1.0/"
         members = {m.name.removeprefix(prefix) for m in archive.getmembers() if m.isfile()}
@@ -696,10 +701,14 @@ import sochron1k, sochron_worker
 import sochron_worker.news_gate
 import sochron_worker.pa01_envelope
 import sochron_worker.pa01_journal
+import sochron_worker.research_evaluation
+import sochron_worker.research_evaluation_journal
 assert all(pathlib.Path(p.__file__).is_relative_to(sys.prefix)
            for p in (sochron1k, sochron_worker, sochron_worker.news_gate,
                      sochron_worker.pa01_envelope,
-                     sochron_worker.pa01_journal))
+                     sochron_worker.pa01_journal,
+                     sochron_worker.research_evaluation,
+                     sochron_worker.research_evaluation_journal))
 assert importlib.util.find_spec('pytest') is None
 assert importlib.util.find_spec('hatchling') is None
 values = {d.metadata['Name'].lower().replace('_','-'):d.version for d in m.distributions()}
@@ -749,6 +758,24 @@ print(json.dumps(values))
             "installed News Gate default-disabled boundary",
         )
         check("installed News Gate command is inert without private configuration")
+        disabled_research = run(
+            [str(environment / "bin/sochron-research-evaluation"), "status"],
+            cwd=directory,
+            env={"PATH": os.defpath},
+        )
+        require(
+            json.loads(disabled_research.stdout)
+            == {
+                "state": "DISABLED",
+                "statistics_source_ready": False,
+                "promotion_decided": False,
+                "execution_ready": False,
+                "auto_trading_enabled": False,
+            }
+            and not disabled_research.stderr,
+            "installed research evaluation default-disabled boundary",
+        )
+        check("installed research evaluation command is inert without private configuration")
         recovery = exercise(environment / "bin/sochron-sync", python, directory, digest(wheel))
         startup = exercise_startup(python, directory)
     return dict(
@@ -779,6 +806,7 @@ print(json.dumps(values))
                 ROOT / "tests/test_native_source.py",
                 ROOT / "tests/test_bar_history.py",
                 ROOT / "tests/test_telemetry_bridge.py",
+                ROOT / "tests/test_research_evaluation_producer.py",
                 ROOT / "tests/fixtures/mt5-telemetry-v1.json",
             ]
         },

@@ -95,8 +95,11 @@ panel now exist but remain empty until an existing private ExecutionService jour
 is explicitly connected. The authenticated `/api/owner/signals` read model and UI
 panel now consume the existing owner-RLS Supabase relations, but remain empty until
 a reviewed strategy producer writes versioned evidence. The authenticated
-`/api/owner/statistics` read model and UI panel also exist, but remain empty until a
-research evaluator persists versioned metrics, uncertainty and costs.
+`/api/owner/statistics` read model and UI panel also exist. The optional
+[`sochron-research-evaluation`](docs/operations/research-evaluation-producer.md)
+worker can now calculate and durably publish versioned metrics, uncertainty and
+costs from a strict labelled-trade bundle, but no non-synthetic bundle is present,
+so the panel correctly remains empty.
 The execution view opens no trading path and preserves confirmed Order/Deal/Position/
 SL evidence and `UNKNOWN` exactly. Its public status model is redacted and always
 preserves Demo-only, Auto Trading off and execution-not-ready. See the
@@ -146,7 +149,9 @@ without a duplicate send. The disabled-by-default
 [coherent policy writer](docs/operations/policy-evidence-writer.md) now combines
 telemetry v2, complete execution inventory and explicit news-gate coverage into
 that handoff atomically. A real news collector, target configuration/scheduling,
-strategy-performance evidence and every trading path remain missing.
+strategy-performance evidence and every trading path remain missing. The separate
+research evaluator is also default-off, is not started by Compose and cannot
+promote a strategy or enable execution.
 
 ## Local Supabase foundation
 
@@ -233,6 +238,8 @@ strategy/experiment rows and private producer configuration. The optional
 [`sochron-news-gate`](docs/operations/news-gate-collector.md) worker now implements
 the strict collector boundary, but still requires an owner-selected licensed
 calendar gateway, credential, target schedule and completeness evidence. Target
-recovery and the separate statistics evaluator remain missing.
+recovery and a raw-data label/backtest producer remain missing. The statistics
+evaluator/publication path now exists, but it has no non-synthetic evaluation
+bundle and therefore cannot establish strategy performance.
 A real Demo round trip still requires owner inputs and explicit target authorization
 listed in the task contract.

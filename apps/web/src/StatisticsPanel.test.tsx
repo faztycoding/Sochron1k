@@ -35,10 +35,10 @@ describe("owner statistics panel", () => {
     expect(fetch.mock.calls[0][1]?.headers).toMatchObject({ Authorization: "Bearer owner-token" });
     expect(screen.queryByRole("button", { name: /โปรโมต|ซื้อ|ขาย|เปิดออเดอร์/ })).not.toBeInTheDocument();
   });
-  it("shows producer dependency rather than zero performance", async () => {
+  it("shows validated evidence dependency rather than zero performance", async () => {
     const value = fixture(); value.status.state = "awaiting_source"; value.status.returned_count = 0; value.evaluations = [];
     vi.spyOn(globalThis, "fetch").mockResolvedValue(json(value)); render(<StatisticsPanel token="owner-token" />);
-    expect(await screen.findByText("API พร้อม · รอ Research producer")).toBeVisible();
+    expect(await screen.findByText("API และตัวประเมินพร้อม · รอชุดหลักฐาน")).toBeVisible();
     expect(screen.queryByText("0%")).not.toBeInTheDocument();
   });
   it("clears malformed evidence and retries read-only", async () => {

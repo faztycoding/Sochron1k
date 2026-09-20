@@ -128,5 +128,32 @@ if rg --ignore-case --quiet 'security definer|insert into public\.(commands|risk
   exit 1
 fi
 
+research_migration="supabase/migrations/20260920044437_reproducible_research_evaluation.sql"
+# SCN-029 source tripwires; pgTAP supplies strict receiver and role evidence.
+for requirement in \
+  'ADD COLUMN producer_revision text' \
+  'ADD COLUMN evaluation_protocol text' \
+  'ADD COLUMN evaluation_fingerprint text' \
+  'ADD COLUMN evidence_manifest jsonb' \
+  'CREATE UNIQUE INDEX evaluations_owner_producer_fingerprint_key' \
+  'CREATE TRIGGER research_evaluation_guard' \
+  'RESEARCH_EVALUATION_CONFLICT' \
+  'RESEARCH_EVALUATION_IMMUTABLE' \
+  'REVOKE ALL ON FUNCTION public.sochron_store_research_evaluation(uuid,bigint,bigint,jsonb)' \
+  'REVOKE ALL ON FUNCTION public.sochron_read_research_evaluation(uuid,text)' \
+  'REVOKE ALL ON TABLE public.evaluations FROM service_role;'; do
+  if ! rg --fixed-strings --quiet "$requirement" "$research_migration"; then
+    printf 'FAIL missing research-evaluation receiver guard: %s\n' "$requirement" >&2
+    exit 1
+  fi
+done
+if rg --ignore-case --quiet \
+  'security definer|insert into public\.(commands|risk_events|orders|positions|deals)' \
+  "$research_migration"; then
+  printf 'FAIL research evaluation adds privileged or execution-authority behavior\n' >&2
+  exit 1
+fi
+
 python3 scripts/check-no-secrets.py
-printf 'PASS SCN-002/008/020/021 static Supabase guards on CLI %s and Node.js %s\n' "$expected_cli" "$expected_node"
+printf 'PASS SCN-002/008/020/021/029 static Supabase guards on CLI %s and Node.js %s\n' \
+  "$expected_cli" "$expected_node"

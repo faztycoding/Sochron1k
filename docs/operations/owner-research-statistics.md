@@ -14,13 +14,14 @@ decision.
 2. Apply the existing Supabase migrations. `evaluations`, `strategy_versions` and
    `experiments` must retain their authenticated SELECT grants, forced RLS and
    owner policies.
-3. A separately validated research producer must insert a conforming SCN-017
-   evaluation. No producer is implemented by this increment.
+3. The optional SCN-029 producer must receive a separately validated canonical
+   labelled-trade bundle and publish a conforming evaluation. See the
+   [research evaluation producer](research-evaluation-producer.md).
 
 Without Auth configuration the connection map reports `awaiting_configuration`.
 With Auth but no rows it reports `awaiting_source`, and the owner panel states that
-it is waiting for the research producer. Neither state is a failure or permission
-to fabricate metrics.
+it is waiting for research evidence. The producer software existing does not make
+a dataset available. Neither state is a failure or permission to fabricate metrics.
 
 ## Accepted evidence
 

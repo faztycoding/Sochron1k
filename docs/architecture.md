@@ -216,9 +216,18 @@ strict metric/cost contract from `evaluations` with embedded strategy and option
 experiment evidence. Win rate is derived from exact outcome counts; sample size,
 expectancy uncertainty, dataset/code identity, temporal split and costs remain
 visible. The reader has no write, aggregation, promotion, risk or execution
-authority. Empty data is `awaiting_source`, because the research producer and
-reproducible PA01 evaluation remain unimplemented; see
+authority. Empty data is `awaiting_source`; see
 [ADR-020](decisions/ADR-020-owner-research-statistics-read-model.md).
+
+SCN-029 adds the separate default-off evaluation producer. A pure worker validates
+one canonical labelled setup-to-flat bundle, derives costs, metrics, mark-to-market
+drawdown and a seeded moving-block bootstrap interval, then journals the exact
+envelope before a backend-only Supabase insert-or-verify RPC. Ambiguous, rejected,
+WAIT and counterfactual records remain visible in provenance but cannot affect the
+trade metrics. Producer rows are owner-bound, fingerprinted and immutable. No real
+research bundle or raw-data backtest producer exists yet, so the UI correctly stays
+`awaiting_source` until that evidence is supplied; see
+[ADR-032](decisions/ADR-032-reproducible-evaluation-envelope.md).
 
 SCN-018 fixes the first PA01 calculation boundary in `sochron_worker.pa01`.
 The pure kernel consumes explicit as-of closed M5/H1 evidence, calculates the

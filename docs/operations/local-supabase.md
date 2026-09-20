@@ -31,20 +31,23 @@ The command resets only the local project, reapplies migrations without seed dat
 runs public/private-schema lint, runs all advisors with errors blocking, and
 executes pgTAP fixtures inside rolled-back transactions. It also runs owner-policy
 mutation detection plus native-receiver and PA01 decision-receiver
-forward-migration/concurrency checks.
+forward-migration/concurrency checks and the research-evaluation receiver
+forward-migration/concurrency check.
 INFO-level unused-index findings are expected for a fresh empty database; retained
 indexes support foreign keys and planned access patterns. This is not workload-based
 index validation.
 
 `scripts/check-native-sync-concurrency.py` and
-`scripts/check-pa01-decision-concurrency.py` each create a random invocation-owned
-database inside the guarded local Postgres container and drop only that database
-after the test. They never reset the primary local database or accept a hosted URL.
-The Auth tables/function are minimal scaffolding in these isolated checks; full
-local Supabase role behavior is covered by pgTAP, not by that scaffold. Independent
-SQL sessions must demonstrably overlap at a database lock before either concurrency
-test can pass. The PA01 verifier also preserves a pre-migration legacy pair and
-simulates committed-but-lost response reconciliation.
+`scripts/check-pa01-decision-concurrency.py` and
+`scripts/check-research-evaluation-concurrency.py` each create a random
+invocation-owned database inside the guarded local Postgres container and drop
+only that database after the test. They never reset the primary local database or
+accept a hosted URL. The Auth tables/function are minimal scaffolding in these
+isolated checks; full local Supabase role behavior is covered by pgTAP, not by that
+scaffold. Independent SQL sessions must demonstrably overlap at a database lock
+before any concurrency test can pass. The PA01 and research-evaluation verifiers
+also preserve pre-migration legacy rows and simulate committed-but-lost response
+reconciliation.
 
 ## Worker HTTP/crash integration (no reset)
 
@@ -79,8 +82,9 @@ key files before the repository secret scan. Temporary fixture data is regenerab
 
 - Initial migration failed because the implicit currency-format constraint name collided with the explicit cost/currency-pair constraint. Rename the pair constraint before first successful deployment; both rules remain enforced. No remote migration history was rewritten.
 - The initial pgTAP text-array comparison failed inside its record-comparison helper with indeterminate collation. Typed JSON equality now checks the exact same complete tuple/list, without dropping a value or owner-isolation assertion.
-- The current suite contains **432 checks**: 16 baseline, 271 all-table access,
-  14 session, 79 native-receiver and 52 PA01 receiver checks. Both owners have
+- The current suite contains **487 checks**: 16 baseline, 271 all-table access,
+  14 session, 79 native-receiver, 52 PA01 receiver and 55 research-evaluation
+  receiver checks. Both owners have
   synthetic rows in all
   18 public tables. Exact owner sets, empty-owner/missing-subject reads, anonymous
   reads, and browser insert/update/delete denial are exercised. The mutation test
@@ -90,7 +94,7 @@ key files before the repository secret scan. Temporary fixture data is regenerab
   denial. PA01 checks include exact linked evidence, role denial, malformed and
   halted-strategy rejection, atomic rollback and immutable producer rows. They do
   not prove HTTP JWT validation, worker synchronization, all data
-  constraints or actual broker evidence. See
+  constraints, research input validity or actual broker evidence. See
   [initial isolation evidence](../verification/SCN-002-owner-isolation.md),
   [native receiver evidence](../verification/SCN-008-native-m1-receiver.md) and
   [PA01 receiver evidence](../verification/SCN-020-pa01-decision-receiver.md).

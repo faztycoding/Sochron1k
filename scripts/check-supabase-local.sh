@@ -26,5 +26,6 @@ npm exec supabase -- test db --local supabase/tests --network-id sochron1k_supab
 "${SOCHRON_PYTHON:-.venv/bin/python}" scripts/check-supabase-rls-mutation.py
 "${SOCHRON_PYTHON:-.venv/bin/python}" scripts/check-native-sync-concurrency.py
 "${SOCHRON_PYTHON:-.venv/bin/python}" scripts/check-pa01-decision-concurrency.py
+"${SOCHRON_PYTHON:-.venv/bin/python}" scripts/check-research-evaluation-concurrency.py
 
-printf 'PASS local migration, lint, advisors, pgTAP, RLS mutation, native and PA01 concurrency verification on Node.js %s\n' "$expected_node"
+printf 'PASS local migration, lint, advisors, pgTAP, RLS mutation, native, PA01 and research-evaluation concurrency verification on Node.js %s\n' "$expected_node"
