@@ -282,8 +282,8 @@ coverage file at a single UTC cutoff. It derives source IDs and atomically repla
 the private SCN-022 policy file; missing or malformed sources never become safe
 defaults. `/policy/v1/status` and the Signals connection node expose only redacted
 integration state. The writer has no strategy, Supabase, risk, command or execution
-authority. A real news collector, selected-host MQL compilation, target private
-configuration and scheduling remain pending; see
+authority. A real calendar source/gateway connection, selected-host MQL compilation,
+target private configuration and scheduling remain pending; see
 [ADR-026](decisions/ADR-026-coherent-policy-evidence-handoff.md).
 
 SCN-024 adds a separately default-off read-only MT5 execution-inventory observer.
@@ -295,6 +295,16 @@ execution readiness and Auto Trading unavailable. The source never polls command
 or invokes a broker mutation. Compilation, actual account parity and the narrow
 target loopback route remain pending; see
 [ADR-027](decisions/ADR-027-policy-only-empty-mt5-inventory.md).
+
+SCN-025 adds the missing project-side News Gate producer without pretending that a
+vendor has been selected. A disabled worker calls one authenticated fixed HTTPS
+calendar-window route, requires a fresh explicitly complete revision covering the
+full blackout interval, applies deterministic half-open event arithmetic and
+atomically writes the existing owner-private gate. Redirects, environment proxies,
+partial windows, stale publications and malformed events fail closed. The browser
+still sees only policy status and owner signal reads. External source selection,
+completeness audit, target credential, scheduling and observation evidence remain
+pending; see [ADR-028](decisions/ADR-028-attested-calendar-gateway.md).
 
 | Failure | Required behavior |
 | --- | --- |

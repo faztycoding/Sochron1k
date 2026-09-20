@@ -604,6 +604,11 @@ def verify(output):
             in archive.read("sochron1k-0.1.0.dist-info/entry_points.txt").decode(),
             "PA01 entry point mismatch",
         )
+        require(
+            "sochron-news-gate = sochron_worker.news_gate_cli:cli"
+            in archive.read("sochron1k-0.1.0.dist-info/entry_points.txt").decode(),
+            "News Gate entry point mismatch",
+        )
     with tarfile.open(sdist) as archive:
         prefix = "sochron1k-0.1.0/"
         members = {m.name.removeprefix(prefix) for m in archive.getmembers() if m.isfile()}
@@ -682,9 +687,13 @@ def verify(output):
                 "-c",
                 """
 import importlib.metadata as m, importlib.util, json, pathlib, sys
-import sochron1k, sochron_worker, sochron_worker.pa01_envelope, sochron_worker.pa01_journal
+import sochron1k, sochron_worker
+import sochron_worker.news_gate
+import sochron_worker.pa01_envelope
+import sochron_worker.pa01_journal
 assert all(pathlib.Path(p.__file__).is_relative_to(sys.prefix)
-           for p in (sochron1k, sochron_worker, sochron_worker.pa01_envelope,
+           for p in (sochron1k, sochron_worker, sochron_worker.news_gate,
+                     sochron_worker.pa01_envelope,
                      sochron_worker.pa01_journal))
 assert importlib.util.find_spec('pytest') is None
 assert importlib.util.find_spec('hatchling') is None
@@ -718,6 +727,23 @@ print(json.dumps(values))
             "installed PA01 default-disabled boundary",
         )
         check("installed PA01 command is inert without private configuration")
+        disabled_news = run(
+            [str(environment / "bin/sochron-news-gate"), "run", "--once"],
+            cwd=directory,
+            env={"PATH": os.defpath},
+        )
+        require(
+            json.loads(disabled_news.stdout)
+            == {
+                "state": "DISABLED",
+                "news_ready": False,
+                "execution_ready": False,
+                "auto_trading_enabled": False,
+            }
+            and not disabled_news.stderr,
+            "installed News Gate default-disabled boundary",
+        )
+        check("installed News Gate command is inert without private configuration")
         recovery = exercise(environment / "bin/sochron-sync", python, directory, digest(wheel))
         startup = exercise_startup(python, directory)
     return dict(

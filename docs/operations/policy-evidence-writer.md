@@ -71,8 +71,8 @@ refuses it after the existing 30-second signal lifetime.
 
 ## News Gate contract
 
-The writer does not yet collect a calendar. A future reviewed collector must
-atomically publish this exact `sochron.news-gate.v1` shape:
+The optional [SCN-025 collector](news-gate-collector.md) can atomically publish
+this exact `sochron.news-gate.v1` shape from a strict normalized calendar gateway:
 
 ```json
 {
@@ -91,9 +91,10 @@ atomically publish this exact `sochron.news-gate.v1` shape:
 Times must be aware UTC values; coverage end is exclusive and must contain the
 writer cutoff. Observation age is capped at five minutes. `blocked=true` requires
 one or more unique event IDs; `blocked=false` requires an empty list. The file's
-owner-only integrity establishes the local handoff boundary, but the collector
-still needs separate evidence that its upstream calendar is complete and timely.
-Official RSS alone must not be described as complete calendar protection.
+owner-only integrity establishes the local handoff boundary. The collector
+software has local fixture evidence, but still needs an owner-selected licensed
+gateway and separate evidence that its upstream calendar is complete and timely.
+RSS or AI output alone must not be described as complete calendar protection.
 
 Missing news data leaves the writer `awaiting_sources`; malformed/insecure data or
 an output failure is `degraded`. Neither state manufactures `news_blocked=false`.
@@ -123,7 +124,8 @@ Targeted local verification:
 ```
 
 Synthetic success proves coherent atomic construction and SCN-021 model
-compatibility only. Still missing are the actual news collector, target private
-files, selected-host MQL compilation, actual Demo read-only source parity, the
-scheduled PA01 producer, hosted Supabase authorization, target recovery/burn-in
-and every execution/release gate.
+compatibility only. The collector boundary exists locally; still missing are its
+actual licensed gateway/provider, target private files and scheduling, selected-host
+MQL compilation, actual Demo read-only source parity, the scheduled PA01 producer,
+hosted Supabase authorization, target recovery/burn-in and every execution/release
+gate.

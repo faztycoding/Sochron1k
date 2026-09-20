@@ -221,7 +221,10 @@ snapshot/signal pair. The owner Signals UI therefore has a complete local softwa
 path. The authoritative handoff writer is implemented locally, but correctly stays
 disabled until its exact MT5 identities, archive, private output and a
 coverage-complete news gate are configured. Signals also require eligible
-strategy/experiment rows and private producer configuration. The news collector,
-target scheduling/recovery and separate statistics evaluator remain missing.
+strategy/experiment rows and private producer configuration. The optional
+[`sochron-news-gate`](docs/operations/news-gate-collector.md) worker now implements
+the strict collector boundary, but still requires an owner-selected licensed
+calendar gateway, credential, target schedule and completeness evidence. Target
+recovery and the separate statistics evaluator remain missing.
 A real Demo round trip still requires owner inputs and explicit target authorization
 listed in the task contract.

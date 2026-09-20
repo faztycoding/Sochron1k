@@ -26,6 +26,8 @@ from sochron1k.policy_evidence import (
     load_policy_writer_settings,
 )
 from sochron1k.telemetry import BridgeSettings, DemoIdentity, TelemetryBridge, TelemetryFrame
+from sochron_worker.news_gate import CalendarGateway, NewsGateCollector, NewsGateUnavailable
+from sochron_worker.news_gate_config import NewsGateConfig
 from sochron_worker.pa01_source import PolicyFileSource
 
 D = Decimal
@@ -319,6 +321,82 @@ def test_scn024_ac05_policy_accepts_read_only_inventory_but_execution_stays_unav
     policy = PolicyFileSource(settings.output_file).read()
     assert policy.has_exposure is False and policy.has_pending is False
     assert writer.status().execution_ready is False
+
+
+def test_scn025_ac07_collected_gate_feeds_writer_and_failure_never_clears(
+    private_directory, identity
+):
+    clock = Clock()
+    settings = writer_settings(private_directory, identity)
+    token = private_directory / "calendar.token"
+    token.write_text("n" * 48)
+    token.chmod(0o600)
+    config = NewsGateConfig(
+        origin="https://calendar.example.com",
+        credential_file=token,
+        output_file=settings.news_gate_file,
+        currencies=("USD",),
+        impacts=("high",),
+        blackout_before_seconds=1_800,
+        blackout_after_seconds=1_800,
+        poll_seconds=60,
+    )
+    payload = {
+        "protocol": "sochron.calendar-window.v1",
+        "source_id": "calendar-fixture",
+        "revision": "revision-1",
+        "published_at_utc": clock.utc.isoformat(),
+        "coverage_from_utc": (clock.utc - timedelta(minutes=30)).isoformat(),
+        "coverage_until_utc": (
+            clock.utc + timedelta(minutes=30, microseconds=1)
+        ).isoformat(),
+        "complete": True,
+        "events": [
+            {
+                "event_id": "high-impact-fixture",
+                "scheduled_at_utc": clock.utc.isoformat(),
+                "currency": "USD",
+                "impact": "high",
+                "status": "scheduled",
+            }
+        ],
+    }
+
+    def reply(request):
+        return httpx.Response(
+            200,
+            headers={"content-type": "application/json"},
+            stream=httpx.ByteStream(json.dumps(payload).encode()),
+        )
+
+    collector = NewsGateCollector(
+        config,
+        CalendarGateway(config, transport=httpx.MockTransport(reply)),
+        utc_now=clock.now,
+    )
+    assert collector.refresh().blocked is True
+    retained = settings.news_gate_file.read_bytes()
+
+    writer = PolicyEvidenceWriter(settings, utc_now=clock.now)
+    telemetry, execution = sources(identity, clock)
+    telemetry.accept(telemetry_frame(telemetry, clock))
+    execution.accept_inventory(inventory_frame(execution, clock))
+    assert writer.refresh(telemetry, execution) is True
+    assert PolicyFileSource(settings.output_file).read().news_blocked is True
+
+    failed = NewsGateCollector(
+        config,
+        CalendarGateway(
+            config,
+            transport=httpx.MockTransport(lambda request: httpx.Response(503)),
+        ),
+        utc_now=clock.now,
+    )
+    with pytest.raises(NewsGateUnavailable):
+        failed.refresh()
+    assert settings.news_gate_file.read_bytes() == retained
+    assert writer.refresh(telemetry, execution) is True
+    assert PolicyFileSource(settings.output_file).read().news_blocked is True
 
 
 def test_ac04_missing_stale_or_malformed_news_never_becomes_clear(private_directory, identity):
