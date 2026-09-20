@@ -81,5 +81,29 @@ if rg --ignore-case --quiet 'security definer' "$native_migration"; then
   exit 1
 fi
 
+pa01_migration="supabase/migrations/20260920000837_pa01_decision_receiver.sql"
+# SCN-020 source tripwires; local pgTAP and independent sessions prove behavior.
+for requirement in \
+  'CREATE UNIQUE INDEX feature_snapshots_owner_decision_fingerprint_key' \
+  'CREATE UNIQUE INDEX signals_owner_feature_snapshot_key' \
+  'CREATE TRIGGER pa01_feature_snapshot_guard' \
+  'CREATE TRIGGER pa01_signal_guard' \
+  'PA01_DECISION_CONFLICT' \
+  'PA01_SNAPSHOT_IMMUTABLE' \
+  'PA01_SIGNAL_IMMUTABLE' \
+  'REVOKE ALL ON FUNCTION public.sochron_store_pa01_decision(uuid,bigint,bigint,jsonb)' \
+  'REVOKE ALL ON TABLE public.feature_snapshots FROM service_role;' \
+  'REVOKE ALL ON TABLE public.signals FROM service_role;'; do
+  if ! rg --fixed-strings --quiet "$requirement" "$pa01_migration"; then
+    printf 'FAIL missing PA01 receiver source guard: %s\n' "$requirement" >&2
+    exit 1
+  fi
+done
+if rg --ignore-case --quiet 'security definer|insert into public\.(commands|risk_events|orders|positions|deals)' \
+  "$pa01_migration"; then
+  printf 'FAIL PA01 receiver adds privileged or execution-authority behavior\n' >&2
+  exit 1
+fi
+
 python3 scripts/check-no-secrets.py
-printf 'PASS SCN-002/008 static Supabase guards on CLI %s and Node.js %s\n' "$expected_cli" "$expected_node"
+printf 'PASS SCN-002/008/020 static Supabase guards on CLI %s and Node.js %s\n' "$expected_cli" "$expected_node"

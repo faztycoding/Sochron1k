@@ -203,7 +203,8 @@ API also validates every returned owner UUID and removes owner/internal database
 identifiers from its bounded response. It preserves BUY, SELL, WAIT, BLOCK and
 expiry exactly, enforces causal formed/confirmed/data-cutoff times, and exposes no
 write, promotion, command, risk or execution authority. Empty data remains
-`awaiting_source`. The producer and PA01 evidence remain unimplemented, so this
+`awaiting_source`. The producer remains unimplemented; a pure PA01 calculator and
+an atomic persistence receiver exist but are not scheduled or connected, so this
 read boundary is not strategy or Demo-release evidence; see
 [ADR-019](decisions/ADR-019-owner-signal-read-model.md).
 
@@ -222,9 +223,9 @@ SCN-018 fixes the first PA01 calculation boundary in `sochron_worker.pa01`.
 The pure kernel consumes explicit as-of closed M5/H1 evidence, calculates the
 versioned EMA/ATR/ADX and delayed L2/R2 pivots, and returns BUY, SELL, WAIT or BLOCK
 with stable evidence hashes. It has no clock-now, I/O, persistence, AI, risk,
-command or execution authority. Aggregation, scheduling and atomic
-feature/signal persistence remain missing, so the owner signal route correctly
-stays `awaiting_source`; see
+command or execution authority. Aggregation and the atomic persistence destination
+now exist as separate boundaries; source reads, a durable producer and scheduling
+remain missing, so the owner signal route correctly stays `awaiting_source`; see
 [ADR-021](decisions/ADR-021-pa01-v1-deterministic-kernel.md).
 
 SCN-019 adds the pure native M1 aggregation boundary in
@@ -235,6 +236,17 @@ provenance and missing minutes never become prices. `ClosedBar` now carries serv
 time and its pinned UTC offset so PA01 gap/alignment semantics match the native
 source. No source query, scheduler, persistence or command path exists; see
 [ADR-022](decisions/ADR-022-native-pa01-aggregation.md).
+
+SCN-020 adds the backend-only Supabase destination for one PA01 decision. One
+security-invoker RPC atomically insert-or-verifies an immutable feature snapshot
+and its owner-linked signal; a separate read RPC supports UNKNOWN reconciliation.
+The receiver pins the exact PA01 parameter/aggregation identity, admits only an
+eligible same-owner experiment, validates bounded causal evidence and keeps legacy
+fixtures forward compatible. Anonymous/authenticated roles cannot invoke the RPCs
+or write the tables, while owner SELECT RLS remains unchanged. The receiver has no
+command, risk, MT5, promotion or Auto Trading authority. It is not a producer and
+does not query native bars or schedule work; see
+[ADR-023](decisions/ADR-023-pa01-decision-receiver.md).
 
 | Failure | Required behavior |
 | --- | --- |

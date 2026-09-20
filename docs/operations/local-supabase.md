@@ -30,17 +30,21 @@ SOCHRON_ALLOW_LOCAL_DB_RESET=sochron1k bash scripts/with-local-docker.sh npx -y 
 The command resets only the local project, reapplies migrations without seed data,
 runs public/private-schema lint, runs all advisors with errors blocking, and
 executes pgTAP fixtures inside rolled-back transactions. It also runs owner-policy
-mutation detection and native-receiver forward-migration/concurrency checks.
+mutation detection plus native-receiver and PA01 decision-receiver
+forward-migration/concurrency checks.
 INFO-level unused-index findings are expected for a fresh empty database; retained
 indexes support foreign keys and planned access patterns. This is not workload-based
 index validation.
 
-`scripts/check-native-sync-concurrency.py` creates a random `scn008_verify_...`
-database inside the guarded local Postgres container and drops only that database
-after the test. It never resets the primary local database or accepts a hosted URL.
-The Auth tables/function are minimal scaffolding in this isolated check; full local
-Supabase role behavior is covered by pgTAP, not by that scaffold. Independent SQL
-sessions must demonstrably overlap at a database lock before the test can pass.
+`scripts/check-native-sync-concurrency.py` and
+`scripts/check-pa01-decision-concurrency.py` each create a random invocation-owned
+database inside the guarded local Postgres container and drop only that database
+after the test. They never reset the primary local database or accept a hosted URL.
+The Auth tables/function are minimal scaffolding in these isolated checks; full
+local Supabase role behavior is covered by pgTAP, not by that scaffold. Independent
+SQL sessions must demonstrably overlap at a database lock before either concurrency
+test can pass. The PA01 verifier also preserves a pre-migration legacy pair and
+simulates committed-but-lost response reconciliation.
 
 ## Worker HTTP/crash integration (no reset)
 
@@ -75,15 +79,20 @@ key files before the repository secret scan. Temporary fixture data is regenerab
 
 - Initial migration failed because the implicit currency-format constraint name collided with the explicit cost/currency-pair constraint. Rename the pair constraint before first successful deployment; both rules remain enforced. No remote migration history was rewritten.
 - The initial pgTAP text-array comparison failed inside its record-comparison helper with indeterminate collation. Typed JSON equality now checks the exact same complete tuple/list, without dropping a value or owner-isolation assertion.
-- The current suite contains **380 checks**: 16 baseline, 271 all-table access,
-  14 session and 79 native-receiver checks. Both owners have synthetic rows in all
+- The current suite contains **432 checks**: 16 baseline, 271 all-table access,
+  14 session, 79 native-receiver and 52 PA01 receiver checks. Both owners have
+  synthetic rows in all
   18 public tables. Exact owner sets, empty-owner/missing-subject reads, anonymous
   reads, and browser insert/update/delete denial are exercised. The mutation test
   requires four isolation failures from a deliberately permissive audit policy,
   restores it via rollback and reruns all 271 access checks. Native checks include
   exact decimals, atomic conflicts, immutable captures and actual backend TRUNCATE
-  denial. They do not prove HTTP JWT validation, worker synchronization, all data
-  constraints or actual broker evidence. See [initial isolation evidence](../verification/SCN-002-owner-isolation.md)
-  and [native receiver evidence](../verification/SCN-008-native-m1-receiver.md).
+  denial. PA01 checks include exact linked evidence, role denial, malformed and
+  halted-strategy rejection, atomic rollback and immutable producer rows. They do
+  not prove HTTP JWT validation, worker synchronization, all data
+  constraints or actual broker evidence. See
+  [initial isolation evidence](../verification/SCN-002-owner-isolation.md),
+  [native receiver evidence](../verification/SCN-008-native-m1-receiver.md) and
+  [PA01 receiver evidence](../verification/SCN-020-pa01-decision-receiver.md).
 - SCN-008 now has real local worker synchronization evidence as described above.
   SCN-001 actual MT5 gates, target recovery, hosted sync and unattended Demo remain incomplete.
