@@ -52,7 +52,9 @@ check "Type checks disabled" '@ts-ignore|@ts-expect-error|as any([^a-zA-Z]|$)|ty
 check "Lint disabled" 'eslint-disable|noqa|nolint'
 check "Placeholder or mock in production code" '(TODO|FIXME|HACK|XXX|placeholder|dummy|fake|mock|stub)' code -i
 check "Swallowed errors" 'catch *(\([^)]*\))? *\{ *\}|except[^:]*: *(pass|\.\.\.) *$'
-check "Possible secrets" '(sk_(live|test)_|pk_live_|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{20,}|service_role|BEGIN [A-Z ]*PRIVATE KEY)'
+# Two literals are split with '' (bash joins the pieces) so this definition line does not match
+# itself; the pattern the scanner uses is unchanged (review BOOT-001 F6).
+check "Possible secrets" '(sk_(live|test)_|pk_''live_|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{20,}|service''_role|BEGIN [A-Z ]*PRIVATE KEY)'
 check "Secret-like value assigned" '[A-Z0-9_]*(PASSWORD|PASSWD|SECRET|TOKEN|API_KEY)[A-Z0-9_]*=[^ #$<]{4,}'
 check "Destructive or bypass commands" '(--force|--no-verify|reset --hard|DROP (TABLE|DATABASE|SCHEMA)|TRUNCATE )'
 check "Client-exposed variable with secret-like name" '(NEXT_PUBLIC_|EXPO_PUBLIC_|VITE_)[A-Z0-9_]*(SECRET|PRIVATE|SERVICE|PASSWORD)'

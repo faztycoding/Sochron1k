@@ -1,8 +1,10 @@
 name: ci
 
+# Runs the PR's OWN code: self-tests of the hooks and lock rules, and the red-flag scan.
+# Informational for reviewers. A PR can change these files, so this workflow is not the gate
+# for locked paths; that is control-gate.yml (review BOOT-001 F1).
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches: [main]
 
@@ -29,10 +31,3 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bash scripts/controls/red-flags.sh "origin/$BASE_REF"
-
-      - name: Locked and append-only paths (needs the owner label to change them)
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_REF: ${{ github.base_ref }}
-          CONTROL_CHANGE_APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'owner-approved-control-change') }}
-        run: node scripts/controls/check-locked-paths.mjs "origin/$BASE_REF"

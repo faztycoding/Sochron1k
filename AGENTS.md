@@ -12,8 +12,10 @@ conflicts with the handbook, stop and ask.
   and Demo work; High for control changes (this bootstrap) and for anything touching real money,
   credentials or controls (SPEC.md section 2).
 - Phase: bootstrap. There is no application code yet. Architecture decision D-001 is proposed,
-  not accepted: do not scaffold packages, install dependencies or write feature code until D-001
-  is accepted and an approved task contract covers the work.
+  not accepted: do not scaffold packages, add project dependencies or write feature code until
+  D-001 is accepted and an approved task contract covers the work. The exception is an approved
+  SPIKE contract, which gathers the evidence D-001 needs: it may run owner-approved packages in a
+  throwaway uv environment (`uv run --with`) without adding them to the project.
 - Sources of truth: SPEC.md (what and why) · docs/architecture.md (boundaries) · DECISIONS.md
   (decisions) · PROGRESS.md (current state) · docs/contracts/ (tasks) · docs/HANDBOOK-CORE.md (process).
 
@@ -96,8 +98,10 @@ Handbook ch.34; the product values (risk limits, symbol, hours) live in SPEC.md.
   martingale, average down, or raise risk to recover losses. Our risk gate runs before every
   order; platform checks are not a risk gate. Confirm results from real orders and positions.
 - One strategy implementation, a pure function shared by backtest and live: no I/O, clock or MT5 imports in strategy code.
-- All time conversion goes through one time module. MT5 timestamps are broker server time, not
-  UTC. Store raw timestamps and never assume an offset.
+- All time conversion goes through one time module. What MT5 timestamps mean is not proven yet:
+  the MetaTrader5 Python docs say tick and bar times are UTC, while MQL5 community reports say
+  broker server time. Store raw timestamps, assume neither, and convert only by the rule that
+  SPIKE-001 measures.
 - Register a hypothesis in docs/hypotheses/ (skill `register-hypothesis`) and commit it before
   running any backtest on it. Never edit its pass/fail conditions after seeing results; a new idea gets a new H number.
 - Every experiment run is logged automatically to the variant registry, failures included. The
@@ -130,7 +134,7 @@ Handbook ch.34; the product values (risk limits, symbol, hours) live in SPEC.md.
   reports, explain-backs. Code, identifiers, commit messages, test names, handoff notes and reviews are English.
 - Folder layout and import rules follow the module map in docs/architecture.md once D-001 is accepted.
 - Money and volume use Decimal or scaled integers; never compare floats for equality. Store
-  UTC plus the raw broker time, and display Asia/Bangkok separately.
+  UTC plus the raw MT5 timestamp, and display Asia/Bangkok separately.
 
 ## Git
 - One branch per task: <feat|fix|chore|spike|research>/<TASK-ID>-<slug>. Never work directly on main.

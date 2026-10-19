@@ -1,17 +1,24 @@
 #!/usr/bin/env node
 // PreToolUse hook for Bash|PowerShell|Monitor. Blocks shell commands that would break the
 // project's controls (Handbook v5 ch.13, ch.14, Appendix O):
-//   git push · reset --hard · clean -f · hook bypass (--no-verify, commit -n, core.hooksPath)
-//   commits, merges or rebases on main · discarding all local changes · deleting branches or stashes
-//   writes to locked or append-only paths (scripts/controls/rules.mjs)
+//   git push · reset --hard · clean · hook bypass (--no-verify, commit -n, core.hooksPath)
+//   commits, merges or rebases on main, including after a branch switch earlier in the command
+//   discarding all local changes · force-deleting branches · dropping stashes
+//   writes to locked or append-only paths (scripts/controls/rules.mjs) at their REAL destination:
+//     cd/pushd/Set-Location and subshells inside the command, copies into folders (cp x . / -t /
+//     -Destination), redirects, tee, output flags (curl -o, wget -O, sort -o, -OutFile), archive
+//     extraction, the target files listed inside patches (git apply, git am, patch), nested shell
+//     strings (bash -c, eval, $(...)) and arguments from xargs (cannot be inspected)
 //   credential reads (.env, SSH keys, Codex auth) · recursive deletes outside the project
 //   destructive SQL · piping downloads into a shell
 // Exit code 2 blocks the call and tells Claude why. Unreadable input fails closed.
-// This is a local guard built on text heuristics. Deny rules and CI are the other layers, and
-// AGENTS.md forbids routing around a block.
+// Limits: a text-level guard cannot see what a program does once it runs (python x.py or
+// node x.mjs opening files themselves). Deny rules and CI (control-gate) are the other layers,
+// and AGENTS.md forbids routing around a block.
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { containsProtected, matchAppendOnly, matchLocked, toRepoRelative } from '../../scripts/controls/rules.mjs';
+import { readFileSync, statSync } from 'node:fs';
+import os from 'node:os';
+import { containsProtected, matchAppendOnly, matchLocked, resolvePath, toRepoRelative } from '../../scripts/controls/rules.mjs';
 
 function block(reason, hint = '') {
   process.stderr.write(`Blocked by .claude/hooks/guard-bash.mjs: ${reason}.${hint ? ` ${hint}` : ''}\n`);
@@ -33,8 +40,8 @@ if (typeof command !== 'string' || command.trim() === '') {
 }
 
 const projectDir = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd();
-const cwd = input.cwd || projectDir;
 const flat = command.replace(/\\/g, '/');
+const home = os.homedir().replace(/\\/g, '/');
 
 const LOCKED_FRAGMENTS = [
   'agents.md', 'agents.override.md', 'claude.md', 'claude.local.md', '.claude/settings',
@@ -61,10 +68,13 @@ if (/core\.hookspath/i.test(flat)) block('changing core.hooksPath bypasses check
 if (/-encodedcommand\b/i.test(flat)) block('encoded PowerShell commands are not allowed');
 
 // ---- Tokenizing ----------------------------------------------------------------------------
+// Segments split at ; newline | && || and at ( ) { } (subshells, substitutions, script blocks),
+// except inside quotes, ${var} and @{hashtable}.
 function splitSegments(s) {
   const segs = [];
   let cur = '';
   let quote = null;
+  let braceDepth = 0;
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
     if (quote) {
@@ -73,16 +83,48 @@ function splitSegments(s) {
       continue;
     }
     if (c === '"' || c === "'") { quote = c; cur += c; continue; }
-    if (c === ';' || c === '\n' || c === '|' || (c === '&' && s[i + 1] === '&')) {
+    if (c === '{' && (s[i - 1] === '$' || s[i - 1] === '@')) { braceDepth++; cur += c; continue; }
+    if (c === '}' && braceDepth > 0) { braceDepth--; cur += c; continue; }
+    const pairOp = (c === '&' || c === '|') && s[i + 1] === c;
+    if (c === ';' || c === '\n' || c === '|' || pairOp || c === '(' || c === ')' || c === '{' || c === '}') {
       segs.push(cur);
       cur = '';
-      if ((c === '&' || c === '|') && s[i + 1] === c) i++;
+      if (pairOp) i++;
       continue;
     }
     cur += c;
   }
   segs.push(cur);
   return segs.map((x) => x.trim()).filter(Boolean);
+}
+
+// Command substitutions that splitSegments cannot see: $(...) inside double quotes, and `...`.
+function substitutions(s) {
+  const out = [];
+  let single = false;
+  let double = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === "'" && !double) { single = !single; continue; }
+    if (single) continue;
+    if (c === '"') { double = !double; continue; }
+    if (double && c === '$' && s[i + 1] === '(') {
+      let depth = 1;
+      let j = i + 2;
+      for (; j < s.length && depth > 0; j++) {
+        if (s[j] === '(') depth++;
+        else if (s[j] === ')') depth--;
+      }
+      out.push(s.slice(i + 2, j - 1));
+      i = j - 1;
+    } else if (c === '`') {
+      const j = s.indexOf('`', i + 1);
+      if (j < 0) break;
+      out.push(s.slice(i + 1, j));
+      i = j;
+    }
+  }
+  return out;
 }
 
 function tokenize(seg) {
@@ -99,11 +141,11 @@ function tokenize(seg) {
     }
     if (c === '"' || c === "'") { quote = c; started = true; continue; }
     if (/\s/.test(c)) { flush(); continue; }
-    if (c === '>') {
-      let op = '>';
-      if (/^[0-9&]$/.test(cur)) { op = cur + op; cur = ''; started = false; } else flush();
-      if (seg[i + 1] === '>') { op += '>'; i++; }
-      if (seg[i + 1] === '&' && /[0-9-]/.test(seg[i + 2] ?? '')) { op += `&${seg[i + 2]}`; i += 2; }
+    if (c === '>' || c === '<') {
+      let op = c;
+      if (c === '>' && /^[0-9&]$/.test(cur)) { op = cur + op; cur = ''; started = false; } else flush();
+      while (seg[i + 1] === c) { op += c; i++; }
+      if (c === '>' && seg[i + 1] === '&' && /[0-9-]/.test(seg[i + 2] ?? '')) { op += `&${seg[i + 2]}`; i += 2; }
       out.push(op);
       continue;
     }
@@ -114,158 +156,428 @@ function tokenize(seg) {
   return out;
 }
 
+function splitRedirects(tokens) {
+  const words = [];
+  const outputs = [];
+  const inputs = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (/^[0-9&]?>>?&[0-9-]$/.test(t)) continue; // 2>&1
+    if (/^[0-9&]?>>?$/.test(t)) { if (tokens[i + 1] !== undefined) outputs.push(tokens[++i]); continue; }
+    if (t === '<') { if (tokens[i + 1] !== undefined) inputs.push(tokens[++i]); continue; }
+    if (/^<<<?$/.test(t)) { i++; continue; } // heredoc delimiter or here-string
+    words.push(t);
+  }
+  return { words, outputs, inputs };
+}
+
+// ---- Paths ---------------------------------------------------------------------------------
+let cwd = input.cwd || projectDir; // effective directory; null once it cannot be known
+const dirStack = [];
+let branchState; // effective branch; undefined until first needed, null when unknown
+
+function locate(rawToken, dir = cwd) {
+  let t = String(rawToken).replace(/\\/g, '/');
+  if (!t || /^[a-z][a-z0-9+.-]*:\/\//i.test(t)) return { kind: 'url' };
+  t = t.replace(/^~(?=\/|$)/, home);
+  if (/^[$%]/.test(t) || t.includes('$(') || t.includes('`')) return { kind: 'unknown' };
+  if (/^[a-zA-Z]:\//.test(t) && process.platform !== 'win32') return { kind: 'outside' };
+  const absolute = /^([a-zA-Z]:\/|\/)/.test(t);
+  if (dir === null && !absolute) return { kind: 'unknown' };
+  const abs = resolvePath(t, dir ?? projectDir);
+  const rel = toRepoRelative(abs, projectDir);
+  return rel === null ? { kind: 'outside', abs } : { kind: 'inside', abs, rel };
+}
+
 // destructive: deleting or moving a folder that contains a protected path also counts.
-function protectedRule(rawToken, { destructive = false } = {}) {
+function protectedRule(rawToken, { destructive = false, dir = cwd } = {}) {
   let t = String(rawToken);
   if (t.startsWith('-')) {
     const eq = t.indexOf('=');
     if (eq < 0) return null;
     t = t.slice(eq + 1);
   }
-  if (/^(of|if)=/.test(t)) t = t.slice(3);
-  t = t.replace(/\\/g, '/');
-  if (!t || /^[a-z][a-z0-9+.-]*:\/\//i.test(t)) return null;
-  const rel = toRepoRelative(t, projectDir, cwd);
-  if (rel === null) return null;
-  if (rel === '') return destructive ? { why: 'the project root' } : null;
-  return matchLocked(rel) ?? matchAppendOnly(rel) ?? (destructive ? containsProtected(rel) : null);
+  if (/^if=/i.test(t)) return null; // dd input file is only read
+  if (/^of=/i.test(t)) t = t.slice(3);
+  const loc = locate(t, dir);
+  if (loc.kind === 'url' || loc.kind === 'outside') return null;
+  if (loc.kind === 'unknown') return { why: 'a path that cannot be resolved here (variable or unknown directory)' };
+  if (loc.rel === '') return destructive ? { why: 'the project root' } : null;
+  return matchLocked(loc.rel) ?? matchAppendOnly(loc.rel) ?? (destructive ? containsProtected(loc.rel) : null);
 }
 
 function dangerousDeleteTarget(rawToken) {
   const t = String(rawToken).replace(/\\/g, '/');
   if (/^(\/|~|~\/.*|\.|\.\/|\.\.|\.\.\/.*|\.?\/?\*|[a-zA-Z]:\/?|%[a-z]+%.*)$/i.test(t)) return true;
-  if (t.startsWith('$')) return true; // unexpanded variable: cannot prove it stays inside the project
-  const rel = toRepoRelative(t, projectDir, cwd);
-  return rel === null || rel === '';
+  const loc = locate(t);
+  if (loc.kind === 'url') return false;
+  if (loc.kind !== 'inside') return true;
+  return loc.rel === '';
 }
 
-let branchCache;
+function cwdIsSensitive() {
+  if (cwd === null) return true;
+  const rel = toRepoRelative(cwd, projectDir);
+  if (rel === null || rel === '') return false;
+  return Boolean(matchLocked(rel) || containsProtected(rel));
+}
+
+const CD = new Set(['cd', 'chdir', 'pushd', 'set-location', 'sl', 'push-location']);
+const POP = new Set(['popd', 'pop-location']);
+function changeDirectory(name, args) {
+  if (POP.has(name)) { cwd = dirStack.length ? dirStack.pop() : null; return; }
+  if (name === 'pushd' || name === 'push-location') dirStack.push(cwd);
+  const operands = args.filter((a) => !a.startsWith('-') && !/^\/d$/i.test(a));
+  const target = operands[0];
+  if (target === undefined) { cwd = home; return; }
+  if (target === '-') { cwd = null; return; }
+  const loc = locate(target);
+  cwd = loc.abs ?? null;
+}
+
+// ---- Git -----------------------------------------------------------------------------------
+function gitOut(args, dir) {
+  if (dir === null) return null;
+  try {
+    return execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch {
+    return null;
+  }
+}
 function currentBranch() {
-  if (branchCache === undefined) {
-    try {
-      branchCache = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-        cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
-      }).trim();
-    } catch {
-      branchCache = null;
+  if (branchState === undefined) branchState = gitOut(['rev-parse', '--abbrev-ref', 'HEAD'], cwd);
+  return branchState;
+}
+// Branch after `git switch|checkout ...`: a name, '(detached)', null (unknown) or undefined (no change).
+function branchAfterSwitch(sub, args, dir) {
+  const valueOf = (flags) => {
+    const j = args.findIndex((a) => flags.includes(a));
+    return j >= 0 ? (args[j + 1] ?? null) : undefined;
+  };
+  const created = sub === 'switch' ? valueOf(['-c', '-C', '--create', '--force-create']) : valueOf(['-b', '-B']);
+  if (created !== undefined) return created;
+  if (args.includes('--detach') || (sub === 'switch' && args.includes('-d'))) return '(detached)';
+  if (sub === 'checkout' && args.includes('--')) return undefined; // paths only
+  const operand = args.find((a) => a === '-' || !a.startsWith('-'));
+  if (operand === undefined) return undefined;
+  if (operand === '-') return null; // "previous branch": cannot be known from the text
+  if (sub === 'switch') return operand;
+  const isBranch = operand === 'main' || operand === 'master'
+    || gitOut(['rev-parse', '--verify', '--quiet', `refs/heads/${operand}`], dir) !== null;
+  return isBranch ? operand : undefined; // `git checkout <path>` keeps the branch
+}
+
+function patchTargets(text) {
+  const out = new Set();
+  for (const line of text.split(/\r?\n/)) {
+    let m;
+    if ((m = /^diff --git a\/(.+?) b\/(.+)$/.exec(line))) { out.add(m[1]); out.add(m[2]); continue; }
+    if ((m = /^(?:---|\+\+\+) (.+?)(?:\t.*)?$/.exec(line))) {
+      const p = m[1].replace(/^[ab]\//, '');
+      if (p !== '/dev/null') out.add(p);
+      continue;
+    }
+    if ((m = /^(?:rename|copy) (?:from|to) (.+)$/.exec(line))) out.add(m[1]);
+  }
+  return [...out];
+}
+function checkPatchFile(file, dir, label) {
+  const loc = locate(file, dir);
+  if (!loc.abs) block(`${label}: cannot locate the patch file ${file}`, 'Save the patch to a known file first.');
+  let text;
+  try {
+    text = readFileSync(loc.abs, 'utf8');
+  } catch {
+    block(`${label}: cannot read the patch file ${file}`);
+  }
+  for (const target of patchTargets(text)) {
+    for (const base of [dir, projectDir]) { // git resolves patch paths from the repository top
+      const rule = protectedRule(target, { destructive: true, dir: base });
+      if (rule) block(`${label} would change ${target} (${rule.why})`, 'Locked paths are owner-only; ask the owner to apply this patch.');
     }
   }
-  return branchCache;
 }
 
-const WRAPPERS = new Set(['sudo', 'command', 'exec', 'time', 'nohup', 'env', 'xargs', 'then', 'do', 'else', '{', '(', '!']);
-// Removing or moving: a folder that contains a protected path counts as protected too.
-const DESTRUCTIVE = new Set(['rm', 'rmdir', 'unlink', 'shred', 'mv', 'del', 'erase', 'rd', 'move', 'ren', 'rename']);
-const PS_DESTRUCTIVE = /^(remove-item|ri|move-item|rename-item)$/i;
-// Creating or rewriting in place: only the exact protected path counts.
-const CREATIVE = new Set(['truncate', 'touch', 'mkdir', 'chmod', 'chown', 'chattr', 'dd', 'patch', 'icacls', 'attrib', 'tee']);
-const PS_CREATIVE = /^(set-content|add-content|out-file|new-item|clear-content|set-item|set-itemproperty|copy-item|ni|sc|ac)$/i;
-const WRITE_DEST = new Set(['cp', 'install', 'rsync', 'ln', 'copy', 'xcopy', 'robocopy']);
-// Subcommands that can rewrite working-tree files (reset without --hard only moves HEAD/index).
-const GIT_PATH_WRITERS = new Set(['checkout', 'restore', 'rm', 'mv', 'apply', 'am', 'stash', 'clean',
-  'update-index', 'read-tree', 'filter-branch', 'filter-repo']);
-const INTERPRETER = /^(node|nodejs|deno|bun|python[0-9.]*|py|pypy[0-9.]*|ruby|perl|php|pwsh|powershell)(\.exe)?$/i;
-const INLINE_FLAG = /^(-c|-e|--eval|-p|--print|-command|-c(o(m(m(a(n(d)?)?)?)?)?)?)$/i;
+const GIT_PATH_WRITERS = new Set(['checkout', 'restore', 'rm', 'mv', 'stash', 'clean', 'update-index', 'read-tree',
+  'filter-branch', 'filter-repo']);
 
-function analyzeGit(tokens, start) {
-  let i = start + 1;
-  while (i < tokens.length) {
-    const t = tokens[i];
-    if (['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path'].includes(t)) { i += 2; continue; }
+function analyzeGit(words, k, stdinFiles) {
+  let i = k + 1;
+  let dir = cwd;
+  while (i < words.length) {
+    const t = words[i];
+    if (t === '-C') { dir = locate(words[i + 1] ?? '', dir).abs ?? null; i += 2; continue; }
+    if (['-c', '--git-dir', '--work-tree', '--namespace', '--exec-path'].includes(t)) { i += 2; continue; }
     if (t.startsWith('-')) { i++; continue; }
     break;
   }
-  const sub = (tokens[i] ?? '').toLowerCase();
-  const args = tokens.slice(i + 1);
+  const sub = (words[i] ?? '').toLowerCase();
+  const args = words.slice(i + 1);
   const shortFlags = args.filter((a) => /^-[a-zA-Z]+$/.test(a)).join('');
+  const sameDir = dir === cwd;
 
   if (sub === 'push') block('git push is reserved for the owner (Handbook App.O deny list)', 'Commit locally and tell the owner the branch is ready.');
   if (args.includes('--no-verify')) block('--no-verify bypasses hooks and checks');
   if (sub === 'commit' && shortFlags.includes('n')) block('git commit -n bypasses hooks and checks');
   if (sub === 'reset' && args.includes('--hard')) block('git reset --hard can destroy work that is not this task\'s', 'Ask the owner.');
   if (sub === 'clean' && !(args.includes('-n') || args.includes('--dry-run'))) block('git clean deletes untracked files', 'Ask the owner; use --dry-run to inspect.');
-  if ((sub === 'checkout' || sub === 'restore')
-    && (args.includes('.') || args.includes(':/') || args.includes('*') || args.includes('-f') || args.includes('--force'))
-    && !(sub === 'restore' && args.includes('--staged') && !args.includes('--worktree'))) {
+  const unstageOnly = sub === 'restore' && args.includes('--staged') && !args.includes('--worktree');
+  if ((sub === 'checkout' || sub === 'restore') && !unstageOnly
+    && (args.includes('.') || args.includes(':/') || args.includes('*') || args.includes('-f') || args.includes('--force'))) {
     block(`git ${sub} on everything discards all local changes, possibly other people's work`, 'Restore only the files of this task.');
   }
   if (sub === 'branch' && (args.includes('-D') || (args.includes('--delete') && args.includes('--force')))) {
     block('force-deleting a branch can lose unmerged work', 'Ask the owner.');
   }
   if (sub === 'stash' && ['drop', 'clear'].includes((args[0] ?? '').toLowerCase())) block('dropping stashes loses work', 'Ask the owner.');
+
+  if (sub === 'switch' || sub === 'checkout') {
+    const next = branchAfterSwitch(sub, args, dir);
+    if (next !== undefined && sameDir) branchState = next;
+  }
   if (['commit', 'merge', 'cherry-pick', 'rebase', 'am', 'revert'].includes(sub)) {
-    const branch = currentBranch();
+    const branch = sameDir ? currentBranch() : gitOut(['rev-parse', '--abbrev-ref', 'HEAD'], dir);
+    if (branch === null) block(`git ${sub} after the current branch became unknown in this command`, 'Run the branch switch and the commit as separate commands.');
     if (branch === 'main' || branch === 'master') {
       block(`git ${sub} on ${branch}`, 'Create a task branch first: git switch -c <type>/<TASK-ID>-<slug>.');
     }
   }
-  const unstageOnly = sub === 'restore' && args.includes('--staged') && !args.includes('--worktree');
+  if (sub === 'apply' || sub === 'am') {
+    const inspectOnly = ['--check', '--stat', '--numstat', '--summary'].some((f) => args.includes(f)) && !args.includes('--apply');
+    if (!inspectOnly) {
+      const files = [...args.filter((a) => !a.startsWith('-')), ...stdinFiles];
+      if (files.length === 0) block(`git ${sub} reads a patch from standard input, which cannot be inspected`, 'Save the patch to a file first.');
+      for (const f of files) checkPatchFile(f, dir, `git ${sub}`);
+    }
+  }
   if (GIT_PATH_WRITERS.has(sub) && !unstageOnly) {
-    const hit = args.map((a) => [a, protectedRule(a, { destructive: true })]).find(([, r]) => r);
+    const hit = args.map((a) => [a, protectedRule(a, { destructive: true, dir })]).find(([, r]) => r);
     if (hit) block(`git ${sub} would change ${hit[0]} (${hit[1].why})`, 'Ask the owner.');
   }
 }
 
-for (const seg of splitSegments(command)) {
-  const tokens = tokenize(seg);
-  if (tokens.length === 0) continue;
+// ---- Command classes -----------------------------------------------------------------------
+const WRAPPERS = new Set(['sudo', 'command', 'exec', 'time', 'nohup', 'env', 'xargs', 'then', 'do', 'else', '!', 'nice']);
+const DELETE_LIKE = new Set(['rm', 'rmdir', 'unlink', 'shred', 'del', 'erase', 'rd', 'remove-item', 'ri']);
+const CREATIVE = new Set(['truncate', 'touch', 'mkdir', 'chmod', 'chown', 'chattr', 'dd', 'icacls', 'attrib', 'tee',
+  'set-content', 'add-content', 'out-file', 'new-item', 'ni', 'clear-content', 'set-item', 'set-itemproperty', 'sc', 'ac']);
+const COPY_LIKE = new Set(['cp', 'install', 'rsync', 'ln', 'copy', 'xcopy', 'robocopy', 'copy-item', 'cpi']);
+const MOVE_LIKE = new Set(['mv', 'move', 'move-item', 'mi']);
+const RENAME_LIKE = new Set(['ren', 'rename', 'rename-item', 'rni']);
+const CMD_STYLE = new Set(['copy', 'xcopy', 'robocopy', 'move', 'del', 'erase', 'rd']);
+const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash', 'ksh', 'cmd', 'pwsh', 'powershell']);
+const INTERPRETER = /^(node|nodejs|deno|bun|python[0-9.]*|py|pypy[0-9.]*|ruby|perl|php)$/i;
+const INLINE_FLAG = /^(-c|-e|--eval|-p|--print)$/i;
+const SHELL_FLAG = /^(-c|\/c|\/k|-command|-c(o(m(m(a(n(d)?)?)?)?)?)?)$/i;
+const OUTPUT_FLAGS = new Map([
+  ['curl', ['-o', '--output']], ['wget', ['-O', '--output-document']], ['sort', ['-o', '--output']],
+  ['invoke-webrequest', ['-outfile']], ['iwr', ['-outfile']], ['invoke-restmethod', ['-outfile']], ['irm', ['-outfile']],
+]);
 
-  // Redirect targets: > file, >> file, 2> file
-  for (let i = 0; i < tokens.length; i++) {
-    const op = tokens[i];
-    if (/^[0-9&]?>>?$/.test(op) && tokens[i + 1] !== undefined) {
-      const rule = protectedRule(tokens[i + 1]);
-      if (rule) block(`redirecting output into ${tokens[i + 1]} (${rule.why})`, 'Ask the owner.');
+function looksLikeDir(dest) {
+  if (dest === '.' || dest === '..' || /[\\/]$/.test(dest)) return true;
+  const loc = locate(dest);
+  if (!loc.abs) return false;
+  try { return statSync(loc.abs).isDirectory(); } catch { return false; }
+}
+function joinTarget(dest, src) {
+  const base = String(src).replace(/\\/g, '/').replace(/\/+$/, '').split('/').pop();
+  return `${String(dest).replace(/\\/g, '/').replace(/\/+$/, '')}/${base}`;
+}
+// Where a copy or move really writes: the destination itself, or <dest>/<source name> for folders.
+function copyPlan(name, args) {
+  const cmdStyle = CMD_STYLE.has(name);
+  const posix = ['cp', 'install', 'rsync', 'ln', 'mv'].includes(name);
+  const recursive = name === 'robocopy' || name === 'xcopy'
+    || (posix && args.some((a) => /^-[a-zA-Z]*[rRa][a-zA-Z]*$/.test(a) || a === '--recursive' || a === '--archive'))
+    || (!posix && !cmdStyle && args.some((a) => /^-recurse$/i.test(a)))
+    || (cmdStyle && args.some((a) => /^\/[se]$/i.test(a)));
+  let targetDir;
+  let destParam;
+  let noTargetDir = false;
+  const operands = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '-t' || a === '--target-directory') { targetDir = args[++i]; continue; }
+    if (a.startsWith('--target-directory=')) { targetDir = a.slice(a.indexOf('=') + 1); continue; }
+    if (a === '-T' || a === '--no-target-directory') { noTargetDir = true; continue; }
+    if (/^-(destination|dest)$/i.test(a)) { destParam = args[++i]; continue; }
+    if (/^-(path|literalpath)$/i.test(a)) { operands.push(args[++i]); continue; }
+    if (a === '-S' || a === '--suffix') { i++; continue; }
+    if (a.startsWith('-') || (cmdStyle && /^\/[a-z]+(:\S*)?$/i.test(a))) continue;
+    operands.push(a);
+  }
+  let dest;
+  let sources;
+  if (targetDir !== undefined) { dest = targetDir; sources = operands; }
+  else if (destParam !== undefined) { dest = destParam; sources = operands; }
+  else if (name === 'robocopy') { dest = operands[1]; sources = []; }
+  else { dest = operands[operands.length - 1]; sources = operands.slice(0, -1); }
+  if (dest === undefined) return { checks: [], sources };
+  const filesLandInDest = name === 'robocopy' || name === 'xcopy';
+  const destIsDir = !noTargetDir && (targetDir !== undefined || filesLandInDest || sources.length > 1 || looksLikeDir(dest));
+  const checks = [{ path: dest, destructive: filesLandInDest }];
+  if (destIsDir && !filesLandInDest) {
+    for (const s of sources) checks.push({ path: joinTarget(dest, s), destructive: recursive || MOVE_LIKE.has(name) });
+  }
+  return { checks, sources };
+}
+
+function outputFlagTargets(name, args) {
+  const flags = OUTPUT_FLAGS.get(name);
+  if (!flags) return [];
+  const ps = name.startsWith('invoke-') || name === 'iwr' || name === 'irm';
+  const out = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    for (const f of flags) {
+      const same = ps ? a.toLowerCase() === f : a === f;
+      if (same) out.push(args[i + 1]);
+      else if (f.startsWith('--') && a.startsWith(`${f}=`)) out.push(a.slice(f.length + 1));
     }
   }
+  return out.filter((x) => x !== undefined);
+}
 
+function extractionTargets(name, args) {
+  if (name === 'tar' && args.some((a, j) => a === '--extract' || a === '--get'
+    || ((j === 0 || a.startsWith('-')) && !a.startsWith('--') && /^-?[a-zA-Z]*x[a-zA-Z]*$/.test(a)))) {
+    const j = args.findIndex((a) => a === '-C' || a === '--directory');
+    const eq = args.find((a) => a.startsWith('--directory='));
+    return [j >= 0 ? args[j + 1] : eq ? eq.slice(12) : '.'];
+  }
+  if (name === 'unzip') {
+    const j = args.indexOf('-d');
+    return [j >= 0 ? args[j + 1] : '.'];
+  }
+  if (name === 'expand-archive') {
+    const j = args.findIndex((a) => /^-destinationpath$/i.test(a));
+    return [j >= 0 ? args[j + 1] : '.'];
+  }
+  if (name === '7z' && (args[0] === 'x' || args[0] === 'e')) {
+    const o = args.find((a) => a.startsWith('-o'));
+    return [o ? o.slice(2) : '.'];
+  }
+  return [];
+}
+
+// ---- Main analysis -------------------------------------------------------------------------
+function analyzeSegment(seg, depth) {
+  const { words, outputs, inputs } = splitRedirects(tokenize(seg));
+  for (const target of outputs) {
+    const rule = protectedRule(target);
+    if (rule) block(`redirecting output into ${target} (${rule.why})`, 'Ask the owner.');
+  }
   let k = 0;
-  while (k < tokens.length && (WRAPPERS.has(tokens[k]) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[k]))) k++;
-  const name = (tokens[k] ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
-  const args = tokens.slice(k + 1);
+  while (k < words.length && (WRAPPERS.has(words[k]) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[k]))) k++;
+  if (k >= words.length) return;
+  const viaXargs = words.slice(0, k).includes('xargs');
+  const name = words[k].replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
+  const args = words.slice(k + 1);
 
-  if (name === 'git') { analyzeGit(tokens, k); continue; }
+  if (CD.has(name) || POP.has(name)) { changeDirectory(name, args); return; }
+  if (name === 'git') { analyzeGit(words, k, inputs); return; }
+
+  const writes = DELETE_LIKE.has(name) || CREATIVE.has(name) || COPY_LIKE.has(name) || MOVE_LIKE.has(name)
+    || RENAME_LIKE.has(name) || name === 'patch' || ((name === 'sed' || name === 'perl') && args.some((a) => /^-i/.test(a)));
+  if (viaXargs && writes) block(`${name} receives its paths from xargs, which cannot be inspected`, 'List the paths explicitly.');
 
   // Recursive deletes outside the project, or of the whole project
   const recursiveRm = name === 'rm' && args.some((a) => /^-[a-zA-Z]*[rR][a-zA-Z]*$/.test(a) || a === '--recursive');
-  const recursivePs = /^(remove-item|ri|del|erase|rd|rmdir)$/i.test(name)
-    && args.some((a) => /^-recurse$/i.test(a) || /^\/s$/i.test(a));
+  const recursivePs = /^(remove-item|ri|del|erase|rd|rmdir)$/.test(name) && args.some((a) => /^-recurse$/i.test(a) || /^\/s$/i.test(a));
   if (recursiveRm || recursivePs) {
-    const targets = args.filter((a) => !/^-/.test(a) && !/^\/[a-z]$/i.test(a));
+    const targets = args.filter((a) => !a.startsWith('-') && !/^\/[a-z]$/i.test(a));
     const bad = targets.find(dangerousDeleteTarget);
     if (bad !== undefined) block(`recursive delete of ${bad}, which is outside the project or the project root itself`, 'Delete only paths inside the task scope.');
   }
 
-  // Writes to locked or append-only paths
-  const findProtected = (list, destructive) => list.map((a) => [a, protectedRule(a, { destructive })]).find(([, r]) => r);
-  const destructive = DESTRUCTIVE.has(name) || PS_DESTRUCTIVE.test(name)
+  const findProtected = (list, destructive) => list
+    .filter((a) => !(CMD_STYLE.has(name) && /^\/[a-z]+$/i.test(a)))
+    .map((a) => [a, protectedRule(a, { destructive })]).find(([, r]) => r);
+  const deleting = DELETE_LIKE.has(name) || RENAME_LIKE.has(name)
     || (name === 'find' && args.some((a) => a === '-delete' || a === '-exec' || a === '-execdir'));
-  const creative = CREATIVE.has(name) || PS_CREATIVE.test(name)
-    || ((name === 'sed' || name === 'perl') && args.some((a) => /^-i/.test(a) || a === '--in-place'));
-  if (destructive || creative) {
-    const hit = findProtected(args, destructive);
+  const creative = CREATIVE.has(name) || ((name === 'sed' || name === 'perl') && args.some((a) => /^-i/.test(a) || a === '--in-place'));
+  if (deleting || creative) {
+    const hit = findProtected(args, deleting);
     if (hit) block(`${name} would change ${hit[0]} (${hit[1].why})`, 'The implementer may not change locked paths; ask the owner.');
   }
-  if (WRITE_DEST.has(name)) {
-    const operands = args.filter((a) => !a.startsWith('-'));
-    const dest = operands[operands.length - 1];
-    const rule = dest !== undefined ? protectedRule(dest) : null;
-    if (rule) block(`${name} would write into ${dest} (${rule.why})`, 'Ask the owner.');
+
+  if (COPY_LIKE.has(name) || MOVE_LIKE.has(name)) {
+    const plan = copyPlan(name, args);
+    for (const c of plan.checks) {
+      const rule = protectedRule(c.path, { destructive: c.destructive });
+      if (rule) block(`${name} would write ${c.path} (${rule.why})`, 'Ask the owner.');
+    }
+    if (MOVE_LIKE.has(name)) {
+      for (const s of plan.sources) {
+        const rule = protectedRule(s, { destructive: true });
+        if (rule) block(`${name} would remove ${s} (${rule.why})`, 'Ask the owner.');
+      }
+    }
   }
 
-  // Inline interpreter code that mentions a locked path
-  for (let i = k; i < tokens.length; i++) {
-    const base = tokens[i].replace(/^.*[\\/]/, '');
+  for (const target of outputFlagTargets(name, args)) {
+    const rule = protectedRule(target);
+    if (rule) block(`${name} would write ${target} (${rule.why})`, 'Ask the owner.');
+  }
+  for (const dest of extractionTargets(name, args)) {
+    const rule = protectedRule(dest, { destructive: true });
+    if (rule) block(`${name} would extract into ${dest} (${rule.why})`, 'Extract into a folder outside protected paths.');
+  }
+
+  if (name === 'patch') {
+    const patchFiles = [...inputs];
+    const operands = [];
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      if (a === '-i' || a === '--input') { patchFiles.push(args[++i]); continue; }
+      if (a.startsWith('--input=')) { patchFiles.push(a.slice(8)); continue; }
+      if (/^-(p|d|D|o|r|B|z|F|V|Y|g)$/.test(a)) { i++; continue; }
+      if (a.startsWith('-')) continue;
+      operands.push(a);
+    }
+    if (operands[0] !== undefined) {
+      const rule = protectedRule(operands[0], { destructive: true });
+      if (rule) block(`patch would change ${operands[0]} (${rule.why})`, 'Ask the owner.');
+    }
+    if (operands[1] !== undefined) patchFiles.push(operands[1]);
+    if (!args.includes('--dry-run')) {
+      if (patchFiles.length === 0) block('patch reads from standard input, which cannot be inspected', 'Save the patch to a file first.');
+      for (const f of patchFiles) checkPatchFile(f, cwd, 'patch');
+    }
+  }
+
+  // Nested shell strings are analyzed as commands; inline interpreter code is checked for locked paths.
+  if (SHELLS.has(name) || name === 'eval') {
+    const j = name === 'eval' ? -1 : args.findIndex((a) => SHELL_FLAG.test(a));
+    const nested = name === 'eval' ? args.join(' ') : (j >= 0 ? args.slice(j + 1).join(' ') : null);
+    if (nested !== null && nested !== '') analyzeCommand(nested, depth + 1);
+  }
+  for (let i = k; i < words.length; i++) {
+    const base = words[i].replace(/^.*[\\/]/, '').replace(/\.exe$/i, '');
     if (!INTERPRETER.test(base)) continue;
-    for (let j = i + 1; j < tokens.length - 1; j++) {
-      if (INLINE_FLAG.test(tokens[j])) {
-        const code = tokens[j + 1].replace(/\\/g, '/').toLowerCase();
-        const frag = LOCKED_FRAGMENTS.find((f) => code.includes(f));
-        if (frag) block(`inline ${base} code references a locked path (${frag})`, 'Use the Read tool to read files; locked paths are owner-only.');
-        break;
-      }
+    for (let j = i + 1; j < words.length - 1; j++) {
+      if (!INLINE_FLAG.test(words[j])) continue;
+      const code = words[j + 1].replace(/\\/g, '/').toLowerCase();
+      const frag = LOCKED_FRAGMENTS.find((f) => code.includes(f));
+      if (frag) block(`inline ${base} code references a locked path (${frag})`, 'Use the Read tool to read files; locked paths are owner-only.');
+      if (cwdIsSensitive()) block(`inline ${base} code running inside a protected folder`, 'Run it from the project root or a task folder.');
+      break;
     }
   }
 }
 
+function analyzeCommand(text, depth = 0) {
+  if (depth > 4) block('the command nests shells too deeply to inspect', 'Split it into separate commands.');
+  for (const sub of substitutions(text)) {
+    // A substitution runs in a subshell: its cd or branch switch does not leak into the parent.
+    const saved = [cwd, [...dirStack], branchState];
+    analyzeCommand(sub, depth + 1);
+    [cwd, , branchState] = saved;
+    dirStack.splice(0, dirStack.length, ...saved[1]);
+  }
+  for (const seg of splitSegments(text)) analyzeSegment(seg, depth);
+}
+
+analyzeCommand(command);
 process.exit(0);

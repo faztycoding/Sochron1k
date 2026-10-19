@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Self-tests for the control plane: the Claude Code hooks and the locked-path rules
-// (BOOT-001 AC-02 to AC-05). No dependencies; Node >= 18.
+// (BOOT-001 AC-02 to AC-07, plus regressions for review BOOT-001-r1 F1, F2, F3, F6).
+// No dependencies; Node >= 18. The red-flag test needs bash (Git for Windows or CI).
 // Run: node scripts/controls/test-controls.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -35,11 +36,47 @@ function tempRepo(branch = 'main') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sochron-controls-'));
   const g = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
   g('init', '-q', '-b', branch);
+  g('config', 'core.autocrlf', 'false');
   fs.mkdirSync(path.join(dir, 'docs', 'hypotheses'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'docs', 'hypotheses', 'H001-committed.md'), 'status: unproven\n');
   g('add', '-A');
   g('-c', 'user.name=test', '-c', 'user.email=test@example.invalid', 'commit', '-q', '-m', 'fixture');
   return dir;
+}
+
+// Helpers for history tests (review F1, F2, F6)
+const gitIn = (dir, ...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+const commitAll = (dir, message) => {
+  gitIn(dir, 'add', '-A');
+  gitIn(dir, '-c', 'user.name=test', '-c', 'user.email=test@example.invalid', 'commit', '-q', '-m', message);
+};
+const writeIn = (dir, rel, text) => {
+  fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+  fs.writeFileSync(path.join(dir, rel), text);
+};
+const checkerPath = path.join(here, 'check-locked-paths.mjs');
+function runChecker(script, cwd, args, env = {}) {
+  const r = spawnSync(process.execPath, [script, ...args], {
+    cwd, encoding: 'utf8', env: { ...process.env, CONTROL_CHANGE_APPROVED: '', ...env },
+  });
+  return { code: r.status, stdout: r.stdout, stderr: r.stderr };
+}
+// A repo whose main branch already contains this project's verifier (like the real main after BOOT-001).
+function repoWithControls() {
+  const dir = tempRepo('main');
+  for (const f of ['check-locked-paths.mjs', 'rules.mjs']) {
+    writeIn(dir, `scripts/controls/${f}`, fs.readFileSync(path.join(here, f), 'utf8'));
+  }
+  commitAll(dir, 'add controls');
+  return dir;
+}
+function findBash() {
+  const candidates = ['bash'];
+  if (process.platform === 'win32') {
+    const pf = process.env.ProgramFiles || 'C:\\Program Files';
+    candidates.push(path.join(pf, 'Git', 'bin', 'bash.exe'), path.join(pf, 'Git', 'usr', 'bin', 'bash.exe'));
+  }
+  return candidates.find((c) => spawnSync(c, ['--version'], { encoding: 'utf8' }).status === 0) ?? null;
 }
 
 // ---- rules.mjs ------------------------------------------------------------------------------
@@ -266,4 +303,198 @@ test('check-locked-paths: flags locked and append-only violations (AC-05)', () =
   assert.equal(evaluate([{ status: 'M', path: reg }], io('{"a":1}\n', '{"a":1}\n{"b":2}\n')).length, 0);
   assert.equal(evaluate([{ status: 'M', path: reg }], io('{"a":1}\n', '{"a":2}\n{"b":2}\n')).length, 1);
   assert.equal(evaluate([{ status: 'M', path: reg }], io('{"a":1}', '{"a":1}{"b":2}\n')).length, 1);
+});
+
+// ---- Review BOOT-001-r1 regressions ---------------------------------------------------------
+test('F1: the base revision verifier still catches a PR that disables its own verifier', () => {
+  const dir = repoWithControls();
+  const trusted = fs.mkdtempSync(path.join(os.tmpdir(), 'sochron-trusted-'));
+  try {
+    gitIn(dir, 'switch', '-q', '-c', 'feat/tamper');
+    writeIn(dir, 'scripts/controls/check-locked-paths.mjs', 'process.exit(0);\n');
+    commitAll(dir, 'tamper: verifier always passes');
+    const prSide = runChecker(path.join(dir, 'scripts', 'controls', 'check-locked-paths.mjs'), dir, ['--base', 'main', '--head', 'feat/tamper']);
+    assert.equal(prSide.code, 0, 'the PR copy of the verifier passes itself; this is why CI must not trust it');
+    for (const f of ['check-locked-paths.mjs', 'rules.mjs']) {
+      fs.writeFileSync(path.join(trusted, f), gitIn(dir, 'show', `main:scripts/controls/${f}`));
+    }
+    const baseSide = runChecker(path.join(trusted, 'check-locked-paths.mjs'), dir, ['--base', 'main', '--head', 'feat/tamper']);
+    assert.equal(baseSide.code, 1, baseSide.stdout + baseSide.stderr);
+    assert.match(baseSide.stdout, /scripts\/controls\/check-locked-paths\.mjs/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(trusted, { recursive: true, force: true });
+  }
+});
+
+test('F1: the locked-path gate judges PRs with the base revision and never runs PR code', () => {
+  const gate = fs.readFileSync(path.join(repo, '.github', 'workflows', 'control-gate.yml'), 'utf8');
+  const ci = fs.readFileSync(path.join(repo, '.github', 'workflows', 'ci.yml'), 'utf8');
+  assert.match(gate, /^\s*pull_request_target:/m, 'the gate must run the base branch copy of its workflow');
+  assert.match(gate, /ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/, 'the gate must check out the base revision');
+  assert.doesNotMatch(gate, /ref:\s*\$\{\{\s*github\.event\.pull_request\.head/, 'the gate must not check out the PR head');
+  assert.match(gate, /check-locked-paths\.mjs --base "\$BASE_SHA" --head "\$HEAD_SHA"/);
+  assert.doesNotMatch(gate, /\b(npm|pnpm|yarn|pip|uv)\s+(install|ci|sync|run|add)\b/, 'the gate must not install or run PR code');
+  assert.doesNotMatch(gate, /:\s*write\b/, 'the gate token stays read-only');
+  assert.doesNotMatch(ci, /check-locked-paths/, 'the PR-controlled workflow must not be the locked-path gate');
+});
+
+test('F2: a hypothesis edited after its registration commit fails, though the branch diff shows it as added', () => {
+  const dir = tempRepo('main');
+  try {
+    gitIn(dir, 'switch', '-q', '-c', 'feat/h');
+    writeIn(dir, 'docs/hypotheses/H002-demo.md', 'status: unproven\nrule: A\n');
+    commitAll(dir, 'register H002');
+    writeIn(dir, 'docs/hypotheses/H002-demo.md', 'status: unproven\nrule: B (after results)\n');
+    commitAll(dir, 'edit H002 after results');
+    const r = runChecker(checkerPath, dir, ['--base', 'main', '--head', 'feat/h']);
+    assert.equal(r.code, 1, r.stdout);
+    assert.match(r.stdout, /H002-demo\.md .*committed file modified \(commit [0-9a-f]{7}\)/);
+    gitIn(dir, 'switch', '-q', '-c', 'feat/h-ok', 'main');
+    writeIn(dir, 'docs/hypotheses/H003-demo.md', 'status: unproven\n');
+    commitAll(dir, 'register H003');
+    assert.equal(runChecker(checkerPath, dir, ['--base', 'main', '--head', 'feat/h-ok']).code, 0);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('F2: registry records rewritten in a later commit fail; appends in every commit pass', () => {
+  const dir = tempRepo('main');
+  try {
+    const reg = 'research/registry/runs.jsonl';
+    gitIn(dir, 'switch', '-q', '-c', 'feat/reg-ok');
+    writeIn(dir, reg, '{"run":1}\n');
+    commitAll(dir, 'run 1');
+    writeIn(dir, reg, '{"run":1}\n{"run":2}\n');
+    commitAll(dir, 'run 2');
+    assert.equal(runChecker(checkerPath, dir, ['--base', 'main', '--head', 'feat/reg-ok']).code, 0);
+    gitIn(dir, 'switch', '-q', '-c', 'feat/reg-bad', 'main');
+    writeIn(dir, reg, '{"run":1}\n');
+    commitAll(dir, 'run 1');
+    writeIn(dir, reg, '{"run":99}\n{"run":2}\n');
+    commitAll(dir, 'rewrite run 1');
+    const r = runChecker(checkerPath, dir, ['--base', 'main', '--head', 'feat/reg-bad']);
+    assert.equal(r.code, 1, r.stdout);
+    assert.match(r.stdout, /runs\.jsonl .*existing records changed/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('F2: an edit made inside a merge commit fails', () => {
+  const dir = tempRepo('main');
+  try {
+    gitIn(dir, 'switch', '-q', '-c', 'feat/m');
+    writeIn(dir, 'docs/hypotheses/H004-demo.md', 'rule: A\n');
+    commitAll(dir, 'register H004');
+    gitIn(dir, 'switch', '-q', '-c', 'side');
+    writeIn(dir, 'notes.txt', 'unrelated\n');
+    commitAll(dir, 'side work');
+    gitIn(dir, 'switch', '-q', 'feat/m');
+    gitIn(dir, 'merge', '--no-ff', '--no-commit', 'side');
+    writeIn(dir, 'docs/hypotheses/H004-demo.md', 'rule: B (changed during merge)\n');
+    commitAll(dir, 'merge side');
+    const r = runChecker(checkerPath, dir, ['--base', 'main', '--head', 'feat/m']);
+    assert.equal(r.code, 1, r.stdout);
+    assert.match(r.stdout, /H004-demo\.md .*changed inside merge commit/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('F2: local mode reports an uncommitted edit to a committed hypothesis', () => {
+  const dir = tempRepo('main');
+  try {
+    gitIn(dir, 'switch', '-q', '-c', 'feat/local');
+    writeIn(dir, 'docs/hypotheses/H005-demo.md', 'rule: A\n');
+    commitAll(dir, 'register H005');
+    writeIn(dir, 'docs/hypotheses/H005-demo.md', 'rule: B\n');
+    const r = runChecker(checkerPath, dir, ['main']);
+    assert.equal(r.code, 1, r.stdout);
+    assert.match(r.stdout, /H005-demo\.md .*\(uncommitted\)/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('F3: shell writes are judged at their real destination (cd, copies into folders, patches, output flags)', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sochron-patch-'));
+  try {
+    const evil = path.join(tmp, 'evil.patch').replace(/\\/g, '/');
+    const safe = path.join(tmp, 'safe.patch').replace(/\\/g, '/');
+    fs.writeFileSync(evil, 'diff --git a/AGENTS.md b/AGENTS.md\n--- a/AGENTS.md\n+++ b/AGENTS.md\n@@ -1 +1 @@\n-x\n+y\n');
+    fs.writeFileSync(safe, 'diff --git a/src/x.py b/src/x.py\n--- a/src/x.py\n+++ b/src/x.py\n@@ -1 +1 @@\n-x\n+y\n');
+    for (const cmd of ['cp /tmp/AGENTS.md .', 'cd .claude && echo {} > settings.json', '(cd .claude; echo {} > settings.json)',
+      'pushd .github && echo x > workflows/ci.yml', 'cd tests && touch acceptance/x.py', 'cp -r /tmp/tests .',
+      'cp -t .claude/hooks evil.mjs', 'mv /tmp/x.md AGENTS.md', 'git -C .claude checkout -- settings.json',
+      `git apply ${evil}`, `patch -p1 < ${evil}`, 'cat fix.patch | git apply', 'curl -o AGENTS.md https://example.invalid/a',
+      'tar -xf payload.tar', 'ls | xargs rm -rf', 'cd $SOMEWHERE && echo x > f.txt',
+      `cd .claude && node -e "require('fs').writeFileSync('settings.json','{}')"`, 'bash -c "cp /tmp/x AGENTS.md"',
+      'cmd /c "copy x AGENTS.md"', 'echo "$(cp /tmp/x AGENTS.md)"', 'echo `rm -rf tests`']) {
+      const r = runHook('guard-bash.mjs', shellInput(cmd));
+      assert.equal(r.code, 2, `expected block: ${cmd}`);
+    }
+    for (const cmd of ['Set-Location .claude; Set-Content settings.json "{}"',
+      'Copy-Item C:/tmp/x.json -Destination .claude/settings.json',
+      'Invoke-WebRequest https://example.invalid/a -OutFile .codex/config.toml']) {
+      const r = runHook('guard-bash.mjs', shellInput(cmd, { tool: 'PowerShell' }));
+      assert.equal(r.code, 2, `expected block (PowerShell): ${cmd}`);
+    }
+    for (const cmd of ['cd src && echo x > out.txt', 'cp README.md /tmp/', 'cp -r src /tmp/backup', `git apply ${safe}`,
+      `git apply --check ${evil}`, 'curl -o data/raw/x.csv https://example.invalid/x.csv', 'tar -xf data.tar -C /tmp/extract',
+      'cd docs && cat AGENTS.md', 'pushd src && echo x > a.txt && popd', 'echo "$(git rev-parse HEAD)" > out.txt',
+      'dd if=AGENTS.md of=/tmp/a.txt', 'bash -c "echo hello"']) {
+      const r = runHook('guard-bash.mjs', shellInput(cmd));
+      assert.equal(r.code, 0, `expected allow: ${cmd}; stderr: ${r.stderr}`);
+    }
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('F3: a branch switch earlier in the same command is honored', () => {
+  const onTask = tempRepo('feat/T-1-x');
+  const onMain = tempRepo('main');
+  try {
+    gitIn(onTask, 'branch', 'main');
+    const atTask = (cmd) => runHook('guard-bash.mjs', shellInput(cmd, { cwd: onTask }), { projectDir: onTask }).code;
+    assert.equal(atTask('git switch main && git commit -m x'), 2);
+    assert.equal(atTask('git checkout main; git merge feat/x'), 2);
+    assert.equal(atTask('git switch - && git commit -m x'), 2);
+    assert.equal(atTask('git switch -c feat/T-2-y && git commit -m x'), 0);
+    const atMain = (cmd) => runHook('guard-bash.mjs', shellInput(cmd, { cwd: onMain }), { projectDir: onMain }).code;
+    assert.equal(atMain('git switch -c feat/new && git commit -m x'), 0);
+  } finally {
+    fs.rmSync(onTask, { recursive: true, force: true });
+    fs.rmSync(onMain, { recursive: true, force: true });
+  }
+});
+
+test('F6: red-flags reports real-looking secrets and does not flag its own pattern line', (t) => {
+  const bash = findBash();
+  if (!bash) {
+    t.skip('bash not found (install Git for Windows; CI has it)');
+    return;
+  }
+  const dir = tempRepo('main');
+  try {
+    gitIn(dir, 'switch', '-q', '-c', 'feat/scan');
+    writeIn(dir, 'scripts/controls/red-flags.sh', fs.readFileSync(path.join(here, 'red-flags.sh'), 'utf8'));
+    commitAll(dir, 'add scanner');
+    const scan = () => spawnSync(bash, ['scripts/controls/red-flags.sh', 'main'], { cwd: dir, encoding: 'utf8' });
+    let r = scan();
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.stdout, /!! Possible secrets/, 'the scanner must not flag its own pattern definition');
+    // Built at runtime so this test file itself contains no secret-like literal.
+    const fakeKey = ['pk', 'live', '51Hfake0000000000000000'].join('_');
+    const role = ['service', 'role'].join('_');
+    writeIn(dir, 'src/config.py', `PUBLISHABLE = "${fakeKey}"\nROLE = "${role}"\n`);
+    commitAll(dir, 'add fixture');
+    r = scan();
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /== !! Possible secrets ==\r?\n(src\/config\.py: .*\r?\n){2}/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
