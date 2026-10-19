@@ -23,6 +23,10 @@ Handbook v5 ภาคผนวก O: ไฟล์ใน repo ไม่ใช่�
 | 2026-10-19 | GitHub Actions · Ubuntu 24.04.5 · Git 2.55.0 | `node scripts/controls/test-controls.mjs`, PR #1 head `7eae474`, after fixture fix `011a55b` | PASS | [Run 39229522531, job 117983829275](https://github.com/faztycoding/Sochron1k/actions/runs/39229522531/job/117983829275), 16:22:19 +07: 28 pass, 0 fail, 0 skipped, including the F2 merge regression. Tested synthetic merge `d4620d3b8f14a76518d590b15752d9498a81a61c`, base `951ee98`. First successful Linux suite recorded after this fixture fix; proves script/test behavior, not live agent hook loading or closure of F3. |
 | 2026-10-19 | GitHub Actions · Ubuntu 24.04.5 | `bash scripts/controls/red-flags.sh "origin/$BASE_REF"`, `BASE_REF=main` | PASS | Same successful run and tested merge, 16:22:20 +07: six existing explained groups; Possible secrets and Secret-like value assigned groups empty. Informational scan, not control-gate approval. |
 
+| 2026-10-19 | Claude Code 2.1.301 | `check-locked-after.mjs` `PostToolUse` loaded live and its report reaches Claude | PASS | 17:34:01 +07: the first shell command after the owner applied the settings got "PostToolUse:Bash hook blocking error ..." listing both uncommitted control files; no restart. Commit `5216ff4` |
+| 2026-10-19 | Claude Code 2.1.301 | Post-run check runs after a failed shell command | PASS | 17:35:13.78 a command exited 1; the session state file was rewritten at 17:35:14.01. Which event dispatched it (`PostToolUse` or `PostToolUseFailure`) is not distinguished |
+| 2026-10-19 | Claude Code 2.1.301 | `PreToolUse --baseline` live | UNKNOWN | Not observable in a session that already has state; covered by scenario evidence and Codex probes only |
+
 `control-gate / locked-paths` remains unverified on GitHub: the bootstrap PR adds that workflow
 and it is absent from `main`. Full P25 and F3 remain separate open work. The historical rows
 above describe their named revisions; a successful CI suite does not certify BOOT-001 overall.

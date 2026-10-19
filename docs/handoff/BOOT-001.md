@@ -435,3 +435,41 @@ or edit them. See `docs/reviews/BOOT-001-r4.md` for full hashes and review scope
 Next: Claude records live evidence and commits the applied controls after checks; the owner
 pushes separately. No further owner apply is needed for the currently matching files. After that,
 check committed blobs against this review and add the separately scoped permanent regressions.
+
+## Post-run check committed, with live evidence, 2026-10-19
+
+Commit `5216ff4` adds `.claude/hooks/check-locked-after.mjs` and the `.claude/settings.json`
+entries.
+- The owner applied the files. They are byte-identical to `BOOT-001-r3-posthook.patch`: the
+  SHA256 values match the scratch build, and the committed blobs `c78d0385…` (hook) and
+  `01f74bb3…` (settings) equal the IDs in review r4.
+- Order: stage → scan → commit.
+- Before committing, Claude reported the live warning below to the owner. The owner had asked
+  for exactly these files to be committed (the r4 next step, forwarded by the owner).
+
+Live checks in this Claude Code session (VS Code extension 2.1.301):
+
+| Time (+07:00) | Command | Observed | Shows |
+|---------------|---------|----------|-------|
+| 17:34:01 | `git status -sb` (first shell command after the settings were applied) | Message "PostToolUse:Bash hook blocking error ... protected files changed since the previous check", listing `M .claude/settings.json` and `A .claude/hooks/check-locked-after.mjs` | Claude Code loaded the new `PostToolUse` entry without a restart, and the exit-2 report reached Claude |
+| 17:34:37 | Tests, `git add` of both files, red-flag scan | No report | The same state is not reported twice |
+| 17:34:46 | `git commit` (`5216ff4`) | No report | A commit holding content already reported while uncommitted is not reported again |
+| 17:35:13.78 → 17:35:14.01 | `git rev-parse --verify --quiet refs/heads/does-not-exist` (exit 1) | The session's state file under `%TEMP%/sochron1k-after/` was rewritten 0.23 s after the failed command | A post-run check ran after a failed command. Which event (`PostToolUse` or `PostToolUseFailure`) dispatched it is not distinguished |
+
+Other checks:
+- `node scripts/controls/test-controls.mjs` → 28/28, 0 skipped (17:34:37).
+- `bash scripts/controls/red-flags.sh main` with both files staged → the same 6 groups, no hit in
+  the new hook, and both secret groups empty.
+
+Not verified:
+- The `PreToolUse --baseline` entry live. Its effect cannot be told apart in a session that
+  already has state.
+- Linux.
+- The permanent regression tests (Codex).
+
+Follow-ups for those tests:
+- Point `TMP`/`TEMP`/`TMPDIR` at a temporary folder, so the tests leave no state files behind.
+- State files are never pruned. They are small (about 150–200 bytes per session per repo).
+
+F3 stays open High and AC-04 stays FAIL until the two guard classes from r2 are fixed and
+reviewed.

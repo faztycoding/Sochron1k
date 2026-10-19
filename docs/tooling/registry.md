@@ -22,8 +22,9 @@ Handbook v5 บท 9 และภาคผนวก I: ทุก tool, skill, pl
 | `protect-paths.mjs` | PreToolUse `Edit\|Write\|MultiEdit\|NotebookEdit` | locked paths, append-only registry, hypotheses ที่ commit แล้ว (รวมใน worktree) | fail closed (`onFailure: block`) |
 | `guard-bash.mjs` | PreToolUse `Bash\|PowerShell\|Monitor` | push, reset --hard, clean, ข้าม hook, commit บน main, เขียน locked path, อ่าน credential, ลบ recursive นอกโปรเจกต์, DROP/TRUNCATE, pipe-to-shell · ตีความปลายทางจริง (ตั้งแต่ patch r1) (cd/pushd/subshell, copy เข้าโฟลเดอร์, redirect, output flags, การแตกไฟล์, เป้าหมายใน patch, nested shell, xargs) และ branch switch ภายในคำสั่ง | fail closed |
 | `session-context.mjs` | SessionStart | – (พิมพ์ branch, HEAD, checkpoint ล่าสุด) | ไม่บล็อก |
+| `check-locked-after.mjs` | PostToolUse + PostToolUseFailure `Bash\|PowerShell\|Monitor`; PreToolUse `--baseline` | ไม่บล็อกก่อน (ตรวจหลังรัน): รายงานการเปลี่ยน locked/append-only paths ที่ใหม่กว่าการตรวจครั้งก่อนใน session รวม commit ใหม่และไฟล์ locked ที่ git ignore (`settings.local.json`) แล้วสั่ง Claude หยุดแจ้งเจ้าของ · ย้อนการแก้ไม่ได้ | input อ่านไม่ได้หรือตรวจไม่สำเร็จ → รายงานให้เจ้าของรู้; โหมด `--baseline` ไม่บล็อกคำสั่ง |
 
-Evidence: `node scripts/controls/test-controls.mjs` (28 tests, PASS 2026-10-19 ที่ `cca98c7`) ข้อจำกัด: เป็น heuristic จากข้อความคำสั่ง จึงมองไม่เห็นโปรแกรมที่เปิดไฟล์เอง (เช่น `python x.py`) ชั้นที่บังคับจริงคือ CI control-gate + การรับรองของเจ้าของ
+Evidence: `node scripts/controls/test-controls.mjs` (28 tests, PASS 2026-10-19 ที่ `cca98c7` และ `5216ff4`) · `check-locked-after.mjs`: live ใน Claude Code 2.1.301 (ดู compatibility.md) แต่ยังไม่มี regression tests ถาวร ข้อจำกัด: เป็น heuristic จากข้อความคำสั่ง จึงมองไม่เห็นโปรแกรมที่เปิดไฟล์เอง (เช่น `python x.py`) ชั้นที่บังคับจริงคือ CI control-gate + การรับรองของเจ้าของ
 
 ## Active: project skills and agents (v1.0.0, owner: เจ้าของ repository, source: Handbook v5 Prompt Library)
 

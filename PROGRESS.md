@@ -1,9 +1,9 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-19 by Codex · พบ posthook r3 ใน working tree แล้ว; ตรวจเฉพาะจุด 6/6 และ suite 28/28
+Updated 2026-10-19 by Claude Code · post-run check committed (`5216ff4`) with live evidence
 
 ## Current task
 BOOT-001 v1 · State FIXING round 2 · **CI fixture fix ผ่าน Linux CI แล้ว** (`ci / control-plane`, run `39229522531`) · F3 ยังเปิด High จึงยังไม่ verified ทั้งงาน
-ขอบเขต F3 (เจ้าของตัดสิน 2026-10-19 หลัง CI เขียว): แคบ แบ่งกันทำ · **Claude: posthook r3 อยู่ใน working tree ตรงกับ patch แล้ว รอ live evidence และ commit** · **Codex: 2 กลุ่มที่ยืนยันใน r2 + permanent regression tests ของทั้งสองส่วน** · review r4 ยืนยันเฉพาะจุดใน fixture ไม่ใช่ผล live/Linux
+ขอบเขต F3 (เจ้าของตัดสิน 2026-10-19 หลัง CI เขียว): แคบ แบ่งกันทำ · **Claude: hook ตรวจหลังรัน commit แล้ว `5216ff4` (live: รายงานถึง Claude จริง 17:34, ตรวจหลังคำสั่งที่ล้ม 17:35)** · **Codex: 2 กลุ่มที่ยืนยันใน r2 + permanent regression tests ของทั้งสองส่วน** · review r4 ยืนยันเฉพาะจุดใน fixture ไม่ใช่ผล live/Linux
 Branch `chore/BOOT-001-project-bootstrap` · เจ้าของ push ถึง `7eae474` แล้วและยืนยัน PR #1 head ตรงกันในรอบ CI · checkpoint นี้เพิ่มเฉพาะ review r4/PROGRESS/handoff; ไม่มีการ push โดย Codex
 
 ## Done (with evidence)
@@ -71,8 +71,8 @@ Branch `chore/BOOT-001-project-bootstrap` · เจ้าของ push ถึ�
 - Approved: เจ้าของขอให้ตั้งโปรเจกต์ (2026-10-18), ส่ง review r1 มาให้แก้, สั่ง commit แยกส่วน สั่งให้ apply patch r1 (2026-10-19, ครั้งเดียวสำหรับ patch นี้), ให้ส่งงานไปมาระหว่าง Claude กับ Codex ได้ และให้ checkpoint ตามกติกาทุกครั้งที่จบงานหนึ่งขั้น · ไม่มีอนุมัติให้ agent merge หรือเชื่อมโบรกเกอร์ · push ถูกบล็อกด้วย deny rule จึงเป็นของเจ้าของ
 
 ## Next safe action
-- Claude: ไฟล์ตรงกับ r3 patch อยู่แล้ว ไม่ต้อง apply ซ้ำ; เก็บ live evidence, stage/scan และ commit hook/settings เมื่อ checks ผ่าน → เจ้าของ push แยกทีหลัง
-- Codex (หลัง hook commit แล้ว): ยืนยันว่า diff ตรงกับ hash ใน review r4 และเขียน permanent regression tests ตาม spec ใน handoff; probes ที่ผ่านไม่ใช่ CI tests
+- เจ้าของ: `git push` (hook commit `5216ff4` + เอกสาร) แล้วดู CI ของ PR #1
+- Codex: เขียน permanent regression tests ของ `check-locked-after.mjs` ตาม spec ใน handoff (ให้ TMP/TEMP/TMPDIR ชี้โฟลเดอร์ชั่วคราว) · blob ใน `5216ff4` ตรงกับ r4 แล้ว (Claude ตรวจ)
 - Codex: ทำตาม handoff หัวข้อ "F3 round 2b" ข้อ Requests to Codex · F3 ยังเปิดจนมีหลักฐานปิด finding และ hook ตรวจหลังรันไม่ใช่หลักฐานว่าป้องกันการเขียนก่อนเกิดได้
 - ติด label `owner-approved-control-change` เมื่อไม่มี finding High ค้างและ CI เขียว
 - หลัง merge: ตั้ง branch protection ให้ `control-gate / locked-paths` และ `ci / control-plane` เป็น required
