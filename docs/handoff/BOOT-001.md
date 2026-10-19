@@ -577,3 +577,45 @@ as local audit evidence; do not apply it.
   `node scripts/controls/test-controls.mjs` (expected 45/45, no skip). A fresh Claude session
   reviews the scoped changes and applied files, records results, then stages, scans and commits
   within the approved process. The owner pushes separately; confirm Linux CI on that new head.
+
+## Review r5 of the applied guard patch (fresh Claude session), 2026-10-19
+
+The owner applied `BOOT-001-r5-controls.patch` and confirmed it in the Claude chat; this session
+reviewed it. Report: `docs/reviews/BOOT-001-r5.md`.
+
+The first shell command of the session (`git status`, read-only) got the post-run report for
+the two uncommitted files. Claude stopped, asked, and continued after the owner confirmed they
+had applied exactly this patch and asked for review and commit.
+
+- The applied files are byte-identical to the proposal. All hashes in the r5 section above
+  match, and `git apply -R --check` passes.
+- Commit `5583e4e` holds blobs `cdffa121…` (guard) and `c80f4886…` (tests).
+- `node scripts/controls/test-controls.mjs` → 45/45, 0 skipped (18:18:09-18:18:35).
+- The six r2 inputs go from 2, 2, 0, 0, 0, 0 at HEAD to 2 each. They were sent to the hook as
+  JSON only and never executed.
+- 15 more in-scope variants block, and 14 normal Bash, PowerShell and Monitor commands pass.
+- F3 is closed for its r2 proof of fix.
+
+New findings (details and proof of fix in the review):
+- **F7 High, regression:** `echo \( ; cd .claude ; echo \) ; echo {} > settings.json` returns 0
+  (HEAD: 2). `splitSegments` turns an escaped parenthesis into a group, and `)` restores cwd.
+  Fix: in POSIX syntax a backslash makes the next character literal. Add tests: that input
+  returns 2, and `find . \( -name a -o -name b \) -print` returns 0.
+- **F8 Low:** new fail-closed blocks on harmless commands: Monitor with `$(...)`, `case`
+  patterns, and `git switch` in an unresolved directory. These go to the false-positive task.
+- **F9 Medium, question for the owner:** `cmd //c "…"` and an escaped `\"` pass both before and
+  after. They are not in the 21-form list sent to the post-run check. Owner decides whether this
+  PR fixes them or the follow-up task does.
+
+Checks on the controls commit:
+- `git diff --cached --check` → PASS (18:26).
+- `bash scripts/controls/red-flags.sh main` → exit 0 (18:26:15). Same six explained groups, both
+  secret groups empty, no hit from the r5 diff.
+
+Requests to Codex (next round, after the owner agrees):
+- A patch for F7 only, plus its permanent regression, as `docs/proposals/BOOT-001-r6-controls.patch`.
+- Include F9 only if the owner asks for it.
+
+Owner:
+- Push when ready. CI on the new head gives Linux evidence for the 45 tests.
+- Do not add the label while F7 is open.
