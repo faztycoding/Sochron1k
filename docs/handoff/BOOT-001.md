@@ -366,3 +366,51 @@ passes; that does not establish runtime behavior. The dirty-files live smoke dem
 and reporting only, not complete F3 coverage. Revise the proposal before owner application, and
 separate owner application from the later push of the tested hook commit. No controls were edited,
 no patch was applied, and no push was performed during this review.
+
+## Findings response (round 3): post-run check revised, 2026-10-19
+
+| ID | Accept/Dispute | Change | Evidence (command → result) |
+|----|----------------|--------|-----------------------------|
+| F3 (r3, failed commands) | Accept | The same check is registered for `PostToolUseFailure` (`Bash\|PowerShell\|Monitor`). The hook reference says exit 2 there "Shows stderr to Claude; the tool already failed" (code.claude.com/docs/en/hooks, read 2026-10-19). | Scenarios C1 (wiring) and S16 (locked write, then the command fails): FAIL on the reviewed patch, PASS on the revision |
+| F3 (r3, no baseline before the first command) | Accept | New `--baseline` mode, registered as a second `PreToolUse` hook for `Bash\|PowerShell\|Monitor`. It records the session's starting state (HEAD, time, ignored local files) only when none exists, and never blocks a command (unparsable input or errors exit 0). A dirty locked path from before the session is still reported once, at the first check. | S14 (first command writes and commits a locked file), S15 (first command changes `settings.local.json`) and S13b (baseline never blocks): FAIL before, PASS after. S11 and S17 unchanged |
+| r3 note: PowerShell `;` | Accept | Owner steps below keep apply and push separate; push only after the hook commit is tested. | – |
+
+### Patch
+- `docs/proposals/BOOT-001-r3-posthook.patch` (gitignored), SHA256
+  `2e5297ec5c8ece08b8074ed9994810553a336dd5501f937d531228972f26474b`, base `6066c97`.
+  It applies at `9f16544` plus this checkpoint.
+- It **supersedes** `BOOT-001-r2-posthook.patch` (`87c72209…`), which stays only as the artifact
+  r3 reviewed. Do not apply that one.
+- Files: `.claude/hooks/check-locked-after.mjs` (162 lines, new), `.claude/settings.json` (+31: the
+  `PreToolUse` baseline entry, `PostToolUse`, `PostToolUseFailure`).
+
+### Evidence (implementer's)
+- The scenario script simulates each command the way `settings.json` wires the hook:
+  PreToolUse baseline if registered → the change → PostToolUse or PostToolUseFailure if
+  registered. Results:
+  - On the reviewed patch: 21/26; the failures are exactly C1, S13b, S14, S15 and S16.
+  - On the revision: 26/26 (17:23 +07:00).
+- `node scripts/controls/test-controls.mjs` in the patched clone → 28/28, 0 skipped.
+- `settings.json` parses as JSON.
+- `git apply --check` in the real repo → OK.
+- Baseline mode on the real repo → exit 0, about 155 ms. It runs in parallel with guard-bash
+  (hooks on the same event run in parallel, per the reference).
+- Process note: the permission system blocked `mkdir old/.claude/hooks` inside a scratch folder,
+  because it resolved the relative path against the project. The before-copy was put in a plain
+  `before/conf/hooks/` folder in scratch instead; no project path was touched.
+
+### Spec additions for the regression tests (Codex)
+C1 wiring for all three tools and events; S13b; S14; S15; S16; S17 (wording as in the scenario
+names above). The earlier table in "F3 round 2b" still holds.
+
+### Not verified
+- Live dispatch in Claude Code of `PostToolUseFailure` and of the `PreToolUse` baseline.
+- Linux.
+- Codex's regression tests.
+- F3 stays open High; AC-04 stays FAIL until the guard classes are fixed and reviewed.
+
+### Owner sequence
+1. In the owner's terminal, apply only: `git apply docs/proposals/BOOT-001-r3-posthook.patch`
+2. Tell Claude. Claude runs the tests, notes the live report of the two uncommitted control files
+   (dispatch smoke only), and commits.
+3. Push separately, after that commit.
