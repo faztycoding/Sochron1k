@@ -355,3 +355,14 @@ owner; if the owner made or asked for exactly that change, say so and follow the
    existing allow-list still passing.
 3. Deliver as one patch for the owner; a Codex session other than the author reviews this
    post-run patch, and a Claude session reviews Codex's guard patch.
+
+### Codex pre-application review, 2026-10-19
+
+See `docs/reviews/BOOT-001-r3.md` for the focused static review of posthook SHA256
+`87c72209…3a0d` at repository head `45046b5`. F3 remains open High: add failure-event
+coverage and establish the observation baseline before the first shell command, with regression
+evidence for both. The owner has not applied this proposal at this checkpoint. Dry-run application
+passes; that does not establish runtime behavior. The dirty-files live smoke demonstrates dispatch
+and reporting only, not complete F3 coverage. Revise the proposal before owner application, and
+separate owner application from the later push of the tested hook commit. No controls were edited,
+no patch was applied, and no push was performed during this review.

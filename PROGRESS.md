@@ -1,12 +1,13 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-19 by Claude Code · F3 scope decided; post-run check patch ready
+Updated 2026-10-19 by Codex · ตรวจ posthook ก่อน apply: พบช่องว่าง 2 ข้อ ต้องแก้ proposal ก่อน
 
 ## Current task
 BOOT-001 v1 · State FIXING round 2 · **CI fixture fix ผ่าน Linux CI แล้ว** (`ci / control-plane`, run `39229522531`) · F3 ยังเปิด High จึงยังไม่ verified ทั้งงาน
-ขอบเขต F3 (เจ้าของตัดสิน 2026-10-19 หลัง CI เขียว): แคบ แบ่งกันทำ · **Claude: hook ตรวจหลังรัน → patch พร้อมแล้ว รอเจ้าของ apply** · **Codex: 2 กลุ่มที่ยืนยันใน r2 + regression tests ของทั้งสองส่วน** · ตรวจไขว้กันคนละเครื่องมือ
-Branch `chore/BOOT-001-project-bootstrap` · เจ้าของ push ถึง `7eae474` แล้วและยืนยัน PR #1 head ตรงกัน · checkpoint นี้เพิ่มเฉพาะ PROGRESS/handoff/compatibility log; ไม่มีการ push โดย Codex
+ขอบเขต F3 (เจ้าของตัดสิน 2026-10-19 หลัง CI เขียว): แคบ แบ่งกันทำ · **Claude: hook ตรวจหลังรัน → proposal ต้องแก้ตาม review r3 ก่อน apply** · **Codex: 2 กลุ่มที่ยืนยันใน r2 + regression tests ของทั้งสองส่วน** · ตรวจไขว้กันคนละเครื่องมือ
+Branch `chore/BOOT-001-project-bootstrap` · เจ้าของ push ถึง `7eae474` แล้วและยืนยัน PR #1 head ตรงกันในรอบ CI · checkpoint นี้เพิ่มเฉพาะ review r3/PROGRESS/handoff; ไม่มีการ push โดย Codex
 
 ## Done (with evidence)
+- 2026-10-19 16:52 +07: Codex ตรวจ proposal posthook SHA256 `87c72209…3a0d` ที่ head `45046b5` พร้อม reviewer อีก context → `docs/reviews/BOOT-001-r3.md`: F3 ยังเปิด High เพราะไม่มี failure event และไม่มี baseline ก่อนคำสั่งแรก; เป็น static review ไม่ใช่ผลรันทดสอบ hook · dry-run apply PASS, red-flags PASS 6 กลุ่มเดิม กลุ่ม secret ว่าง · ไม่ apply หรือ push
 - 2026-10-19 16:22 +07: ยืนยัน [PR #1](https://github.com/faztycoding/Sochron1k/pull/1) head `7eae47434cbb8eaffed55a324e00eeba76817f3e` และ [CI job 117983829275 / run 39229522531](https://github.com/faztycoding/Sochron1k/actions/runs/39229522531/job/117983829275) จบด้วย success บน Ubuntu 24.04.5, Git 2.55.0
 - CI checkout synthetic merge `d4620d3b8f14a76518d590b15752d9498a81a61c` (PR head `7eae474` กับ base `951ee98`): `node scripts/controls/test-controls.mjs` → PASS 28/28, fail 0, skipped 0 ที่ 16:22:19 +07 รวม F2 merge test ที่เคยล้ม; red-flags เทียบ `origin/main` → PASS ที่ 16:22:20, 6 กลุ่มเดิมและ secret groups ว่างทั้งคู่
 - บันทึกหลักฐาน Linux ที่ผ่านหลัง fixture fix ลง `docs/tooling/compatibility.md` และ handoff แล้ว; ผลนี้ไม่ปิด F3 ไม่ยืนยัน P25 และไม่ใช่ผลของ control-gate ซึ่งยังไม่ทำงานกับ bootstrap PR นี้
@@ -41,7 +42,7 @@ Branch `chore/BOOT-001-project-bootstrap` · เจ้าของ push ถึ�
 
 ## Not done yet
 - เจ้าของ: push checkpoint เอกสารนี้เมื่อพร้อม; ผล Linux CI ที่ยืนยันแล้วอ้างถึง `7eae474` และไม่ถูกอ้างว่าเป็นผลของ commit เอกสารที่ใหม่กว่า
-- Hook ตรวจหลังรัน (Claude): patch `docs/proposals/BOOT-001-r2-posthook.patch` (SHA256 `87c72209…3a0d`, base `6066c97`) · หลักฐานผู้ทำ: 20/20 scenarios, suite 28/28 ใน clone, รันกับ repo จริง exit 0 ใน 154 ms · รอเจ้าของ apply; ยังไม่มี regression tests (ขอ Codex) และยังไม่ได้ทดสอบ live ใน Claude Code
+- Hook ตรวจหลังรัน (Claude): patch `docs/proposals/BOOT-001-r2-posthook.patch` (SHA256 `87c72209…3a0d`, base `6066c97`) · หลักฐานผู้ทำ: 20/20 scenarios, suite 28/28 ใน clone, รันกับ repo จริง exit 0 ใน 154 ms · review r3 พบช่องว่าง 2 ข้อ ต้องแก้ก่อน apply; ยังไม่มี regression tests (ขอ Codex) และยังไม่ได้ทดสอบ live ใน Claude Code
 - F3 สองกลุ่มที่ยืนยันใน r2 (Codex): ยังไม่ทำ
 - review รอบ 3 ต้องระบุให้ตรงกับสิ่งที่ apply จริง ไม่ถือว่า F3 ปิดจาก fixture fix
 - P25 ใน session ใหม่ของ Claude Code และของ Codex
@@ -68,7 +69,7 @@ Branch `chore/BOOT-001-project-bootstrap` · เจ้าของ push ถึ�
 - Approved: เจ้าของขอให้ตั้งโปรเจกต์ (2026-10-18), ส่ง review r1 มาให้แก้, สั่ง commit แยกส่วน สั่งให้ apply patch r1 (2026-10-19, ครั้งเดียวสำหรับ patch นี้), ให้ส่งงานไปมาระหว่าง Claude กับ Codex ได้ และให้ checkpoint ตามกติกาทุกครั้งที่จบงานหนึ่งขั้น · ไม่มีอนุมัติให้ agent merge หรือเชื่อมโบรกเกอร์ · push ถูกบล็อกด้วย deny rule จึงเป็นของเจ้าของ
 
 ## Next safe action
-- เจ้าของ: ตรวจและ apply `docs/proposals/BOOT-001-r2-posthook.patch` เองใน terminal → คำสั่ง shell ถัดไปของ Claude ควรรายงานไฟล์ hook และ settings ที่ยังไม่ commit 1 ครั้ง (นี่คือการทดสอบ live) → สั่ง Claude commit
+- Claude: แก้ proposal posthook ตาม `docs/reviews/BOOT-001-r3.md` ก่อนเจ้าของ apply; warning ของไฟล์ที่เจ้าของ apply เป็นเพียง live smoke ไม่ปิด F3 · แยก apply จาก push ซึ่งควรทำหลังทดสอบและ commit hook แล้ว
 - Codex: ทำตาม handoff หัวข้อ "F3 round 2b" ข้อ Requests to Codex · F3 ยังเปิดจนมีหลักฐานปิด finding และ hook ตรวจหลังรันไม่ใช่หลักฐานว่าป้องกันการเขียนก่อนเกิดได้
 - ติด label `owner-approved-control-change` เมื่อไม่มี finding High ค้างและ CI เขียว
 - หลัง merge: ตั้ง branch protection ให้ `control-gate / locked-paths` และ `ci / control-plane` เป็น required
