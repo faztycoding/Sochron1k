@@ -619,3 +619,90 @@ Requests to Codex (next round, after the owner agrees):
 Owner:
 - Push when ready. CI on the new head gives Linux evidence for the 45 tests.
 - Do not add the label while F7 is open.
+
+## Findings response (round 6): F7-only proposal (Codex), 2026-10-19
+
+Acting implementer and regression author for the owner's F7-only handoff, following
+`.claude/skills/fix-findings/SKILL.md` as a plain procedure. Base:
+`96e3279c7a80ac1615e581a947c9371071a7b4ec`, initially clean. This is an implementation response,
+not a closure review. The actual r5 controls remain unchanged; only documents are committed.
+
+| ID | Accept/Dispute | Commit / artifact | Evidence |
+|----|----------------|-------------------|----------|
+| F7 High | Accept | This documentation checkpoint; `docs/proposals/BOOT-001-r6-controls.patch` for owner application | Original input allows before (0), blocks after (2) with the locked-settings reason. New suite: 46 pass / 2 fail before, 48/48 after, zero skipped. |
+| F8 Low | Outside this fix | Existing false-positive follow-up | No policy or shell-syntax expansion. |
+| F9 Medium | Owner decision pending | No fix in r6 | No change to quote tokenization or nested cmd flags; no closure or risk acceptance. |
+
+### Artifact and expected applied files
+
+- Patch: `docs/proposals/BOOT-001-r6-controls.patch`, SHA256
+  `f8390d0bb470ee0d014c6ce6db0ef0cba1946486a82b146aba0f9f4a35eb8742`.
+- Target `.claude/hooks/guard-bash.mjs`: SHA256
+  `5379d3ebaf253746b2117bcedf479cbd8c2c91739aef1cf964a65eff6860575a`, Git blob
+  `33273778fce1be48e04f58ec40f9caee7db49762`.
+- Target `scripts/controls/test-controls.mjs`: SHA256
+  `741e8daf33af95ec425d7ac8d01ce1252216d245efed4010b555a194675f372f`, Git blob
+  `8615a79c03fd8e9841b88f9028cf2120dd52c1a9`.
+- The patch adds six guard lines and 47 test lines. It is incremental on committed r5
+  (`5583e4e`), not a replacement for r5. Proposal files remain gitignored and local.
+
+### Minimal fix and regression coverage
+
+Outside the existing quote handling, POSIX `splitSegments` consumes a backslash followed by
+another backslash or a parenthesis as a verbatim pair. Escaped parentheses stay ordinary
+arguments; consuming backslash pairs preserves odd/even parity. The change does not alter
+`tokenize`, `substitutions`, other shell syntax, posthook/settings, workflow or dependencies.
+
+Three permanent regression tests cover fourteen hook inputs: the exact F7 input, three
+backslashes and a nested Bash variant; allowed `find` and ordinary writes, standalone literal
+parentheses and an escaped closing parenthesis inside a real subshell; even backslashes before
+a real closing delimiter with both locked and ordinary destinations, and quoted parentheses.
+Denial cases assert the locked-settings reason, so a grouping parse error cannot masquerade
+as protection. All inputs go to the hook as JSON only; no payload command is executed.
+
+The original 45-test source is byte-identical after removing the new test block. The existing
+posthook fixtures still isolate TMP/TEMP/TMPDIR. The verifier uses the same assertions in both
+runs, adapting only import/module locations and the selected guard. System/global Git config
+and inherited Git identity/config environment are excluded; fixtures use local Git identity.
+
+### Checks
+
+Windows, Node `v26.12.0`, Git `2.46.1.windows.1`; all checks below at base `96e3279`.
+Times are 2026-10-19, Asia/Bangkok.
+
+| Command / check | Result | Time (+07) |
+|-----------------|--------|------------|
+| `node docs/proposals/BOOT-001-r6-verify.mjs before` | FAIL as required: 48 tests, 46 pass, 2 fail (new F7 denial and allowed-argument tests), 0 skipped. Original 45 all pass. | 20:01:28–20:01:59 |
+| `node docs/proposals/BOOT-001-r6-verify.mjs after` | PASS 48/48, 0 skipped | 20:01:28–20:01:59 |
+| Exact F7 / required `find` inputs | Before 0/0; after 2/0 | Same runs |
+| `git apply --check docs/proposals/BOOT-001-r6-controls.patch` | PASS, dry run only | 20:01 |
+| `node scripts/controls/check-locked-paths.mjs main` | FAIL, 42 bootstrap control changes needing owner review; not waived | 20:02 |
+| `bash scripts/controls/red-flags.sh main` (Git Bash absolute path), after staging documents | PASS, six existing explained groups, both secret groups empty. Ignored proposal files are excluded. | 20:03 |
+| `git diff --cached --check` | PASS; only PROGRESS and handoff staged | 20:03 |
+
+The verifier confirms unchanged SHA256 for all four actual controls: guard `cec6c7dc…679b1`,
+tests `aca04ebd…8fafe`, posthook `28c6283c…84b9`, settings `9de3df7d…2e422fe485c1edf2e`.
+Full hashes, selected guard identity, original-suite comparison and timestamps are recorded in
+`docs/proposals/BOOT-001-r6-before-evidence.json` and `BOOT-001-r6-after-evidence.json`.
+The corresponding `.log` files, `BOOT-001-r6-verify.mjs`, `BOOT-001-r6-build-patch.mjs`, and
+guard/tests candidate files are retained beside the patch for reproduction.
+
+A separate read-only Codex context checked the exact patch against both candidate diffs and
+independently ran thirteen JSON-only before/after probes at 20:02:23: odd backslash runs
+1/3/5/7, even closing runs 2/4/6 with both destinations, escaped parentheses inside actual
+groups, and the required `find`. All candidate expectations pass, including denial reasons.
+No in-scope defect was found. The reviewer also checked both suite logs and their artifact hashes;
+the full suite was not independently rerun. This is supporting pre-review; it does not replace
+the independent Claude review or establish live/CI behavior.
+
+### Remaining work
+
+F7 remains OPEN High pending owner application and independent recheck; AC-04 is still FAIL
+for actual controls. F8 and F9 remain as recorded in r5. No broader shell-parser coverage,
+live dispatch, Linux CI, merge, push or approval label is claimed in this round.
+
+Owner: apply only `git apply docs/proposals/BOOT-001-r6-controls.patch`. Have the independent
+Claude reviewer verify both applied hashes, rerun `node scripts/controls/test-controls.mjs`
+(expected 48/48, no skips), and recheck F7 in `docs/reviews/BOOT-001-r6.md`. After review,
+stage, scan and commit the owner-applied files and updated records. The owner pushes separately;
+CI must be tied to that new head. Do not apply r5 again or combine application with push.
