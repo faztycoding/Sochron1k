@@ -1,12 +1,13 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-19 by Codex · CI fixture proposal (ขอบเขตที่เจ้าของอนุมัติในแชท)
+Updated 2026-10-19 by Claude Code · fixture fix applied by the owner and committed (`011a55b`)
 
 ## Current task
-BOOT-001 v1 · State FIXING round 2 · **CI fixture patch ทดสอบในสำเนาชั่วคราวผ่านแล้ว รอเจ้าของ apply** · F3 ยังเปิด High
+BOOT-001 v1 · State FIXING round 2 · **CI fixture fix apply แล้ว commit `011a55b` รอเจ้าของ push และดู CI** · F3 ยังเปิด High
 ผู้ลงมือรอบนี้: **Codex เฉพาะ CI fixture** ตามคำตอบเจ้าของ "เริ่ม CI fixture ก่อน (แนะนำ)" · ขอบเขต F3/PostToolUse ยังไม่อนุมัติให้ทำในรอบนี้
 Branch `chore/BOOT-001-project-bootstrap` · PR #1 head ล่าสุดที่ตรวจ `4b83b1c` · local base ก่อนรอบนี้ `ea06315` (ahead 4) · checkpoint นี้เพิ่มเฉพาะ handoff/PROGRESS; patch และ logs อยู่ใน `docs/proposals/` ซึ่ง gitignored
 
 ## Done (with evidence)
+- 2026-10-19 16:19: เจ้าของ apply patch r2 เองใน terminal → test-controls 28/28 (ในเครื่องเจ้าของ) · Claude ตรวจซ้ำ: SHA256 ของไฟล์ = candidate ของ Codex (`294107ec…`); ไม่ใช้ system/global Git config และ identity ที่สืบทอดมา → merge test 1/1, full suite 28/28, skipped 0 → commit `011a55b` · red-flags 6 กลุ่มเดิม
 - 2026-10-19, Codex fixture-only: เตรียม `docs/proposals/BOOT-001-r2-controls.patch` เพิ่ม comment และ `git config --local` 2 บรรทัดใน `tempRepo()` ของ test เพื่อให้ merge มี identity ของ fixture; ไฟล์ล็อกจริงยังไม่เปลี่ยน
 - Patch SHA256: `77315b362634b20e3a3fd5088489e4bdd2040d463c474bbee28f35ed0414106c` · base `ea06315` · ไม่แก้ guard, hook หลังรัน, workflow หรือ assertions
 - หลักฐานเมื่อไม่ใช้ system/global Git config และ identity จาก environment: merge regression ก่อนแก้ FAIL (1 fail, `Committer identity unknown`, 15:33:00 +07); candidate หลังแก้ PASS 1/1 (15:33:18); full candidate suite PASS 28/28, 0 skipped (15:33:31)
@@ -36,7 +37,7 @@ Branch `chore/BOOT-001-project-bootstrap` · PR #1 head ล่าสุดที
 - การสลับให้ Codex ไม่ได้ยกเลิกข้อห้ามของเครื่องมือ → เจ้าของเลือกแผนแคบ **CI fixture เท่านั้น** ในรอบนี้; ไม่ใช้เนื้อหาที่ถูกระงับ และยังไม่ทำ guard/PostToolUse
 
 ## Not done yet
-- เจ้าของ: ตรวจ SHA256 และ apply fixture-only patch เอง แล้วรัน isolated merge test และ full suite ก่อน commit/push
+- เจ้าของ: `git push` แล้วดู `ci / control-plane` ของ PR #1 (หลักฐาน Linux ครั้งแรกหลังแก้ fixture)
 - CI บน Linux หลัง fixture patch: ยังไม่รัน; ผล candidate ใน Windows ไม่ใช่หลักฐาน Linux
 - F3 และ hook ตรวจหลังรัน: ยังไม่ทำ ต้องมีขอบเขตที่เจ้าของอนุมัติแยก; reviewer ของ implementation ต้องเป็นอีก session
 - review รอบ 3 ต้องระบุให้ตรงกับสิ่งที่ apply จริง ไม่ถือว่า F3 ปิดจาก fixture fix
@@ -64,7 +65,7 @@ Branch `chore/BOOT-001-project-bootstrap` · PR #1 head ล่าสุดที
 - Approved: เจ้าของขอให้ตั้งโปรเจกต์ (2026-10-18), ส่ง review r1 มาให้แก้, สั่ง commit แยกส่วน สั่งให้ apply patch r1 (2026-10-19, ครั้งเดียวสำหรับ patch นี้), ให้ส่งงานไปมาระหว่าง Claude กับ Codex ได้ และให้ checkpoint ตามกติกาทุกครั้งที่จบงานหนึ่งขั้น · ไม่มีอนุมัติให้ agent merge หรือเชื่อมโบรกเกอร์ · push ถูกบล็อกด้วย deny rule จึงเป็นของเจ้าของ
 
 ## Next safe action
-- เจ้าของ: ใช้ handoff หัวข้อ "Findings response (round 2): CI fixture only" ซึ่งแทนขอบเขตเดิม → ตรวจ patch/hash → apply เอง → isolated merge test 1/1 และ controls 28/28 → commit/push → ตรวจ CI
+- เจ้าของ: `git push` (ส่ง 7 commits รวม `011a55b`) → ดู CI ของ PR #1 ว่าเขียว ถ้าแดงส่ง log ของ step ที่ล้มมา
 - จากนั้นตัดสินขอบเขต F3/PostToolUse แยก และให้ session ใหม่ตรวจสิ่งที่เปลี่ยนจริง; F3 ยังเปิดจนมีหลักฐานปิด finding
 - ติด label `owner-approved-control-change` เมื่อไม่มี finding High ค้างและ CI เขียว
 - หลัง merge: ตั้ง branch protection ให้ `control-gate / locked-paths` และ `ci / control-plane` เป็น required

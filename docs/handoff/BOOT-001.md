@@ -242,3 +242,14 @@ actual owner application and broader control enforcement have not been tested wi
 4. Commit the applied fixture fix with `Refs: BOOT-001`, then push as the owner and inspect CI.
 5. Keep F3 open and obtain a separate scope decision for guard/post-run work. A green fixture
    suite alone is not BOOT-001 verification or approval for the control-change label.
+
+### Applied, 2026-10-19
+- The owner ran steps 2–3 in their own terminal: `git apply --check` and `git apply` succeeded,
+  and `node scripts/controls/test-controls.mjs` passed 28/28.
+- Claude Code then checked the result and committed it as `011a55b` (`F2: give fixture repos a Git identity...`):
+  - The file's SHA256 equals the candidate above (`294107ec…`).
+  - With `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL` set to an absent file, and inherited
+    `GIT_AUTHOR_*`, `GIT_COMMITTER_*` and `EMAIL` removed, the merge test passed 1/1 and the full
+    suite passed 28/28 with 0 skipped (16:19 +07:00).
+  - Red-flags still shows the same 6 groups.
+- Not yet run: Linux CI on this commit. It needs the owner's push.
