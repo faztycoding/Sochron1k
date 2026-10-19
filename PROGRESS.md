@@ -1,11 +1,15 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-19 by Codex · F7-only patch r6 พร้อมให้เจ้าของ apply · candidate ผ่าน 48/48; ยังรอ independent review
+Updated 2026-10-19 by Codex · patch r7 รวม F7/F9 และ F8 เฉพาะ unknown branch พร้อมให้เจ้าของ apply แทน r6 · candidate ผ่าน 54/54; ยังรอ independent review
 
 ## Current task
-BOOT-001 v1 · State FIXING round 3 · F3 ปิดแล้วตามเงื่อนไขของ r2 (review r5) · **F7 High เปิดอยู่**: guard ตัวใหม่ทำให้ `cd` ระหว่างวงเล็บที่ escape (`\(` … `\)`) ถูกมองว่าอยู่ใน subshell → การเขียน locked path ที่ guard เดิมบล็อกได้ ตอนนี้หลุด · F8 Low, F9 Medium (คำถามถึงเจ้าของ)
-Branch `chore/BOOT-001-project-bootstrap` · base รอบนี้ `96e3279` · checkpoint เพิ่มเฉพาะ PROGRESS/handoff; patch และหลักฐานอยู่ใน docs/proposals ที่ gitignored · ไม่ apply หรือ push โดย Codex · Linux CI ล่าสุดที่ยืนยันยังเป็นของ `7eae474`
+BOOT-001 v1 · State FIXING · F3 ปิดแล้วตามเงื่อนไขของ r2 (review r5) · **F7 High และ F9 Medium ยังเปิดบน controls จริง**; r7 เตรียมแก้ทั้งสองตามคำขอให้จัดการให้เสร็จ · F8 Low แก้ใน proposal เฉพาะ switch ในโฟลเดอร์ที่ไม่รู้; Monitor/case ยังเป็นงานแยก
+Branch `chore/BOOT-001-project-bootstrap` · base รอบนี้ `5f293ce` · checkpoint เพิ่มเฉพาะ PROGRESS/handoff; patch และหลักฐานอยู่ใน docs/proposals ที่ gitignored · ไม่ apply หรือ push โดย Codex · Linux CI ล่าสุดที่ยืนยันยังเป็นของ `7eae474`
 
 ## Done (with evidence)
+- 2026-10-19 20:35 +07: เตรียม `docs/proposals/BOOT-001-r7-controls.patch` SHA256 `a95d979d13ef0f1de8d05c0e75e7b964143823abb21ce0abf862106ec3e48602` · **ใช้แทน r6 โดย apply บน r5 ที่ commit แล้วเพียงครั้งเดียว** · แก้ POSIX escaping/quoted operators/substitution boundaries และ cmd alternate flags สำหรับ F7/F9; F8 เฉพาะ switch อย่างเดียวผ่าน แต่ branch state ที่ไม่รู้จะบล็อกการ commit/history operation ต่อท้าย
+- tests เดิม 45 ข้อคงเดิมทุก byte; เพิ่ม 9 กลุ่ม → ก่อนแก้ 46 ผ่าน/8 ล้ม → candidate 54/54, skipped 0 (20:35:06–20:35:38) · fixture แยก TMP/TEMP/TMPDIR และ Git config · payload ส่งเป็น JSON ให้ hook เท่านั้น ไม่ execute · hash controls จริงทั้ง 4 ไฟล์ไม่เปลี่ยน
+- ผู้ช่วยตรวจแยก: F8 subset 19/19 (20:33:50), F7/F9 ฉบับสุดท้าย 44/44 (20:35:53–54) · patch reconstruction/hash และ `git apply --check` PASS (20:36:21) · แก้ปัญหา draft ที่ผู้ช่วยพบเรื่อง nested quotes, branch state และ line continuation พร้อมเพิ่ม regression แล้ว; ไม่ใช้ผล draft เป็นหลักฐานฉบับสุดท้าย · การตรวจนี้ไม่แทน fresh Claude review หลัง owner apply
+- 20:38 +07: stage เฉพาะ handoff/PROGRESS → red-flags PASS 6 กลุ่มเดิม, secret ทั้งสองกลุ่มว่าง; ignored proposals ไม่อยู่ใน scan · `git diff --cached --check` PASS · locked-path verifier ก่อนหน้านี้ยัง FAIL 42 control changes ของ bootstrap ตามที่ต้องให้เจ้าของตรวจ
 - 2026-10-19 20:01 +07: Codex รับ F7 และเตรียม `docs/proposals/BOOT-001-r6-controls.patch` (SHA256 `f8390d0bb470ee0d014c6ce6db0ef0cba1946486a82b146aba0f9f4a35eb8742`) · guard เพิ่ม 6 บรรทัดเฉพาะ POSIX escaped parentheses/backslash pairs · เพิ่ม tests 3 กลุ่ม/14 inputs; tests เดิม 45 ข้อคงเดิมทุก byte · ก่อนแก้ 46 ผ่าน/2 ล้ม → หลังแก้ 48/48, skipped 0 · F7 0→2, find 0→0 · `git apply --check` PASS · hash ของไฟล์ควบคุมจริงทั้ง 4 ไฟล์ไม่เปลี่ยน
 - ผู้ตรวจ Codex อีก context ตรวจ diff/hash และ probe ขอบเขตอีก 13 กรณีที่ 20:02:23 → ผ่านทุกกรณีของ candidate; ไม่แทน review โดย Claude · รายละเอียดและ expected applied hashes อยู่ใน handoff หัวข้อ "Findings response (round 6): F7-only proposal" · F8/F9 ไม่ได้แก้ในรอบนี้
 - 2026-10-19 18:18–18:26 +07: Claude session ใหม่ review patch r5 ที่เจ้าของ apply (เจ้าของยืนยันในแชทหลัง posthook รายงานไฟล์ล็อก 2 ไฟล์ในคำสั่งแรก) → `docs/reviews/BOOT-001-r5.md`
@@ -53,8 +57,8 @@ Branch `chore/BOOT-001-project-bootstrap` · base รอบนี้ `96e3279` �
 - การสลับให้ Codex ไม่ได้ยกเลิกข้อห้ามของเครื่องมือ → เจ้าของเลือกแผนแคบ **CI fixture เท่านั้น** ในรอบนี้; ไม่ใช้เนื้อหาที่ถูกระงับ และยังไม่ทำ guard/PostToolUse
 
 ## Not done yet
-- F7 High: patch r6 พร้อมแล้ว แต่ไฟล์ควบคุมจริงยังเป็น r5 · เจ้าของ apply → Claude ผู้ตรวจอิสระตรวจ hash/tests และเขียน review r6 ก่อนปิด finding
-- F9: รอเจ้าของตัดสินว่า `cmd //c` และ `\"` ไปอยู่ใต้การตัดสินใจ 2026-10-19 (posthook + งานแก้ guard ภายหลัง) หรือแก้ใน PR นี้
+- F7 High/F9 Medium: proposal r7 พร้อมแล้ว แต่ไฟล์ควบคุมจริงยังเป็น r5 · เจ้าของ apply r7 → Claude ผู้ตรวจอิสระตรวจ hash/tests และเขียน review r7 ก่อนปิด findings
+- F8 Low: unknown branch switch มี fix ใน r7; Monitor ที่มี substitution และ case pattern ยังเปิดในงาน false-positive · ไม่ถือว่าการเตรียม patch เป็นการยอมรับความเสี่ยงที่เหลือ
 - Permanent regressions 45 ข้อเข้า tracked source แล้ว (`5583e4e`) แต่ยังไม่มีผล Linux บน head ที่มี r5 · live fresh-session baseline / การแยก failure event ที่ dispatch ยังไม่ยืนยัน
 - เจ้าของ push; ผล Linux CI ที่ยืนยันแล้วยังอ้างถึง `7eae474`
 - P25 ใน session ใหม่ของ Claude Code และของ Codex
@@ -90,17 +94,18 @@ Codex ชี้ (หลัง review r5 static) ว่า Claude เปลี่
 - none · run 39229522531 completed/success; ไม่มี rerun, label, merge หรือ push โดย Codex หรือ Claude
 
 ## Authority and budget left
+- รอบ r7 (Codex): เจ้าของส่งผล pre-apply r6/ข้อเสนอ F9 และขอให้จัดการให้เสร็จ → ทำ proposal รวม F7/F9 และ F8 เฉพาะ unknown branch ที่แก้พร้อม regression ได้; อัปเดต handoff/PROGRESS และ commit เอกสาร · ไม่ apply/แก้ controls จริงหรือ push · ไม่เปลี่ยน N6 หรือยกเว้น runtime block
 - รอบ r6 (Codex): ทำเฉพาะ F7 ตามข้อความส่งต่อ พร้อม permanent regressions และหลักฐาน fail-before/pass-after; ส่ง patch ให้เจ้าของ, อัปเดต handoff/PROGRESS และ commit เอกสารเท่านั้น · ไม่ apply/แก้ controls จริงหรือ push และไม่ขยายไป F8/F9
 - รอบ r5 review (เจ้าของอนุมัติในแชท 2026-10-19): ตรวจ patch r5 ที่เจ้าของ apply, รัน tests, ส่ง input ให้ hook อย่างเดียว, เขียน review r5, อัปเดต handoff/PROGRESS แล้ว stage → scan → commit รวมไฟล์ล็อก 2 ไฟล์ที่เจ้าของ apply · ห้ามแก้ controls และห้าม push · ทำครบแล้ว
 - รอบก่อน (Codex): เตรียม patch เดียวสำหรับ F3 สองกลุ่มที่ยืนยันใน r2 และ permanent regressions ของ guard/posthook; ไม่ apply ไฟล์ล็อกและไม่ push
 - Approved: เจ้าของขอให้ตั้งโปรเจกต์ (2026-10-18), ส่ง review r1 มาให้แก้, สั่ง commit แยกส่วน สั่งให้ apply patch r1 (2026-10-19, ครั้งเดียวสำหรับ patch นี้), ให้ส่งงานไปมาระหว่าง Claude กับ Codex ได้ และให้ checkpoint ตามกติกาทุกครั้งที่จบงานหนึ่งขั้น · ไม่มีอนุมัติให้ agent merge หรือเชื่อมโบรกเกอร์ · push ถูกบล็อกด้วย deny rule จึงเป็นของเจ้าของ
 
 ## Next safe action
-- เจ้าของ: apply `docs/proposals/BOOT-001-r6-controls.patch` อย่างเดียว แล้วให้ Claude ผู้ตรวจอิสระตรวจ applied hashes, รัน tests (คาด 48/48), review F7 และ stage → scan → commit เมื่อผ่าน · เจ้าของ push แยกเพื่อดู CI บน head ใหม่
-- F9 ยังรอเจ้าของตัดสินขอบเขต ไม่ถือว่าการทำ F7 เป็นการรับความเสี่ยง F9
+- เจ้าของ: apply `docs/proposals/BOOT-001-r7-controls.patch` อย่างเดียว **แทน r6** แล้วให้ Claude ผู้ตรวจอิสระตรวจ applied hashes, รัน tests (คาด 54/54), review F7/F9 และ F8 subset ลง `docs/reviews/BOOT-001-r7.md` แล้ว stage → scan → commit เมื่อผ่าน · เจ้าของ push แยกเพื่อดู CI บน head ใหม่
+- F8 ส่วนที่เหลือต้องมี contract/หลักฐาน shell ของ Monitor และการวิเคราะห์ branch ของ case ก่อนแก้; ไม่เดา syntax เพื่อทำให้คำสั่งผ่าน
 - ยังไม่ติด label `owner-approved-control-change`: F7 High ยังเปิด · ติดได้เมื่อไม่มี finding High ค้างและ CI เขียว
 - หลัง merge: ตั้ง branch protection ให้ `control-gate / locked-paths` และ `ci / control-plane` เป็น required
-- งานถัดไปหลัง BOOT-001 (ยังไม่มี contract): แก้ false positive ของ guard-bash พร้อม regression tests → (1) เนื้อหาใน heredoc ถูกอ่านเป็นคำสั่ง (2) regex pipe-to-shell จับคำ curl/bash ที่อยู่ใน pattern ของ grep (3) F8 จาก review r5: Monitor ที่มี `$(...)`, `case` pattern, `git switch` ในโฟลเดอร์ที่ไม่รู้
-- Waiting for owner action/decision: apply/push r6 ตามลำดับ, F9, N1–N4, D-002..D-005, contract SPIKE-001
+- งานถัดไปหลัง BOOT-001 (ยังไม่มี contract): แก้ false positive ของ guard-bash พร้อม regression tests → (1) เนื้อหาใน heredoc ถูกอ่านเป็นคำสั่ง (2) regex pipe-to-shell จับคำ curl/bash ที่อยู่ใน pattern ของ grep (3) F8 ส่วนที่เหลือ: Monitor ที่มี `$(...)`, `case` pattern
+- Waiting for owner action/decision: apply/review/push r7 ตามลำดับ, N1–N4, D-002..D-005, contract SPIKE-001
 
 On resume: re-check git state and every pending external operation first.

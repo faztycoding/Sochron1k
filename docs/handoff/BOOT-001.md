@@ -622,6 +622,9 @@ Owner:
 
 ## Findings response (round 6): F7-only proposal (Codex), 2026-10-19
 
+Superseded before application by the consolidated r7 proposal below. Retained as historical
+evidence only: do not apply r6 first, and do not combine the two patches.
+
 Acting implementer and regression author for the owner's F7-only handoff, following
 `.claude/skills/fix-findings/SKILL.md` as a plain procedure. Base:
 `96e3279c7a80ac1615e581a947c9371071a7b4ec`, initially clean. This is an implementation response,
@@ -706,3 +709,143 @@ Claude reviewer verify both applied hashes, rerun `node scripts/controls/test-co
 (expected 48/48, no skips), and recheck F7 in `docs/reviews/BOOT-001-r6.md`. After review,
 stage, scan and commit the owner-applied files and updated records. The owner pushes separately;
 CI must be tied to that new head. Do not apply r5 again or combine application with push.
+
+## Findings response (round 7): consolidated F7/F9 and scoped F8 proposal, 2026-10-19
+
+The owner forwarded the r6 pre-apply review and expanded F9 reproduction, then asked Codex to
+finish the work. Acting as implementer and regression author under that request, Codex prepared
+one owner-applied patch for the shared F7/F9 lexical fix and the independently testable F8
+unknown-branch subset. `.claude/skills/fix-findings/SKILL.md` is followed as a plain procedure.
+Base `5f293ced0f5c931fca9725eeb4fda303b9ba05ad`, initially clean; actual controls are still r5.
+This is a proposal checkpoint, not a finding-closure review or acceptance of residual risk.
+
+### Apply only r7
+
+`docs/proposals/BOOT-001-r7-controls.patch` supersedes the unapplied r6 proposal. Apply r7
+directly to the committed r5 controls. It changes exactly two files, with 226 insertions and
+23 deletions. All proposal files are local and gitignored; this commit contains documentation
+only. Codex has not applied a patch, edited actual controls, pushed, or added an approval label.
+
+| Artifact | SHA256 | Expected Git blob |
+|----------|--------|-------------------|
+| `BOOT-001-r7-controls.patch` | `a95d979d13ef0f1de8d05c0e75e7b964143823abb21ce0abf862106ec3e48602` | n/a |
+| Applied `.claude/hooks/guard-bash.mjs` | `2986d0e1324d292e4abbf6ecf14f07d5b8abe8b3c73c6f8c26a32303e52fa3c0` | `25c05cb3767a1c809d556c2d4bb763e01bf649ed` |
+| Applied `scripts/controls/test-controls.mjs` | `0664b0fef1891c49861f6c0b74f4692fd2c12fd1dabfdbd1f007e606a527dfe4` | `f5f144fbf1da31d1ff18cbf83c5424c9ef6e5194` |
+
+### Findings response
+
+| ID | Accept/Dispute | Commit / artifact | Evidence |
+|----|----------------|-------------------|----------|
+| F7 High | Accept | This documentation checkpoint; owner-applied r7 artifact | Original input returns 0 before, 2 after with the locked-settings reason. All three r6 regression groups are retained. |
+| F9 Medium | Accept; fix now within the requested completion scope | Same artifact; shared lexical change with F7 | Five new regression groups fail before and pass after, covering escaped characters, literal operators, continuation/substitution boundaries, and alternate cmd flags. |
+| F8 Low | Accept; partial fix only | Same artifact for unknown branch switch; Monitor/case remain follow-up | Switch-only input passes. Unknown branch state blocks subsequent branch-sensitive actions, including after child scopes or later switches. One new suite group plus 19 independent probes. |
+
+POSIX escaping now uses one rule across segmentation, substitution scanning and tokenization:
+outside quotes a backslash consumes the next character; single quotes preserve it literally;
+inside double quotes only shell-defined escapes are consumed. Backslash-newline joins logical
+tokens, including repeated joins at substitution and control-operator boundaries. Escaped and
+quoted redirection characters retain word identity instead of becoming redirect operators.
+Substitutions keep their own quote context and are preserved as a unit while the enclosing
+command is split, then inspected recursively. Odd/even backslash parity remains covered.
+
+The syntax rules were checked against the primary Bash documentation:
+[escape character](https://www.gnu.org/s/bash/manual/html_node/Escape-Character.html),
+[double quotes](https://www.gnu.org/s/bash/manual/html_node/Double-Quotes.html), and
+[single quotes](https://www.gnu.org/software/bash/manual/html_node/Single-Quotes.html).
+Nested cmd recognizes alternate double-slash c/k switches, case-insensitively. Other shell
+syntax is not treated as POSIX. Complex legacy backtick substitutions containing escapes fail
+closed explicitly; complete legacy backtick grammar is not claimed.
+
+For F8, an unresolved switch no longer rejects a switch-only command. Instead it marks branch
+state unknown for the rest of that hook invocation, including parent/child scopes. Subsequent
+commit/merge/cherry-pick/rebase/am/revert operations are blocked. A later textual branch switch
+cannot prove successful execution and cannot clear this state; a new invocation reads actual
+repository state. Known ordinary switches and subsequent reads remain allowed.
+
+### Tests and checks
+
+Nine added test groups bring the suite to 54. Removing the contiguous additions leaves the
+original 45-test source byte-identical. Existing posthook/settings are exercised unchanged;
+TMP/TEMP/TMPDIR are isolated, Git system/global config and inherited identity/config variables
+are excluded, and fixtures use their own local Git identity. Guard payloads are JSON input to
+the hook only, never executed shell commands. No dependency or workflow change is proposed.
+
+All times below are 2026-10-19, Asia/Bangkok, at `5f293ce`, Node `v26.12.0`, Git
+`2.46.1.windows.1`, Windows. The verifier adapts module/import locations and selects the actual
+or candidate guard, without altering assertions.
+
+| Command / check | Result | Time (+07) |
+|-----------------|--------|------------|
+| `node docs/proposals/BOOT-001-r7-verify.mjs before` | FAIL as required: 54 tests, 46 pass, 8 fail, 0 skipped; all original 45 pass | 20:35:06–20:35:36 |
+| `node docs/proposals/BOOT-001-r7-verify.mjs after` | PASS 54/54, 0 skipped | 20:35:06–20:35:38 |
+| F7 input / required find input | Before 0/0; after 2/0, correct denial reason | Same runs |
+| Read-only F8 supporting reviewer, JSON-only probes | PASS 19/19 on the final branch-state logic | 20:33:50 |
+| Read-only F7/F9 supporting reviewer, JSON-only probes on final candidate | PASS 44/44 | 20:35:53–20:35:54 |
+| Patch SHA256, in-memory reconstruction against both candidates, target-file scope | PASS; exactly two targets, expected candidate contents | 20:36:21 |
+| `git apply --check docs/proposals/BOOT-001-r7-controls.patch` | PASS, dry run only | 20:36:21 |
+| `node scripts/controls/check-locked-paths.mjs main` | FAIL, 42 bootstrap control changes needing owner review; not waived | 20:35–20:36 |
+| `bash scripts/controls/red-flags.sh main` (Git Bash absolute path), after staging documents | PASS, six existing groups; both secret groups empty; ignored proposals excluded | 20:38 |
+| `git diff --cached --check` | PASS; only PROGRESS and handoff staged | 20:38 |
+
+The six scan groups are unchanged: an existing Bash-unavailable test skip (not taken in either
+run); type/lint examples in rules and scanner definitions; the scanner definition and synthetic
+scanner fixture under the placeholder category; forbidden-command rules and hook-input test
+strings; and the scanner's own order/account pattern. No new group or secret hit was added by
+this checkpoint. This scan does not cover the ignored patch files.
+
+Acceptance at this checkpoint: AC-04 FAIL for actual r5 controls; AC-06 PASS and AC-07 PASS
+within the tracked-file scan; AC-01/02/03/05/08 UNKNOWN as full acceptance conditions in this
+round. Candidate regression passes do not establish live integration or owner approval.
+
+Evidence under `docs/proposals/`: `BOOT-001-r7-verify.mjs`, `BOOT-001-r7-build-patch.mjs`,
+`BOOT-001-r7-guard-candidate.mjs`, `BOOT-001-r7-tests-candidate.mjs`, before/after `.log` and
+`-evidence.json` files. Both evidence files report `originalSuitePreserved: true` and
+`controlsUnchanged: true`, with the full selected guard hash, original hashes and timestamps.
+The independent probes were read-only supporting checks; they did not write a closure review.
+
+Supporting reviewers found nested-quote, branch-state recovery and continuation-boundary
+defects in earlier drafts. Each was fixed and given permanent regression coverage before the
+final suite and artifact checks above. Draft1/draft2 logs are retained only for local audit;
+their hashes/results do not describe the delivered patch. No known in-scope finding remains
+in the final candidate according to those supporting checks. Fresh applied-state review is
+still required.
+
+Actual controls remained unchanged throughout:
+
+| File | SHA256 |
+|------|--------|
+| `.claude/hooks/guard-bash.mjs` | `cec6c7dc7e44380754cec50b13fe187dfe2150f1b12edf91e6d6edbb4b1679b1` |
+| `scripts/controls/test-controls.mjs` | `aca04ebd8d71527a0487c7c3231e924fd2a2c1fa3ebb892b6467a1618998fafe` |
+| `.claude/hooks/check-locked-after.mjs` | `28c6283c38c3514dc6112c650f3d2ae09251e56d2873292f59929e55c0e384b9` |
+| `.claude/settings.json` | `9de3df7d0decc7d4eafb7280eaf39f48b58c210ec55f8c2de422fe485c1edf2e` |
+
+### Limits and next action
+
+F7/F9 remain OPEN on actual controls until owner application and independent review. AC-04
+remains FAIL at the current head. F8 is not closed: Monitor syntax has no verified runtime
+contract here, and case patterns require conditional branch analysis, not just punctuation
+removal. Those two cases, prior heredoc/grep false positives and N6 remain in the separate
+follow-up. Unknown branch state deliberately continues to block dependent operations.
+
+This text guard is not a complete shell parser. General dynamic command expansion, other
+command families/option clusters, and obfuscated spellings of whole-command credential,
+download or SQL checks are not certified by these tests. Post-run detection cannot undo a
+write. No residual risk is accepted by Codex. No new Linux CI, live dispatch, P25, gate/branch
+protection, merge or deployment result is claimed.
+
+Owner command (apply only, no push in the same command):
+
+```powershell
+git apply docs/proposals/BOOT-001-r7-controls.patch
+```
+
+Then a fresh Claude session should read AGENTS.md, review r5 and this final r7 section; verify
+both applied hashes, run `node scripts/controls/test-controls.mjs` (54/54, no skips), and review
+the F7/F9 changes plus the F8 branch-state subset using hook JSON inputs only. Record scoped
+findings and limits in `docs/reviews/BOOT-001-r7.md`, update handoff/PROGRESS, then stage, scan
+and commit if checks pass. Do not edit controls or push. The posthook may report the two
+owner-applied dirty controls; follow the project's stop/owner-confirmation rule, unchanged.
+
+The owner pushes separately after that review. Confirm Linux CI on that exact new head before
+considering the approval label; a successful candidate suite does not close findings or
+complete BOOT-001.
