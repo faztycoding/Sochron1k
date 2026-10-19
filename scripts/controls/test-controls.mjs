@@ -37,6 +37,9 @@ function tempRepo(branch = 'main') {
   const g = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
   g('init', '-q', '-b', branch);
   g('config', 'core.autocrlf', 'false');
+  // Merges need fixture-local identity too, not just explicit commit commands.
+  g('config', '--local', 'user.name', 'test');
+  g('config', '--local', 'user.email', 'test@example.invalid');
   fs.mkdirSync(path.join(dir, 'docs', 'hypotheses'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'docs', 'hypotheses', 'H001-committed.md'), 'status: unproven\n');
   g('add', '-A');
