@@ -144,3 +144,101 @@ narrower round 2:
 The other forms Claude probed would then fall to the post-run check rather than an
 ever-longer list of text patterns. Whoever implements uses their own judgment of the task; the
 withheld content is not an input.
+
+## Findings response (round 2): CI fixture only, 2026-10-19
+
+This section supersedes the earlier proposed implementation scope. The owner explicitly chose
+the CI-fixture-only plan in chat. Codex acts as implementer for this scoped proposal; a separate
+Codex session reviewed the patch and recorded evidence below. No guard or PostToolUse work is
+included, and no withheld content from the earlier stop event was used.
+
+| ID | Accept/Dispute | Delivery / commit | Evidence (command → result) |
+|----|----------------|-------------------|-----------------------------|
+| CI fixture (r2 F2 evidence qualification) | Accept | `docs/proposals/BOOT-001-r2-controls.patch`, based on `ea06315`; this handoff checkpoint records the proposal, not an applied fix | The existing merge regression fails before the change with missing Git identity, then passes 1/1; the full candidate suite passes 28/28 with 0 skipped, all with system/global Git config and inherited identity excluded. |
+| F3 | Deferred, still open High | No change | Guard fixes and post-run detection are outside the owner's current authorization. The fixture fix does not close F3 or establish AC-04. |
+
+### Patch and scope
+
+- Patch: `docs/proposals/BOOT-001-r2-controls.patch` (gitignored local artifact).
+- SHA256: `77315b362634b20e3a3fd5088489e4bdd2040d463c474bbee28f35ed0414106c`.
+- Only target: `scripts/controls/test-controls.mjs`, inside `tempRepo()` after initialization.
+- Adds one explanatory comment and two calls: `git config --local user.name test` and
+  `git config --local user.email test@example.invalid`. Both run in disposable fixture repos.
+- Existing assertions, test count, direct commit options, hooks, workflows and project/global
+  Git config remain unchanged. Identity also applies to `git merge`, which previously had none.
+- The actual locked file in the working tree is **not patched**. `git apply --check` passed;
+  no `git apply` mutation, push, workflow rerun or merge was performed.
+
+Source revision: `ea063152b06383770a569828fe26562662b8d5f2`.
+Original working-file SHA256: `cd295a8ba45b898337df48695d91662f07933b9cae726c265d8d37a13eefbb2d`.
+Candidate SHA256: `294107ece4e9e638d26fc25e7de4490972796b0522899c75208c2e9e8074cbfd`.
+The original working-file hash was checked again after testing and is unchanged.
+
+### Reproduction and verification
+
+Only the tracked control scripts, existing hooks, workflows and settings were copied from
+`ea06315` into a disposable test snapshot. Snapshot base commit: `4c1bf1080f5e9dab3defdb5cc05c43827f3549cd`.
+The candidate differs from that snapshot only by the three-line fixture change. Tests ran on
+Windows with Node v26.12.0 and Git 2.46.1.windows.1. No dependency was installed.
+
+Child-process isolation: `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL` points to a verified absent
+file; inherited `GIT_AUTHOR_*`, `GIT_COMMITTER_*`, `GIT_CONFIG*` and `EMAIL` variables were removed
+before setting the two isolation variables. No persistent machine or project config was changed.
+
+| Command | Result | Revision / artifact | Time, 2026-10-19 (+07:00) |
+|---------|--------|---------------------|-------------------------|
+| `node --test --test-name-pattern="F2: an edit made inside a merge commit fails" scripts/controls/test-controls.mjs` under isolated child environment | FAIL as reproduced: 0 pass / 1 fail; `Committer identity unknown` at `git merge`, before invariant evaluation | Original `ea06315` snapshot | 15:33:00 |
+| Same command and isolated environment after the candidate change | PASS: 1 pass / 0 fail / 0 skipped; existing checker assertions execute | `ea06315` snapshot + patch SHA256 above | 15:33:17–15:33:18 |
+| `node scripts/controls/test-controls.mjs` under the same isolated environment | PASS: 28 pass / 0 fail / 0 skipped | Same candidate | 15:33:18–15:33:31 |
+| `git apply --check docs/proposals/BOOT-001-r2-controls.patch` in the actual working tree | PASS, no mutation | Actual `ea06315` | 15:33:38 |
+| `& 'C:\Program Files\Git\bin\bash.exe' scripts/controls/red-flags.sh main` | PASS execution, exit 0; six explained groups, both secret groups empty | `ea06315` + handoff/PROGRESS checkpoint | 15:35:33–15:35:35 |
+| `node scripts/controls/check-locked-paths.mjs main` | FAIL as expected for bootstrap: 41 pre-existing control changes need owner approval | Same actual working tree; proposal not applied | 15:35:33–15:35:34 |
+| `git diff --check` | PASS, exit 0 | Same documentation checkpoint | 15:35:33 |
+
+Red-flag leads: the six groups are existing policy/scanner definitions, test fixtures and the
+conditional Bash-unavailable skip. No tests were skipped in the candidate run. No new group or
+secret-group hit was introduced. The locked-path failure is reported as FAIL, not waived or
+reclassified as PASS; this proposal did not modify any of those protected files.
+
+Local evidence (gitignored, not part of the documentation commit):
+`docs/proposals/BOOT-001-r2-fixture-evidence.json` and the corresponding
+`BOOT-001-r2-fixture-before.log`, `BOOT-001-r2-fixture-after.log`, `BOOT-001-r2-fixture-suite.log`.
+The JSON includes exact UTC timestamps, source/candidate hashes, the scratch path and test counts.
+
+To repeat the isolated merge test before and after the owner applies the patch, run this from
+the actual repository root in PowerShell. It changes only the test process's environment:
+
+```powershell
+@'
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
+  !/^(GIT_(AUTHOR_|COMMITTER_|CONFIG)|EMAIL$)/i.test(key)));
+env.GIT_CONFIG_NOSYSTEM = '1';
+env.GIT_CONFIG_GLOBAL = path.resolve('docs/proposals/BOOT-001-absent-global.gitconfig');
+if (fs.existsSync(env.GIT_CONFIG_GLOBAL)) throw new Error('Expected absent config path');
+const r = spawnSync(process.execPath, [
+  '--test', '--test-name-pattern=F2: an edit made inside a merge commit fails',
+  'scripts/controls/test-controls.mjs'
+], { env, stdio: 'inherit' });
+if (r.error) throw r.error;
+process.exit(r.status ?? 1);
+'@ | node --input-type=module -
+```
+
+Independent review: the separate reviewer inspected the exact patch, hashes, baseline/candidate
+logs and unchanged merge assertions; no findings in this fixture-only change. The reviewer did
+not rerun tests or approve the overall task. AC-05 remains UNKNOWN on GitHub. Fresh Linux CI,
+actual owner application and broader control enforcement have not been tested with this patch.
+
+### Owner handoff
+
+1. Inspect the local patch and verify its SHA256.
+2. In the owner's terminal: `git apply --check docs/proposals/BOOT-001-r2-controls.patch`, then
+   `git apply docs/proposals/BOOT-001-r2-controls.patch`.
+3. Run the isolated merge test above and `node scripts/controls/test-controls.mjs`; expect 1/1
+   and 28/28 respectively, with no skipped tests.
+4. Commit the applied fixture fix with `Refs: BOOT-001`, then push as the owner and inspect CI.
+5. Keep F3 open and obtain a separate scope decision for guard/post-run work. A green fixture
+   suite alone is not BOOT-001 verification or approval for the control-change label.
