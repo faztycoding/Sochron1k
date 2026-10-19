@@ -474,6 +474,278 @@ test('F3: a branch switch earlier in the same command is honored', () => {
   }
 });
 
+// ---- F3 round 2: directory scope and attached output operands -------------------------------
+// These strings are hook input only: none is executed as a shell command.
+test('F3: child directory changes do not change the parent write destination', () => {
+  for (const cmd of ['(cd /tmp); cp /tmp/AGENTS.md .', 'bash -c "cd /tmp"; cp /tmp/AGENTS.md .',
+    'cd .claude; (cd ..); echo {} > settings.json',
+    'cd .claude; sh -c "cd .."; echo {} > settings.json',
+    '(pushd /tmp); popd; echo x > AGENTS.md',
+    'cd .claude; echo "$(cd ..)"; echo {} > settings.json',
+    'cd .claude; echo `cd ..`; echo {} > settings.json',
+    'cd .claude; echo "$(touch settings.json)"',
+    '{ cd .claude; }; echo {} > settings.json',
+    'eval "cd .claude"; echo {} > settings.json']) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
+  }
+  for (const cmd of ['(cd .claude); echo x > settings.json',
+    'bash -c "cd .claude"; echo x > settings.json',
+    'cd src; (cd ..); echo x > AGENTS-copy.md',
+    'pushd src; (pushd ..); popd; echo x > out.txt',
+    '{ cd src; }; echo x > out.txt', 'eval "cd src"; echo x > out.txt',
+    'echo "literal (parentheses)" > out.txt']) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 0, `${cmd}: ${r.stderr}`);
+  }
+  for (const cmd of ['(Set-Location .claude); Set-Content settings.json "{}"',
+    'Write-Output "$(Set-Location .claude)"; Set-Content settings.json "{}"']) {
+    assert.equal(runHook('guard-bash.mjs', shellInput(cmd, { tool: 'PowerShell' })).code, 2, cmd);
+  }
+});
+
+test('F3: child shells keep repository branch changes visible to the parent', () => {
+  const dir = tempRepo('feat/BOOT-001-child');
+  try {
+    gitIn(dir, 'branch', 'main');
+    for (const cmd of ['(git switch main); git commit -m x',
+      'bash -c "git switch main"; git commit -m x',
+      'echo "$(git switch main)"; git commit -m x']) {
+      const r = runHook('guard-bash.mjs', shellInput(cmd, { cwd: dir }), { projectDir: dir });
+      assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('F3: another repository in a child cannot overwrite the parent branch forecast', () => {
+  const parent = tempRepo('feat/BOOT-001-parent');
+  const child = tempRepo('feat/BOOT-001-child');
+  try {
+    gitIn(parent, 'branch', 'main');
+    const other = child.replace(/\\/g, '/');
+    for (const cmd of [
+      `git switch main; (cd '${other}'; git switch -c feat/other); git commit -m x`,
+      `git switch main; bash -c "cd '${other}'; git switch -c feat/other"; git commit -m x`,
+      `git switch main; echo "$(cd '${other}'; git switch -c feat/other)"; git commit -m x`,
+      'git switch main; echo "$(cd /tmp; git switch feat/other)"; git commit -m x',
+    ]) {
+      const r = runHook('guard-bash.mjs', shellInput(cmd, { cwd: parent }), { projectDir: parent });
+      assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
+    }
+    const allowed = `bash -c "cd '${other}'; git switch main"; git commit -m x`;
+    assert.equal(runHook('guard-bash.mjs', shellInput(allowed, { cwd: parent }), { projectDir: parent }).code, 0);
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true }); fs.rmSync(child, { recursive: true, force: true });
+  }
+});
+
+test('F3: attached short output operands are checked without changing option case', () => {
+  for (const cmd of ['curl -oAGENTS.md https://example.invalid/a',
+    'curl -o".claude/settings.json" https://example.invalid/a',
+    'curl -o"tests/acceptance/a b.py" https://example.invalid/a',
+    'wget -OAGENTS.md https://example.invalid/a', 'sort -oAGENTS.md input.txt',
+    'cd .claude; curl -osettings.json https://example.invalid/a']) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
+  }
+  for (const cmd of ['curl -odata/raw/a.csv https://example.invalid/a',
+    'wget -Odata/raw/a.csv https://example.invalid/a', 'sort -oout.txt input.txt',
+    'curl --output=data/raw/a.csv https://example.invalid/a', 'sort -o out.txt input.txt',
+    'curl -o"data/raw/a b.csv" https://example.invalid/a']) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 0, `${cmd}: ${r.stderr}`);
+  }
+});
+
+// ---- Post-run detector: handoff behavior table, with no shared session state -----------------
+function withPostFixture(body) {
+  const dir = tempRepo('feat/BOOT-001-post');
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sochron-post-state-'));
+  const extraRepos = [];
+  const env = { ...process.env, CLAUDE_PROJECT_DIR: dir, TMP: stateDir, TEMP: stateDir, TMPDIR: stateDir };
+  const call = (event = 'PostToolUse', { baseline = false, raw, session = 'fixture-session',
+    tool = 'Bash', cwd = dir } = {}) => {
+    const r = spawnSync(process.execPath, [hookPath('check-locked-after.mjs'), ...(baseline ? ['--baseline'] : [])], {
+      cwd: dir, env, encoding: 'utf8',
+      input: raw ?? JSON.stringify({ hook_event_name: event, tool_name: tool, session_id: session, cwd,
+        tool_input: { command: 'fixture operation (simulated event)' },
+        ...(event === 'PostToolUseFailure' ? { error: 'Exit code 1', is_interrupt: false } : {}) }),
+    });
+    assert.ifError(r.error);
+    assert.equal(r.signal, null);
+    return { code: r.status, stderr: r.stderr, stdout: r.stdout };
+  };
+  const pre = (options = {}) => assert.equal(call('PreToolUse', { ...options, baseline: true }).code, 0);
+  const otherRepo = () => { const other = tempRepo('feat/BOOT-001-other'); extraRepos.push(other); return other; };
+  try { body({ dir, stateDir, call, pre, otherRepo }); }
+  finally {
+    // Only absolute roots returned by this fixture's mkdtemp calls are removed.
+    for (const owned of [dir, stateDir, ...extraRepos]) {
+      assert.equal(path.dirname(owned), path.resolve(os.tmpdir()));
+      assert.match(path.basename(owned), /^sochron-(controls|post-state)-/);
+      fs.rmSync(owned, { recursive: true, force: true });
+    }
+  }
+}
+const postHit = (result, expected) => {
+  assert.equal(result.code, 2, result.stderr);
+  assert.match(result.stderr, expected);
+};
+
+test('posthook: shell tools wire baseline, success and failure events', () => {
+  const config = JSON.parse(fs.readFileSync(path.join(repo, '.claude/settings.json'), 'utf8'));
+  for (const tool of ['Bash', 'PowerShell', 'Monitor']) {
+    for (const event of ['PreToolUse', 'PostToolUse', 'PostToolUseFailure']) {
+      const handlers = (config.hooks[event] ?? []).filter(row => new RegExp(`^(?:${row.matcher})$`).test(tool))
+        .flatMap(row => row.hooks).filter(hook => hook.command.includes('/check-locked-after.mjs'));
+      assert.equal(handlers.length, 1, `${event}/${tool}`);
+      assert.equal(handlers[0].command.includes('--baseline'), event === 'PreToolUse');
+    }
+  }
+});
+
+test('posthook: clean and ordinary changes stay quiet for all shell tools and post events', () => {
+  withPostFixture(({ dir, stateDir, call, pre }) => {
+    pre();
+    assert.equal(call().code, 0);
+    writeIn(dir, 'src/ordinary.txt', 'one\n'); commitAll(dir, 'ordinary addition');
+    writeIn(dir, 'src/ordinary.txt', 'two\n'); writeIn(dir, 'notes.txt', 'new ordinary file\n');
+    for (const tool of ['Bash', 'PowerShell', 'Monitor']) {
+      for (const event of ['PostToolUse', 'PostToolUseFailure']) assert.equal(call(event, { tool }).code, 0);
+    }
+    assert.ok(fs.readdirSync(path.join(stateDir, 'sochron1k-after')).some(f => f.endsWith('.json')));
+  });
+});
+
+test('posthook: locked additions, edits and deletions report only new content', () => {
+  withPostFixture(({ dir, call, pre }) => {
+    writeIn(dir, 'AGENTS.md', 'original\n'); commitAll(dir, 'protected fixture'); pre();
+    writeIn(dir, 'AGENTS.md', 'changed\n');
+    const first = call(); postHit(first, /uncommitted\s+M\s+AGENTS\.md/);
+    assert.match(first.stderr, /Stop\. Tell the owner/);
+    assert.match(first.stderr, /Do not edit, revert or commit/);
+    assert.match(first.stderr, /cannot undo/);
+    assert.equal(call().code, 0);
+    writeIn(dir, 'AGENTS.md', 'changed again\n'); postHit(call(), /AGENTS\.md/);
+    fs.unlinkSync(path.join(dir, 'AGENTS.md')); postHit(call(), /uncommitted\s+D\s+AGENTS\.md/);
+    writeIn(dir, 'nested/CLAUDE.md', 'new protected fixture\n'); postHit(call(), /nested\/CLAUDE\.md/);
+  });
+});
+
+test('posthook: initially dirty locked files report once with or without a baseline', () => {
+  withPostFixture(({ dir, call, pre }) => {
+    writeIn(dir, 'AGENTS.md', 'already dirty\n');
+    postHit(call(), /AGENTS\.md/); assert.equal(call().code, 0);
+    pre({ session: 'new-session' });
+    postHit(call('PostToolUse', { session: 'new-session' }), /AGENTS\.md/);
+    assert.equal(call('PostToolUse', { session: 'new-session' }).code, 0);
+  });
+});
+
+test('posthook: first command committing a protected edit is reported despite a clean tree', () => {
+  withPostFixture(({ dir, call, pre }) => {
+    writeIn(dir, 'AGENTS.md', 'before\n'); commitAll(dir, 'protected baseline'); pre();
+    writeIn(dir, 'AGENTS.md', 'after\n'); commitAll(dir, 'first command edit');
+    assert.equal(gitIn(dir, 'status', '--porcelain'), '');
+    pre(); // A second pre-event must not erase the original observation point.
+    const sha = gitIn(dir, 'rev-parse', '--short=7', 'HEAD').trim();
+    const r = call(); postHit(r, /AGENTS\.md/); assert.ok(r.stderr.includes(sha));
+    assert.match(r.stderr, /first command edit/); assert.equal(call().code, 0);
+  });
+});
+
+test('posthook: committing already reported content is quiet but a later changed commit reports', () => {
+  withPostFixture(({ dir, call, pre }) => {
+    pre(); writeIn(dir, 'AGENTS.md', 'one\n'); postHit(call(), /AGENTS\.md/);
+    gitIn(dir, 'add', '--', 'AGENTS.md'); assert.equal(call().code, 0);
+    commitAll(dir, 'reported content'); assert.equal(call().code, 0);
+    writeIn(dir, 'AGENTS.md', 'two\n'); commitAll(dir, 'unreported content');
+    postHit(call(), /commit .*unreported content.*AGENTS\.md/);
+  });
+});
+
+test('posthook: old branch history is not attributed to the switching command', () => {
+  withPostFixture(({ dir, call, pre }) => {
+    gitIn(dir, 'switch', '-q', '-c', 'old-side');
+    writeIn(dir, 'AGENTS.md', 'old change\n'); gitIn(dir, 'add', '-A');
+    execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'old protected commit'], {
+      cwd: dir, stdio: 'ignore', env: { ...process.env, GIT_AUTHOR_DATE: '2001-01-01T00:00:00Z', GIT_COMMITTER_DATE: '2001-01-01T00:00:00Z' },
+    });
+    gitIn(dir, 'switch', '-q', 'feat/BOOT-001-post'); pre();
+    gitIn(dir, 'switch', '-q', 'old-side'); assert.equal(call().code, 0);
+  });
+});
+
+test('posthook: ignored local fixtures baseline quietly then report creation, edits and deletion', () => {
+  withPostFixture(({ dir, call, pre }) => {
+    const locals = ['.claude/settings.local.json', 'CLAUDE.local.md'];
+    writeIn(dir, '.gitignore', locals.join('\n') + '\n'); commitAll(dir, 'ignore local fixtures');
+    for (const local of locals) writeIn(dir, local, 'fixture before\n');
+    assert.equal(call().code, 0); // Existing locals alone do not accuse an unknown first command.
+    for (const local of locals) {
+      writeIn(dir, local, 'fixture after\n');
+      postHit(call(), new RegExp(local.replaceAll('.', '\\.')));
+      assert.equal(call().code, 0);
+      fs.unlinkSync(path.join(dir, local)); postHit(call(), /local file/);
+      writeIn(dir, local, 'fixture created\n'); postHit(call(), /local file/);
+    }
+    pre({ session: 'first-local-command' });
+    writeIn(dir, locals[0], 'first command local edit\n');
+    postHit(call('PostToolUse', { session: 'first-local-command' }), /settings\.local\.json/);
+  });
+});
+
+test('posthook: registry appends and new hypotheses are allowed; rewrites and removals report', () => {
+  withPostFixture(({ dir, call, pre }) => {
+    const registry = 'research/registry/runs.jsonl';
+    writeIn(dir, registry, '{"id":1}\n'); commitAll(dir, 'registry baseline'); pre();
+    writeIn(dir, registry, '{"id":1}\n{"id":2}\n');
+    writeIn(dir, 'research/registry/new.jsonl', '{"id":3}\n');
+    writeIn(dir, 'docs/hypotheses/H002-new.md', 'new hypothesis\n');
+    assert.equal(call().code, 0);
+    writeIn(dir, registry, '{"id":9}\n'); postHit(call(), /existing records changed/);
+    fs.unlinkSync(path.join(dir, registry)); postHit(call(), /existing file removed/);
+    writeIn(dir, 'docs/hypotheses/H001-committed.md', 'rewritten\n'); postHit(call(), /committed file modified/);
+    fs.unlinkSync(path.join(dir, 'docs/hypotheses/H001-committed.md')); postHit(call(), /H001-committed\.md/);
+  });
+});
+
+test('posthook: a violating hypothesis commit is detected even with no uncommitted files', () => {
+  withPostFixture(({ dir, call, pre }) => {
+    pre(); writeIn(dir, 'docs/hypotheses/H001-committed.md', 'changed invariant\n');
+    commitAll(dir, 'rewrite hypothesis'); assert.equal(gitIn(dir, 'status', '--porcelain'), '');
+    postHit(call(), /commit .*H001-committed\.md/);
+  });
+});
+
+test('posthook: failure payload still reports a protected change', () => {
+  withPostFixture(({ dir, call, pre }) => {
+    pre(); writeIn(dir, 'AGENTS.md', 'changed before failure\n');
+    postHit(call('PostToolUseFailure'), /AGENTS\.md/);
+    assert.equal(call('PostToolUseFailure').code, 0);
+  });
+});
+
+test('posthook: baseline does not block errors, while failed post checks report unverified state', () => {
+  withPostFixture(({ stateDir, call, pre }) => {
+    pre({ raw: '{broken' });
+    postHit(call('PostToolUse', { raw: '{broken' }), /cannot parse.*not checked/);
+    fs.writeFileSync(path.join(stateDir, 'sochron1k-after'), 'fixture blocking state directory creation');
+    pre(); // Baseline mode deliberately never blocks, including this filesystem error.
+    postHit(call(), /check failed.*not verified/);
+  });
+});
+
+test('posthook: project and differing cwd repositories are both checked without shared session suppression', () => {
+  withPostFixture(({ dir, call, pre, otherRepo }) => {
+    const other = otherRepo(); pre({ cwd: other });
+    writeIn(dir, 'AGENTS.md', 'project change\n'); writeIn(other, 'CLAUDE.md', 'cwd change\n');
+    const r = call('PostToolUse', { cwd: other }); postHit(r, /AGENTS\.md/); assert.match(r.stderr, /CLAUDE\.md/);
+    assert.equal(call('PostToolUse', { cwd: other }).code, 0);
+    postHit(call('PostToolUse', { cwd: other, session: 'other-session' }), /AGENTS\.md/);
+  });
+});
+
 test('F6: red-flags reports real-looking secrets and does not flag its own pattern line', (t) => {
   const bash = findBash();
   if (!bash) {

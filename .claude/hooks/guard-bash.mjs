@@ -68,9 +68,9 @@ if (/core\.hookspath/i.test(flat)) block('changing core.hooksPath bypasses check
 if (/-encodedcommand\b/i.test(flat)) block('encoded PowerShell commands are not allowed');
 
 // ---- Tokenizing ----------------------------------------------------------------------------
-// Segments split at ; newline | && || and at ( ) { } (subshells, substitutions, script blocks),
-// except inside quotes, ${var} and @{hashtable}.
-function splitSegments(s) {
+// Keep parentheses as scope boundaries. Braces group commands in the caller's directory.
+// Quotes, POSIX backticks, ${var} and @{hashtable} keep their existing contents together.
+function splitSegments(s, syntax) {
   const segs = [];
   let cur = '';
   let quote = null;
@@ -82,13 +82,14 @@ function splitSegments(s) {
       if (c === quote) quote = null;
       continue;
     }
-    if (c === '"' || c === "'") { quote = c; cur += c; continue; }
+    if (c === '"' || c === "'" || (c === '`' && syntax === 'posix')) { quote = c; cur += c; continue; }
     if (c === '{' && (s[i - 1] === '$' || s[i - 1] === '@')) { braceDepth++; cur += c; continue; }
     if (c === '}' && braceDepth > 0) { braceDepth--; cur += c; continue; }
     const pairOp = (c === '&' || c === '|') && s[i + 1] === c;
     if (c === ';' || c === '\n' || c === '|' || pairOp || c === '(' || c === ')' || c === '{' || c === '}') {
       segs.push(cur);
       cur = '';
+      if (c === '(' || c === ')') segs.push(c);
       if (pairOp) i++;
       continue;
     }
@@ -99,7 +100,8 @@ function splitSegments(s) {
 }
 
 // Command substitutions that splitSegments cannot see: $(...) inside double quotes, and `...`.
-function substitutions(s) {
+function substitutions(s, syntax) {
+  if (syntax === 'cmd') return [];
   const out = [];
   let single = false;
   let double = false;
@@ -117,7 +119,7 @@ function substitutions(s) {
       }
       out.push(s.slice(i + 2, j - 1));
       i = j - 1;
-    } else if (c === '`') {
+    } else if (c === '`' && syntax !== 'powershell') {
       const j = s.indexOf('`', i + 1);
       if (j < 0) break;
       out.push(s.slice(i + 1, j));
@@ -174,7 +176,7 @@ function splitRedirects(tokens) {
 // ---- Paths ---------------------------------------------------------------------------------
 let cwd = input.cwd || projectDir; // effective directory; null once it cannot be known
 const dirStack = [];
-let branchState; // effective branch; undefined until first needed, null when unknown
+const branchStates = new Map(); // effective branches by worktree root; null means unknown
 
 function locate(rawToken, dir = cwd) {
   let t = String(rawToken).replace(/\\/g, '/');
@@ -244,9 +246,15 @@ function gitOut(args, dir) {
     return null;
   }
 }
-function currentBranch() {
-  if (branchState === undefined) branchState = gitOut(['rev-parse', '--abbrev-ref', 'HEAD'], cwd);
-  return branchState;
+function repositoryRoot(dir) {
+  const root = gitOut(['rev-parse', '--show-toplevel'], dir)?.replace(/\\/g, '/');
+  return root && process.platform === 'win32' ? root.toLowerCase() : root;
+}
+function currentBranch(dir) {
+  const root = repositoryRoot(dir);
+  if (!root) return null;
+  if (!branchStates.has(root)) branchStates.set(root, gitOut(['rev-parse', '--abbrev-ref', 'HEAD'], dir));
+  return branchStates.get(root);
 }
 // Branch after `git switch|checkout ...`: a name, '(detached)', null (unknown) or undefined (no change).
 function branchAfterSwitch(sub, args, dir) {
@@ -314,7 +322,6 @@ function analyzeGit(words, k, stdinFiles) {
   const sub = (words[i] ?? '').toLowerCase();
   const args = words.slice(i + 1);
   const shortFlags = args.filter((a) => /^-[a-zA-Z]+$/.test(a)).join('');
-  const sameDir = dir === cwd;
 
   if (sub === 'push') block('git push is reserved for the owner (Handbook App.O deny list)', 'Commit locally and tell the owner the branch is ready.');
   if (args.includes('--no-verify')) block('--no-verify bypasses hooks and checks');
@@ -333,10 +340,14 @@ function analyzeGit(words, k, stdinFiles) {
 
   if (sub === 'switch' || sub === 'checkout') {
     const next = branchAfterSwitch(sub, args, dir);
-    if (next !== undefined && sameDir) branchState = next;
+    if (next !== undefined) {
+      const root = repositoryRoot(dir);
+      if (!root) block(`cannot determine the repository for git ${sub}`, 'Run it from a known repository directory.');
+      branchStates.set(root, next);
+    }
   }
   if (['commit', 'merge', 'cherry-pick', 'rebase', 'am', 'revert'].includes(sub)) {
-    const branch = sameDir ? currentBranch() : gitOut(['rev-parse', '--abbrev-ref', 'HEAD'], dir);
+    const branch = currentBranch(dir);
     if (branch === null) block(`git ${sub} after the current branch became unknown in this command`, 'Run the branch switch and the commit as separate commands.');
     if (branch === 'main' || branch === 'master') {
       block(`git ${sub} on ${branch}`, 'Create a task branch first: git switch -c <type>/<TASK-ID>-<slug>.');
@@ -434,6 +445,7 @@ function outputFlagTargets(name, args) {
       const same = ps ? a.toLowerCase() === f : a === f;
       if (same) out.push(args[i + 1]);
       else if (f.startsWith('--') && a.startsWith(`${f}=`)) out.push(a.slice(f.length + 1));
+      else if (!ps && /^-[A-Za-z]$/.test(f) && a.startsWith(f) && a.length > f.length) out.push(a.slice(f.length));
     }
   }
   return out.filter((x) => x !== undefined);
@@ -462,7 +474,7 @@ function extractionTargets(name, args) {
 }
 
 // ---- Main analysis -------------------------------------------------------------------------
-function analyzeSegment(seg, depth) {
+function analyzeSegment(seg, depth, syntax) {
   const { words, outputs, inputs } = splitRedirects(tokenize(seg));
   for (const target of outputs) {
     const rule = protectedRule(target);
@@ -551,7 +563,13 @@ function analyzeSegment(seg, depth) {
   if (SHELLS.has(name) || name === 'eval') {
     const j = name === 'eval' ? -1 : args.findIndex((a) => SHELL_FLAG.test(a));
     const nested = name === 'eval' ? args.join(' ') : (j >= 0 ? args.slice(j + 1).join(' ') : null);
-    if (nested !== null && nested !== '') analyzeCommand(nested, depth + 1);
+    if (nested !== null && nested !== '') {
+      if (name === 'eval') analyzeCommand(nested, depth + 1, syntax);
+      else {
+        const childSyntax = name === 'cmd' ? 'cmd' : /^(pwsh|powershell)$/.test(name) ? 'powershell' : 'posix';
+        analyzeChildCommand(nested, depth + 1, childSyntax);
+      }
+    }
   }
   for (let i = k; i < words.length; i++) {
     const base = words[i].replace(/^.*[\\/]/, '').replace(/\.exe$/i, '');
@@ -567,17 +585,42 @@ function analyzeSegment(seg, depth) {
   }
 }
 
-function analyzeCommand(text, depth = 0) {
-  if (depth > 4) block('the command nests shells too deeply to inspect', 'Split it into separate commands.');
-  for (const sub of substitutions(text)) {
-    // A substitution runs in a subshell: its cd or branch switch does not leak into the parent.
-    const saved = [cwd, [...dirStack], branchState];
-    analyzeCommand(sub, depth + 1);
-    [cwd, , branchState] = saved;
-    dirStack.splice(0, dirStack.length, ...saved[1]);
+function analyzeChildCommand(text, depth, syntax) {
+  const savedCwd = cwd;
+  const savedStack = [...dirStack];
+  try { analyzeCommand(text, depth, syntax); }
+  finally {
+    cwd = savedCwd;
+    dirStack.splice(0, dirStack.length, ...savedStack);
   }
-  for (const seg of splitSegments(text)) analyzeSegment(seg, depth);
+  // Git switches alter that worktree, so its branch forecast remains visible to the parent.
 }
 
-analyzeCommand(command);
+function analyzeCommand(text, depth = 0, syntax = 'unknown') {
+  if (depth > 4) block('the command nests shells too deeply to inspect', 'Split it into separate commands.');
+  const groups = [];
+  for (const seg of splitSegments(text, syntax)) {
+    if (seg === '(') {
+      if (syntax === 'unknown') block('cannot determine directory scope of this grouped command', 'Use an explicit shell.');
+      groups.push(syntax === 'posix' ? [cwd, [...dirStack]] : null);
+      continue;
+    }
+    if (seg === ')') {
+      if (groups.length === 0) block('unmatched closing parenthesis in the command', 'Split it into separate commands.');
+      const saved = groups.pop();
+      if (saved) { cwd = saved[0]; dirStack.splice(0, dirStack.length, ...saved[1]); }
+      continue;
+    }
+    // Analyze substitutions where they occur, after directory changes in earlier segments.
+    for (const sub of substitutions(seg, syntax)) {
+      if (syntax === 'unknown') block('cannot determine directory scope of this substitution', 'Use an explicit shell.');
+      if (syntax === 'posix') analyzeChildCommand(sub, depth + 1, syntax);
+      else analyzeCommand(sub, depth + 1, syntax);
+    }
+    analyzeSegment(seg, depth, syntax);
+  }
+  if (groups.length) block('unmatched opening parenthesis in the command', 'Split it into separate commands.');
+}
+
+analyzeCommand(command, 0, tool === 'Bash' ? 'posix' : tool === 'PowerShell' ? 'powershell' : 'unknown');
 process.exit(0);
