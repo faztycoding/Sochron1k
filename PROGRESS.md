@@ -75,7 +75,9 @@ Codex ชี้ (หลัง review r5 static) ว่า Claude เปลี่
 5. guard-bash บล็อก `grep` ที่ pattern มี curl กับ bash คั่นด้วย `|` (false positive แบบ pipe-to-shell) → ใช้ Read tool อ่านไฟล์ patch แทน
 
 ทั้ง 5 ครั้งไม่ได้แตะไฟล์ที่ล็อก และเป้าหมายอยู่นอกขอบเขตของกฎที่บล็อก แต่ CLAUDE.md ไม่มีข้อยกเว้น จึงนับเป็นการผิดขั้นตอน
-ตั้งแต่นี้ Claude จะหยุดและถามเจ้าของทุกครั้งที่ถูกบล็อก รวมถึงกรณีที่คิดว่าเป็น false positive (N6: รอเจ้าของตัดสินว่าจะเขียนข้อยกเว้นลง CLAUDE.md หรือไม่ ซึ่งเป็นไฟล์ที่ล็อก)
+ตั้งแต่นี้ Claude จะหยุดและถามเจ้าของทุกครั้งที่ถูกบล็อก รวมถึงกรณีที่คิดว่าเป็น false positive
+**N6 ตัดสินแล้ว (เจ้าของ 2026-10-19 ตามคำแนะนำของ Codex):** คงกฎเดิม ไม่เพิ่มข้อยกเว้น เพราะเงื่อนไข "ไฟล์ไม่ล็อก" กว้างเกินไป และข้อความบล็อกไม่ใช่การอนุญาตใหม่ · false positive ให้แก้แยกเป็นงานใหม่พร้อม regression tests · N6 ไม่ขวาง r5
+หมายเหตุจาก Codex: ข้อความ "ไม่แตะไฟล์ล็อก" ของทั้ง 5 เหตุการณ์เป็นรายงานของ Claude เอง ยังไม่มีใครตรวจย้อนหลัง
 
 ## Pending external operations
 - none · run 39229522531 completed/success; ไม่มี rerun, label, merge หรือ push โดย Codex
@@ -90,6 +92,7 @@ Codex ชี้ (หลัง review r5 static) ว่า Claude เปลี่
 - เจ้าของ push แยกหลัง commit แล้วตรวจ CI ของ PR #1 ที่ head ใหม่; hook ตรวจหลังรันเป็นการตรวจพบ ไม่ใช่การป้องกันการเขียนก่อนเกิด
 - ติด label `owner-approved-control-change` เมื่อไม่มี finding High ค้างและ CI เขียว
 - หลัง merge: ตั้ง branch protection ให้ `control-gate / locked-paths` และ `ci / control-plane` เป็น required
-- Waiting for owner action/decision: apply/push patch r5 ตามลำดับ, N1–N4, N6 (ข้อยกเว้นเรื่อง "ถูกบล็อกแล้วต้องหยุด" ดูหัวข้อ Process deviations), D-002..D-005, contract SPIKE-001; ขอบเขต F3 รอบนี้อนุมัติแล้ว และ fixture fix ผ่าน Linux CI แล้ว
+- งานถัดไปหลัง BOOT-001 (ยังไม่มี contract): แก้ false positive ของ guard-bash พร้อม regression tests → (1) เนื้อหาใน heredoc ถูกอ่านเป็นคำสั่ง (2) regex pipe-to-shell จับคำ curl/bash ที่อยู่ใน pattern ของ grep
+- Waiting for owner action/decision: apply/push patch r5 ตามลำดับ, N1–N4, D-002..D-005, contract SPIKE-001; ขอบเขต F3 รอบนี้อนุมัติแล้ว และ fixture fix ผ่าน Linux CI แล้ว
 
 On resume: re-check git state and every pending external operation first.
