@@ -414,3 +414,24 @@ names above). The earlier table in "F3 round 2b" still holds.
 2. Tell Claude. Claude runs the tests, notes the live report of the two uncommitted control files
    (dispatch smoke only), and commits.
 3. Push separately, after that commit.
+
+### Codex applied-tree verification (round 4), 2026-10-19
+
+At session start, HEAD was `137ec7e` and the hook/settings changes were already present,
+uncommitted. Their Git blobs (`c78d038` / `01f74bb`) match the r3 proposal. Codex did not apply
+or edit them. See `docs/reviews/BOOT-001-r4.md` for full hashes and review scope.
+
+- Existing suite: PASS 28/28, zero skipped (17:27-17:28 +07).
+- Independent focused probes: PASS 6/6 at 17:30:01 +07. Local ignored reproduction/evidence:
+  `docs/proposals/BOOT-001-r4-posthook-probe.mjs` and `BOOT-001-r4-posthook-evidence.json`.
+- Probes invoke the applied hook in place, with synthetic disposable repositories and simulated
+  event dispatch. They do not recreate/copy hook directories or read real local configuration.
+- Both r3 changes work in the exercised cases. Live Claude dispatch remains UNKNOWN. These
+  probes are not the permanent regression suite; F3 overall and AC-04 remain open/FAIL.
+- The current scan reports six existing groups with empty secret groups, but excludes the
+  untracked hook. Its committer must scan again after staging it. Codex left both control files
+  unstaged/uncommitted and commits only the review checkpoint documents.
+
+Next: Claude records live evidence and commits the applied controls after checks; the owner
+pushes separately. No further owner apply is needed for the currently matching files. After that,
+check committed blobs against this review and add the separately scoped permanent regressions.

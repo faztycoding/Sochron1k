@@ -1,12 +1,13 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-19 by Claude Code · แก้ posthook ตาม r3 แล้ว (patch r3) รอเจ้าของ apply
+Updated 2026-10-19 by Codex · พบ posthook r3 ใน working tree แล้ว; ตรวจเฉพาะจุด 6/6 และ suite 28/28
 
 ## Current task
 BOOT-001 v1 · State FIXING round 2 · **CI fixture fix ผ่าน Linux CI แล้ว** (`ci / control-plane`, run `39229522531`) · F3 ยังเปิด High จึงยังไม่ verified ทั้งงาน
-ขอบเขต F3 (เจ้าของตัดสิน 2026-10-19 หลัง CI เขียว): แคบ แบ่งกันทำ · **Claude: hook ตรวจหลังรัน → แก้ตาม r3 แล้ว `docs/proposals/BOOT-001-r3-posthook.patch` (SHA256 `2e5297ec…474b`) รอเจ้าของ apply** · **Codex: 2 กลุ่มที่ยืนยันใน r2 + regression tests ของทั้งสองส่วน** · ตรวจไขว้กันคนละเครื่องมือ
-Branch `chore/BOOT-001-project-bootstrap` · เจ้าของ push ถึง `7eae474` แล้วและยืนยัน PR #1 head ตรงกันในรอบ CI · checkpoint นี้เพิ่มเฉพาะ review r3/PROGRESS/handoff; ไม่มีการ push โดย Codex
+ขอบเขต F3 (เจ้าของตัดสิน 2026-10-19 หลัง CI เขียว): แคบ แบ่งกันทำ · **Claude: posthook r3 อยู่ใน working tree ตรงกับ patch แล้ว รอ live evidence และ commit** · **Codex: 2 กลุ่มที่ยืนยันใน r2 + permanent regression tests ของทั้งสองส่วน** · review r4 ยืนยันเฉพาะจุดใน fixture ไม่ใช่ผล live/Linux
+Branch `chore/BOOT-001-project-bootstrap` · เจ้าของ push ถึง `7eae474` แล้วและยืนยัน PR #1 head ตรงกันในรอบ CI · checkpoint นี้เพิ่มเฉพาะ review r4/PROGRESS/handoff; ไม่มีการ push โดย Codex
 
 ## Done (with evidence)
+- 2026-10-19 17:30 +07: Codex พบ hook/settings ตรงกับ r3 patch ที่ head `137ec7e` (blob `c78d038` / `01f74bb`), ไม่ apply ซ้ำ · suite เดิม PASS 28/28, skipped 0 · independent probes PASS 6/6 รวม first-command commit, ignored-file change, failure payload และ initial dirty state · `docs/reviews/BOOT-001-r4.md` บันทึกขอบเขตและ hash; live dispatch/Linux/permanent regressions ยังไม่ยืนยัน
 - 2026-10-19 17:23 +07: Claude แก้ posthook ตาม r3 (ยอมรับทั้ง 2 ข้อ): เพิ่ม `PostToolUseFailure` + โหมด `--baseline` ใน PreToolUse · scenario script: patch เดิม 21/26 (ล้มตรง C1, S13b, S14, S15, S16) → patch ใหม่ 26/26 · suite 28/28 ใน clone · `git apply --check` ผ่าน · patch r2-posthook ถูกแทนแล้ว ห้าม apply
 - 2026-10-19 16:52 +07: Codex ตรวจ proposal posthook SHA256 `87c72209…3a0d` ที่ head `45046b5` พร้อม reviewer อีก context → `docs/reviews/BOOT-001-r3.md`: F3 ยังเปิด High เพราะไม่มี failure event และไม่มี baseline ก่อนคำสั่งแรก; เป็น static review ไม่ใช่ผลรันทดสอบ hook · dry-run apply PASS, red-flags PASS 6 กลุ่มเดิม กลุ่ม secret ว่าง · ไม่ apply หรือ push
 - 2026-10-19 16:22 +07: ยืนยัน [PR #1](https://github.com/faztycoding/Sochron1k/pull/1) head `7eae47434cbb8eaffed55a324e00eeba76817f3e` และ [CI job 117983829275 / run 39229522531](https://github.com/faztycoding/Sochron1k/actions/runs/39229522531/job/117983829275) จบด้วย success บน Ubuntu 24.04.5, Git 2.55.0
@@ -43,7 +44,7 @@ Branch `chore/BOOT-001-project-bootstrap` · เจ้าของ push ถึ�
 
 ## Not done yet
 - เจ้าของ: push checkpoint เอกสารนี้เมื่อพร้อม; ผล Linux CI ที่ยืนยันแล้วอ้างถึง `7eae474` และไม่ถูกอ้างว่าเป็นผลของ commit เอกสารที่ใหม่กว่า
-- Hook ตรวจหลังรัน (Claude): patch `docs/proposals/BOOT-001-r2-posthook.patch` (SHA256 `87c72209…3a0d`, base `6066c97`) · หลักฐานผู้ทำ: 20/20 scenarios, suite 28/28 ใน clone, รันกับ repo จริง exit 0 ใน 154 ms · review r3 พบช่องว่าง 2 ข้อ ต้องแก้ก่อน apply; ยังไม่มี regression tests (ขอ Codex) และยังไม่ได้ทดสอบ live ใน Claude Code
+- Hook ตรวจหลังรัน: r3 patch แทน r2 แล้วและพบ applied files ตรงกัน · review r4 probes ผ่าน แต่ยังรอ live dispatch, permanent regressions และ Linux · hook ยัง untracked จึงไม่อยู่ใน red-flag scan รอบนี้ ต้อง scan หลังผู้ commit stage ไฟล์
 - F3 สองกลุ่มที่ยืนยันใน r2 (Codex): ยังไม่ทำ
 - review รอบ 3 ต้องระบุให้ตรงกับสิ่งที่ apply จริง ไม่ถือว่า F3 ปิดจาก fixture fix
 - P25 ใน session ใหม่ของ Claude Code และของ Codex
@@ -70,8 +71,8 @@ Branch `chore/BOOT-001-project-bootstrap` · เจ้าของ push ถึ�
 - Approved: เจ้าของขอให้ตั้งโปรเจกต์ (2026-10-18), ส่ง review r1 มาให้แก้, สั่ง commit แยกส่วน สั่งให้ apply patch r1 (2026-10-19, ครั้งเดียวสำหรับ patch นี้), ให้ส่งงานไปมาระหว่าง Claude กับ Codex ได้ และให้ checkpoint ตามกติกาทุกครั้งที่จบงานหนึ่งขั้น · ไม่มีอนุมัติให้ agent merge หรือเชื่อมโบรกเกอร์ · push ถูกบล็อกด้วย deny rule จึงเป็นของเจ้าของ
 
 ## Next safe action
-- เจ้าของ: apply อย่างเดียว `git apply docs/proposals/BOOT-001-r3-posthook.patch` แล้วบอก Claude → Claude รัน test, ดู live report (แค่ smoke ว่า hook ถูกเรียก ไม่ปิด F3) และ commit → push แยกทีหลัง
-- Codex (หลัง hook commit แล้ว): ตรวจ revision นี้ (r4) + เขียน regression tests ตาม spec ใน handoff
+- Claude: ไฟล์ตรงกับ r3 patch อยู่แล้ว ไม่ต้อง apply ซ้ำ; เก็บ live evidence, stage/scan และ commit hook/settings เมื่อ checks ผ่าน → เจ้าของ push แยกทีหลัง
+- Codex (หลัง hook commit แล้ว): ยืนยันว่า diff ตรงกับ hash ใน review r4 และเขียน permanent regression tests ตาม spec ใน handoff; probes ที่ผ่านไม่ใช่ CI tests
 - Codex: ทำตาม handoff หัวข้อ "F3 round 2b" ข้อ Requests to Codex · F3 ยังเปิดจนมีหลักฐานปิด finding และ hook ตรวจหลังรันไม่ใช่หลักฐานว่าป้องกันการเขียนก่อนเกิดได้
 - ติด label `owner-approved-control-change` เมื่อไม่มี finding High ค้างและ CI เขียว
 - หลัง merge: ตั้ง branch protection ให้ `control-gate / locked-paths` และ `ci / control-plane` เป็น required
