@@ -252,4 +252,28 @@ actual owner application and broader control enforcement have not been tested wi
     `GIT_AUTHOR_*`, `GIT_COMMITTER_*` and `EMAIL` removed, the merge test passed 1/1 and the full
     suite passed 28/28 with 0 skipped (16:19 +07:00).
   - Red-flags still shows the same 6 groups.
-- Not yet run: Linux CI on this commit. It needs the owner's push.
+- At the application checkpoint, Linux CI was still pending the owner's push; the completed run is recorded below.
+
+### Linux CI after owner push, 2026-10-19
+
+The owner pushed the branch from `4b83b1c` to `7eae47434cbb8eaffed55a324e00eeba76817f3e`.
+Codex verified that PR #1 has that head and that workflow run **39229522531** and its
+`control-plane` job **117983829275** completed with **success**. No rerun was requested.
+
+[CI job and full log](https://github.com/faztycoding/Sochron1k/actions/runs/39229522531/job/117983829275).
+Runner: Ubuntu 24.04.5, Git 2.55.0. The tested checkout was synthetic merge
+`d4620d3b8f14a76518d590b15752d9498a81a61c`, combining PR head `7eae474` with base `951ee98`.
+
+| Command | Result | Tested revision | Time, 2026-10-19 (+07:00) |
+|---------|--------|-----------------|-------------------------|
+| `node scripts/controls/test-controls.mjs` | PASS: 28 pass, 0 fail, 0 skipped; F2 merge regression passes | `d4620d3` (PR head `7eae474`) | 16:22:19 |
+| `bash scripts/controls/red-flags.sh "origin/$BASE_REF"`, `BASE_REF=main` | PASS: six explained groups; both secret groups empty | Same synthetic merge | 16:22:20 |
+
+The six scan groups remain policy/scanner definitions, existing synthetic test fixtures and the
+conditional Bash-unavailable skip. No test was actually skipped in this CI run. Both test and
+scan steps completed successfully, unlike the earlier run where fixture setup stopped the scan.
+
+This establishes Linux execution evidence for the applied fixture fix `011a55b`. It does not
+close F3, satisfy live P25, or prove control-gate/branch-protection enforcement. BOOT-001 stays
+implemented with F3 open High. The approval label was not created/applied; no merge or push was
+performed by Codex. Next action is the owner's separate F3 scope decision and independent review.

@@ -1,12 +1,15 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-19 by Claude Code · fixture fix applied by the owner and committed (`011a55b`)
+Updated 2026-10-19 by Codex · ยืนยัน Linux CI หลัง fixture fix ที่ PR head `7eae474`
 
 ## Current task
-BOOT-001 v1 · State FIXING round 2 · **CI fixture fix apply แล้ว commit `011a55b` รอเจ้าของ push และดู CI** · F3 ยังเปิด High
+BOOT-001 v1 · State FIXING round 2 · **CI fixture fix ผ่าน Linux CI แล้ว** (`ci / control-plane`, run `39229522531`) · F3 ยังเปิด High จึงยังไม่ verified ทั้งงาน
 ผู้ลงมือรอบนี้: **Codex เฉพาะ CI fixture** ตามคำตอบเจ้าของ "เริ่ม CI fixture ก่อน (แนะนำ)" · ขอบเขต F3/PostToolUse ยังไม่อนุมัติให้ทำในรอบนี้
-Branch `chore/BOOT-001-project-bootstrap` · PR #1 head ล่าสุดที่ตรวจ `4b83b1c` · local base ก่อนรอบนี้ `ea06315` (ahead 4) · checkpoint นี้เพิ่มเฉพาะ handoff/PROGRESS; patch และ logs อยู่ใน `docs/proposals/` ซึ่ง gitignored
+Branch `chore/BOOT-001-project-bootstrap` · เจ้าของ push ถึง `7eae474` แล้วและยืนยัน PR #1 head ตรงกัน · checkpoint นี้เพิ่มเฉพาะ PROGRESS/handoff/compatibility log; ไม่มีการ push โดย Codex
 
 ## Done (with evidence)
+- 2026-10-19 16:22 +07: ยืนยัน [PR #1](https://github.com/faztycoding/Sochron1k/pull/1) head `7eae47434cbb8eaffed55a324e00eeba76817f3e` และ [CI job 117983829275 / run 39229522531](https://github.com/faztycoding/Sochron1k/actions/runs/39229522531/job/117983829275) จบด้วย success บน Ubuntu 24.04.5, Git 2.55.0
+- CI checkout synthetic merge `d4620d3b8f14a76518d590b15752d9498a81a61c` (PR head `7eae474` กับ base `951ee98`): `node scripts/controls/test-controls.mjs` → PASS 28/28, fail 0, skipped 0 ที่ 16:22:19 +07 รวม F2 merge test ที่เคยล้ม; red-flags เทียบ `origin/main` → PASS ที่ 16:22:20, 6 กลุ่มเดิมและ secret groups ว่างทั้งคู่
+- บันทึกหลักฐาน Linux ที่ผ่านหลัง fixture fix ลง `docs/tooling/compatibility.md` และ handoff แล้ว; ผลนี้ไม่ปิด F3 ไม่ยืนยัน P25 และไม่ใช่ผลของ control-gate ซึ่งยังไม่ทำงานกับ bootstrap PR นี้
 - 2026-10-19 16:19: เจ้าของ apply patch r2 เองใน terminal → test-controls 28/28 (ในเครื่องเจ้าของ) · Claude ตรวจซ้ำ: SHA256 ของไฟล์ = candidate ของ Codex (`294107ec…`); ไม่ใช้ system/global Git config และ identity ที่สืบทอดมา → merge test 1/1, full suite 28/28, skipped 0 → commit `011a55b` · red-flags 6 กลุ่มเดิม
 - 2026-10-19, Codex fixture-only: เตรียม `docs/proposals/BOOT-001-r2-controls.patch` เพิ่ม comment และ `git config --local` 2 บรรทัดใน `tempRepo()` ของ test เพื่อให้ merge มี identity ของ fixture; ไฟล์ล็อกจริงยังไม่เปลี่ยน
 - Patch SHA256: `77315b362634b20e3a3fd5088489e4bdd2040d463c474bbee28f35ed0414106c` · base `ea06315` · ไม่แก้ guard, hook หลังรัน, workflow หรือ assertions
@@ -37,12 +40,11 @@ Branch `chore/BOOT-001-project-bootstrap` · PR #1 head ล่าสุดที
 - การสลับให้ Codex ไม่ได้ยกเลิกข้อห้ามของเครื่องมือ → เจ้าของเลือกแผนแคบ **CI fixture เท่านั้น** ในรอบนี้; ไม่ใช้เนื้อหาที่ถูกระงับ และยังไม่ทำ guard/PostToolUse
 
 ## Not done yet
-- เจ้าของ: `git push` แล้วดู `ci / control-plane` ของ PR #1 (หลักฐาน Linux ครั้งแรกหลังแก้ fixture)
-- CI บน Linux หลัง fixture patch: ยังไม่รัน; ผล candidate ใน Windows ไม่ใช่หลักฐาน Linux
+- เจ้าของ: push checkpoint เอกสารนี้เมื่อพร้อม; ผล Linux CI ที่ยืนยันแล้วอ้างถึง `7eae474` และไม่ถูกอ้างว่าเป็นผลของ commit เอกสารที่ใหม่กว่า
 - F3 และ hook ตรวจหลังรัน: ยังไม่ทำ ต้องมีขอบเขตที่เจ้าของอนุมัติแยก; reviewer ของ implementation ต้องเป็นอีก session
 - review รอบ 3 ต้องระบุให้ตรงกับสิ่งที่ apply จริง ไม่ถือว่า F3 ปิดจาก fixture fix
 - P25 ใน session ใหม่ของ Claude Code และของ Codex
-- CI ล่าสุดที่มีหลักฐานคือ run 39219308064 FAIL; control-gate ยังไม่เคยตัดสิน bootstrap PR นี้ และ branch protection ยังรอเจ้าของตั้ง
+- CI ล่าสุดที่ยืนยันคือ run 39229522531 PASS (แทน run 39219308064 FAIL สำหรับ fixture เก่า); control-gate และ branch protection ยังต้องยืนยันแยก
 - รอเจ้าของตัดสิน N1–N4 ใน `docs/handoff/BOOT-001.md`; N5 แก้แล้วที่ `4ee6d09`
 
 ## Decisions and assumptions this session
@@ -58,17 +60,16 @@ Branch `chore/BOOT-001-project-bootstrap` · PR #1 head ล่าสุดที
 - เกือบเก็บ patch ไว้ใน path ที่ track: patch มีบรรทัดเก่าของ red-flags.sh ที่มี literal คล้าย secret → ย้ายไป `docs/proposals/` ซึ่ง gitignored
 
 ## Pending external operations
-- none
+- none · run 39229522531 completed/success; ไม่มี rerun, label, merge หรือ push โดย Codex
 
 ## Authority and budget left
 - รอบปัจจุบันได้รับอนุมัติ: เตรียม fixture-only patch, พิสูจน์ fail ก่อน/pass หลังในสำเนาชั่วคราว, อัปเดต handoff/PROGRESS และ local commit; ไม่ apply ไฟล์ล็อกใน working tree และไม่ push
 - Approved: เจ้าของขอให้ตั้งโปรเจกต์ (2026-10-18), ส่ง review r1 มาให้แก้, สั่ง commit แยกส่วน สั่งให้ apply patch r1 (2026-10-19, ครั้งเดียวสำหรับ patch นี้), ให้ส่งงานไปมาระหว่าง Claude กับ Codex ได้ และให้ checkpoint ตามกติกาทุกครั้งที่จบงานหนึ่งขั้น · ไม่มีอนุมัติให้ agent merge หรือเชื่อมโบรกเกอร์ · push ถูกบล็อกด้วย deny rule จึงเป็นของเจ้าของ
 
 ## Next safe action
-- เจ้าของ: `git push` (ส่ง 7 commits รวม `011a55b`) → ดู CI ของ PR #1 ว่าเขียว ถ้าแดงส่ง log ของ step ที่ล้มมา
-- จากนั้นตัดสินขอบเขต F3/PostToolUse แยก และให้ session ใหม่ตรวจสิ่งที่เปลี่ยนจริง; F3 ยังเปิดจนมีหลักฐานปิด finding
+- เจ้าของ: ตัดสินขอบเขต F3/PostToolUse แยก แล้วให้ session ใหม่ตรวจสิ่งที่เปลี่ยนจริง; F3 ยังเปิดจนมีหลักฐานปิด finding และ hook ตรวจหลังรันไม่ใช่หลักฐานว่าป้องกันการเขียนก่อนเกิดได้
 - ติด label `owner-approved-control-change` เมื่อไม่มี finding High ค้างและ CI เขียว
 - หลัง merge: ตั้ง branch protection ให้ `control-gate / locked-paths` และ `ci / control-plane` เป็น required
-- Waiting for owner action/decision: apply fixture patch, ขอบเขต F3/PostToolUse, N1–N4, D-002..D-005, contract SPIKE-001
+- Waiting for owner action/decision: ขอบเขต F3/PostToolUse, N1–N4, D-002..D-005, contract SPIKE-001; apply/push fixture และ CI หลังแก้เสร็จแล้ว
 
 On resume: re-check git state and every pending external operation first.
