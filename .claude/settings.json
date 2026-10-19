@@ -74,6 +74,37 @@
             "timeout": 15,
             "onFailure": "block",
             "statusMessage": "Checking command against project controls"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-locked-after.mjs\" --baseline",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Monitor",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-locked-after.mjs\"",
+            "timeout": 15,
+            "statusMessage": "Checking locked paths after the command"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash|PowerShell|Monitor",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-locked-after.mjs\"",
+            "timeout": 15,
+            "statusMessage": "Checking locked paths after the failed command"
           }
         ]
       }
