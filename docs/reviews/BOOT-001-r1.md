@@ -3,6 +3,10 @@
 > Provenance: written by the Codex reviewer and pasted into the Claude Code chat by the owner on
 > 2026-10-18 at 19:56 (Asia/Bangkok). Saved verbatim below by Claude Code (the implementer), without
 > edits, so the response can cite finding IDs. The reviewer re-checks in round 2 (`BOOT-001-r2.md`).
+>
+> One edit, 2026-10-19, by owner decision on N5 (AC-07): in item 5 the key name is written
+> `service-role` (hyphen) instead of the original underscore form, so the secret scan does not
+> flag this record. The meaning is unchanged; AC-07 stays strict.
 
 ---
 
@@ -28,7 +32,7 @@
    bash scripts/controls/red-flags.sh main	BLOCKED: bash ไม่อยู่ใน PATH	ต้นฉบับ	19:50
    คำสั่ง scan เดิมผ่าน Git Bash absolute path	PASS การรัน; พบ 6 กลุ่ม	scratch c49b017 + staged snapshot	19:55
 4. ไฟล์ที่เปลี่ยน: ไม่แก้ไฟล์ในโปรเจกต์ ไม่ commit; ใช้สำเนาชั่วคราวแยกสำหรับทดสอบ
-5. Red flags: พบ 6 กลุ่มจากเอกสาร นิยามตัวตรวจ และ negative tests โดยมี F6 — Medium: [red-flags.sh (line 55)](/C:/Users/MSI/Desktop/โปรเจคต่างๆ/Sochron1k/scripts/controls/red-flags.sh:55) จับคำ service_role ใน regex ของตัวเองเป็น Possible secrets ทำให้ AC-07 ไม่ผ่าน ต้องแก้ false positive นี้โดยยังตรวจ secret จริงได้ ไม่พบ credential จริงจาก patterns ที่รัน
+5. Red flags: พบ 6 กลุ่มจากเอกสาร นิยามตัวตรวจ และ negative tests โดยมี F6 — Medium: [red-flags.sh (line 55)](/C:/Users/MSI/Desktop/โปรเจคต่างๆ/Sochron1k/scripts/controls/red-flags.sh:55) จับคำ service-role ใน regex ของตัวเองเป็น Possible secrets ทำให้ AC-07 ไม่ผ่าน ต้องแก้ false positive นี้โดยยังตรวจ secret จริงได้ ไม่พบ credential จริงจาก patterns ที่รัน
 6. ยังไม่ได้ทดสอบ: GitHub CI/branch protection จริง, P25 ครบทั้งสองเครื่องมือ, MT5 และเนื้อหา handbook .docx ทั้งเล่ม นอกจากนี้ runtime ของแชทนี้เป็น danger-full-access/never ต่างจากค่าที่โปรเจกต์คาดไว้
 7. Delivery state: implemented เท่านั้น ยังไม่ verified, merged หรือ deployed
 8. ขั้นถัดไป: ให้ Claude แก้ F1–F6 พร้อม regression evidence แล้วตรวจซ้ำก่อนรับ BOOT-001 โดยเฉพาะ F1–F3 ซึ่งเป็นช่องโหว่ในระบบควบคุมที่งานนี้ตั้งใจสร้างครับ
