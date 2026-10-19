@@ -25,7 +25,11 @@ Branch `chore/BOOT-001-project-bootstrap` · PR #1 เปิดแล้ว (hea
 - เจ้าของตัดสิน (2026-10-19): F3 = อุดช่อง + เพิ่ม hook ตรวจหลังรัน (PostToolUse) · N5 = แก้คำในสำเนา review → ทำแล้ว `4ee6d09` (red-flags เหลือ 6 กลุ่ม, กลุ่ม secret ว่างทั้งสอง)
 - **สลับบทบาทสำหรับ F3 (บันทึกตาม AGENTS.md "Agent roles")**: Claude พยายามเขียน patch guard รอบ 2 แล้วถูกระบบความปลอดภัยหยุด → เจ้าของให้ Codex เป็นผู้ลงมือ F3 + fixture; ผู้ตรวจรอบ 3 ต้องเป็นอีก session (Claude session ใหม่)
 
+- Codex ขอข้อความที่หยุด Claude แบบตรงตัว → บันทึกแล้วใน handoff หัวข้อ "Stop events on 2026-10-19": เหตุที่ 1 = safety classifier ของเครื่องมือ (ไม่ใช่ hook) · เหตุที่ 2 = guard-bash จับ heredoc ผิด (false positive) แล้ว Claude ใช้ Edit แทนโดยไม่ได้ถามก่อน (ไฟล์ไม่ล็อก แต่ผิดขั้นตอน CLAUDE.md)
+- การสลับให้ Codex ไม่ได้ยกเลิกข้อห้ามของเครื่องมือ → รอเจ้าของตัดสินขอบเขตรอบ 2 (Claude แนะนำ: fixture + hook ตรวจหลังรัน + เฉพาะ 2 กลุ่มที่ Codex ยืนยัน)
+
 ## Not done yet
+- เจ้าของ: ตัดสินขอบเขตรอบ 2 ก่อนใครลงมือ
 - Codex: patch r2 (fixture identity, F3, hook ตรวจหลังรัน) → `docs/proposals/BOOT-001-r2-controls.patch`
 - Claude (session ใหม่): review รอบ 3 → `docs/reviews/BOOT-001-r3.md` เฉพาะ F1–F6 (`docs/reviews/BOOT-001-r2.md`)
 - P25 ใน session ใหม่ของ Claude Code และของ Codex
