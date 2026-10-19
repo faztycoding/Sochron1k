@@ -277,3 +277,81 @@ This establishes Linux execution evidence for the applied fixture fix `011a55b`.
 close F3, satisfy live P25, or prove control-gate/branch-protection enforcement. BOOT-001 stays
 implemented with F3 open High. The approval label was not created/applied; no merge or push was
 performed by Codex. Next action is the owner's separate F3 scope decision and independent review.
+
+## F3 round 2b: scope decision and the post-run check (Claude part), 2026-10-19
+
+Owner decision in the Claude chat, after the green CI: narrow scope, split between the tools.
+- **Claude Code:** the post-run check hook (this section).
+- **Codex:** the two F3 classes confirmed in r2 (child-shell directory scope; attached output
+  operands) in `guard-bash.mjs`, plus the regression tests for both parts.
+- Each tool's work is reviewed by a session of the other tool.
+
+The other forms Claude probed are left to the post-run check, not to more text patterns.
+
+### Patch
+- `docs/proposals/BOOT-001-r2-posthook.patch` (gitignored), SHA256
+  `87c722097c1bc07383e52afa7c5fdbbf447ab7508649b0d385e2b573af3c3a0d`, base `6066c97`.
+- New `.claude/hooks/check-locked-after.mjs` (136 lines). It reuses `evaluateLocked`,
+  `evaluateAppendOnly` and `parseNameStatusZ` from `check-locked-paths.mjs`, so the post-run
+  check and CI judge paths with the same rules.
+- `.claude/settings.json`: one `PostToolUse` entry for `Bash|PowerShell|Monitor`, timeout 15.
+- No test file is changed. Regression tests for the hook are a request to the test author
+  (below), per `fix-findings`.
+- Apply this patch before Codex's guard patch; the two touch different files.
+
+### Behavior (spec for the regression tests)
+After each `Bash`, `PowerShell` or `Monitor` call, for the project repository (and also the
+repository of the command's `cwd` when it differs, such as a worktree), compare with the previous
+check of the same `session_id` and report only what is new. The state is kept in
+`<os tmpdir>/sochron1k-after/<repo hash>-<session>.json`.
+
+| Situation | Exit | Report |
+|-----------|------|--------|
+| Clean, or only ordinary files changed | 0 | – |
+| Uncommitted change, add or delete under a locked path | 2 | path and rule |
+| Same state at the next check | 0 | not repeated |
+| A further change to an already reported file | 2 | again (content digest changed) |
+| Registry `.jsonl` gains whole lines / a new registry file | 0 | – |
+| Registry record changed or removed | 2 | existing records changed |
+| New untracked hypothesis `H###` | 0 | – |
+| Committed hypothesis edited or deleted | 2 | committed file modified / removed |
+| New commit since the previous check touches a locked or append-only path | 2 | commit sha, subject, path |
+| That commit only contains content already reported while uncommitted | 0 | not repeated |
+| Commits older than the previous check (reached by a branch switch) | 0 | – |
+| `.claude/settings.local.json` or `CLAUDE.local.md` (ignored, locked): first check of a session | 0 | baseline only |
+| The same files change later | 2 | local file changed |
+| First check of a session with a dirty locked path | 2 | once |
+| Unparsable hook input, or the check itself fails | 2 | not verified; tell the owner |
+
+The report tells Claude to stop, not to edit, revert or commit the files itself, and to tell the
+owner; if the owner made or asked for exactly that change, say so and follow the owner.
+
+### Evidence (implementer's, not the regression tests)
+- `node hook-scenarios.mjs <hook>` (scratch script, throwaway repos, one session each) →
+  20/20 scenarios as the table above expects, 16:32 +07:00.
+- `node scripts/controls/test-controls.mjs` in the patched scratch clone → 28/28, 0 skipped.
+- `.claude/settings.json` in the clone parses as JSON.
+- The hook on the real repo at `6066c97` (clean tree, read-only probe) → exit 0 in 154 ms.
+- `git apply --check docs/proposals/BOOT-001-r2-posthook.patch` in the real repo → OK.
+
+### Not verified
+- Live behavior in Claude Code: that a `PostToolUse` exit 2 reaches Claude as a message.
+  Expected right after the owner applies the patch: the next shell command should report the
+  uncommitted hook and settings files once. That report is the live check.
+- Linux; Codex's own tests for the hook.
+
+### Known limits
+- A file cannot say who changed it: owner or Codex changes made between commands are reported
+  too, once each. Changes Claude Code makes to `settings.local.json` when the owner approves a
+  permission are reported as well.
+- Writes by a background process started with `Monitor` show up at the next shell command's check.
+- Detection only: it cannot undo a change. CI control-gate and the owner remain the gate.
+- New commits are selected by committer time; a deliberately backdated commit is not seen here
+  (CI control-gate still sees it).
+
+### Requests to Codex
+1. Write regression tests for this hook from the table above in `scripts/controls/test-controls.mjs`.
+2. Implement the two confirmed F3 classes in `guard-bash.mjs`, with regression cases and the
+   existing allow-list still passing.
+3. Deliver as one patch for the owner; a Codex session other than the author reviews this
+   post-run patch, and a Claude session reviews Codex's guard patch.

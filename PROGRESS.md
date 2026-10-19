@@ -1,9 +1,9 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-19 by Codex · ยืนยัน Linux CI หลัง fixture fix ที่ PR head `7eae474`
+Updated 2026-10-19 by Claude Code · F3 scope decided; post-run check patch ready
 
 ## Current task
 BOOT-001 v1 · State FIXING round 2 · **CI fixture fix ผ่าน Linux CI แล้ว** (`ci / control-plane`, run `39229522531`) · F3 ยังเปิด High จึงยังไม่ verified ทั้งงาน
-ผู้ลงมือรอบนี้: **Codex เฉพาะ CI fixture** ตามคำตอบเจ้าของ "เริ่ม CI fixture ก่อน (แนะนำ)" · ขอบเขต F3/PostToolUse ยังไม่อนุมัติให้ทำในรอบนี้
+ขอบเขต F3 (เจ้าของตัดสิน 2026-10-19 หลัง CI เขียว): แคบ แบ่งกันทำ · **Claude: hook ตรวจหลังรัน → patch พร้อมแล้ว รอเจ้าของ apply** · **Codex: 2 กลุ่มที่ยืนยันใน r2 + regression tests ของทั้งสองส่วน** · ตรวจไขว้กันคนละเครื่องมือ
 Branch `chore/BOOT-001-project-bootstrap` · เจ้าของ push ถึง `7eae474` แล้วและยืนยัน PR #1 head ตรงกัน · checkpoint นี้เพิ่มเฉพาะ PROGRESS/handoff/compatibility log; ไม่มีการ push โดย Codex
 
 ## Done (with evidence)
@@ -41,7 +41,8 @@ Branch `chore/BOOT-001-project-bootstrap` · เจ้าของ push ถึ�
 
 ## Not done yet
 - เจ้าของ: push checkpoint เอกสารนี้เมื่อพร้อม; ผล Linux CI ที่ยืนยันแล้วอ้างถึง `7eae474` และไม่ถูกอ้างว่าเป็นผลของ commit เอกสารที่ใหม่กว่า
-- F3 และ hook ตรวจหลังรัน: ยังไม่ทำ ต้องมีขอบเขตที่เจ้าของอนุมัติแยก; reviewer ของ implementation ต้องเป็นอีก session
+- Hook ตรวจหลังรัน (Claude): patch `docs/proposals/BOOT-001-r2-posthook.patch` (SHA256 `87c72209…3a0d`, base `6066c97`) · หลักฐานผู้ทำ: 20/20 scenarios, suite 28/28 ใน clone, รันกับ repo จริง exit 0 ใน 154 ms · รอเจ้าของ apply; ยังไม่มี regression tests (ขอ Codex) และยังไม่ได้ทดสอบ live ใน Claude Code
+- F3 สองกลุ่มที่ยืนยันใน r2 (Codex): ยังไม่ทำ
 - review รอบ 3 ต้องระบุให้ตรงกับสิ่งที่ apply จริง ไม่ถือว่า F3 ปิดจาก fixture fix
 - P25 ใน session ใหม่ของ Claude Code และของ Codex
 - CI ล่าสุดที่ยืนยันคือ run 39229522531 PASS (แทน run 39219308064 FAIL สำหรับ fixture เก่า); control-gate และ branch protection ยังต้องยืนยันแยก
@@ -67,7 +68,8 @@ Branch `chore/BOOT-001-project-bootstrap` · เจ้าของ push ถึ�
 - Approved: เจ้าของขอให้ตั้งโปรเจกต์ (2026-10-18), ส่ง review r1 มาให้แก้, สั่ง commit แยกส่วน สั่งให้ apply patch r1 (2026-10-19, ครั้งเดียวสำหรับ patch นี้), ให้ส่งงานไปมาระหว่าง Claude กับ Codex ได้ และให้ checkpoint ตามกติกาทุกครั้งที่จบงานหนึ่งขั้น · ไม่มีอนุมัติให้ agent merge หรือเชื่อมโบรกเกอร์ · push ถูกบล็อกด้วย deny rule จึงเป็นของเจ้าของ
 
 ## Next safe action
-- เจ้าของ: ตัดสินขอบเขต F3/PostToolUse แยก แล้วให้ session ใหม่ตรวจสิ่งที่เปลี่ยนจริง; F3 ยังเปิดจนมีหลักฐานปิด finding และ hook ตรวจหลังรันไม่ใช่หลักฐานว่าป้องกันการเขียนก่อนเกิดได้
+- เจ้าของ: ตรวจและ apply `docs/proposals/BOOT-001-r2-posthook.patch` เองใน terminal → คำสั่ง shell ถัดไปของ Claude ควรรายงานไฟล์ hook และ settings ที่ยังไม่ commit 1 ครั้ง (นี่คือการทดสอบ live) → สั่ง Claude commit
+- Codex: ทำตาม handoff หัวข้อ "F3 round 2b" ข้อ Requests to Codex · F3 ยังเปิดจนมีหลักฐานปิด finding และ hook ตรวจหลังรันไม่ใช่หลักฐานว่าป้องกันการเขียนก่อนเกิดได้
 - ติด label `owner-approved-control-change` เมื่อไม่มี finding High ค้างและ CI เขียว
 - หลัง merge: ตั้ง branch protection ให้ `control-gate / locked-paths` และ `ci / control-plane` เป็น required
 - Waiting for owner action/decision: ขอบเขต F3/PostToolUse, N1–N4, D-002..D-005, contract SPIKE-001; apply/push fixture และ CI หลังแก้เสร็จแล้ว
