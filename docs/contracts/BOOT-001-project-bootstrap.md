@@ -2,7 +2,7 @@
 
 Version v1 · Owner: เจ้าของ repository · Parent: Handbook v5 "เริ่มโปรเจกต์ใหม่ใน 1 หน้า" ขั้น 1–4 · Tier **High** · Branch `chore/BOOT-001-project-bootstrap`
 Status: draft (เขียนระหว่างทำงาน ตามคำขอของเจ้าของ "วาง architecture, ตั้ง project rule ตาม handbook, หา skill/agent") — **รอเจ้าของรับรอง**
-Review r1 (Codex, `docs/reviews/BOOT-001-r1.md`): ยอมรับ F1–F6 ทั้งหมด คำตอบและหลักฐานอยู่ใน `docs/handoff/BOOT-001.md` · รอเจ้าของ apply patch และ Codex review round 2
+Review r1 (Codex, `docs/reviews/BOOT-001-r1.md`): ยอมรับ F1–F6 ทั้งหมด คำตอบและหลักฐานอยู่ใน `docs/handoff/BOOT-001.md` · apply patch แล้ว (`cca98c7`, ตามคำสั่งเจ้าของ 2026-10-19) · รอ Codex review round 2
 
 ## Risk tier (Q1–Q6)
 - Q1 no · Q2 no · Q3 no · Q4 no · Q5 no

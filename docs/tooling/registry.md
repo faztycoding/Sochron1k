@@ -10,7 +10,7 @@ Handbook v5 บท 9 และภาคผนวก I: ทุก tool, skill, pl
 |---|---|---|---|---|
 | Claude Code (VS Code extension) | 2.1.301 (`anthropic.claude-code-2.1.301-win32-x64`) | `CLAUDE.md` → `@AGENTS.md`; `.claude/settings.json` (deny/ask, hooks, `worktree.baseRef=head`); skills; agents | ส่ง code context ไป Anthropic · deny rules บังคับทุกโหมดรวม bypassPermissions · ask rules ไม่ถามในโหมด bypass | hooks: logic test PASS 2026-10-18 · runtime: ดู compatibility.md |
 | Codex (VS Code extension) | `openai.chatgpt-26.1007.21434` | อ่าน `AGENTS.md` เอง; skills จาก `.agents/skills/`; `.codex/config.toml` (มีผลเมื่อ trust โปรเจกต์) | ส่ง code context ไป OpenAI · global `~/.codex/config.toml` ของเจ้าของ: model `gpt-6-astra`, reasoning `ultra`, `[windows] sandbox = "elevated"` | UNKNOWN: รอเจ้าของรัน P25 |
-| GitHub Actions | `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1` (v7.0.1) | `ci.yml` (pull_request: self-tests และ red-flags ของโค้ดใน PR เป็นข้อมูลประกอบ) · `control-gate.yml` (pull_request_target: ตัวตรวจจาก base revision, PR เป็นแค่ข้อมูล, เป็น required check ที่เจ้าของต้องตั้ง; มีหลัง apply patch r1) · ทั้งสองใช้ `contents: read` และไม่มี secrets | – | UNKNOWN: ยังไม่เคยรัน (ยังไม่มี push); control-gate มีผลตั้งแต่ PR ถัดจากที่เพิ่มมัน |
+| GitHub Actions | `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1` (v7.0.1) | `ci.yml` (pull_request: self-tests และ red-flags ของโค้ดใน PR เป็นข้อมูลประกอบ) · `control-gate.yml` (pull_request_target: ตัวตรวจจาก base revision, PR เป็นแค่ข้อมูล, เป็น required check ที่เจ้าของต้องตั้ง) · ทั้งสองใช้ `contents: read` และไม่มี secrets | – | UNKNOWN: ยังไม่เคยรัน (ยังไม่มี push); control-gate มีผลตั้งแต่ PR ถัดจากที่เพิ่มมัน |
 | Node.js | v26.12.0 (local) / ค่าเริ่มต้นของ runner `ubuntu-24.04` | สคริปต์ `scripts/controls/*.mjs` และ hooks | ไม่มี network | 2026-10-18 |
 | Git / Git Bash | git 2.46.1, bash 5.2.32 | hooks รันผ่าน Git Bash บน Windows | – | 2026-10-18 |
 | uv | 0.13.0 (มี CPython 3.12.15, 3.15.0) | ยังไม่ใช้จนกว่า D-001 จะ accepted | ดาวน์โหลดแพ็กเกจจาก PyPI เมื่อใช้ | 2026-10-18 |
@@ -20,10 +20,10 @@ Handbook v5 บท 9 และภาคผนวก I: ทุก tool, skill, pl
 | Hook | Event / matcher | Blocks | Failure mode |
 |---|---|---|---|
 | `protect-paths.mjs` | PreToolUse `Edit\|Write\|MultiEdit\|NotebookEdit` | locked paths, append-only registry, hypotheses ที่ commit แล้ว (รวมใน worktree) | fail closed (`onFailure: block`) |
-| `guard-bash.mjs` | PreToolUse `Bash\|PowerShell\|Monitor` | push, reset --hard, clean, ข้าม hook, commit บน main, เขียน locked path, อ่าน credential, ลบ recursive นอกโปรเจกต์, DROP/TRUNCATE, pipe-to-shell · หลัง apply patch r1: ตีความปลายทางจริง (cd/pushd/subshell, copy เข้าโฟลเดอร์, redirect, output flags, การแตกไฟล์, เป้าหมายใน patch, nested shell, xargs) และ branch switch ภายในคำสั่ง | fail closed |
+| `guard-bash.mjs` | PreToolUse `Bash\|PowerShell\|Monitor` | push, reset --hard, clean, ข้าม hook, commit บน main, เขียน locked path, อ่าน credential, ลบ recursive นอกโปรเจกต์, DROP/TRUNCATE, pipe-to-shell · ตีความปลายทางจริง (ตั้งแต่ patch r1) (cd/pushd/subshell, copy เข้าโฟลเดอร์, redirect, output flags, การแตกไฟล์, เป้าหมายใน patch, nested shell, xargs) และ branch switch ภายในคำสั่ง | fail closed |
 | `session-context.mjs` | SessionStart | – (พิมพ์ branch, HEAD, checkpoint ล่าสุด) | ไม่บล็อก |
 
-Evidence: `node scripts/controls/test-controls.mjs` (19 tests ตอนนี้; 28 tests หลัง apply patch r1) ข้อจำกัด: เป็น heuristic จากข้อความคำสั่ง จึงมองไม่เห็นโปรแกรมที่เปิดไฟล์เอง (เช่น `python x.py`) ชั้นที่บังคับจริงคือ CI control-gate + การรับรองของเจ้าของ
+Evidence: `node scripts/controls/test-controls.mjs` (28 tests, PASS 2026-10-19 ที่ `cca98c7`) ข้อจำกัด: เป็น heuristic จากข้อความคำสั่ง จึงมองไม่เห็นโปรแกรมที่เปิดไฟล์เอง (เช่น `python x.py`) ชั้นที่บังคับจริงคือ CI control-gate + การรับรองของเจ้าของ
 
 ## Active: project skills and agents (v1.0.0, owner: เจ้าของ repository, source: Handbook v5 Prompt Library)
 

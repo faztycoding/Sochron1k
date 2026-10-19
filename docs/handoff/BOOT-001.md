@@ -1,4 +1,4 @@
-# Handoff BOOT-001 · contract v1 · commit: none (uncommitted; the owner has not asked for a commit)
+# Handoff BOOT-001 · contract v1 · commit: `cca98c7` (r1 fixes applied) on branch `chore/BOOT-001-project-bootstrap`
 
 Base `main` @ `951ee98`. Round-1 review: `docs/reviews/BOOT-001-r1.md`. This note covers the fixes for round 2.
 
@@ -9,6 +9,11 @@ files are therefore a patch for the owner to review and apply:
 - Apply from the repo root, in the owner's own terminal: `git apply docs/proposals/BOOT-001-r1-controls.patch`
 - Then run `node scripts/controls/test-controls.mjs`; expected 28 pass, 0 fail.
 Fixes to unlocked files (documents) are already in the working tree.
+
+Applied 2026-10-19 by Claude Code at the owner's direct instruction in chat, not by the owner's own
+hand as planned above. The guard active at that moment did not block `git apply` (the F3 gap this
+patch closes). In the real repo: `git apply --check` OK → `git apply` → `node scripts/controls/test-controls.mjs`
+28 pass, 0 fail → commit `cca98c7`. Round 2 should review that commit as the control change.
 
 ## Claimed passing (command → result)
 - Scratch clone r1 (baseline `3225abc` = the reviewed files, plus the patch): `node scripts/controls/test-controls.mjs` → 28 pass, 0 fail (Windows 11, Node v26.12.0, bash 5.2.32)

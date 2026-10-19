@@ -2,8 +2,8 @@
 Updated 2026-10-19 by Claude Code · Session 1 (commits split by area)
 
 ## Current task
-BOOT-001 v1 · State REVIEWING (round 1 ตอบแล้ว รอเจ้าของ apply patch และ Codex review round 2)
-Branch `chore/BOOT-001-project-bootstrap` · 12 commits บน `951ee98` (commit นี้คือ checkpoint ตัวสุดท้าย) · ยังไม่ push · Uncommitted: ไม่มี (`docs/proposals/` gitignored)
+BOOT-001 v1 · State REVIEWING (apply patch r1 แล้วที่ `cca98c7` · รอเจ้าของ push/เปิด PR และ Codex review round 2)
+Branch `chore/BOOT-001-project-bootstrap` · 14 commits บน `951ee98` (commit นี้คือ checkpoint ตัวสุดท้าย) · ยังไม่ push · Uncommitted: ไม่มี (`docs/proposals/` gitignored)
 
 ## Done (with evidence)
 - Bootstrap ครบ: Starter Kit, AGENTS.md, CLAUDE.md, controls (deny rules, 3 hooks, CI), skills 21 ตัว, subagents 4 ตัว, templates, SPEC 0.1, architecture (D-001 proposed), DECISIONS D-001..D-005, contracts BOOT-001 และ SPIKE-001
@@ -15,9 +15,12 @@ Branch `chore/BOOT-001-project-bootstrap` · 12 commits บน `951ee98` (commit
 - หลักฐาน regression: test ชุดใหม่บนโค้ดก่อนแก้ (`3225abc`) ได้ 19 ผ่าน / 9 ไม่ผ่าน คือ F-tests ใหม่ทั้ง 9 ข้อ; บนโค้ดหลังแก้ได้ 28/28; patch apply บนสำเนาที่ไฟล์ยังไม่ track ได้ และผลตรงกับไฟล์ที่ทดสอบทุก byte
 - 2026-10-19: เจ้าของสั่งแยก commit `09217d2` ("sew") เป็นส่วนๆ → `git reset 951ee98` (mixed ไม่แตะไฟล์) แล้ว commit ใหม่ 12 ก้อนตามหมวด: repo, controls, agents, skills ×2, ci, templates, spec, tooling, boot, handbook, checkpoint · commit เดิมสำรองไว้ที่ ref `refs/backup/BOOT-001-sew` (ไม่ถูก push)
 - ตรวจหลังแยก commit (2026-10-19 13:36 +0700): `node scripts/controls/test-controls.mjs` → 19/19 PASS · `bash scripts/controls/red-flags.sh main` → 6 กลุ่ม เหมือนเดิม (N4, N5) · `node scripts/controls/check-locked-paths.mjs main` → FAIL 40 control changes ตามคาด (PR bootstrap ต้องใช้ label ของเจ้าของ)
+- 2026-10-19 13:41: เจ้าของสั่งในแชทให้ Claude รันเอง ("มึงก็รันทำให้กูเลย") → `git apply docs/proposals/BOOT-001-r1-controls.patch` (guard ตัวเก่าไม่บล็อก เพราะเป็นช่องโหว่ F3 ที่ patch นี้ปิด) → `node scripts/controls/test-controls.mjs` → 28/28 PASS → commit `cca98c7`
+- หลัง patch: red-flags → 7 กลุ่ม (กลุ่มใหม่คือ `t.skip` ของ F6 test ที่ข้ามเฉพาะเครื่องที่ไม่มี bash; secret self-hit ของ red-flags.sh หายแล้ว เหลือ hit เดียวที่ review r1 = N5) · locked-paths → FAIL 41 ตามคาด
+- `git push` ทำไม่ได้: deny rule `Bash(git push *)` และ guard-bash บล็อก agent ทุกกรณีโดยตั้งใจ จึงไม่พยายามเลี่ยง · ไม่มี `gh` CLI บนเครื่อง → เตรียม PR body ไว้ที่ `docs/proposals/BOOT-001-pr-body.md` (gitignored)
 
 ## Not done yet
-- เจ้าของ apply patch r1 (Claude แก้ไฟล์ที่ล็อกเองไม่ได้)
+- เจ้าของ push และเปิด PR (agent ทำไม่ได้)
 - Codex review round 2 เฉพาะ F1–F6 (`docs/reviews/BOOT-001-r2.md`)
 - P25 ใน session ใหม่ของ Claude Code และของ Codex
 - CI ยังไม่เคยรันบน GitHub; ต้องตั้ง branch protection ให้ `control-gate / locked-paths` เป็น required
@@ -39,11 +42,11 @@ Branch `chore/BOOT-001-project-bootstrap` · 12 commits บน `951ee98` (commit
 - none
 
 ## Authority and budget left
-- Approved: เจ้าของขอให้ตั้งโปรเจกต์ (2026-10-18), ส่ง review r1 มาให้แก้ และสั่ง commit แยกส่วน (2026-10-19) · ไม่มีอนุมัติให้ agent push, merge, เชื่อมโบรกเกอร์ หรือแก้ไฟล์ที่ล็อก (push เป็นของเจ้าของ)
+- Approved: เจ้าของขอให้ตั้งโปรเจกต์ (2026-10-18), ส่ง review r1 มาให้แก้, สั่ง commit แยกส่วน และสั่งให้ apply patch r1 (2026-10-19, ครั้งเดียวสำหรับ patch นี้) · ไม่มีอนุมัติให้ agent merge หรือเชื่อมโบรกเกอร์ · push ถูกบล็อกด้วย deny rule จึงเป็นของเจ้าของ
 
 ## Next safe action
-- เจ้าของ: `git apply docs/proposals/BOOT-001-r1-controls.patch` → `node scripts/controls/test-controls.mjs` (ควรได้ 28/28) → commit เอง
-- เจ้าของ: `git push -u origin chore/BOOT-001-project-bootstrap` แล้วเปิด PR ไป `main` (body ตาม `.github/pull_request_template.md`)
+- เจ้าของ: สร้าง label `owner-approved-control-change` ใน GitHub (Issues → Labels) ถ้ายังไม่มี
+- เจ้าของ: `git push -u origin chore/BOOT-001-project-bootstrap` แล้วเปิด PR ไป `main` โดยใช้ body จาก `docs/proposals/BOOT-001-pr-body.md` และติด label หลังตรวจเอง
 - จากนั้นให้ Codex (chat ใหม่, read-only) ตรวจซ้ำเฉพาะ F1–F6 จาก `docs/handoff/BOOT-001.md`
 - หลัง merge: ตั้ง branch protection ให้ `control-gate / locked-paths` และ `ci / control-plane` เป็น required
 - Waiting for approval: การตัดสิน N1–N5, D-002..D-005, contract SPIKE-001
