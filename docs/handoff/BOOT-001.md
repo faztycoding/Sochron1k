@@ -58,3 +58,44 @@ patch closes). In the real repo: `git apply --check` OK → `git apply` → `nod
 - N3: The Codex review ran with danger-full-access and approval "never" (review §6), so `.codex/config.toml` was not in effect. Trust the project and choose workspace-write in the Codex UI; review chats should be read-only.
 - N4: Other red-flag groups still match their own definition lines, which adds noise only when the scanner itself changes.
 - N5: AC-07 says the secret groups must be empty, while the verbatim review file quotes the service-role key name. Either accept one explained hit, or reword how AC-07 is verified; I did not change the AC after seeing the result.
+
+## Round 2 handoff to Codex (role swap for F3, 2026-10-19)
+
+Review r2: `docs/reviews/BOOT-001-r2.md` (F1, F2, F4, F5, F6 closed; **F3 open, High**; CI failed on a fixture).
+Branch `chore/BOOT-001-project-bootstrap`. Local commits after the PR head `4b83b1c`: `186070d` (r2 report), `4ee6d09` (N5), and the commit adding this section. Not pushed.
+
+Why Codex: Claude Code's attempt to write the round-2 guard patch was stopped by a safety system
+on 2026-10-19. Under "Agent roles" in AGENTS.md (a tool failing one task type), the owner moved
+this implementation to Codex; recorded in PROGRESS.md. Codex follows
+`.claude/skills/fix-findings/SKILL.md` as a plain procedure. The reviewer of this work must be a
+different session (Claude Code in a new session, writing `docs/reviews/BOOT-001-r3.md`).
+
+Owner decisions (2026-10-19):
+- F3: close the confirmed classes **and** add a post-run check: a PostToolUse hook for
+  `Bash|PowerShell` that detects any change to locked or append-only paths after a shell command
+  and returns a blocking message telling Claude to stop and report to the owner. It catches
+  writes the text-level guard cannot see (scripts that open files themselves). It needs a
+  `.claude/settings.json` change.
+- N5 / AC-07: done in `4ee6d09` (key name hyphenated in the r1 copy; both secret groups empty).
+
+Tasks:
+1. CI fixture: fixture repos get a Git identity inside the test (for example in `tempRepo`), so
+   "F2: an edit made inside a merge commit fails" passes on a clean runner. Prove it the r2 way:
+   run the test with system and global Git config excluded, before (fails) and after (passes).
+2. F3 classes from r2: child-shell directory scope and attached option operands. The
+   implementer's hook-only probe on `4b83b1c` found 21 more forms in the same families: scope
+   (unquoted substitutions, pipelines, background jobs), shell operators (`&`, `|&`, `>|`, `>&`),
+   option clusters and attached operands, URL-derived output names, in-place edit clusters,
+   wrapper options, globs and brace expansion, branch switches inside substitutions, and
+   PowerShell colon parameters and call operator. Each fix gets a regression case; the existing
+   allow-list of normal commands must still pass.
+3. False positive seen live on 2026-10-19: a heredoc body (`cat >> file <<'EOF' ... EOF`) is
+   parsed as commands, so text inside it that looks like a redirect blocks an append to an
+   unlocked file. Heredoc bodies are data; only the command line that opens them is a command.
+4. The post-run check hook, its wiring in `.claude/settings.json`, and its tests.
+5. Every file above is locked. Deliver one patch, `docs/proposals/BOOT-001-r2-controls.patch`
+   (gitignored), for the owner to review and apply, as in round 1. Record its sha256.
+6. Add a "Findings response (round 2)" table to this file, run the three verified commands, and
+   end with the completion report. Do not push.
+
+Still open for the owner: N1 to N4 above.

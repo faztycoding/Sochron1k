@@ -2,8 +2,8 @@
 Updated 2026-10-19 by Claude Code · Session 1 (commits split by area)
 
 ## Current task
-BOOT-001 v1 · State REVIEWING (apply patch r1 แล้วที่ `cca98c7` · รอเจ้าของ push/เปิด PR และ Codex review round 2)
-Branch `chore/BOOT-001-project-bootstrap` · 14 commits บน `951ee98` (commit นี้คือ checkpoint ตัวสุดท้าย) · ยังไม่ push · Uncommitted: ไม่มี (`docs/proposals/` gitignored)
+BOOT-001 v1 · State FIXING round 2 (F3 เปิดอยู่ระดับ High; CI แดงเพราะ fixture) · ผู้ลงมือ F3: **Codex** (สลับบทบาท ดูด้านล่าง)
+Branch `chore/BOOT-001-project-bootstrap` · PR #1 เปิดแล้ว (head บน GitHub `4b83b1c`) · commit ในเครื่องที่ยังไม่ push: `186070d` (r2), `4ee6d09` (N5), commit นี้ · Uncommitted: ไม่มี
 
 ## Done (with evidence)
 - Bootstrap ครบ: Starter Kit, AGENTS.md, CLAUDE.md, controls (deny rules, 3 hooks, CI), skills 21 ตัว, subagents 4 ตัว, templates, SPEC 0.1, architecture (D-001 proposed), DECISIONS D-001..D-005, contracts BOOT-001 และ SPIKE-001
@@ -19,9 +19,15 @@ Branch `chore/BOOT-001-project-bootstrap` · 14 commits บน `951ee98` (commit
 - หลัง patch: red-flags → 7 กลุ่ม (กลุ่มใหม่คือ `t.skip` ของ F6 test ที่ข้ามเฉพาะเครื่องที่ไม่มี bash; secret self-hit ของ red-flags.sh หายแล้ว เหลือ hit เดียวที่ review r1 = N5) · locked-paths → FAIL 41 ตามคาด
 - `git push` ทำไม่ได้: deny rule `Bash(git push *)` และ guard-bash บล็อก agent ทุกกรณีโดยตั้งใจ จึงไม่พยายามเลี่ยง · ไม่มี `gh` CLI บนเครื่อง → เตรียม PR body ไว้ที่ `docs/proposals/BOOT-001-pr-body.md` (gitignored)
 
+- 2026-10-19: เจ้าของ push และเปิด PR #1 · CI run 39219308064 → FAIL (27/28: fixture `git merge` ไม่มี git identity บน runner)
+- Codex review r2 (`docs/reviews/BOOT-001-r2.md`, commit `186070d`): F1, F2, F4, F5, F6 ปิด · F3 เปิด (High) · AC-04 FAIL, AC-06 PASS, AC-07 FAIL (N5)
+- Claude probe guard ที่ `4b83b1c` (ส่งข้อความให้ hook อย่างเดียว ไม่รันคำสั่ง): 4 แบบของ Codex ยังผ่าน + พบเพิ่ม 21 แบบในกลุ่มเดียวกัน → รายการกลุ่มอยู่ใน handoff
+- เจ้าของตัดสิน (2026-10-19): F3 = อุดช่อง + เพิ่ม hook ตรวจหลังรัน (PostToolUse) · N5 = แก้คำในสำเนา review → ทำแล้ว `4ee6d09` (red-flags เหลือ 6 กลุ่ม, กลุ่ม secret ว่างทั้งสอง)
+- **สลับบทบาทสำหรับ F3 (บันทึกตาม AGENTS.md "Agent roles")**: Claude พยายามเขียน patch guard รอบ 2 แล้วถูกระบบความปลอดภัยหยุด → เจ้าของให้ Codex เป็นผู้ลงมือ F3 + fixture; ผู้ตรวจรอบ 3 ต้องเป็นอีก session (Claude session ใหม่)
+
 ## Not done yet
-- เจ้าของ push และเปิด PR (agent ทำไม่ได้)
-- Codex review round 2 เฉพาะ F1–F6 (`docs/reviews/BOOT-001-r2.md`)
+- Codex: patch r2 (fixture identity, F3, hook ตรวจหลังรัน) → `docs/proposals/BOOT-001-r2-controls.patch`
+- Claude (session ใหม่): review รอบ 3 → `docs/reviews/BOOT-001-r3.md` เฉพาะ F1–F6 (`docs/reviews/BOOT-001-r2.md`)
 - P25 ใน session ใหม่ของ Claude Code และของ Codex
 - CI ยังไม่เคยรันบน GitHub; ต้องตั้ง branch protection ให้ `control-gate / locked-paths` เป็น required
 - รอเจ้าของตัดสิน N1–N5 ใน `docs/handoff/BOOT-001.md` (เช่น label ค้างหลังมี commit ใหม่)
@@ -42,12 +48,13 @@ Branch `chore/BOOT-001-project-bootstrap` · 14 commits บน `951ee98` (commit
 - none
 
 ## Authority and budget left
-- Approved: เจ้าของขอให้ตั้งโปรเจกต์ (2026-10-18), ส่ง review r1 มาให้แก้, สั่ง commit แยกส่วน และสั่งให้ apply patch r1 (2026-10-19, ครั้งเดียวสำหรับ patch นี้) · ไม่มีอนุมัติให้ agent merge หรือเชื่อมโบรกเกอร์ · push ถูกบล็อกด้วย deny rule จึงเป็นของเจ้าของ
+- Approved: เจ้าของขอให้ตั้งโปรเจกต์ (2026-10-18), ส่ง review r1 มาให้แก้, สั่ง commit แยกส่วน สั่งให้ apply patch r1 (2026-10-19, ครั้งเดียวสำหรับ patch นี้), ให้ส่งงานไปมาระหว่าง Claude กับ Codex ได้ และให้ checkpoint ตามกติกาทุกครั้งที่จบงานหนึ่งขั้น · ไม่มีอนุมัติให้ agent merge หรือเชื่อมโบรกเกอร์ · push ถูกบล็อกด้วย deny rule จึงเป็นของเจ้าของ
 
 ## Next safe action
-- เจ้าของ: สร้าง label `owner-approved-control-change` ใน GitHub (Issues → Labels) ถ้ายังไม่มี
-- เจ้าของ: `git push -u origin chore/BOOT-001-project-bootstrap` แล้วเปิด PR ไป `main` โดยใช้ body จาก `docs/proposals/BOOT-001-pr-body.md` และติด label หลังตรวจเอง
-- จากนั้นให้ Codex (chat ใหม่, read-only) ตรวจซ้ำเฉพาะ F1–F6 จาก `docs/handoff/BOOT-001.md`
+- เจ้าของ: เปิด Codex chat ใหม่ (workspace-write) ให้ทำตาม `docs/handoff/BOOT-001.md` หัวข้อ "Round 2 handoff to Codex" → ได้ patch r2
+- เจ้าของ: ตรวจและ apply patch r2 เอง → `node scripts/controls/test-controls.mjs` ต้องผ่านทั้งหมด → commit (หรือสั่ง Claude commit) → push (CI ต้องเขียว)
+- Claude session ใหม่: review รอบ 3 เฉพาะ F3 + fixture
+- ติด label `owner-approved-control-change` เมื่อไม่มี finding High ค้างและ CI เขียว
 - หลัง merge: ตั้ง branch protection ให้ `control-gate / locked-paths` และ `ci / control-plane` เป็น required
 - Waiting for approval: การตัดสิน N1–N5, D-002..D-005, contract SPIKE-001
 
