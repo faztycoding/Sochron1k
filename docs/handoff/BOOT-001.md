@@ -473,3 +473,107 @@ Follow-ups for those tests:
 
 F3 stays open High and AC-04 stays FAIL until the two guard classes from r2 are fixed and
 reviewed.
+
+## F3 scoped guard fix and permanent regression proposal (Codex), 2026-10-19
+
+Role: acting implementer for the two F3 classes confirmed in r2, and regression-test author,
+under the owner's narrowed scope. `.claude/skills/fix-findings/SKILL.md` was followed as a plain
+procedure. This is not a new acceptance-first task or a closure review. A fresh Claude session
+must review the guard changes. Base: `8ad089547b2218a132c8f4854a30398c723171d7`, initially clean.
+
+### Owner artifact
+
+- Apply only `docs/proposals/BOOT-001-r5-controls.patch` for this step. SHA256:
+  `953019c3c76ca54dec1cbcb029ed81f75d357874fef3b286bfad090913d112b4`.
+- Exactly two target files: `.claude/hooks/guard-bash.mjs` and
+  `scripts/controls/test-controls.mjs`.
+- Expected applied guard: SHA256
+  `cec6c7dc7e44380754cec50b13fe187dfe2150f1b12edf91e6d6edbb4b1679b1`, Git blob
+  `cdffa1213b3987db66ab72fbaa75bba127cc1581`.
+- Expected applied tests: SHA256
+  `aca04ebd8d71527a0487c7c3231e924fd2a2c1fa3ebb892b6467a1618998fafe`, Git blob
+  `c80f4886c9012f5df60014cdaae93aac571afc1e`.
+- The proposal and local evidence are gitignored. This checkpoint commits only handoff and
+  PROGRESS. Codex did not apply the patch, edit actual controls, or push.
+
+### Findings response and coverage
+
+| ID / scope | Change in proposal | Evidence |
+|------------|--------------------|----------|
+| F3: child-shell directories | Preserve the parent directory and directory stack across POSIX subshells and nested shells; evaluate substitutions at their command position. Retain caller semantics for braces/eval and explicit shell syntax for Bash/PowerShell/cmd. Unknown grouping fails closed. | Original r2 directory payloads go from allow to block; normal directory/command pairs remain allowed. |
+| F3: attached output operands | Recognize attached operands of the already supported short output flags: curl `-o`, wget `-O`, sort `-o`. | Locked targets are blocked; ordinary targets, including quoted spaces, are allowed. |
+| F3: surrounding branch behavior | Track branch state by repository/worktree root. A child directory or a different repository cannot overwrite the parent's branch state; same-repository branch switches still affect the parent. | Same-repository and cross-repository regression cases, including allowed task-branch commits. |
+| Permanent regressions | Four guard tests plus thirteen posthook tests; original 28 tests unchanged. | 45 total, with isolated disposable repositories and state directories. |
+
+Posthook coverage includes the three tool matchers and three events; clean/ordinary changes;
+locked adds/edits/deletes and content deduplication; initial dirty state; the first command
+committing a locked change; stage/commit deduplication; later commits; old branch history;
+ignored local control files; append-only records and hypotheses; failure payloads; malformed
+input and baseline/post-check error exits; project/cwd and session isolation. The installed
+posthook and settings are exercised unchanged, including their documented limitations.
+
+The test helper gives every posthook fixture explicit disposable project/cwd paths and a separate
+owned state directory through all of `TMP`, `TEMP` and `TMPDIR`. Cleanup is restricted to the
+known temporary roots. No real local configuration or credentials are read. No hook directory
+mirror is created. The guard reproductions are JSON input to the hook, never executed shell
+commands. System/global Git config and inherited identity/config environment variables are
+removed from the verification runs; fixtures set their own local Git identity.
+
+### Checks and reproducibility
+
+All times below are 2026-10-19, Asia/Bangkok. Commands ran at base `8ad0895`, using Node
+`v26.12.0` and Git `2.46.1.windows.1` on Windows.
+
+| Command / check | Result | Time |
+|-----------------|--------|------|
+| `node docs/proposals/BOOT-001-r5-verify.mjs before` | FAIL as required: 45 tests, 41 pass, 4 fail, 0 skipped; only the four new guard regressions fail | 17:50:05–17:50:29 |
+| `node docs/proposals/BOOT-001-r5-verify.mjs after` | PASS: 45 tests, 45 pass, 0 fail, 0 skipped | 17:50:05–17:50:31 |
+| Four original r2 hook-input reproductions, before/after | All allow (exit 0) before; all block (exit 2) after | Same runs |
+| `git apply --check docs/proposals/BOOT-001-r5-controls.patch` | PASS; dry run only | 17:50:58 |
+| `bash scripts/controls/red-flags.sh main` (Git Bash absolute path) | PASS, six existing explained groups; both secret groups empty. Ignored proposals are excluded. | 17:48 |
+| `node scripts/controls/check-locked-paths.mjs main` | FAIL, 42 bootstrap control changes requiring owner review; not waived by candidate tests | 17:48:32 |
+| `bash scripts/controls/red-flags.sh main` after staging this documentation checkpoint | PASS, same six groups, both secret groups empty; ignored proposals excluded | 17:54 |
+| `git diff --cached --check` | PASS; only PROGRESS and handoff staged | 17:54 |
+
+The verifier writes runners with only path/import adaptation: they invoke the real installed
+posthook and settings, and select either the actual guard or the proposal guard. Assertions are
+unchanged. Evidence files in `docs/proposals/`:
+
+- `BOOT-001-r5-verify.mjs`, `BOOT-001-r5-build-patch.mjs`;
+- `BOOT-001-r5-guard-candidate.mjs`, `BOOT-001-r5-tests-candidate.mjs`;
+- `BOOT-001-r5-before.log`, `BOOT-001-r5-after.log`;
+- `BOOT-001-r5-before-evidence.json`, `BOOT-001-r5-after-evidence.json`.
+
+In both evidence JSON files, `guardHash` identifies the candidate artifact. The actual before
+guard's hash is under `original[".claude/hooks/guard-bash.mjs"]`. All four actual control-file
+hashes remained unchanged throughout verification:
+
+| Actual file | SHA256 |
+|-------------|--------|
+| `.claude/hooks/guard-bash.mjs` | `483c25cd10445acb60725d1018c8d4147a5bc1966f516263d949d42d4d0fa2a7` |
+| `scripts/controls/test-controls.mjs` | `294107ece4e9e638d26fc25e7de4490972796b0522899c75208c2e9e8074cbfd` |
+| `.claude/hooks/check-locked-after.mjs` | `28c6283c38c3514dc6112c650f3d2ae09251e56d2873292f59929e55c0e384b9` |
+| `.claude/settings.json` | `9de3df7d0decc7d4eafb7280eaf39f48b58c210ec55f8c2de422fe485c1edf2e` |
+
+A separate read-only Codex context found a branch-state regression in the first candidate. It
+was fixed with per-worktree state and a permanent regression before delivery. That context
+rechecked the final patch/hash/evidence at 17:51:14 and independently exercised the original
+payloads plus allowed pairs, finding no remaining in-scope issue. It did not rerun the complete
+suite or establish Linux/live behavior. This supporting review does not replace the fresh Claude
+review required for Codex's implementation. `BOOT-001-r5-rejected-draft.patch` is retained only
+as local audit evidence; do not apply it.
+
+### Limits and next action
+
+- The guard is not a complete shell parser. This proposal does not expand the scope to heredoc,
+  pipelines, option clusters or new command families. The posthook's documented error/baseline
+  and backdated-commit limits are unchanged; detection cannot undo a write.
+- No Linux result or live dispatch evidence is claimed for this candidate. The earlier live
+  evidence in `8ad0895` remains valid within its stated scope; a fresh-session live baseline
+  and unambiguous failure-event dispatch remain unverified.
+- F3 remains OPEN High and AC-04 remains FAIL for the actual controls, which are unchanged.
+  Candidate tests do not close BOOT-001 or approve the owner label.
+- Owner applies only the r5 controls patch. Verify the two applied hashes and run
+  `node scripts/controls/test-controls.mjs` (expected 45/45, no skip). A fresh Claude session
+  reviews the scoped changes and applied files, records results, then stages, scans and commits
+  within the approved process. The owner pushes separately; confirm Linux CI on that new head.
