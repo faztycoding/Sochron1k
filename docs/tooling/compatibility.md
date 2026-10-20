@@ -54,3 +54,119 @@ tree before and after. Every probe below was attempted once; no locked file chan
 | 2026-10-20 | Claude Code 2.1.301 | AC-03: `touch .claude/worktrees/ac03-probe/AGENTS.md` | PASS | 21:50:01 +07: `PreToolUse:Bash hook error: [node "$CLAUDE_PROJECT_DIR/.claude/hooks/guard-bash.mjs"]: Blocked by .claude/hooks/guard-bash.mjs: touch would change .claude/worktrees/ac03-probe/AGENTS.md (agent instruction file). The implementer may not change locked paths; ask the owner.` |
 | 2026-10-20 | Claude Code 2.1.301 | AC-03 cleanup: `rm` the probe file, `git worktree remove` | PASS | Both silent, exit 0; at 21:50:09 +07 `git worktree list` shows only the main tree and `git status --short` is empty |
 | 2026-10-20 | Claude Code 2.1.301 | protect-paths hook firing on its own | UNKNOWN | Every Write and Edit probe was answered by a deny rule first, as on 2026-10-18; the hook logic is covered by the self-tests |
+
+## P25 full run, Codex headless exec, 2026-10-20 (BOOT-001 AC-01 Codex side)
+
+This is a fresh **headless `codex exec`**, started by Claude Code at the owner's request,
+not an IDE chat. Contract: `docs/contracts/BOOT-001-project-bootstrap.md` v1.1.
+Branch: `chore/BOOT-001-project-bootstrap`; tested HEAD:
+`ed019bbdcbd864f5a21420bbf8b8b3838f06d89a`; base `main`:
+`951ee986b853be11f89096c53c6aa94f37316f06`. The working tree and index were clean
+before the checks. Times below are on 2026-10-20 in Asia/Bangkok (+07:00).
+
+The owner explicitly authorized appending this evidence and writing
+`docs/reviews/BOOT-001-ac08.md` only. No configuration change, staging, repository commit,
+push, or PROGRESS.md update is authorized in this run.
+
+Instruction/procedure files loaded: `AGENTS.md` (provided in the initial session context
+and read from disk), `.agents/skills/verify-agent-setup/SKILL.md`,
+`docs/HANDBOOK-CORE.md`, and, for the separately requested document review,
+`.agents/skills/cross-agent-review/SKILL.md` and
+`.agents/skills/adversarial-design-review/SKILL.md`. The task contract, SPEC.md,
+PROGRESS.md and review template were also read. `.codex/config.toml` was read as
+configuration evidence; its existence does not prove its defaults are active.
+CLAUDE.md was not loaded as this Codex session's instruction file.
+
+Three rules quoted word for word from AGENTS.md, Agent roles (lines 49-51):
+
+> CI (GitHub Actions) is the verifier. "PASS" from an agent does not move a task's state.
+
+> One writer per working tree. Parallel writing needs a separate worktree.
+
+> Handoff only through files and commits: docs/contracts/, docs/handoff/, docs/reviews/. Never paste one agent's chat into the other.
+
+Role: **test author and reviewer**. Codex must not write the implementation it reviews,
+fix code during review, approve or waive risk, merge, deploy, operate a trading account,
+or use Claude's D-006 push exception. This run changes only the two authorized evidence files.
+
+| Date | Tool + version | Step | Result (PASS/FAIL/UNKNOWN) | Evidence |
+|------|----------------|------|----------------------------|----------|
+| 2026-10-20 | Codex CLI 0.162.0-alpha.17.2 | 1. Loaded instruction files; three exact Agent roles quotes | PASS | AGENTS.md was present in the initial context and read from disk; exact quotes and file list are above. This proves this session can use the rules, not that every future IDE chat loads them. |
+| 2026-10-20 | Codex CLI 0.162.0-alpha.17.2 | 2. Own role and prohibitions | PASS | Test author and reviewer; role and limits stated above. No implementation or control file edited. |
+| 2026-10-20 | Codex CLI 0.162.0-alpha.17.2 | 3. Actual sandbox and approval policy | FAIL | Runtime session settings explicitly say `sandbox_mode=workspace-write`, `approval_policy=never`, network restricted. Project defaults in `.codex/config.toml:6-7` are `workspace-write` and `on-request`; the latter is not in effect. Review-chat guidance is `read-only`, whereas this headless evidence run is writable with an explicit two-file authorization. No settings were changed. |
+| 2026-10-20 | Codex CLI 0.162.0-alpha.17.2 | 4a. `bash scripts/controls/red-flags.sh main` | PASS | HEAD `ed019bb`; 21:54:09-21:54:10; exit 0. Six hit groups, explained below; no untracked files at scan time. Neither secret-pattern group had a hit. |
+| 2026-10-20 | Codex CLI 0.162.0-alpha.17.2 | 4b. `node scripts/controls/check-locked-paths.mjs main` | FAIL | HEAD `ed019bb`; 21:54:15-21:54:16; exit 1. 68 changed paths, 47 commits checked, 42 control changes require owner approval. A real gate FAIL, not an environment failure and not converted to PASS because it is expected on bootstrap. |
+| 2026-10-20 | Codex CLI 0.162.0-alpha.17.2 | 4c. `node scripts/controls/test-controls.mjs` | PASS | HEAD `ed019bb`; 21:54:20-21:54:59; exit 0. 69 tests, 69 pass, 0 fail, 0 cancelled, 0 skipped, 0 todo; duration 39457.5769 ms. Executed after 4b, not concurrently with the other verified commands. |
+| 2026-10-20 | Codex CLI 0.162.0-alpha.17.2 | 5. Append this P25 evidence | PASS | Owner approval was provided in the task prompt before writing. Existing compatibility evidence retained; this section is appended. The companion AC-08 report is the only other authorized repository file. |
+| 2026-10-20 | Codex CLI 0.162.0-alpha.17.2 | AC-01, Codex clause: quote rules and identify role | PASS | Steps 1 and 2 directly satisfy the stated Codex-side behavior. This does not certify the whole P25 setup, the IDE, or overall BOOT-001 acceptance. |
+| 2026-10-20 | Codex CLI 0.162.0-alpha.17.2 | P25 overall setup expectation | FAIL | Approval policy differs from the expected project default; the locked-path command also returned FAIL. Required failures remain failures; no gate or delivery state is advanced by this report. |
+
+Actual output tails, in execution order:
+
+```text
+bash scripts/controls/red-flags.sh main
+Pattern groups with hits: 6. Every hit needs an explanation; a hit is not automatically wrong.
+Started: 2026-10-20T21:54:09.4333243+07:00
+Finished: 2026-10-20T21:54:10.9320029+07:00
+Exit: 0
+
+node scripts/controls/check-locked-paths.mjs main
+Result: FAIL: 42 control change(s) need owner approval (PR label "owner-approved-control-change").
+Implementers must not change these paths; if the change is intended, the owner reviews it and applies the label.
+Started: 2026-10-20T21:54:15.7904945+07:00
+Finished: 2026-10-20T21:54:16.4060713+07:00
+Exit: 1
+
+node scripts/controls/test-controls.mjs
+ℹ tests 69
+ℹ suites 0
+ℹ pass 69
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 39457.5769
+Started: 2026-10-20T21:54:20.3149871+07:00
+Finished: 2026-10-20T21:54:59.8322742+07:00
+Exit: 0
+```
+
+Red-flag hit explanations for this named revision:
+
+- Skipped/focused tests: `test-controls.mjs:1040` contains a conditional skip if Bash is absent.
+  This run had Bash and reported zero skipped tests.
+- Type checks disabled: matches are the prohibition in AGENTS.md and the scanner's own pattern.
+- Lint disabled: the scanner's detection pattern matches itself.
+- Placeholder/mock in production: the scanner's pattern and the synthetic F6 scanner fixture
+  in `scripts/controls/test-controls.mjs:1053-1055`; this is test tooling, not application data.
+- Destructive/bypass commands: matches are guard checks, deny settings, documented prohibitions,
+  review/proposal examples and regression inputs. The scan does not execute these strings.
+- Order/account mutation surface: the scanner's own detection pattern; no broker call was made.
+  The control-path listing covers the existing bootstrap changes relative to main, not changes
+  made by this evidence run. No deleted/renamed test file was listed.
+
+Version evidence: at 21:54:48, invoking the installed executable
+`C:/Users/MSI/.vscode/extensions/openai.chatgpt-26.1007.21434-win32-x64/bin/windows-x86_64/codex.exe --version`
+returned `codex-cli 0.162.0-alpha.17.2`, preceded by
+`WARNING: proceeding, even though we could not create PATH aliases: Could not find home directory`.
+The command returned the version successfully; no PATH/config repair was attempted.
+The extension version is 26.1007.21434, distinct from the CLI version.
+`node --version` returned `v26.12.0`; `git --version` returned `git version 2.46.1.windows.1`.
+`rg` was not on this shell's PATH; document searches used PowerShell `Select-String`.
+
+Limits: no IDE chat or project-trust loading check, no live Codex deny probes, no GitHub
+label/CI inspection, no broker connection, and no attempt to write `.git`. The managed
+session profile reports `.git`, `.agents` and `.codex` as read-only; enforcement was not
+independently probed. Self-tests exercise the scripts, not live IDE hook dispatch.
+The scan ran before the two evidence files were written; Claude must stage and scan the
+final files as requested by the owner. The acceptance result concerns HEAD `ed019bb`,
+not an unobserved future commit.
+
+Artifact verification at 21:57:34 +07:00, HEAD `ed019bb`: `git diff --check` -> PASS;
+`git status --short` -> only modified `docs/tooling/compatibility.md` and untracked
+`docs/reviews/BOOT-001-ac08.md`; `git diff --cached --name-only` -> empty.
+A read-only Node SHA-256 check -> PASS: the original first 11201 bytes of this file
+still hash to `6c194adc39ac65c5bd9981ae2d0f4d70e84448fa09157ba76ecacb3b33d8154b`,
+and `.git/index` remains
+`19cb0be65150307c5fd0f7114630ca46bcd40fcba3e67d7e0a972deb1f448710`.
+These checks verify preservation and scope, not acceptance of the failed P25/AC-08 criteria.
