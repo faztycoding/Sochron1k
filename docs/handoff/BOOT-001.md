@@ -1835,3 +1835,95 @@ A runtime block still invokes N6.
 After that, the prior AC-05 PR sequence remains: Claude's authorized task-branch push, owner
 PR/label actions, record the actual locked-path gate failing without the label and passing with
 it, then owner branch-protection/merge decisions. This session does not perform those actions.
+
+## Review r11 of the applied controls (fresh Claude session), 2026-10-20
+
+The owner applied `docs/proposals/BOOT-001-r11-controls.patch`. A fresh headless Claude Code
+session (`claude -p`) then reviewed it. The parent session started that session at the owner's
+request. The reviewer did not author r11 and did not propose its approach. The review, with
+findings and evidence, is `docs/reviews/BOOT-001-r11.md`. Branch `chore/BOOT-001-ac05-control-gate`,
+HEAD `71a46ff` before this commit.
+
+Verification of the application (23:34:19 +07):
+
+| File | Applied SHA256 | Applied blob | Handoff |
+|------|----------------|--------------|---------|
+| `.claude/hooks/guard-bash.mjs` | `30114a6bc917bfcaeb1b5df1b65ea626289f92538a9e435d5379d81800b1085f` | `8d2715dd97f1672443a28cf726b875d106d0af7c` | match |
+| `scripts/controls/test-controls.mjs` | `8cfa2970cdbdd17fba1e84df75fc8696080378d26007e7b360b2cfa49a0182a7` | `e0b81034c672da3fc7a26fe92d2f03e1d9959db0` | match |
+
+- Patch SHA256 `c0a10ce8…376b` matches.
+- The posthook is unchanged (`28c6283c…84b9`).
+- The index held the r9 blobs.
+- `git apply -R --check`, run standalone, exits 0.
+- The post-run detector reported exactly these two targets, so the session continued (N6 not triggered).
+
+Results:
+
+- **F22: closed on Windows, Linux pending CI.**
+  - In 66 combinations of project and cwd spelling (drive case, path case, slash direction, mixed
+    slashes, trailing separators), the HEAD guard allowed the direct proposal patch only with the
+    on-disk project spelling. The applied guard allowed every combination, with empty stdout.
+  - Real repository, hook only, `git apply docs/proposals/BOOT-001-r11-controls.patch`: HEAD 24/132,
+    applied 132/132.
+- **The exception is not wider than D-006.** In every spelling and with both guards, these stay
+  blocked:
+  - outside, nested and missing patches, and a directory;
+  - junction, file-symlink, redirected-`docs/proposals` and redirected-`docs` escapes;
+  - unsafe flags, `git am` and `patch`;
+  - chained, subshell and nested-shell forms, `-C`, and Monitor.
+
+  That is 11,356 hook runs with 0 mismatches.
+- **Linux:** unchanged by construction, because non-win32 keeps `realpathSync` at all three sites.
+  The POSIX-only tests were not run here; CI on the pushed head is the first Linux run. 76 tests are
+  expected there.
+- **F23: closed.** `git diff --check` is clean for both files.
+- **Tests:** `node scripts/controls/test-controls.mjs` → 105/105, 0 skipped, 23:35:51–23:38:17.
+- **New Low findings,** recorded at the owner's request. Neither is a regression: each behaves the
+  same at HEAD with the on-disk project spelling, so r11 adds no permission.
+  - **F24:** an NTFS alternate data stream, `docs/proposals/<file>.patch:<stream>`, gets the
+    exception. The handoff hash of the main stream does not cover its bytes.
+  - **F25:** a hard link in `docs/proposals/` to a file kept elsewhere gets the exception.
+- **Also observed:** a doubled comment at `test-controls.mjs:1330` (cosmetic only).
+
+### Stop event, exact text (F8 class)
+
+At about 23:44 the session waited for its own background probe with a Monitor `until` loop. The
+loop's final `echo` contained `$(date '+%H:%M:%S')`. It was blocked:
+
+`PreToolUse:Monitor hook error: [node "$CLAUDE_PROJECT_DIR/.claude/hooks/guard-bash.mjs"]: Blocked by .claude/hooks/guard-bash.mjs: cannot determine directory scope of this substitution. Use an explicit shell.`
+
+This matches none of the session's three standing answers, so the session stopped and asked. The
+probe finished on its own. The owner's answer, relayed by the parent session:
+
+- carry on to commit, and do not rerun the Monitor command;
+- record the block as an F8-class false positive;
+- record the ADS and hard-link observations as Low findings.
+
+None of the three standing answers was needed in this session.
+
+### Staging, scan and commit
+
+Staged: the two owner-applied files, `docs/reviews/BOOT-001-r11.md`, this handoff and `PROGRESS.md`.
+The staged blobs of the two control files are `8d2715dd…` and `e0b81034…`, as in the handoff.
+
+| Command | Result | Time (+07) |
+|---------|--------|------------|
+| `git diff --cached --check` | PASS, exit 0 | 23:57:09 |
+| `bash scripts/controls/red-flags.sh main` (local `main` is still `951ee98`, the bootstrap base) | exit 0, the same 6 explained groups as before; both secret groups empty; no untracked files | 23:57:09–11 |
+| `node scripts/controls/check-locked-paths.mjs main` | FAIL, exit 1, as expected: 42 bootstrap control changes | 23:57:39 |
+| `bash scripts/controls/red-flags.sh origin/main` (PR base `7b6a841`) | exit 0, 1 group: "Destructive or bypass commands", 4 lines of hook-input strings in the copied F22 negative tests; no deleted tests, no secret hits, no untracked files | 23:57:41 |
+| `node scripts/controls/check-locked-paths.mjs origin/main` | FAIL, exit 1, as expected without the label: exactly `.claude/hooks/guard-bash.mjs` and `scripts/controls/test-controls.mjs` | 23:57:40 |
+
+No reference was moved. The FAIL results wait for the owner's label on the PR; they are not
+AC-05 evidence.
+
+### Next
+
+- **Parent session:** run `git push origin HEAD:refs/heads/chore/BOOT-001-ac05-control-gate` as a
+  standalone command. Record the pushed head and the CI result for it, including the Linux test
+  count.
+- **Owner:** create the PR. Without `owner-approved-control-change`, `control-gate / locked-paths`
+  is expected to FAIL. With the label, it is expected to PASS (AC-05). Then decide branch
+  protection and merge.
+- **F24 and F25:** the owner chooses their placement (next guard-fix task, or accept F25 as by
+  design). F8's Monitor part stays in the false-positive task.
