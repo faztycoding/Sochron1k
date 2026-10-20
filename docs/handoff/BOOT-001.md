@@ -1115,3 +1115,66 @@ the reviewed r8. Requirements:
 
 The owner applies r9 (the last paste under the old rule), a fresh Claude session reviews it,
 and then the live check above runs.
+
+## Review r8 of the applied guard patch (fresh Claude session), 2026-10-20
+
+The owner applied `BOOT-001-r8-controls.patch`, and a fresh headless Claude session reviewed
+it. Report: `docs/reviews/BOOT-001-r8.md`.
+
+Session events:
+
+- The session's first shell command got the post-run report for the two uncommitted locked
+  files. The owner's prompt had confirmed in advance that these were the applied r8 files, and
+  Claude verified the hashes before relying on that.
+- One response was stopped by the tool's safety classifier (not a hook) after Claude read the
+  guard source. Its content was not reproduced, and the review continued with a narrower probe set.
+
+Results:
+
+- The applied files are byte-identical to the proposal. Every hash in the r8 section above
+  matches, and `git apply -R --check` passes.
+- Commit `a7e14e7` holds blobs `98ab688b…` (guard) and `ec961f6b…` (tests).
+- `node scripts/controls/test-controls.mjs` → 61/61, 0 skipped (19:58:47–19:59:15).
+- A hook-only probe ran 125 cases, all sent as JSON and never executed. 101 of the 103 cases
+  with an expected exit match. The two mismatches are F18 below. The r2, r5, F7, F9 and F8-subset
+  inputs keep their r7 results, and 29 normal commands pass, including 12 with `#` or `${…}`.
+- F10 is closed: its r7 proof of fix is met. Six Git Bash 5.2.32 analogues (cd, pwd and echo
+  only, in the scratch folder, no writes) back the Bash claims.
+- No deferred item got worse. F11's three recorded inputs and F15's comment form moved from
+  0 to 2, and the r7 C-6 false positive is gone. Their status is left to the next guard-fix task.
+
+New findings (details and proof of fix in the review):
+
+- **F18 High, regression from r8:** `echo <(pwd)#; cd .claude; echo {} > settings.json` returns
+  0 (HEAD: 2). Same for `>(pwd)#`. The comment rule starts a comment after the `)` of a process
+  substitution, but Bash continues the word there: the analogue `echo <(pwd)#; cd ..; pwd`
+  printed `/dev/fd/63#` and then the parent folder. Fix: model process substitution so its `)`
+  does not end the word, or fail closed on `)#`. A subshell `)` must stay a boundary, or F10
+  returns. AC-04 stays FAIL until this is fixed.
+- **F19 Medium, pre-existing (0 before and after):** the two nested variants Codex listed under
+  r8 "Limits and next action". `substitutions()` has no parameter quote context, so a `$(…)` in a
+  quoted `${…:-…}` default with nested quotes is never analyzed. The Bash analogue confirms the
+  substitution runs. The owner decides its placement.
+- **V-1 (note):** Bash 5.3's `${ command; }` would run in the current shell, and r8 treats a
+  `${…}` body as opaque. This is from documentation only, and the Git Bash here is 5.2.32.
+
+Checks before the commits:
+- `git diff --cached --check` → PASS (20:12:55).
+- `bash scripts/controls/red-flags.sh main` → exit 0 (20:13:01). The same six explained groups,
+  both secret groups empty, and no hit from the 467 staged added lines (20:13:36).
+- `node scripts/controls/check-locked-paths.mjs main` → FAIL as expected: 42 bootstrap control
+  changes need the owner's label (20:10:33).
+
+Request to Codex (next round), on the head that contains `a7e14e7`:
+- A patch for F18 only, plus permanent regressions. The regressions must show:
+  - both F18 inputs return 2;
+  - `echo <(pwd) #; cd .claude; echo {} > settings.json` returns 0;
+  - `(pwd)# C:\`, newline, `cd .claude; echo {} > settings.json` still returns 2;
+  - the r8 F10 tests still pass.
+- Ordering against the D-006 patch (r9) is the owner's choice. Recommendation: F18 as its own
+  small patch first.
+
+Owner:
+- Decide F18's place relative to r9, and where F19 goes.
+- Push when ready. CI on the new head gives Linux evidence for the 61 tests.
+- Do not add the label while F18 is open.
