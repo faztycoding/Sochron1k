@@ -849,3 +849,68 @@ owner-applied dirty controls; follow the project's stop/owner-confirmation rule,
 The owner pushes separately after that review. Confirm Linux CI on that exact new head before
 considering the approval label; a successful candidate suite does not close findings or
 complete BOOT-001.
+
+## Review r7 of the applied guard patch (fresh Claude session), 2026-10-20
+
+The owner applied `BOOT-001-r7-controls.patch`, and a fresh headless Claude session reviewed
+it. Report: `docs/reviews/BOOT-001-r7.md`.
+
+Session events:
+
+- The session's first shell command got the post-run report for the two uncommitted locked
+  files. The owner's prompt had confirmed in advance that these were the applied r7 files, and
+  Claude verified the hashes before relying on that.
+- Later, a WebFetch call to read the Bash manual was not permitted in the headless session.
+  Claude stopped and asked. The owner answered through the parent session with an owner-side
+  Git Bash check and the decisions below.
+
+Results:
+
+- The applied files are byte-identical to the proposal. Every hash in the r7 section above
+  matches, and `git apply -R --check` passes.
+- Commit `077c3a1` holds blobs `25c05cb3…` (guard) and `f5f144fb…` (tests).
+- `node scripts/controls/test-controls.mjs` → 54/54, 0 skipped (11:50:54–11:51:19).
+- A hook-only probe ran 101 cases, all sent as JSON and never executed. All 79 cases with an
+  expected exit match. The r2 and r5 inputs still block, and 17 normal commands pass.
+- F7 is closed (the r5 proof of fix is met), and F9 is closed for its recorded forms. For F8,
+  the unresolved-switch subset is fixed; Monitor and `case` remain open.
+
+New findings (details and proof of fix in the review):
+
+- **F10 High, regression from r7:** `echo ok # C:\`, newline, `cd .claude; echo {} > settings.json`
+  returns 0 (HEAD: 2). The guard applies line continuation inside comments, but Git Bash
+  5.2.32 ends the comment at the newline (owner-side check, 12:05). Fix: model POSIX comments
+  in `splitSegments` and `substitutionEnd`. AC-04 stays FAIL until this is fixed.
+- **F11 to F15 Medium, pre-existing** (exit 0 before and after):
+  - a quote character or a `cd` inside a comment;
+  - ANSI-C `$'\''`;
+  - PowerShell's backtick escape;
+  - cmd's caret escape;
+  - a `case` pattern, comment or backtick that ends a quoted `$(…)` early.
+
+  Owner decision (2026-10-20): these go to the next guard-fix task, as with the unmodelled
+  forms of 2026-10-19. They are not fixes for this PR.
+- **F16 Low:** r7's new block on backtick substitutions that contain a backslash. Example:
+  `` x=`ls docs | sed 's/\.md$//'` ``. It goes to the false-positive task.
+- **F17 Low, pre-existing since r5:** `git switch main; git switch -c <existing>; git commit`
+  returns 0. Git refuses the second switch, so the commit lands on main. It goes to the next
+  guard-fix task.
+
+Checks before the commits:
+- `git diff --cached --check` → PASS (12:13:11).
+- `bash scripts/controls/red-flags.sh main` → exit 0 (12:13:17). The same six explained groups,
+  both secret groups empty, and no hit from the 427 staged added lines.
+
+Request to Codex (next round):
+- A patch for F10 only, plus permanent regressions, as `docs/proposals/BOOT-001-r8-controls.patch`.
+  The regressions must show:
+  - both F10 inputs return 2 with the locked-settings reason;
+  - an ordinary commented command such as `echo ok # it's fine`, newline, `echo ok > out.txt`
+    returns 0;
+  - `a#b`, `$#` and `${#x}` are unchanged.
+
+  F11 to F15 and F17 stay in the next guard-fix task, per the owner's 2026-10-20 decision.
+
+Owner:
+- Push when ready. CI on the new head gives Linux evidence for the 54 tests.
+- Do not add the label while F10 is open.
