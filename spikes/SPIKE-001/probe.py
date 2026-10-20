@@ -170,9 +170,14 @@ def time_samples(mt5: object, samples: int, interval: float) -> dict:
 
 
 # ---- AC-05 / AC-06 helpers ----------------------------------------------------------------------
-def rates_range(mt5: object, start: datetime, end: datetime):
-    rates = mt5.copy_rates_range(SYMBOL, mt5.TIMEFRAME_M1, start, end)
-    return rates if rates is not None else []
+def times_in_range(mt5: object, timeframe: int, start: datetime, end: datetime) -> list[int]:
+    """Bar open times inside [start, end). When a range holds no data, the terminal still returns
+    the earliest bar it has (observed in round 2), so out-of-range bars must be dropped."""
+    rates = mt5.copy_rates_range(SYMBOL, timeframe, start, end)
+    if rates is None or not len(rates):
+        return []
+    lo, hi = int(start.timestamp()), int(end.timestamp())
+    return [int(t) for t in rates["time"] if lo <= int(t) < hi]
 
 
 def daily_breaks(times) -> list[dict]:
@@ -200,60 +205,79 @@ def week_edges(times) -> list[dict]:
 
 
 def dst_study(mt5: object) -> dict:
+    """M1 is the contract's timeframe. When the terminal's bar limit hides M1 that far back,
+    M5 is added and marked as supplementary, so the M1 gap is visible rather than replaced."""
     out = {}
     for label, change in DST_CHANGES.items():
-        rates = rates_range(mt5, change - timedelta(days=10), change + timedelta(days=10))
-        times = [int(t) for t in rates["time"]] if len(rates) else []
-        out[label] = {
-            "bars": len(times),
-            "last_error": None if times else list(mt5.last_error()),
-            "daily_breaks": daily_breaks(times),
-            "week_edges": week_edges(times),
-        }
+        entry = {}
+        for tf_name in ("TIMEFRAME_M1", "TIMEFRAME_M5"):
+            times = times_in_range(mt5, getattr(mt5, tf_name), change - timedelta(days=10),
+                                   change + timedelta(days=10))
+            entry[tf_name[10:]] = {
+                "bars": len(times),
+                "first_as_if_utc": as_if_utc(times[0]) if times else None,
+                "last_error": list(mt5.last_error()),
+                "daily_breaks": daily_breaks(times),
+                "week_edges": week_edges(times),
+            }
+            if tf_name == "TIMEFRAME_M1" and len(times) >= 10000:
+                break  # enough M1; M5 not needed
+        if "M5" in entry:
+            entry["M5"]["note"] = "supplementary: M1 for this window was not available to the API"
+        out[label] = entry
     return out
 
 
 def history_depth(mt5: object, now: datetime) -> dict:
     out: dict = {}
     term = mt5.terminal_info()
-    maxbars = getattr(term, "maxbars", None) or 100000
-    pos = mt5.copy_rates_from_pos(SYMBOL, mt5.TIMEFRAME_M1, 0, int(maxbars))
+    maxbars = int(getattr(term, "maxbars", None) or 100000)
+    out["terminal_maxbars"] = maxbars
+    count = min(maxbars, 5_000_000) - 1  # asking for exactly maxbars returns "Invalid params"
+    pos = mt5.copy_rates_from_pos(SYMBOL, mt5.TIMEFRAME_M1, 0, count)
     out["m1_by_position"] = {
-        "requested": int(maxbars),
+        "requested": count,
         "returned": 0 if pos is None else len(pos),
         "earliest_as_if_utc": as_if_utc(pos[0]["time"]) if pos is not None and len(pos) else None,
         "last_error": list(mt5.last_error()),
     }
-    years = []
-    first_year = None
+    out["earliest_by_position"] = {}
+    for tf_name in ("TIMEFRAME_M5", "TIMEFRAME_H1", "TIMEFRAME_D1"):
+        bars = mt5.copy_rates_from_pos(SYMBOL, getattr(mt5, tf_name), 0, count)
+        out["earliest_by_position"][tf_name[10:]] = {
+            "returned": 0 if bars is None else len(bars),
+            "earliest_as_if_utc": as_if_utc(bars[0]["time"]) if bars is not None and len(bars) else None,
+        }
+    # Month-sized requests stay below the bar limit per call; whole-year requests did not.
+    years: dict[int, dict] = {}
+    first_month = None
     other_gaps: list[dict] = []
-    for year in range(2005, now.year + 1):
-        start = datetime(year, 1, 1, tzinfo=timezone.utc)
-        end = min(datetime(year + 1, 1, 1, tzinfo=timezone.utc), now)
-        rates = rates_range(mt5, start, end)
-        n = len(rates)
-        row = {"year": year, "m1_bars": n}
-        if n:
-            times = [int(t) for t in rates["time"]]
-            first_year = first_year if first_year is not None else year
-            row["first_as_if_utc"] = as_if_utc(times[0])
-            row["last_as_if_utc"] = as_if_utc(times[-1])
-            weekend = daily = other = 0
+    y, m = 2005, 1
+    while (y, m) <= (now.year, now.month):
+        start = datetime(y, m, 1, tzinfo=timezone.utc)
+        nxt = datetime(y + (m == 12), 1 if m == 12 else m + 1, 1, tzinfo=timezone.utc)
+        times = times_in_range(mt5, mt5.TIMEFRAME_M1, start, min(nxt, now))
+        row = years.setdefault(y, {"year": y, "m1_bars": 0, "months_with_data": 0, "gaps_weekend_or_holiday": 0,
+                                   "gaps_15m_to_3h": 0, "gaps_5_to_15m_or_over_3h": 0})
+        if times:
+            first_month = first_month or f"{y}-{m:02d} (first bar {as_if_utc(times[0])})"
+            row["m1_bars"] += len(times)
+            row["months_with_data"] += 1
             for a, b in zip(times[:-1], times[1:]):
                 gap = b - a
                 if gap <= 60:
                     continue
                 if gap >= 24 * 3600:
-                    weekend += 1
+                    row["gaps_weekend_or_holiday"] += 1
                 elif 15 * 60 <= gap <= 3 * 3600:
-                    daily += 1
+                    row["gaps_15m_to_3h"] += 1
                 elif gap > 5 * 60:
-                    other += 1
+                    row["gaps_5_to_15m_or_over_3h"] += 1
                     other_gaps.append({"after_as_if_utc": as_if_utc(a), "gap_minutes": round(gap / 60, 1)})
-            row.update({"gaps_weekend_or_holiday": weekend, "gaps_15m_to_3h": daily, "gaps_5_to_15m_or_over_3h": other})
-        years.append(row)
-    out["m1_by_year_range"] = years
-    out["m1_first_year_with_data"] = first_year
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    out["m1_by_month_range"] = [r for r in years.values() if r["m1_bars"]]
+    out["m1_first_month_with_data"] = first_month
+    first_year = int(first_month[:4]) if first_month else None
     out["m1_largest_other_gaps"] = sorted(other_gaps, key=lambda g: -g["gap_minutes"])[:20]
     out["ticks"] = tick_depth(mt5, first_year or now.year, now)
     return out

@@ -105,6 +105,31 @@ def test_offset_classification(offsets, expected):
     assert probe.classify_offsets(offsets).startswith(expected)
 
 
+class RatesStub:
+    """Minimal stand-in for the terminal's structured array: len() and ["time"]."""
+
+    def __init__(self, times):
+        self._times = times
+
+    def __len__(self):
+        return len(self._times)
+
+    def __getitem__(self, key):
+        assert key == "time"
+        return self._times
+
+
+def test_out_of_range_bar_returned_for_an_empty_range_is_dropped():
+    # Round 2: a 2005 range returned one bar from 2026-07-10, which read as "data since 2005".
+    later_bar = int(datetime(2026, 7, 10, 4, 2, tzinfo=probe.timezone.utc).timestamp())
+    term = SimpleNamespace(copy_rates_range=lambda *a: RatesStub([later_bar]))
+    start = datetime(2005, 1, 1, tzinfo=probe.timezone.utc)
+    assert probe.times_in_range(term, 1, start, datetime(2005, 2, 1, tzinfo=probe.timezone.utc)) == []
+    inside = int(datetime(2026, 7, 10, 4, 2, tzinfo=probe.timezone.utc).timestamp())
+    assert probe.times_in_range(term, 1, datetime(2026, 7, 1, tzinfo=probe.timezone.utc),
+                                datetime(2026, 8, 1, tzinfo=probe.timezone.utc)) == [inside]
+
+
 def test_daily_break_and_week_edges_from_raw_times():
     t0 = int(datetime(2026, 3, 2, 20, 0).timestamp())  # any fixed epoch base
     times = [t0 + 60 * i for i in range(60)]  # 20:00..20:59 bars
