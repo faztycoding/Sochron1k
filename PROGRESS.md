@@ -1,9 +1,9 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-20 by Claude Code (fresh headless session, review r9) · r9 ที่เจ้าของ apply ตรวจแล้ว: hash ตรง, tests 69/69, F18 ปิด, D-006 ทำงานตามข้อกำหนด · พบ F20 Medium และ F21–F23 Low · commit controls + records แล้ว ยังไม่ push
+Updated 2026-10-20 by Claude Code · review r9 เสร็จ (F18 ปิด, ไม่มี High ค้าง) · D-006 live push ผ่าน (`2f2b6ca`) · CI control-plane success บน head ที่ push · รอเจ้าของตัดสิน label, AC-04 และที่วาง F20
 
 ## Current task
 BOOT-001 v1 · State FIXING · F3, F7, F10 และ F18 ปิดแล้ว (F18 ใน review r9) · F9 ปิดสำหรับรูปแบบที่บันทึกไว้ (review r7) · ไม่มี finding High ค้าง · **F20 Medium ใหม่ (ต้นเหตุเดียวกับ F18 แต่ไม่ใช่ regression):** `#` ที่ติดหลัง `)` ของ `@(…)` หรือ `a=(…)` ถูก guard อ่านเป็น comment → เจ้าของเลือกที่วาง · F19 และ F11–F15 Medium ไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน · Low ที่ค้าง: F8 ส่วน Monitor/case, F16, F17, F21 (inspection ที่พ่วงคำสั่งอื่นถูกบล็อก), F22 (ตัวพิมพ์ของ path ทำให้สิทธิ์ apply ไม่ทำงาน แต่บล็อกอย่างปลอดภัย), F23 (blank line ท้ายไฟล์ test) · AC-04 FAIL ตามข้อความ contract: ข้อ push ต้องแก้ตาม D-006 และ Medium ที่ค้างยังเขียนไฟล์ล็อกผ่านได้
-Branch `chore/BOOT-001-project-bootstrap` · controls r9 + review r9 อยู่ใน commit ของ session นี้ (ดู Done) · ยังไม่ push: parent session จะรัน live push ตาม D-006 · Linux CI ล่าสุดที่ยืนยันยังเป็นของ `7eae474`
+Branch `chore/BOOT-001-project-bootstrap` · controls r9 + review r9 อยู่ใน commit ของ session นี้ (ดู Done) · push แล้วถึง `2f2b6ca` (D-006) · Linux CI ล่าสุด: run 39438962998 success บน `2f2b6ca`
 
 ## Done (with evidence)
 - 2026-10-20 21:01–21:20 +07: Claude session ใหม่ (headless, parent session เริ่มตามคำขอเจ้าของ) review r9 ที่เจ้าของ apply → `docs/reviews/BOOT-001-r9.md`
@@ -134,7 +134,7 @@ Codex ชี้ (หลัง review r5 static) ว่า Claude เปลี่
 หมายเหตุจาก Codex: ข้อความ "ไม่แตะไฟล์ล็อก" ของทั้ง 5 เหตุการณ์เป็นรายงานของ Claude เอง ยังไม่มีใครตรวจย้อนหลัง
 
 ## Pending external operations
-- none · run 39229522531 completed/success; ไม่มี rerun, label, merge หรือ push โดย Codex หรือ Claude
+- none · Claude push `2f2b6ca` ตาม D-006 แล้ว (21:24 +07) และ CI run 39438962998 completed/success · ยังไม่มี label หรือ merge · commit checkpoint นี้จะ push ตามมาเป็นคำสั่งเดี่ยว
 
 ## Authority and budget left
 - รอบ r9 review (Claude, 2026-10-20, เจ้าของสั่งผ่าน parent session แบบ headless): ตรวจ r9 ที่เจ้าของ apply, รัน tests 69 ข้อ, ส่ง input ให้ hook อย่างเดียว, analogue ใน scratch ด้วย cd/pwd/echo เท่านั้น, เขียน review r9, อัปเดต handoff/PROGRESS แล้ว stage → scan → commit รวมไฟล์ล็อก 5 ไฟล์ที่เจ้าของ apply · ห้ามแก้ controls, ห้าม push (parent session push เอง), F11–F17 และ F19 ยังพักไว้ · คำตอบถาวรเฉพาะ session นี้สองประเภท (path ตัวแปรที่ชี้ไป scratchpad และ apply/push ที่ต้องเป็นคำสั่งเดี่ยว) ไม่ใช้กับ session อื่น · ทำครบแล้ว
@@ -149,7 +149,8 @@ Codex ชี้ (หลัง review r5 static) ว่า Claude เปลี่
 - Approved: เจ้าของขอให้ตั้งโปรเจกต์ (2026-10-18), ส่ง review r1 มาให้แก้, สั่ง commit แยกส่วน สั่งให้ apply patch r1 (2026-10-19, ครั้งเดียวสำหรับ patch นี้), ให้ส่งงานไปมาระหว่าง Claude กับ Codex ได้ และให้ checkpoint ตามกติกาทุกครั้งที่จบงานหนึ่งขั้น · ไม่มีอนุมัติให้ agent merge หรือเชื่อมโบรกเกอร์ · push ถูกบล็อกด้วย deny rule จึงเป็นของเจ้าของ
 
 ## Next safe action
-- **parent session:** รัน `git push origin HEAD:refs/heads/chore/BOOT-001-project-bootstrap` เป็นคำสั่งเดี่ยว (ไม่มี `cd`, `;`, pipe หรือ echo พ่วง) → บันทึกผลจริง, head ที่ push และ CI ของ head นั้น · ถ้าถูกบล็อกหรือมีหน้าต่างถาม ให้หยุดตาม N6 ห้ามเปลี่ยน permission mode หรือเลี่ยง
+- เสร็จแล้ว (21:24–21:26): parent session push `2f2b6ca` ตาม D-006 ผ่านโดยไม่มีบล็อกหรือหน้าต่างถาม · CI `control-plane` success บน head `2f2b6ca295f5…` (job 118683457366) · รายละเอียดอยู่ใน handoff หัวข้อ "D-006 live push and Linux CI"
+- เจ้าของ: ตัดสินเรื่อง label (ไม่มี High ค้าง และ CI เขียวแล้ว แต่ AC-04 ยังเขียนว่า guard บล็อก push ต้องให้เจ้าของแก้ และ Medium ที่พักไว้ยังเขียนไฟล์ล็อกผ่าน guard ได้ ถ้าติด label แปลว่ายอมรับความเสี่ยงนี้)
 - คำสั่งตรวจ `git apply --check` / `-R --check` ต้องรันเดี่ยวและอ่าน exit status แยก (F21) · ถ้า path ของโปรเจกต์สะกดตัวพิมพ์ต่างจากบนดิสก์ apply ตาม D-006 จะถูกบล็อก (F22) → หยุดถามตาม N6
 - เจ้าของ: เลือกที่วาง F20 · แก้ AC-04 ของ BOOT-001 และข้อความ D-006/D-004 หลัง live check ผ่าน · ดู Linux CI บน head ที่ push จริง
 - F8 ส่วนที่เหลือต้องมี contract/หลักฐาน shell ของ Monitor และการวิเคราะห์ branch ของ case ก่อนแก้; ไม่เดา syntax เพื่อทำให้คำสั่งผ่าน

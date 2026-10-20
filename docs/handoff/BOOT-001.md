@@ -1516,3 +1516,37 @@ Next:
   owner places it.
 - **Owner:** amend AC-04, update D-006/D-004 text after the live check, and decide on the label
   after CI is green.
+
+## D-006 live push and Linux CI on the pushed head (parent Claude session), 2026-10-20
+
+Live D-006 check:
+- At 21:24 +07 the parent session ran the standalone command
+  `git push origin HEAD:refs/heads/chore/BOOT-001-project-bootstrap`.
+- Session mode: bypassPermissions.
+- No hook block, no deny and no permission prompt. Output:
+  `7eae474..2f2b6ca  HEAD -> chore/BOOT-001-project-bootstrap`.
+- 23 local commits reached the remote. Pushed head:
+  `2f2b6ca295f5c148763197fd1b0f61a3cf206606`.
+- This is the live check required by D-006 item 8, and it passes. Settings changed on disk took
+  effect without a restart.
+
+CI:
+- GitHub REST API `commits/<head>/check-runs`, polled every 30 s until complete.
+- One check run: `control-plane`, head_sha `2f2b6ca295f5c148763197fd1b0f61a3cf206606`,
+  status completed, conclusion **success**, completed 2026-10-20T14:25:34Z (21:25:34 +07).
+- [Job 118683457366 / run 39438962998](https://github.com/faztycoding/Sochron1k/actions/runs/39438962998/job/118683457366).
+- The job log was not read (the public API needs a token for logs), so the 69/69 count on Linux
+  is not independently confirmed; only the job conclusion is.
+- `control-gate / locked-paths` produced no check run on this head. That matches the earlier
+  note that the gate does not judge this bootstrap PR, because main has no gate yet.
+
+Earlier, a polling loop was started with a mistyped SHA (`2f2b6caf`). It was stopped and
+restarted with the full SHA, and it produced no evidence.
+
+Open for the owner:
+- The label decision. No High finding is open, and CI is green on the pushed head.
+  - Review r9 notes that AC-04 still says the guard blocks push, which conflicts with D-006.
+    The AC text needs the owner's amendment; agents do not change acceptance after results.
+  - Deferred Medium items (F11–F15, F19, F20) can still write locked paths past the guard. The
+    post-run check detects them after the fact. Adding the label accepts that residual risk.
+- F20 placement.

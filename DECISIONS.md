@@ -43,7 +43,7 @@ Why: ขั้นตอนตรงกับ handbook ทุกตัว ไม�
 Consequences: ยังไม่ได้ทำ eval อัตโนมัติของ skills (SKIPPED) วัดผลจากการใช้งานจริงและ rules-review รายสัปดาห์แทน
 Review when: D-001 ได้รับการยอมรับ (พิจารณา candidate ด้าน Python เช่น pyright-lsp, astral) · skill ไม่ถูกเรียกเมื่อควรถูกเรียก หรือถูกเรียกผิดงาน
 
-## D-006 Claude รัน `git apply` ของ patch ใน `docs/proposals/` และ `git push` ของ branch งานเองโดยไม่ต้องขออนุมัติ — 2026-10-20 — accepted (เจ้าของสั่งในแชท Claude) · ยังไม่ implement
+## D-006 Claude รัน `git apply` ของ patch ใน `docs/proposals/` และ `git push` ของ branch งานเองโดยไม่ต้องขออนุมัติ — 2026-10-20 — accepted (เจ้าของสั่งในแชท Claude) · implement แล้วใน r9 (`2f2b6ca`) · live push ผ่านแล้ว 2026-10-20 21:24 +07 และ CI ของ head นั้นเขียว
 Context: ตาม D-004 และ AGENTS.md เจ้าของต้อง copy คำสั่งไปวางเองทุกครั้งที่ apply patch ไฟล์ล็อกหรือ push · 2026-10-20 guard บล็อก `git apply` ของ r8 ที่เจ้าของสั่งให้ Claude รัน · เจ้าของเลือกให้เปลี่ยนเป็นกดปุ่ม Allow ก่อน แล้วสั่งตามมาว่า "เอากฎ ask ออก ... คำสั่งจากเจ้าของโปรเจค" คือไม่ต้องมีหน้าต่างอนุมัติเลย
 Decision: Claude รันสองคำสั่งนี้ได้เองโดยไม่ถามและไม่มีหน้าต่างอนุญาต:
 - `git apply` ของไฟล์ patch ใน `docs/proposals/`
