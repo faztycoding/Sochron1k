@@ -170,3 +170,14 @@ still hash to `6c194adc39ac65c5bd9981ae2d0f4d70e84448fa09157ba76ecacb3b33d8154b`
 and `.git/index` remains
 `19cb0be65150307c5fd0f7114630ca46bcd40fcba3e67d7e0a972deb1f448710`.
 These checks verify preservation and scope, not acceptance of the failed P25/AC-08 criteria.
+
+## Owner decision on the Codex P25 environment (D-008), 2026-10-20
+
+The owner treats `codex exec` (Codex CLI 0.162, bundled with the VS Code extension and started
+by Claude) as Codex's working environment. In that mode the expected runtime is sandbox
+`workspace-write` and approval `never`, because no one is present to approve. The run above
+matches those values. The sandbox cannot write `.git`, so Claude stages and commits Codex's
+files. P25 in a Codex VS Code chat (expected `workspace-write` / `on-request` from
+`.codex/config.toml`) is still UNKNOWN; run `$verify-agent-setup` the first time a chat is used.
+AC-01 passes on rule quoting and role reporting for both tools. This note does not turn the
+earlier P25 FAIL into a PASS for the IDE configuration.

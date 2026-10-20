@@ -166,7 +166,11 @@ Codex ชี้ (หลัง review r5 static) ว่า Claude เปลี่
   - ถัดไป: `codex exec` รัน P25 ฝั่ง Codex (AC-01) และตรวจ AC-08
   - ผลจะบันทึกใน handoff หัวข้อ "Acceptance evidence"
   - AC-05 ตรวจได้หลัง merge ตาม contract
-- เจ้าของ: ติด label และ merge เมื่อหลักฐานครบ (merge เป็นของเจ้าของเท่านั้น)
+- เจ้าของ: ติด label และ merge PR #1 ได้เมื่อพร้อม (merge เป็นของเจ้าของเท่านั้น) · D-008 (22:2x) ยอมรับข้อยกเว้นสองเรื่อง ได้แก่ AC-08 ข้อย่อยเรื่องที่มาของค่า และ P25 ของ Codex ใน IDE ส่วน `codex exec` ถือเป็นสภาพแวดล้อมจริง · CI `control-plane` success บน `f0627f7`
+- หลัง merge (ตามคำแนะนำของ Codex 22:23):
+  - พิสูจน์ control-gate บน PR ถัดไป (AC-05)
+  - ตั้ง required checks จากชื่อที่ GitHub รายงานจริง ซึ่งต้องเคยรันสำเร็จภายใน 7 วัน
+- การ merge ไม่ได้อนุมัติ SPIKE-001 ไปด้วย ต้องอนุมัติแยกทั้ง contract, ผล dependency review ของ `MetaTrader5`, `tzdata` และ `pytest` และขอบเขตการเชื่อม Demo
 - คำสั่งตรวจ `git apply --check` / `-R --check` ต้องรันเดี่ยวและอ่าน exit status แยก (F21) · ถ้า path ของโปรเจกต์สะกดตัวพิมพ์ต่างจากบนดิสก์ apply ตาม D-006 จะถูกบล็อก (F22) → หยุดถามตาม N6
 - เสร็จแล้ว: ที่วาง F20 (งาน guard-fix ถัดไป), AC-04 v1.1, ข้อความ D-006/D-004 · Linux CI เขียวบน `2f2b6ca` และ `77a8139`
 - F8 ส่วนที่เหลือต้องมี contract/หลักฐาน shell ของ Monitor และการวิเคราะห์ branch ของ case ก่อนแก้; ไม่เดา syntax เพื่อทำให้คำสั่งผ่าน
@@ -174,6 +178,6 @@ Codex ชี้ (หลัง review r5 static) ว่า Claude เปลี่
 - หลัง merge: ตั้ง branch protection ให้ `control-gate / locked-paths` และ `ci / control-plane` เป็น required
 - งานถัดไปหลัง BOOT-001 (ยังไม่มี contract): แก้ false positive ของ guard-bash พร้อม regression tests → (1) เนื้อหาใน heredoc ถูกอ่านเป็นคำสั่ง (2) regex pipe-to-shell จับคำ curl/bash ที่อยู่ใน pattern ของ grep (3) F8 ส่วนที่เหลือ: Monitor ที่มี `$(...)`, `case` pattern (4) F16 backtick ที่มี backslash
 - งาน guard-fix ถัดไป (ยังไม่มี contract): F11–F15 และ F17 จาก review r7 และ F19 จาก review r8 ตามที่เจ้าของตัดสินเมื่อ 2026-10-20
-- Waiting for owner action/decision: label และ merge PR #1 หลังหลักฐาน acceptance ครบ, N1–N4, D-002..D-005, contract SPIKE-001
+- Waiting for owner action/decision: label และ merge PR #1, N1–N4, D-002..D-005, contract SPIKE-001 พร้อม dependency review และขอบเขตการเชื่อม Demo
 
 On resume: re-check git state and every pending external operation first.

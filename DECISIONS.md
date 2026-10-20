@@ -75,3 +75,20 @@ Decision: เจ้าของยอมรับว่า guard-bash ยัง�
 - CI control-gate กับ label ของเจ้าของก่อน merge มีผลกับ PR ถัดจาก BOOT-001
 Not accepted here: การปิด AC ที่ยัง UNKNOWN (AC-01, 02, 03, 08) ยังต้องมีหลักฐานก่อน · AC-05 ตรวจได้หลัง merge ตามตาราง verification ของ contract
 Review when: มีการเขียนไฟล์ล็อกที่ hook ตรวจหลังรันจับได้แต่ guard ปล่อยผ่าน · เริ่มงานแก้ guard รอบถัดไป
+
+## D-008 ข้อยกเว้นของ acceptance BOOT-001: ที่มาของค่าใน AC-08 และ P25 ของ Codex — 2026-10-20 — accepted (เจ้าของเลือกในแชท Claude)
+Context: Codex แจ้งก่อน merge (22:23) ว่ามีสองเรื่องที่ D-007 ไม่ครอบคลุม
+- AC-08 ข้อย่อย "ไม่มีค่าทางธุรกิจที่ agent เดาเอง" ยัง UNKNOWN เพราะพิสูจน์ที่มาของค่าเดิมไม่ได้ (`docs/reviews/BOOT-001-ac08.md`)
+- P25 ฝั่ง Codex โดยรวม FAIL เพราะ approval policy ของ `codex exec` เป็น `never` ไม่ใช่ `on-request` และยังไม่ได้ตรวจในแชทของ VS Code (`docs/tooling/compatibility.md`)
+
+Decision:
+1. **AC-08:** เจ้าของยอมรับข้อยกเว้นนี้โดยตรง
+   - AC-08 ยังเป็น UNKNOWN ไม่เปลี่ยนเป็น PASS
+   - ค่าที่เกี่ยวข้องทุกตัวยังติด `[A]` และต้องให้เจ้าของยืนยันก่อน task ที่ใช้ค่านั้นเริ่ม ได้แก่ risk policy (Q-04), stale-tick 5 วินาที, งบและค่าใช้จ่าย (Q-10) และ retention (Q-12)
+2. **P25 ของ Codex:** สภาพแวดล้อมที่ใช้งานจริงของ Codex คือ `codex exec` ที่ Claude เรียกตามคำขอของเจ้าของ
+   - ค่าที่คาดไว้สำหรับโหมดนี้คือ sandbox `workspace-write` และ approval `never`
+   - sandbox ของโหมดนี้เขียน `.git` ไม่ได้ Claude จึงเป็นคนตรวจ, stage, scan และ commit ไฟล์ของ Codex
+   - P25 ในแชทของ VS Code ยังเป็น UNKNOWN และต้องรัน `$verify-agent-setup` ในครั้งแรกที่ใช้แชทนั้น
+Why: ค่าทุกตัวที่ยังไม่รู้ที่มายังติดป้ายและถูกกั้นด้วยคำถามที่เปิดอยู่ จึงไม่มีค่าไหนถูกใช้เป็นข้อกำหนดโดยไม่มีเจ้าของยืนยัน · โหมด exec ไม่มีคนตอบ approval จึงมีค่า `never` เป็นปกติ
+Not accepted here: ไม่มีข้อไหนกลายเป็น PASS · AC-05 ยังต้องพิสูจน์บน PR ถัดไป
+Review when: เริ่ม task ที่ใช้ค่า `[A]` เหล่านี้ · เริ่มใช้ Codex ผ่านแชทของ VS Code
