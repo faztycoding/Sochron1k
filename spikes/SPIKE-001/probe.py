@@ -198,6 +198,39 @@ def daily_breaks(times) -> list[dict]:
     ]
 
 
+GAP_BUCKETS = ("gaps_2_to_5m", "gaps_5_to_15m", "gaps_15m_to_3h", "gaps_3h_to_24h", "gaps_24h_plus")
+
+
+def gap_bucket(gap: int) -> str | None:
+    """Every M1 interval above one minute lands in exactly one bucket (review r1 F1)."""
+    if gap <= 60:
+        return None
+    if gap <= 5 * 60:
+        return "gaps_2_to_5m"
+    if gap < 15 * 60:
+        return "gaps_5_to_15m"
+    if gap <= 3 * 3600:
+        return "gaps_15m_to_3h"
+    if gap < 24 * 3600:
+        return "gaps_3h_to_24h"
+    return "gaps_24h_plus"
+
+
+def gap_census(times: list[int], prev_last: int | None = None) -> tuple[dict, list[dict]]:
+    """Counts per bucket, plus notable gaps (5-15 min and 3-24 h). prev_last is the previous
+    chunk's final bar, so a gap that crosses a month boundary is counted once."""
+    counts = dict.fromkeys(GAP_BUCKETS, 0)
+    notable = []
+    seq = ([prev_last] if prev_last is not None else []) + list(times)
+    for a, b in zip(seq[:-1], seq[1:]):
+        bucket = gap_bucket(int(b) - int(a))
+        if bucket:
+            counts[bucket] += 1
+            if bucket in ("gaps_5_to_15m", "gaps_3h_to_24h"):
+                notable.append({"after_as_if_utc": as_if_utc(a), "gap_minutes": round((int(b) - int(a)) / 60, 1)})
+    return counts, notable
+
+
 def week_edges(times) -> list[dict]:
     edges = []
     for a, b in zip(times[:-1], times[1:]):
@@ -256,6 +289,7 @@ def history_depth(mt5: object, now: datetime) -> dict:
     first_month = None
     other_gaps: list[dict] = []
     call_errors: list[dict] = []
+    prev_last: int | None = None
     y, m = 2005, 1
     while (y, m) <= (now.year, now.month):
         start = datetime(y, m, 1, tzinfo=timezone.utc)
@@ -263,23 +297,18 @@ def history_depth(mt5: object, now: datetime) -> dict:
         times, error = times_in_range(mt5, mt5.TIMEFRAME_M1, start, min(nxt, now))
         if error is not None:
             call_errors.append({"month": f"{y}-{m:02d}", "error": error})
-        row = years.setdefault(y, {"year": y, "m1_bars": 0, "months_with_data": 0, "gaps_weekend_or_holiday": 0,
-                                   "gaps_15m_to_3h": 0, "gaps_5_to_15m_or_over_3h": 0})
-        if times:
+        row = years.setdefault(y, {"year": y, "m1_bars": 0, "months_with_data": 0, **dict.fromkeys(GAP_BUCKETS, 0)})
+        if error is not None:
+            prev_last = None  # continuity across a failed month is unknown
+        elif times:
             first_month = first_month or f"{y}-{m:02d} (first bar {as_if_utc(times[0])})"
             row["m1_bars"] += len(times)
             row["months_with_data"] += 1
-            for a, b in zip(times[:-1], times[1:]):
-                gap = b - a
-                if gap <= 60:
-                    continue
-                if gap >= 24 * 3600:
-                    row["gaps_weekend_or_holiday"] += 1
-                elif 15 * 60 <= gap <= 3 * 3600:
-                    row["gaps_15m_to_3h"] += 1
-                elif gap > 5 * 60:
-                    row["gaps_5_to_15m_or_over_3h"] += 1
-                    other_gaps.append({"after_as_if_utc": as_if_utc(a), "gap_minutes": round(gap / 60, 1)})
+            counts, notable = gap_census(times, prev_last)
+            for bucket, n in counts.items():
+                row[bucket] += n
+            other_gaps.extend(notable)
+            prev_last = times[-1]
         y, m = (y + 1, 1) if m == 12 else (y, m + 1)
     out["m1_by_month_range"] = [r for r in years.values() if r["m1_bars"]]
     out["m1_first_month_with_data"] = first_month

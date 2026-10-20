@@ -147,6 +147,22 @@ def test_failed_tick_probe_makes_the_month_search_unknown():
     assert result["first_month_with_ticks"] == "UNKNOWN"
 
 
+def test_gap_census_counts_every_interval_and_month_boundaries():
+    # Review r1 F1: 2-5 minute gaps had no bucket, and a gap across a month boundary was lost.
+    july_last = int(datetime(2026, 7, 31, 20, 59, tzinfo=UTC).timestamp())
+    august = [july_last + 3 * 3600 + 60 * i for i in range(3)]  # first August bar 3 h after July's last
+    counts, notable = probe.gap_census(august, prev_last=july_last)
+    assert counts["gaps_15m_to_3h"] == 1  # exactly 3 h is in the 15 min to 3 h bucket
+    alone, _ = probe.gap_census(august)
+    assert sum(alone.values()) == 0  # without the carried bar the boundary gap would vanish
+    t0 = int(datetime(2026, 8, 3, 10, 0, tzinfo=UTC).timestamp())
+    times = [t0, t0 + 180, t0 + 180 + 600, t0 + 780 + 4 * 3600, t0 + 780 + 4 * 3600 + 2 * 86400]
+    counts, notable = probe.gap_census(times)
+    assert counts == {"gaps_2_to_5m": 1, "gaps_5_to_15m": 1, "gaps_15m_to_3h": 0,
+                      "gaps_3h_to_24h": 1, "gaps_24h_plus": 1}
+    assert [g["gap_minutes"] for g in notable] == [10.0, 240.0]
+
+
 def test_daily_break_and_week_edges_from_raw_times():
     t0 = int(datetime(2026, 3, 2, 20, 0).timestamp())  # any fixed epoch base
     times = [t0 + 60 * i for i in range(60)]  # 20:00..20:59 bars
