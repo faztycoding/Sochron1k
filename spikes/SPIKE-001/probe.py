@@ -1,0 +1,340 @@
+"""SPIKE-001: read-only probe of the MT5 terminal (throwaway spike code).
+
+Proves that Python reaches the terminal, records the account and symbol facts, measures what
+the timestamps returned by the Python API mean, and surveys history depth. It never sends,
+modifies or checks orders. Contract: docs/contracts/SPIKE-001-mt5-connectivity-time.md (v1.1).
+
+Run (approved pins, temporary uv environment):
+  uv run --python 3.12 --with MetaTrader5==5.0.6231 --with numpy==2.5.4 --with tzdata==2026.5 \
+    python spikes/SPIKE-001/probe.py --out <file outside the repository>
+
+Raw timestamps are kept as integers. "as_if_utc" fields only format the raw number for reading;
+they do not assert that the number is UTC (AC-04 decides that).
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+import time
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+BANGKOK = ZoneInfo("Asia/Bangkok")
+SYMBOL = "XAUUSDm"
+DST_CHANGES = {  # latest changes before the spike (2026-10-21)
+    "US 2026-03-08": datetime(2026, 3, 8, tzinfo=timezone.utc),
+    "EU 2026-03-29": datetime(2026, 3, 29, tzinfo=timezone.utc),
+}
+
+
+@dataclass(frozen=True)
+class Authorization:
+    server: str
+    login_suffix: str
+    valid_until: datetime
+
+
+AUTH = Authorization("Exness-MT5Trial14", "8107", datetime(2026, 10, 28, 23, 59, tzinfo=BANGKOK))
+
+
+class Refused(Exception):
+    """The probe must stop before reading anything else."""
+
+
+def mask_login(login: object) -> str:
+    text = str(login)
+    return "*" * max(len(text) - 4, 4) + text[-4:]
+
+
+def as_if_utc(raw: int) -> str:
+    return datetime.fromtimestamp(int(raw), tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def check_expiry(now: datetime, auth: Authorization = AUTH) -> None:
+    if now > auth.valid_until:
+        raise Refused(f"authorization expired at {auth.valid_until.isoformat()}")
+
+
+def check_account(info: object, demo_mode: int, auth: Authorization = AUTH) -> None:
+    """Stop unless the logged-in account is exactly the authorized Demo account."""
+    if info is None:
+        raise Refused("terminal is not logged in to an account")
+    if info.trade_mode != demo_mode:
+        raise Refused(f"account trade mode {info.trade_mode} is not Demo")
+    if info.server != auth.server:
+        raise Refused(f"server {info.server!r} is not the authorized server")
+    if not str(info.login).endswith(auth.login_suffix):
+        raise Refused(f"account {mask_login(info.login)} is not the authorized account")
+
+
+# ---- AC-01 ------------------------------------------------------------------------------------
+def connection_facts(mt5: object, info: object) -> dict:
+    import numpy
+
+    term = mt5.terminal_info()
+    version = mt5.version()
+    return {
+        "package_MetaTrader5": getattr(mt5, "__version__", None),
+        "package_numpy": numpy.__version__,
+        "terminal_version": list(version) if version else None,
+        "terminal_build": getattr(term, "build", None),
+        "terminal_company": getattr(term, "company", None),
+        "terminal_connected": getattr(term, "connected", None),
+        "terminal_maxbars": getattr(term, "maxbars", None),
+        "account_login_masked": mask_login(info.login),
+        "account_company": info.company,
+        "account_server": info.server,
+        "account_currency": info.currency,
+        "account_trade_mode": info.trade_mode,
+        "account_trade_mode_is_demo": info.trade_mode == mt5.ACCOUNT_TRADE_MODE_DEMO,
+        "account_trade_allowed": info.trade_allowed,
+        "account_leverage": info.leverage,
+        "account_margin_mode": info.margin_mode,
+        "account_margin_mode_is_hedging": info.margin_mode == mt5.ACCOUNT_MARGIN_MODE_RETAIL_HEDGING,
+    }
+
+
+# ---- AC-03 ------------------------------------------------------------------------------------
+SPEC_FIELDS = (
+    "visible", "select", "digits", "point", "trade_tick_size", "trade_tick_value",
+    "trade_contract_size", "volume_min", "volume_step", "volume_max", "trade_stops_level",
+    "trade_freeze_level", "filling_mode", "trade_mode", "trade_exemode", "spread", "spread_float",
+    "swap_mode", "swap_long", "swap_short", "currency_base", "currency_profit", "currency_margin",
+    "path", "description",
+)
+
+
+def symbol_spec(mt5: object) -> dict:
+    sym = mt5.symbol_info(SYMBOL)
+    if sym is None:
+        names = [s.name for s in (mt5.symbols_get("*XAU*") or [])]
+        return {"found": False, "last_error": list(mt5.last_error()), "xau_symbols": names}
+    spec = {field: getattr(sym, field, None) for field in SPEC_FIELDS}
+    spec["found"] = True
+    spec["trade_sessions"] = "not exposed by the MetaTrader5 Python API (no SymbolInfoSessionTrade)"
+    return spec
+
+
+# ---- AC-04 ------------------------------------------------------------------------------------
+def windows_time_sync() -> dict:
+    try:
+        r = subprocess.run(["w32tm", "/query", "/status"], capture_output=True, text=True, timeout=15)
+        return {"exit": r.returncode, "output": (r.stdout or r.stderr).strip()[:1500]}
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {"exit": None, "output": f"{type(exc).__name__}: {exc}"}
+
+
+def classify_offsets(offsets: list[float], tolerance: float = 120.0) -> str:
+    if not offsets:
+        return "UNKNOWN (no samples)"
+    if all(abs(o) <= tolerance for o in offsets):
+        return "UTC"
+    hours = {round(o / 3600) for o in offsets}
+    if len(hours) == 1 and all(abs(o - round(o / 3600) * 3600) <= tolerance for o in offsets):
+        h = hours.pop()
+        return f"shifted by {h:+d} h from UTC (server-time style)"
+    return "UNKNOWN (offsets inconsistent)"
+
+
+def time_samples(mt5: object, samples: int, interval: float) -> dict:
+    rows = []
+    for i in range(samples):
+        if i:
+            time.sleep(interval)
+        wall = time.time()
+        tick = mt5.symbol_info_tick(SYMBOL)
+        bars = mt5.copy_rates_from_pos(SYMBOL, mt5.TIMEFRAME_M1, 0, 1)
+        row = {"machine_utc": datetime.fromtimestamp(wall, tz=timezone.utc).isoformat(timespec="milliseconds")}
+        if tick is None:
+            row["tick"] = None
+            row["last_error"] = list(mt5.last_error())
+        else:
+            row.update({
+                "tick_time_raw": int(tick.time),
+                "tick_time_msc_raw": int(tick.time_msc),
+                "tick_time_as_if_utc": as_if_utc(tick.time),
+                "offset_time_s": round(tick.time - wall, 3),
+                "offset_time_msc_s": round(tick.time_msc / 1000 - wall, 3),
+            })
+        if bars is not None and len(bars):
+            bar_time = int(bars[0]["time"])
+            row["last_m1_open_raw"] = bar_time
+            row["last_m1_open_as_if_utc"] = as_if_utc(bar_time)
+            row["offset_m1_open_vs_minute_s"] = round(bar_time - (wall // 60) * 60, 3)
+        rows.append(row)
+    offsets = [r["offset_time_msc_s"] for r in rows if "offset_time_msc_s" in r]
+    return {"samples": rows, "classification": classify_offsets(offsets), "windows_time_sync": windows_time_sync()}
+
+
+# ---- AC-05 / AC-06 helpers ----------------------------------------------------------------------
+def rates_range(mt5: object, start: datetime, end: datetime):
+    rates = mt5.copy_rates_range(SYMBOL, mt5.TIMEFRAME_M1, start, end)
+    return rates if rates is not None else []
+
+
+def daily_breaks(times) -> list[dict]:
+    """Largest intraday gap of 15 min to 3 h per as-if-UTC day: the broker's daily break."""
+    best: dict[str, tuple[int, int]] = {}
+    for a, b in zip(times[:-1], times[1:]):
+        gap = int(b) - int(a)
+        if 15 * 60 <= gap <= 3 * 3600:
+            day = as_if_utc(a)[:10]
+            if day not in best or gap > best[day][1]:
+                best[day] = (int(a), gap)
+    return [
+        {"day": day, "break_after_bar_as_if_utc": as_if_utc(a)[11:16], "gap_minutes": gap // 60}
+        for day, (a, gap) in sorted(best.items())
+    ]
+
+
+def week_edges(times) -> list[dict]:
+    edges = []
+    for a, b in zip(times[:-1], times[1:]):
+        if int(b) - int(a) >= 24 * 3600:
+            edges.append({"last_bar_before": as_if_utc(a), "first_bar_after": as_if_utc(b),
+                          "gap_hours": round((int(b) - int(a)) / 3600, 2)})
+    return edges
+
+
+def dst_study(mt5: object) -> dict:
+    out = {}
+    for label, change in DST_CHANGES.items():
+        rates = rates_range(mt5, change - timedelta(days=10), change + timedelta(days=10))
+        times = [int(t) for t in rates["time"]] if len(rates) else []
+        out[label] = {
+            "bars": len(times),
+            "last_error": None if times else list(mt5.last_error()),
+            "daily_breaks": daily_breaks(times),
+            "week_edges": week_edges(times),
+        }
+    return out
+
+
+def history_depth(mt5: object, now: datetime) -> dict:
+    out: dict = {}
+    term = mt5.terminal_info()
+    maxbars = getattr(term, "maxbars", None) or 100000
+    pos = mt5.copy_rates_from_pos(SYMBOL, mt5.TIMEFRAME_M1, 0, int(maxbars))
+    out["m1_by_position"] = {
+        "requested": int(maxbars),
+        "returned": 0 if pos is None else len(pos),
+        "earliest_as_if_utc": as_if_utc(pos[0]["time"]) if pos is not None and len(pos) else None,
+        "last_error": list(mt5.last_error()),
+    }
+    years = []
+    first_year = None
+    other_gaps: list[dict] = []
+    for year in range(2005, now.year + 1):
+        start = datetime(year, 1, 1, tzinfo=timezone.utc)
+        end = min(datetime(year + 1, 1, 1, tzinfo=timezone.utc), now)
+        rates = rates_range(mt5, start, end)
+        n = len(rates)
+        row = {"year": year, "m1_bars": n}
+        if n:
+            times = [int(t) for t in rates["time"]]
+            first_year = first_year if first_year is not None else year
+            row["first_as_if_utc"] = as_if_utc(times[0])
+            row["last_as_if_utc"] = as_if_utc(times[-1])
+            weekend = daily = other = 0
+            for a, b in zip(times[:-1], times[1:]):
+                gap = b - a
+                if gap <= 60:
+                    continue
+                if gap >= 24 * 3600:
+                    weekend += 1
+                elif 15 * 60 <= gap <= 3 * 3600:
+                    daily += 1
+                elif gap > 5 * 60:
+                    other += 1
+                    other_gaps.append({"after_as_if_utc": as_if_utc(a), "gap_minutes": round(gap / 60, 1)})
+            row.update({"gaps_weekend_or_holiday": weekend, "gaps_15m_to_3h": daily, "gaps_5_to_15m_or_over_3h": other})
+        years.append(row)
+    out["m1_by_year_range"] = years
+    out["m1_first_year_with_data"] = first_year
+    out["m1_largest_other_gaps"] = sorted(other_gaps, key=lambda g: -g["gap_minutes"])[:20]
+    out["ticks"] = tick_depth(mt5, first_year or now.year, now)
+    return out
+
+
+def tick_depth(mt5: object, from_year: int, now: datetime) -> dict:
+    """Binary search over months for the first month whose mid-month weekday has ticks."""
+    months = []
+    y, m = from_year, 1
+    while (y, m) <= (now.year, now.month):
+        months.append((y, m))
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+
+    def has_ticks(ym: tuple[int, int]) -> int:
+        day = datetime(ym[0], ym[1], 15, 12, tzinfo=timezone.utc)
+        while day.weekday() >= 5:
+            day += timedelta(days=1)
+        ticks = mt5.copy_ticks_range(SYMBOL, day, day + timedelta(hours=1), mt5.COPY_TICKS_ALL)
+        return 0 if ticks is None else len(ticks)
+
+    lo, hi, probes = 0, len(months) - 1, []
+    if not months or not has_ticks(months[-1]):
+        return {"first_month_with_ticks": None, "note": "no ticks found even in the current month",
+                "last_error": list(mt5.last_error())}
+    while lo < hi:
+        mid = (lo + hi) // 2
+        n = has_ticks(months[mid])
+        probes.append({"month": f"{months[mid][0]}-{months[mid][1]:02d}", "ticks_in_hour": n})
+        if n:
+            hi = mid
+        else:
+            lo = mid + 1
+    first = months[lo]
+    return {"first_month_with_ticks": f"{first[0]}-{first[1]:02d}", "probes": probes,
+            "method": "binary search on one mid-month weekday hour; assumes history is contiguous"}
+
+
+# ---- Orchestration -----------------------------------------------------------------------------
+def run(mt5: object, now: datetime, samples: int = 3, interval: float = 20.0, history: bool = True) -> tuple[int, dict]:
+    report: dict = {"probe_started_bangkok": now.isoformat(timespec="seconds"), "symbol": SYMBOL}
+    try:
+        check_expiry(now)
+    except Refused as exc:
+        report["refused"] = str(exc)
+        return 2, report
+    if not mt5.initialize():
+        report["refused"] = f"initialize failed: {mt5.last_error()}"
+        return 3, report
+    try:
+        info = mt5.account_info()
+        try:
+            check_account(info, mt5.ACCOUNT_TRADE_MODE_DEMO)
+        except Refused as exc:
+            report["refused"] = str(exc)
+            return 2, report
+        report["ac01_connection"] = connection_facts(mt5, info)
+        report["ac03_symbol_spec"] = symbol_spec(mt5)
+        report["ac04_time"] = time_samples(mt5, samples, interval)
+        if history:
+            report["ac05_dst"] = dst_study(mt5)
+            report["ac06_history"] = history_depth(mt5, datetime.now(timezone.utc))
+        return 0, report
+    finally:
+        mt5.shutdown()
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--out", required=True, help="JSON result path, outside the repository")
+    parser.add_argument("--samples", type=int, default=3)
+    parser.add_argument("--interval", type=float, default=20.0)
+    parser.add_argument("--no-history", action="store_true")
+    args = parser.parse_args(argv)
+    import MetaTrader5 as mt5
+
+    code, report = run(mt5, datetime.now(BANGKOK), args.samples, args.interval, not args.no_history)
+    with open(args.out, "w", encoding="utf-8") as fh:
+        json.dump(report, fh, ensure_ascii=False, indent=2, default=str)
+    print(json.dumps({"exit": code, "refused": report.get("refused"), "out": args.out}))
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

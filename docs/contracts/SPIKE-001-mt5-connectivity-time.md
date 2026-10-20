@@ -43,7 +43,7 @@ terminal ไม่ได้เปิดหรือไม่ได้ login · �
 | AC | Verifier | Command or procedure | Evidence level |
 |----|----------|----------------------|----------------|
 | 01, 03–06 | สคริปต์ + เจ้าของอ่านรายงาน | `uv run --python 3.12 --with MetaTrader5==5.0.6231 --with numpy==2.5.4 --with tzdata==2026.5 python spikes/SPIKE-001/probe.py` → `docs/evidence/SPIKE-001.md` | L2 + เจ้าของตรวจ |
-| 02 | test ที่จำลองค่า trade mode | `uv run --python 3.12 --with pytest==9.1.1 --with colorama==0.4.6 --with iniconfig==2.3.1 --with packaging==26.3 --with pluggy==1.7.0 --with Pygments==2.21.0 pytest spikes/SPIKE-001 -q` | L2 |
+| 02 | test ที่จำลองค่า trade mode | `uv run --python 3.12 --with pytest==9.1.1 --with colorama==0.4.6 --with iniconfig==2.3.1 --with packaging==26.3 --with pluggy==1.7.0 --with Pygments==2.21.0 --with tzdata==2026.5 pytest spikes/SPIKE-001 -q` (tzdata ตาม D-010 เพราะสคริปต์ใช้ `zoneinfo`) | L2 |
 | 07 | สคริปต์ | `bash scripts/controls/red-flags.sh main` | L2 |
 
 ## Authorization
