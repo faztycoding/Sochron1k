@@ -1225,3 +1225,213 @@ D-006 no longer depends on them.
 
 Next: Codex writes `docs/proposals/BOOT-001-r9-controls.patch` on head `b7fccc8` or later,
 following this section.
+
+## R9 proposal: F18 and revised D-006, Codex, 2026-10-20
+
+Prepared on `be2e02aa7c986be36701f067dd3f2fcf02c01d4a`, branch
+`chore/BOOT-001-project-bootstrap`, under the owner's explicit implementer/regression-author
+binding for this headless run. Used `.claude/skills/fix-findings/SKILL.md` as a plain procedure.
+The owner requested one combined proposal. No actual control file was edited, no patch was
+applied, and no push occurred. The intended docs-only commit contains this handoff and PROGRESS,
+but staging was blocked by the filesystem boundary (details below), so neither is committed.
+Proposal, candidate sources, builder, adapter and evidence remain local under the existing
+ignored `docs/proposals/`.
+
+### Findings response
+
+| ID | Accept/Dispute | Delivery | Evidence |
+|----|----------------|----------|----------|
+| F18 | Accept | Proposed fix and permanent regressions in r9; not closed by its maker | Both reported inputs change from 0 to 2; spaced comment remains 0; real subshell boundary remains 2; all seven F10 groups pass |
+| D-006 revised | Implement owner decision | Same proposal, no ask/allow rule or hook approval output | Six permanent groups: before 1 pass/5 fail; after 6 pass/0 fail |
+| F19, F11–F17 and remaining F8 | Outside this change | Owner's existing follow-up placement retained | No closure or acceptance of risk in this session |
+
+### Patch and expected applied files
+
+Patch: `docs/proposals/BOOT-001-r9-controls.patch`.
+SHA256: `68351d1f623d019b9aa44ed7f005efe519f79d20ad51a42dd3e945269177700c`.
+The patch changes exactly these five files. These are expected **applied** bytes, not the
+unchanged actual files in this docs-only commit:
+
+| File | Expected SHA256 | Expected Git blob |
+|------|-----------------|-------------------|
+| `.claude/hooks/guard-bash.mjs` | `cab5ddf3e26e18e526b100ba537d4f6b6040a106fc373be83ba19ba139c404c9` | `8fdef64c6cd40f852a521c5d2eafb74e30e2e495` |
+| `scripts/controls/test-controls.mjs` | `a7ef3e4b1589a0df30cc37c9fdb02d495a7dfad26089cb3388e348963018e603` | `14c58e680a85a1927e9469bdc2932b13367bf7bd` |
+| `.claude/settings.json` | `72179bc64727d31c55e887f514b5ca82dfa3cee650fd367e4bb8b8b72f6f3396` | `4801a73ddc21be8f5143da4e38c8ce0f49c9924b` |
+| `AGENTS.md` | `e4ae3241176a02e0d22f7ff150548aecafe4a4b00ab75963ceb5cd5d0885cfe7` | `90c2a5b3213929240737fddee45896cbf5b804fa` |
+| `CLAUDE.md` | `b47c048e2a8b6c1013a37ff5490a461d7cf1e69c3646a61bfc9773450c311632` | `dd08b5459ebde11dc304b2b2a0d49b8fc21a39ad` |
+
+The unchanged posthook SHA256 is
+`28c6283c38c3514dc6112c650f3d2ae09251e56d2873292f59929e55c0e384b9`.
+Both evidence JSON files record unchanged actual hashes for all five targets and the posthook.
+
+### What the proposal implements
+
+- F18: process substitution is a word fragment in both segment and substitution-end scanners.
+  Its contents are inspected as child commands, and token decoding keeps the whole fragment.
+  A real subshell still ends at a word boundary. No shell analogue or payload was executed.
+- D-006 requirement 1: remove only the two push deny entries. No ask or allow entry is added;
+  reset and clean deny entries remain. Allowed hook calls return 0 with empty stdout.
+- Requirement 2: accept a named remote, optional leading `-u` or `--set-upstream`, and one
+  refspec from HEAD/current branch to `refs/heads/<current-task-branch>`. Current-branch
+  shorthand also passes only if `remote.<name>.push` is absent. Unknown/detached/non-task
+  branches, implicit destinations, all other flags, force, deletion, extra refs and main/master
+  destinations fail closed. Bare `git push` remains blocked: use the explicit command below.
+  Config enabling mirror, extra tags, force-if-includes, recursion, push options or signing
+  cannot silently expand the operation. Config lookup failure also blocks.
+- Requirement 3: the locked-path exception accepts only plain `git apply [--] <file>...`.
+  Every operand must resolve to a regular file directly in the real `docs/proposals/`
+  directory; a redirected directory, escaping junction, nested/missing file or mixed location
+  cannot get the exception. Other locked patches, `git am` and `patch` keep their block.
+  Ordinary standalone nonlocked patches outside proposals and standalone inspection keep
+  their existing behavior.
+- Requirement 4: **every** `git apply` and permitted push must be a single literal top-level
+  command. No separators, pipes, redirections, substitutions, nested shells, wrappers, global
+  Git options, expansions or unknown Monitor syntax. This includes ordinary and inspection
+  apply commands, so combining them cannot escape the rule.
+- Requirements 5–6: AGENTS/CLAUDE describe the two exceptions without a prompt, retain
+  owner-only merge/labels/other external writes, and require apply → handoff hash verification
+  → fresh-session review → commit. The unchanged posthook's exact expected target report is
+  handled by hash verification; any other report, mismatch or missing expected hash means
+  stop and ask under N6. Direct edits get no new exception.
+- Requirement 7: eight added test groups (two F18, six D-006), plus only the assertion change
+  listed below.
+- Requirement 8: the live push/no-prompt/CI check is explicitly deferred until owner application
+  and fresh-session review. This proposal run has no authority to perform it.
+
+Git behavior was checked against the installed Git 2.46.1 documentation (`git-push.html`,
+`git-config.html`) and the [versioned upstream push reference](https://git-scm.com/docs/git-push/2.45.0).
+Source-only refspecs can inherit a configured destination; this is why shorthand needs the
+config check. Process substitution follows the
+[GNU Bash reference](https://www.gnu.org/s/bash/manual/html_node/Process-Substitution.html)
+and the r8 review's already recorded Git Bash 5.2.32 analogue.
+The [Claude permission-mode reference](https://code.claude.com/docs/en/permission-modes)
+still makes runtime behavior mode-dependent. Removing project rules does not prove a live
+session will run without prompting; no mode setting or runtime approval boundary was changed.
+
+### Original assertions changed (complete list)
+
+Exactly one assertion changes, at base `scripts/controls/test-controls.mjs:680`:
+`/redirecting output|git push is reserved/` becomes `/redirecting output|git push/`.
+The F9 escape test still requires exit 2. The old blanket owner-only diagnostic no longer
+describes D-006's scoped denial. All other existing test bytes, inputs and expected exits are
+preserved; the verification adapter checks this byte-for-byte after removing the added block
+and reversing this one replacement.
+
+In particular, the existing bare/implicit pushes remain denied, and the F3 locked patch
+outside proposals remains denied. Neither qualifies for D-006. Their source needs no expected
+exit change. The new fixture tests separately demonstrate allowed task pushes and proposal
+patches. No original test is deleted, skipped or weakened.
+
+### Fail-before / pass-after: F18
+
+All strings are JSON input to the hook, never executed by a shell. Base is `be2e02a`.
+
+| Case | Before (r8) | After (r9 candidate) |
+|------|-------------|----------------------|
+| `echo <(pwd)#; cd .claude; echo {} > settings.json` | FAIL: 0 | PASS: 2, locked-settings reason |
+| Same input with `>(pwd)#` | FAIL: 0 | PASS: 2, locked-settings reason |
+| `echo <(pwd) #; cd .claude; echo {} > settings.json` | PASS: 0 | PASS: 0 |
+| `(pwd)# C:\`, newline, `cd .claude; echo {} > settings.json` | PASS: 2 | PASS: 2 |
+| Existing F10 tests | PASS: 7/7 groups | PASS: 7/7 groups |
+| New F18 groups, including nested and line-continued forms | FAIL: 1 pass/1 fail | PASS: 2/2 |
+
+### Fail-before / pass-after: D-006
+
+Temporary repository fixtures use branch `chore/BOOT-001-proposal` and a reserved-domain
+remote URL. The guard only queries local Git metadata. No push, apply, am or patch payload runs.
+
+| Requirement / example | Before (r8) | After (r9 candidate) |
+|-----------------------|-------------|----------------------|
+| Explicit task push `git push origin HEAD:refs/heads/chore/BOOT-001-proposal` | FAIL: 2 | PASS: 0, empty stdout |
+| Locked patch `git apply docs/proposals/control.patch` | FAIL: 2 | PASS: 0, empty stdout |
+| Forbidden push flags/destinations/unknown forms | PASS | PASS |
+| Config safety plus explicit-destination positive control | FAIL on positive control | PASS |
+| Direct files, multiple files, spaced filename, canonical paths and junction negatives | FAIL on positive control | PASS |
+| Single-invocation rule, including ordinary/inspection apply plus another command | FAIL: ordinary combined apply returns 0 | PASS: 2 |
+| Settings without push deny, ask or allow | FAIL: push deny present | PASS |
+| Six D-006 groups in total | FAIL: 1 pass/5 fail | PASS: 6/6 |
+
+### Checks and retained evidence
+
+Windows, Node `v26.12.0`, Git `2.46.1.windows.1`. All times below are 2026-10-20, +07:00.
+The adapter selects actual or proposed guard/settings and changes only module locations.
+It isolates system/global Git config and inherited identity/config variables; existing
+posthook fixtures retain their isolated TMP/TEMP/TMPDIR behavior.
+
+| Command / check | Result | Revision | Time |
+|-----------------|--------|----------|------|
+| `node docs/proposals/BOOT-001-r9-verify.mjs before` | FAIL as required: 69 total, 63 pass, 6 fail, 0 skipped; original 61 all pass | `be2e02a`, new tests against actual controls | 20:40:45–20:41:17 |
+| `node docs/proposals/BOOT-001-r9-verify.mjs after` | PASS: 69/69, 0 skipped | `be2e02a` + candidate hashes above, no application | 20:40:45–20:41:26 |
+| `git apply --check docs/proposals/BOOT-001-r9-controls.patch` | PASS, dry run only | `be2e02a` | 20:40 |
+| `node scripts/controls/check-locked-paths.mjs main` | FAIL: 42 existing bootstrap control changes need owner label; not waived | `be2e02a` | 20:41:53 |
+| Read-only supporting security review: in-memory reconstruction and 313 JSON cases / 626 hook invocations | PASS within scope: all five target bytes/hashes/blobs match; actual files unchanged; original test prefix preserved | `be2e02a` + candidate | 20:42:11–20:42:36 |
+| `git add -- PROGRESS.md docs/handoff/BOOT-001.md` | BLOCKED: cannot create `.git/index.lock`, permission denied | `be2e02a` + unstaged docs | 20:43:59 |
+| `git diff --cached --check` after that failed stage | UNKNOWN as document validation: no docs were staged | same | 20:43:59 |
+| `& 'C:/Program Files/Git/bin/bash.exe' scripts/controls/red-flags.sh main`, after staging | SKIPPED: stopped at stage block as instructed | same | Not run |
+| Docs-only commit | BLOCKED by failed stage; not attempted | same | Not run |
+
+Retained local files: `BOOT-001-r9-build.mjs`, `BOOT-001-r9-git-helpers.txt`,
+`BOOT-001-r9-tests-additions.txt`, five `*-candidate.*` files, `BOOT-001-r9-manifest.json`,
+`BOOT-001-r9-verify.mjs`, `BOOT-001-r9-before.log`, `BOOT-001-r9-after.log`,
+and `BOOT-001-r9-before-evidence.json` / `BOOT-001-r9-after-evidence.json`.
+The manifest records the complete assertion-change list and applied hashes/blobs.
+
+Supporting security review used `.agents/skills/security-review/SKILL.md` as a read-only
+pre-review procedure. It found the draft's ordinary combined-apply gap; the delivered candidate
+enforces the single-invocation rule for all apply commands and includes permanent tests.
+Final probes replayed 113 r8 repo-context cases (only F18's two results changed), 180 generated
+process-substitution boundary cases (no former denial became an allow), and 20 targeted cases.
+The 12 historical disposed-fixture cases were not replayed. Probe records were emitted in
+tool output, not saved as a local artifact; their SHA256 is
+`343a0c9bab01c7e510608bca92efab7c056b8fe49e04bd83cef8426239eb5c8b`.
+This support does not replace independent Claude review or certify shell execution semantics.
+
+### Acceptance, limits and next action
+
+AC-04 remains FAIL on actual controls because F18 is still present there. The candidate's
+scoped F18/D-006 checks pass locally; that is not finding closure, CI or live integration.
+AC-01/02/03/05/08 are UNKNOWN as complete acceptance conditions in this run.
+No Linux run, P25, live permission dispatch, real push, label, merge or deployment was tested.
+The guard remains a text-level check; arbitrary program behavior and changes between checking
+a file and executing a command are not certified by these tests.
+
+AC-06 and AC-07 are UNKNOWN for this delivery: no staged red-flag scan ran, so there is no
+new hit list or secret-scan pass to claim. The earlier reviewed rounds' scan results are not
+substituted for this run.
+
+### Delivery block: filesystem permissions
+
+Staging returned the exact error below. The runtime grants read-only access to `.git` and
+does not offer approval escalation in this run. No retry through another tool, permission
+change, alternate index or commit workaround was attempted. Work stopped as the owner directed.
+
+```text
+fatal: Unable to create 'C:/Users/MSI/Desktop/โปรเจคต่างๆ/Sochron1k/.git/index.lock': Permission denied
+```
+
+Next action for the owner or a session with existing `.git` write permission: stage only
+PROGRESS/handoff, run the red-flag scan with
+`& 'C:/Program Files/Git/bin/bash.exe' scripts/controls/red-flags.sh main`, inspect and record its
+hits, run the staged diff check, then commit docs only. A suitable message is
+`F18: propose r9 fix and revised D-006 controls`, with `Refs: BOOT-001` in the body.
+The local ignored patch must remain available for the subsequent application and review.
+
+Owner applies this last patch under the existing rule:
+
+```powershell
+git apply docs/proposals/BOOT-001-r9-controls.patch
+```
+
+A fresh Claude session verifies all five expected hashes/blobs above and the unchanged posthook,
+runs `node scripts/controls/test-controls.mjs` (expected 69/69, no skips), reviews F18 and
+D-006 including the invocation/config/path boundaries, and records its finding decisions
+before committing applied controls. The maker does not declare F18 closed.
+After that review, Claude runs the revised live check in the owner's session:
+
+```text
+git push origin HEAD:refs/heads/chore/BOOT-001-project-bootstrap
+```
+
+No prompt is expected. Record the actual result, exact pushed head and CI result for that head.
+If runtime blocks or prompts, stop under N6; do not change permission modes or route around it.
+The owner alone applies labels and merges when the remaining gates are satisfied.
