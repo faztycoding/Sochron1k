@@ -15,6 +15,15 @@ Environment boundary (review D-001 r1 F1, เจ้าของเลือก 2
 - ระยะนี้ใช้เครื่องเดียวไปก่อน จึงห้ามตัด holdout, ห้าม ingest ข้อมูลวิจัย และห้ามทดลองกลยุทธ์ จนกว่าด่าน ENV-1 (VPS + synthetic sentinel) จะผ่าน
 - ค่าใช้จ่าย VPS อยู่ใน Q-10
 - การใช้โฟลเดอร์, VM หรือผู้ใช้คนละคนบนเครื่องเดียวแทนการแยกเครื่อง ต้องเป็นการตัดสินเปลี่ยนกฎของเจ้าของแยกต่างหาก
+
+Execution scope (review D-001 r1 F2):
+- ทุก action ภายนอกต้องอยู่ใน scope ที่แก้ไม่ได้ระหว่างรัน ได้แก่ terminal identity, server, บัญชีที่อนุญาต, Demo, action และสัญลักษณ์ที่อนุญาต และวันหมดอายุ
+- ตรวจตอนเริ่ม, ตอน reconnect และก่อนทุก action ถ้าไม่ตรงหรือไม่รู้ให้หยุด
+- journal, risk และการ reconcile ผูกกับ scope
+- ผู้ส่งคำสั่งต่อ scope มีหนึ่งตัว และใช้ terminal เฉพาะงาน
+- การเช็กกับการส่งไม่ใช่ atomic จึงยังมีความเสี่ยงที่ระบุไว้ใน `docs/architecture.md` ข้อ 7.1
+- E1 ต้องพิสูจน์ด้วย negative cases ที่มีการส่งคำสั่งเป็นศูนย์
+- สิทธิ์อ่านอย่างเดียวของ SPIKE-001 ไม่ใช่สิทธิ์ของ E1
 Review when: ต้องย้ายไป host ที่ไม่ใช่ Windows · `MetaTrader5` หยุดดูแลหรือเปลี่ยนแบบไม่เข้ากัน · ต้องการ logic ฝั่ง terminal ที่ทำงานต่อได้แม้ Python ล่ม · latency ที่ต้องการต่ำกว่าที่ polling ทำได้
 Before accepting (ลำดับที่เดินได้จริง แก้ตาม review F5):
 1. เจ้าของอนุมัติ contract SPIKE-001 และผล `$dependency-admission` ของ `MetaTrader5` สำหรับใช้ใน spike เท่านั้น

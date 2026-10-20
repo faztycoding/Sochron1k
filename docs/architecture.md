@@ -145,9 +145,44 @@ flowchart TB
 Trust boundaries ที่ต้องบังคับจริง:
 - ข้อมูลจากโบรกเกอร์เป็น input ที่ไม่น่าเชื่อถือ ตรวจที่ boundary (bid > ask, เวลาถอยหลัง, ช่องว่าง) แล้วรายงาน ห้ามซ่อมเงียบ
 - ระหว่าง strategy กับ execution: strategy ส่งได้แค่ "การตัดสินใจ" ส่วนสิทธิ์ส่งคำสั่งอยู่ที่ risk gate + execution เท่านั้น
-- ระหว่างแอปกับบัญชี: ก่อนส่งทุกคำสั่ง ตรวจ `account_info().trade_mode` ว่าเป็น Demo ถ้าไม่ใช่ ให้ปฏิเสธและหยุด
+- ระหว่างแอปกับบัญชี: การเช็กว่าเป็น Demo อย่างเดียวไม่พอ ทุก action ภายนอกต้องอยู่ใน **execution scope** ที่อนุมัติ (ข้อ 7.1) ถ้าไม่ตรงหรือไม่รู้ ให้ปฏิเสธและหยุด
 - ระหว่าง research กับ holdout: research host ไม่มี holdout, terminal, terminal cache หรือ `data.acquire` (ข้อ 6.1) รับเฉพาะ snapshot ก่อน cutoff ที่ตรวจ manifest hash แล้ว · การประเมิน holdout รันบน acquisition host ด้วย strategy version ที่ freeze แล้ว · ระยะนี้ที่ยังใช้เครื่องเดียว ขอบเขตนี้**ยังไม่มีผล** จึงห้ามงานที่ต้องพึ่ง holdout
 - ระหว่าง agent กับ repo: locked paths บังคับด้วย deny rules + hooks + CI (D-004)
+
+### 7.1 Execution scope (ตอบ review D-001 r1 F2)
+
+**Scope แก้ไม่ได้ระหว่างรัน** กำหนดใน contract ที่อนุมัติ (ไม่มี credential) และ execution ได้รับเป็นค่าคงที่ตอนเริ่ม:
+
+| องค์ประกอบ | ตัวอย่างจาก SPIKE-001 |
+|---|---|
+| terminal identity | company และ build ที่คาดไว้ |
+| server | `Exness-MT5Trial14` |
+| บัญชีที่อนุญาต | เลขเต็มอยู่ใน config บนเครื่อง ส่วนในเอกสารและ log แสดงแบบปิดบัง |
+| trade mode | Demo |
+| action ที่อนุญาต | E1: เปิดพร้อม SL, แก้ SL ให้แคบลงเท่านั้น, ปิด |
+| สัญลักษณ์ที่อนุญาต | `XAUUSDm` |
+| volume สูงสุด | ตาม risk gate |
+| วันหมดอายุ | กำหนดใน contract |
+
+**ตรวจเมื่อไหร่:**
+- ตอนเริ่ม
+- ทุกครั้งที่ reconnect หรือ initialize ใหม่
+- **ก่อนทุก action ภายนอก** ทุกครั้ง
+
+ถ้า identity ใดไม่ตรง ไม่รู้ หรือเลยวันหมดอายุ ให้หยุดทุก action ภายนอก บันทึก halt ลง journal แล้วรอเจ้าของ
+
+**ผูก state กับ scope:**
+- journal, risk snapshot และการ reconcile อ้างถึง scope id
+- หลัง restart ห้าม reconcile หรือส่งต่อกับบัญชีที่ไม่ตรง scope ของ intent ที่ค้างอยู่
+
+**ผู้ส่งคำสั่งต่อ scope มีหนึ่งตัวเท่านั้น:** ใช้ terminal เฉพาะงานนี้ และห้ามสลับบัญชีด้วยมือระหว่างที่ runner ทำงาน
+
+**ความเสี่ยงที่ยังเหลือ (ระบุตรงๆ):**
+- การเช็ก scope กับการส่งคำสั่งเป็นคนละ call กันใน Python API และ `order_send` ไม่มีช่องระบุบัญชี
+- การเช็กก่อนส่งจึงลดความเสี่ยงได้ แต่**กันไม่ได้ 100%** ถ้ามีคนสลับบัญชีในจังหวะระหว่างสอง call
+- การจัดการ: ใช้ terminal เฉพาะงาน, เช็กซ้ำหลังส่ง และ reconcile กับบัญชีของ scope
+
+**สิทธิ์อ่านอย่างเดียวของ SPIKE-001** แยกจากสิทธิ์ของ E1 และไม่ได้ทำให้ส่งคำสั่งได้
 
 ## 8. Module map และกฎ import
 
@@ -185,6 +220,7 @@ data/ journal/ reports/out/   # runtime data, gitignored
 | Invariant | บังคับด้วย |
 |---|---|
 | ไม่มีเส้นทางไปบัญชีเงินจริง | Demo guard ในโค้ด + negative test + red-flag "Order or account mutation surface" |
+| ทุก action ภายนอกอยู่ใน execution scope ที่อนุมัติ (ข้อ 7.1) | ตรวจ identity, บัญชี, server, สัญลักษณ์, action และวันหมดอายุตอนเริ่ม ตอน reconnect และก่อนทุก action · journal และการ reconcile ผูกกับ scope · E1 negative tests (ข้อ 13) |
 | ไม่มีคำสั่งไหนถูกส่งโดยไม่ผ่าน risk gate และ journal | โครงสร้าง module (execution เท่านั้นที่เรียก broker send) + architecture test |
 | ส่งแล้วผลไม่ชัด = UNKNOWN และ reconcile ก่อน retry | state machine + test กรณี timeout |
 | Strategy ไม่มี I/O และไม่ import MetaTrader5 | architecture test (AST) ใน `tests/architecture/` |
@@ -237,4 +273,11 @@ SLICE-E1 เริ่มได้เมื่อ (ก) มี strategy version �
 - `tests/architecture/` (เขียนโดย test author, locked): ตรวจกฎ import ตามตารางในข้อ 8 ด้วย AST (ไม่ต้องเพิ่ม dependency) เช่น ห้าม import `MetaTrader5` นอก `broker/mt5`, `strategy` import ได้เฉพาะ `core` และ `timebase` และ `research`/`backtest`/`strategy` ห้าม import `data.acquire` หรือ `broker` (F1)
 - ENV-1 (ก่อน R1): environment check + synthetic excluded-period sentinel บน research host ตามข้อ 6.1
 - CI ที่มีอยู่แล้ว: `control-gate` (pull_request_target ใช้ตัวตรวจจาก base revision และไม่รันโค้ดจาก PR) ตรวจ locked paths, สมมติฐาน immutable และ registry append-only ทีละ commit; `ci` รัน self-tests และ red-flag scan
-- ตั้งแต่ E1: negative test ว่า trade mode ที่ไม่ใช่ Demo ทำให้การส่งคำสั่งถูกปฏิเสธเสมอ
+- ตั้งแต่ E1: negative tests ของ execution scope (ข้อ 7.1) โดยแต่ละกรณีต้องไม่มีการเรียกส่งคำสั่งเลย (zero send calls):
+  - trade mode ไม่ใช่ Demo
+  - บัญชี Demo อื่น
+  - server อื่น
+  - สัญลักษณ์หรือ action ที่ไม่อนุญาต
+  - scope หมดอายุ
+  - identity เปลี่ยนหลัง reconnect
+  - restart แล้วพบ intent ที่ค้างอยู่ผูกกับบัญชีอื่น
