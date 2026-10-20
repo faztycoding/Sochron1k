@@ -143,8 +143,26 @@ def test_failed_range_call_is_reported_as_an_error_not_as_no_data():
 def test_failed_tick_probe_makes_the_month_search_unknown():
     term = SimpleNamespace(COPY_TICKS_ALL=-1, copy_ticks_range=lambda *a: None,
                            copy_ticks_from=lambda *a: None, last_error=lambda: (-10005, "IPC timeout"))
-    result = probe.tick_depth(term, 2026, datetime(2026, 10, 21, tzinfo=UTC))
-    assert result["first_month_with_ticks"] == "UNKNOWN"
+    result = probe.tick_depth(term, datetime(2026, 10, 21, tzinfo=UTC))
+    assert result["first_tick"] == "UNKNOWN"
+    assert result["month_sample_search"]["first_month_with_ticks"] == "UNKNOWN"
+
+
+def test_first_tick_day_comes_from_the_first_tick_not_a_mid_month_sample():
+    # Review r1 F2: history starting January 20 has no tick on the January 15 sample hour, so a
+    # month search says February; the first tick itself must say January 20.
+    start = int(datetime(2026, 1, 20, 9, 30, tzinfo=UTC).timestamp())
+
+    def ticks_range(_symbol, frm, to, _flags):
+        lo, hi = int(frm.timestamp()), int(to.timestamp())
+        return RatesStub([t for t in range(max(lo, start), hi, 600)])
+
+    term = SimpleNamespace(COPY_TICKS_ALL=-1, copy_ticks_from=lambda *a: RatesStub([start]),
+                           copy_ticks_range=ticks_range, last_error=lambda: (1, "Success"))
+    result = probe.tick_depth(term, datetime(2026, 3, 1, tzinfo=UTC))
+    assert result["first_tick_as_if_utc"] == "2026-01-20 09:30:00"
+    assert result["ticks_in_day_before_first"] == 0
+    assert result["month_sample_search"]["first_month_with_ticks"] == "2026-02"  # why it is only supplementary
 
 
 def test_gap_census_counts_every_interval_and_month_boundaries():

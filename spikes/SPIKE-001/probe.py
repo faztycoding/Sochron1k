@@ -313,14 +313,38 @@ def history_depth(mt5: object, now: datetime) -> dict:
     out["m1_by_month_range"] = [r for r in years.values() if r["m1_bars"]]
     out["m1_first_month_with_data"] = first_month
     out["m1_range_call_errors"] = call_errors  # failed calls: unknown, not "no data"
-    first_year = int(first_month[:4]) if first_month else None
     out["m1_largest_other_gaps"] = sorted(other_gaps, key=lambda g: -g["gap_minutes"])[:20]
-    out["ticks"] = tick_depth(mt5, first_year or now.year, now)
+    out["ticks"] = tick_depth(mt5, now)
     return out
 
 
-def tick_depth(mt5: object, from_year: int, now: datetime) -> dict:
-    """Binary search over months for the first month whose mid-month weekday has ticks."""
+TICK_SEARCH_FROM = datetime(2005, 1, 1, tzinfo=timezone.utc)
+
+
+def tick_depth(mt5: object, now: datetime) -> dict:
+    """First tick the terminal returns at or after 2005-01-01, checked against the day before it.
+
+    Review r1 F2: one mid-month hour cannot locate the first tick day, so the month search is
+    kept only as a labelled supplement and no longer starts from the M1-derived year."""
+    out: dict = {}
+    first = mt5.copy_ticks_from(SYMBOL, TICK_SEARCH_FROM, 1, mt5.COPY_TICKS_ALL)
+    if first is None:
+        out["first_tick"] = "UNKNOWN"
+        out["first_tick_call_error"] = list(mt5.last_error())
+    elif not len(first):
+        out["first_tick"] = None
+    else:
+        t = int(first["time"][0])
+        out["first_tick_as_if_utc"] = as_if_utc(t)
+        before = mt5.copy_ticks_range(SYMBOL, datetime.fromtimestamp(t - 86400, tz=timezone.utc),
+                                      datetime.fromtimestamp(t, tz=timezone.utc), mt5.COPY_TICKS_ALL)
+        out["ticks_in_day_before_first"] = None if before is None else len(before)  # expected 0
+    out["month_sample_search"] = month_sample_search(mt5, TICK_SEARCH_FROM.year, now)
+    return out
+
+
+def month_sample_search(mt5: object, from_year: int, now: datetime) -> dict:
+    """Supplementary: binary search over months on one mid-month weekday hour."""
     months = []
     y, m = from_year, 1
     while (y, m) <= (now.year, now.month):
@@ -353,7 +377,8 @@ def tick_depth(mt5: object, from_year: int, now: datetime) -> dict:
             lo = mid + 1
     first = months[lo]
     return {"first_month_with_ticks": f"{first[0]}-{first[1]:02d}", "probes": probes,
-            "method": "binary search on one mid-month weekday hour; assumes history is contiguous"}
+            "method": "supplementary binary search on one mid-month weekday hour; assumes contiguous "
+                      "history and cannot locate the first day"}
 
 
 # ---- Orchestration -----------------------------------------------------------------------------
