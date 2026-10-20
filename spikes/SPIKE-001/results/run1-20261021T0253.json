@@ -1,0 +1,237 @@
+{
+  "probe_started_bangkok": "2026-10-21T02:53:12+07:00",
+  "symbol": "XAUUSDm",
+  "ac01_connection": {
+    "package_MetaTrader5": "5.0.6231",
+    "package_numpy": "2.5.4",
+    "terminal_version": [
+      500,
+      6274,
+      "19 Oct 2026"
+    ],
+    "terminal_build": 6274,
+    "terminal_company": "MetaQuotes Ltd.",
+    "terminal_connected": true,
+    "terminal_maxbars": 100000,
+    "account_login_masked": "*****8107",
+    "account_company": "Exness Technologies Ltd",
+    "account_server": "Exness-MT5Trial14",
+    "account_currency": "USD",
+    "account_trade_mode": 0,
+    "account_trade_mode_is_demo": true,
+    "account_trade_allowed": false,
+    "account_leverage": 200,
+    "account_margin_mode": 2,
+    "account_margin_mode_is_hedging": true
+  },
+  "ac03_symbol_spec": {
+    "visible": true,
+    "select": true,
+    "digits": 3,
+    "point": 0.001,
+    "trade_tick_size": 0.001,
+    "trade_tick_value": 0.1,
+    "trade_contract_size": 100.0,
+    "volume_min": 0.01,
+    "volume_step": 0.01,
+    "volume_max": 200.0,
+    "trade_stops_level": 0,
+    "trade_freeze_level": 0,
+    "filling_mode": 3,
+    "trade_mode": 4,
+    "trade_exemode": 2,
+    "spread": 240,
+    "spread_float": true,
+    "swap_mode": 1,
+    "swap_long": -503.8,
+    "swap_short": 0.0,
+    "currency_base": "XAU",
+    "currency_profit": "USD",
+    "currency_margin": "XAU",
+    "path": "Standard\\Forex\\XAUUSDm",
+    "description": "Gold vs US Dollar",
+    "found": true,
+    "trade_sessions": "not exposed by the MetaTrader5 Python API (no SymbolInfoSessionTrade)"
+  },
+  "ac04_time": {
+    "samples": [
+      {
+        "machine_utc": "2026-10-20T19:53:12.281+00:00",
+        "tick_time_raw": 1792525992,
+        "tick_time_msc_raw": 1792525992035,
+        "tick_time_as_if_utc": "2026-10-20 19:53:12",
+        "offset_time_s": -0.281,
+        "offset_time_msc_s": -0.246,
+        "last_m1_open_raw": 1792525980,
+        "last_m1_open_as_if_utc": "2026-10-20 19:53:00",
+        "offset_m1_open_vs_minute_s": 0.0
+      },
+      {
+        "machine_utc": "2026-10-20T19:53:32.308+00:00",
+        "tick_time_raw": 1792526012,
+        "tick_time_msc_raw": 1792526012576,
+        "tick_time_as_if_utc": "2026-10-20 19:53:32",
+        "offset_time_s": -0.308,
+        "offset_time_msc_s": 0.268,
+        "last_m1_open_raw": 1792525980,
+        "last_m1_open_as_if_utc": "2026-10-20 19:53:00",
+        "offset_m1_open_vs_minute_s": 0.0
+      },
+      {
+        "machine_utc": "2026-10-20T19:53:52.308+00:00",
+        "tick_time_raw": 1792526032,
+        "tick_time_msc_raw": 1792526032615,
+        "tick_time_as_if_utc": "2026-10-20 19:53:52",
+        "offset_time_s": -0.309,
+        "offset_time_msc_s": 0.306,
+        "last_m1_open_raw": 1792525980,
+        "last_m1_open_as_if_utc": "2026-10-20 19:53:00",
+        "offset_m1_open_vs_minute_s": 0.0
+      }
+    ],
+    "classification": "UTC",
+    "windows_time_sync": {
+      "exit": 0,
+      "output": "Leap Indicator: 3(not synchronized)\nStratum: 0 (unspecified)\nPrecision: -23 (119.209ns per tick)\nRoot Delay: 0.0473709s\nRoot Dispersion: 9.0711466s\nReferenceId: 0x00000000 (unspecified)\nLast Successful Sync Time: 20/10/2569 20:04:43\nSource: time.windows.com,0x9 \nPoll Interval: 10 (1024s)"
+    }
+  },
+  "ac05_dst": {
+    "US 2026-03-08": {
+      "bars": 1,
+      "last_error": null,
+      "daily_breaks": [],
+      "week_edges": []
+    },
+    "EU 2026-03-29": {
+      "bars": 1,
+      "last_error": null,
+      "daily_breaks": [],
+      "week_edges": []
+    }
+  },
+  "ac06_history": {
+    "m1_by_position": {
+      "requested": 100000,
+      "returned": 0,
+      "earliest_as_if_utc": null,
+      "last_error": [
+        -2,
+        "Terminal: Invalid params"
+      ]
+    },
+    "m1_by_year_range": [
+      {
+        "year": 2005,
+        "m1_bars": 0
+      },
+      {
+        "year": 2006,
+        "m1_bars": 0
+      },
+      {
+        "year": 2007,
+        "m1_bars": 0
+      },
+      {
+        "year": 2008,
+        "m1_bars": 0
+      },
+      {
+        "year": 2009,
+        "m1_bars": 0
+      },
+      {
+        "year": 2010,
+        "m1_bars": 0
+      },
+      {
+        "year": 2011,
+        "m1_bars": 0
+      },
+      {
+        "year": 2012,
+        "m1_bars": 0
+      },
+      {
+        "year": 2013,
+        "m1_bars": 0
+      },
+      {
+        "year": 2014,
+        "m1_bars": 0
+      },
+      {
+        "year": 2015,
+        "m1_bars": 0
+      },
+      {
+        "year": 2016,
+        "m1_bars": 0
+      },
+      {
+        "year": 2017,
+        "m1_bars": 0
+      },
+      {
+        "year": 2018,
+        "m1_bars": 0
+      },
+      {
+        "year": 2019,
+        "m1_bars": 0
+      },
+      {
+        "year": 2020,
+        "m1_bars": 0
+      },
+      {
+        "year": 2021,
+        "m1_bars": 0
+      },
+      {
+        "year": 2022,
+        "m1_bars": 0
+      },
+      {
+        "year": 2023,
+        "m1_bars": 0
+      },
+      {
+        "year": 2024,
+        "m1_bars": 0
+      },
+      {
+        "year": 2025,
+        "m1_bars": 0
+      },
+      {
+        "year": 2026,
+        "m1_bars": 0
+      }
+    ],
+    "m1_first_year_with_data": null,
+    "m1_largest_other_gaps": [],
+    "ticks": {
+      "first_month_with_ticks": "2026-06",
+      "probes": [
+        {
+          "month": "2026-05",
+          "ticks_in_hour": 0
+        },
+        {
+          "month": "2026-08",
+          "ticks_in_hour": 13457
+        },
+        {
+          "month": "2026-07",
+          "ticks_in_hour": 17519
+        },
+        {
+          "month": "2026-06",
+          "ticks_in_hour": 11323
+        }
+      ],
+      "method": "binary search on one mid-month weekday hour; assumes history is contiguous"
+    }
+  }
+}

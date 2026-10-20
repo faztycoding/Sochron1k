@@ -1,0 +1,541 @@
+{
+  "probe_started_bangkok": "2026-10-21T03:16:44+07:00",
+  "symbol": "XAUUSDm",
+  "ac01_connection": {
+    "package_MetaTrader5": "5.0.6231",
+    "package_numpy": "2.5.4",
+    "terminal_version": [
+      500,
+      6274,
+      "19 Oct 2026"
+    ],
+    "terminal_build": 6274,
+    "terminal_company": "MetaQuotes Ltd.",
+    "terminal_connected": true,
+    "terminal_maxbars": 100000000,
+    "account_login_masked": "*****8107",
+    "account_company": "Exness Technologies Ltd",
+    "account_server": "Exness-MT5Trial14",
+    "account_currency": "USD",
+    "account_trade_mode": 0,
+    "account_trade_mode_is_demo": true,
+    "account_trade_allowed": false,
+    "account_leverage": 200,
+    "account_margin_mode": 2,
+    "account_margin_mode_is_hedging": true
+  },
+  "ac03_symbol_spec": {
+    "visible": true,
+    "select": true,
+    "digits": 3,
+    "point": 0.001,
+    "trade_tick_size": 0.001,
+    "trade_tick_value": 0.1,
+    "trade_contract_size": 100.0,
+    "volume_min": 0.01,
+    "volume_step": 0.01,
+    "volume_max": 200.0,
+    "trade_stops_level": 0,
+    "trade_freeze_level": 0,
+    "filling_mode": 3,
+    "trade_mode": 4,
+    "trade_exemode": 2,
+    "spread": 240,
+    "spread_float": true,
+    "swap_mode": 1,
+    "swap_long": -503.8,
+    "swap_short": 0.0,
+    "currency_base": "XAU",
+    "currency_profit": "USD",
+    "currency_margin": "XAU",
+    "path": "Standard\\Forex\\XAUUSDm",
+    "description": "Gold vs US Dollar",
+    "found": true,
+    "trade_sessions": "not exposed by the MetaTrader5 Python API (no SymbolInfoSessionTrade)"
+  },
+  "ac04_time": {
+    "samples": [
+      {
+        "machine_utc": "2026-10-20T20:16:44.516+00:00",
+        "tick_time_raw": 1792527405,
+        "tick_time_msc_raw": 1792527405252,
+        "tick_time_as_if_utc": "2026-10-20 20:16:45",
+        "offset_time_s": 0.483,
+        "offset_time_msc_s": 0.735,
+        "last_m1_open_raw": 1792527360,
+        "last_m1_open_as_if_utc": "2026-10-20 20:16:00",
+        "offset_m1_open_vs_minute_s": 0.0
+      },
+      {
+        "machine_utc": "2026-10-20T20:17:04.517+00:00",
+        "tick_time_raw": 1792527425,
+        "tick_time_msc_raw": 1792527425383,
+        "tick_time_as_if_utc": "2026-10-20 20:17:05",
+        "offset_time_s": 0.482,
+        "offset_time_msc_s": 0.865,
+        "last_m1_open_raw": 1792527420,
+        "last_m1_open_as_if_utc": "2026-10-20 20:17:00",
+        "offset_m1_open_vs_minute_s": 0.0
+      },
+      {
+        "machine_utc": "2026-10-20T20:17:24.518+00:00",
+        "tick_time_raw": 1792527440,
+        "tick_time_msc_raw": 1792527440718,
+        "tick_time_as_if_utc": "2026-10-20 20:17:20",
+        "offset_time_s": -4.518,
+        "offset_time_msc_s": -3.8,
+        "last_m1_open_raw": 1792527420,
+        "last_m1_open_as_if_utc": "2026-10-20 20:17:00",
+        "offset_m1_open_vs_minute_s": 0.0
+      }
+    ],
+    "classification": "UTC",
+    "windows_time_sync": {
+      "exit": 0,
+      "output": "Leap Indicator: 3(not synchronized)\nStratum: 0 (unspecified)\nPrecision: -23 (119.209ns per tick)\nRoot Delay: 0.0473709s\nRoot Dispersion: 9.0711466s\nReferenceId: 0x00000000 (unspecified)\nLast Successful Sync Time: 20/10/2569 20:04:43\nSource: time.windows.com,0x9 \nPoll Interval: 10 (1024s)"
+    }
+  },
+  "ac05_dst": {
+    "US 2026-03-08": {
+      "M1": {
+        "bars": 19329,
+        "first_as_if_utc": "2026-02-26 00:00:00",
+        "call_error": null,
+        "daily_breaks": [
+          {
+            "day": "2026-02-26",
+            "break_after_bar_as_if_utc": "21:57",
+            "gap_minutes": 64
+          },
+          {
+            "day": "2026-03-02",
+            "break_after_bar_as_if_utc": "21:57",
+            "gap_minutes": 63
+          },
+          {
+            "day": "2026-03-03",
+            "break_after_bar_as_if_utc": "21:57",
+            "gap_minutes": 64
+          },
+          {
+            "day": "2026-03-04",
+            "break_after_bar_as_if_utc": "21:57",
+            "gap_minutes": 63
+          },
+          {
+            "day": "2026-03-05",
+            "break_after_bar_as_if_utc": "21:57",
+            "gap_minutes": 68
+          },
+          {
+            "day": "2026-03-09",
+            "break_after_bar_as_if_utc": "20:57",
+            "gap_minutes": 63
+          },
+          {
+            "day": "2026-03-10",
+            "break_after_bar_as_if_utc": "20:57",
+            "gap_minutes": 64
+          },
+          {
+            "day": "2026-03-11",
+            "break_after_bar_as_if_utc": "20:57",
+            "gap_minutes": 65
+          },
+          {
+            "day": "2026-03-12",
+            "break_after_bar_as_if_utc": "20:57",
+            "gap_minutes": 64
+          },
+          {
+            "day": "2026-03-16",
+            "break_after_bar_as_if_utc": "20:57",
+            "gap_minutes": 63
+          },
+          {
+            "day": "2026-03-17",
+            "break_after_bar_as_if_utc": "20:57",
+            "gap_minutes": 64
+          }
+        ],
+        "week_edges": [
+          {
+            "last_bar_before": "2026-02-27 21:57:00",
+            "first_bar_after": "2026-03-01 23:01:00",
+            "gap_hours": 49.07
+          },
+          {
+            "last_bar_before": "2026-03-06 21:57:00",
+            "first_bar_after": "2026-03-08 22:03:00",
+            "gap_hours": 48.1
+          },
+          {
+            "last_bar_before": "2026-03-13 20:57:00",
+            "first_bar_after": "2026-03-15 22:01:00",
+            "gap_hours": 49.07
+          }
+        ]
+      }
+    },
+    "EU 2026-03-29": {
+      "M1": {
+        "bars": 17887,
+        "first_as_if_utc": "2026-03-19 00:00:00",
+        "call_error": null,
+        "daily_breaks": [
+          {
+            "day": "2026-03-19",
+            "break_after_bar_as_if_utc": "20:57",
+            "gap_minutes": 64
+          },
+          {
+            "day": "2026-03-23",
+            "break_after_bar_as_if_utc": "20:57",
+            "gap_minutes": 64
+          },
+          {
+            "day": "2026-03-24",
+            "break_after_bar_as_if_utc": "20:57",
+            "gap_minutes": 63
+          },
+          {
+            "day": "2026-03-25",
+            "break_after_bar_as_if_utc": "20:57",
+            "gap_minutes": 63
+          },
+          {
+            "day": "2026-03-26",
+            "break_after_bar_as_if_utc": "20:57",
+            "gap_minutes": 64
+          },
+          {
+            "day": "2026-03-30",
+            "break_after_bar_as_if_utc": "20:57",
+            "gap_minutes": 63
+          },
+          {
+            "day": "2026-03-31",
+            "break_after_bar_as_if_utc": "20:57",
+            "gap_minutes": 63
+          },
+          {
+            "day": "2026-04-01",
+            "break_after_bar_as_if_utc": "20:57",
+            "gap_minutes": 79
+          },
+          {
+            "day": "2026-04-06",
+            "break_after_bar_as_if_utc": "20:57",
+            "gap_minutes": 64
+          },
+          {
+            "day": "2026-04-07",
+            "break_after_bar_as_if_utc": "20:57",
+            "gap_minutes": 64
+          }
+        ],
+        "week_edges": [
+          {
+            "last_bar_before": "2026-03-20 20:57:00",
+            "first_bar_after": "2026-03-22 22:01:00",
+            "gap_hours": 49.07
+          },
+          {
+            "last_bar_before": "2026-03-27 20:57:00",
+            "first_bar_after": "2026-03-29 22:04:00",
+            "gap_hours": 49.12
+          },
+          {
+            "last_bar_before": "2026-04-02 20:57:00",
+            "first_bar_after": "2026-04-05 22:01:00",
+            "gap_hours": 73.07
+          }
+        ]
+      }
+    }
+  },
+  "ac06_history": {
+    "terminal_maxbars": 100000000,
+    "m1_by_position": {
+      "requested": 4999999,
+      "returned": 3343061,
+      "earliest_as_if_utc": "2014-01-14 00:00:00",
+      "last_error": [
+        1,
+        "Success"
+      ]
+    },
+    "earliest_by_position": {
+      "M5": {
+        "returned": 671356,
+        "earliest_as_if_utc": "2014-01-14 00:00:00"
+      },
+      "H1": {
+        "returned": 57831,
+        "earliest_as_if_utc": "2014-01-14 00:00:00"
+      },
+      "D1": {
+        "returned": 3931,
+        "earliest_as_if_utc": "2014-01-14 00:00:00"
+      }
+    },
+    "m1_by_month_range": [
+      {
+        "year": 2014,
+        "m1_bars": 302,
+        "months_with_data": 12,
+        "gaps_2_to_5m": 0,
+        "gaps_5_to_15m": 0,
+        "gaps_15m_to_3h": 0,
+        "gaps_3h_to_24h": 0,
+        "gaps_24h_plus": 301
+      },
+      {
+        "year": 2015,
+        "m1_bars": 312,
+        "months_with_data": 12,
+        "gaps_2_to_5m": 0,
+        "gaps_5_to_15m": 0,
+        "gaps_15m_to_3h": 0,
+        "gaps_3h_to_24h": 0,
+        "gaps_24h_plus": 312
+      },
+      {
+        "year": 2016,
+        "m1_bars": 310,
+        "months_with_data": 12,
+        "gaps_2_to_5m": 0,
+        "gaps_5_to_15m": 0,
+        "gaps_15m_to_3h": 0,
+        "gaps_3h_to_24h": 0,
+        "gaps_24h_plus": 310
+      },
+      {
+        "year": 2017,
+        "m1_bars": 238054,
+        "months_with_data": 12,
+        "gaps_2_to_5m": 16,
+        "gaps_5_to_15m": 8,
+        "gaps_15m_to_3h": 1118,
+        "gaps_3h_to_24h": 7,
+        "gaps_24h_plus": 91
+      },
+      {
+        "year": 2018,
+        "m1_bars": 347537,
+        "months_with_data": 12,
+        "gaps_2_to_5m": 31,
+        "gaps_5_to_15m": 2,
+        "gaps_15m_to_3h": 205,
+        "gaps_3h_to_24h": 8,
+        "gaps_24h_plus": 55
+      },
+      {
+        "year": 2019,
+        "m1_bars": 351910,
+        "months_with_data": 12,
+        "gaps_2_to_5m": 15,
+        "gaps_5_to_15m": 0,
+        "gaps_15m_to_3h": 198,
+        "gaps_3h_to_24h": 6,
+        "gaps_24h_plus": 54
+      },
+      {
+        "year": 2020,
+        "m1_bars": 354358,
+        "months_with_data": 12,
+        "gaps_2_to_5m": 17,
+        "gaps_5_to_15m": 0,
+        "gaps_15m_to_3h": 201,
+        "gaps_3h_to_24h": 5,
+        "gaps_24h_plus": 53
+      },
+      {
+        "year": 2021,
+        "m1_bars": 353411,
+        "months_with_data": 12,
+        "gaps_2_to_5m": 13,
+        "gaps_5_to_15m": 7,
+        "gaps_15m_to_3h": 202,
+        "gaps_3h_to_24h": 6,
+        "gaps_24h_plus": 52
+      },
+      {
+        "year": 2022,
+        "m1_bars": 353324,
+        "months_with_data": 12,
+        "gaps_2_to_5m": 5,
+        "gaps_5_to_15m": 0,
+        "gaps_15m_to_3h": 203,
+        "gaps_3h_to_24h": 7,
+        "gaps_24h_plus": 52
+      },
+      {
+        "year": 2023,
+        "m1_bars": 352091,
+        "months_with_data": 12,
+        "gaps_2_to_5m": 9,
+        "gaps_5_to_15m": 1,
+        "gaps_15m_to_3h": 198,
+        "gaps_3h_to_24h": 7,
+        "gaps_24h_plus": 52
+      },
+      {
+        "year": 2024,
+        "m1_bars": 354414,
+        "months_with_data": 12,
+        "gaps_2_to_5m": 65,
+        "gaps_5_to_15m": 3,
+        "gaps_15m_to_3h": 198,
+        "gaps_3h_to_24h": 7,
+        "gaps_24h_plus": 54
+      },
+      {
+        "year": 2025,
+        "m1_bars": 353113,
+        "months_with_data": 12,
+        "gaps_2_to_5m": 8,
+        "gaps_5_to_15m": 3,
+        "gaps_15m_to_3h": 203,
+        "gaps_3h_to_24h": 6,
+        "gaps_24h_plus": 54
+      },
+      {
+        "year": 2026,
+        "m1_bars": 283925,
+        "months_with_data": 10,
+        "gaps_2_to_5m": 6,
+        "gaps_5_to_15m": 2,
+        "gaps_15m_to_3h": 160,
+        "gaps_3h_to_24h": 4,
+        "gaps_24h_plus": 43
+      }
+    ],
+    "m1_first_month_with_data": "2014-01 (first bar 2014-01-14 00:00:00)",
+    "m1_range_call_errors": [],
+    "m1_largest_other_gaps": [
+      {
+        "after_as_if_utc": "2017-04-14 01:00:00",
+        "gap_minutes": 540.0
+      },
+      {
+        "after_as_if_utc": "2017-02-27 00:00:00",
+        "gap_minutes": 360.0
+      },
+      {
+        "after_as_if_utc": "2021-01-18 17:43:00",
+        "gap_minutes": 318.0
+      },
+      {
+        "after_as_if_utc": "2021-02-15 17:43:00",
+        "gap_minutes": 318.0
+      },
+      {
+        "after_as_if_utc": "2021-11-25 17:44:00",
+        "gap_minutes": 316.0
+      },
+      {
+        "after_as_if_utc": "2021-07-05 16:58:00",
+        "gap_minutes": 307.0
+      },
+      {
+        "after_as_if_utc": "2020-01-20 17:59:00",
+        "gap_minutes": 306.0
+      },
+      {
+        "after_as_if_utc": "2020-05-25 16:59:00",
+        "gap_minutes": 306.0
+      },
+      {
+        "after_as_if_utc": "2019-01-21 17:58:00",
+        "gap_minutes": 303.0
+      },
+      {
+        "after_as_if_utc": "2019-02-18 17:58:00",
+        "gap_minutes": 303.0
+      },
+      {
+        "after_as_if_utc": "2019-05-27 16:58:00",
+        "gap_minutes": 303.0
+      },
+      {
+        "after_as_if_utc": "2019-07-04 16:58:00",
+        "gap_minutes": 303.0
+      },
+      {
+        "after_as_if_utc": "2020-02-17 17:58:00",
+        "gap_minutes": 303.0
+      },
+      {
+        "after_as_if_utc": "2019-09-02 16:59:00",
+        "gap_minutes": 302.0
+      },
+      {
+        "after_as_if_utc": "2019-11-28 17:59:00",
+        "gap_minutes": 302.0
+      },
+      {
+        "after_as_if_utc": "2020-09-07 16:59:00",
+        "gap_minutes": 302.0
+      },
+      {
+        "after_as_if_utc": "2020-11-26 17:59:00",
+        "gap_minutes": 302.0
+      },
+      {
+        "after_as_if_utc": "2021-09-06 16:59:00",
+        "gap_minutes": 302.0
+      },
+      {
+        "after_as_if_utc": "2018-01-15 18:00:00",
+        "gap_minutes": 301.0
+      },
+      {
+        "after_as_if_utc": "2018-05-28 17:00:00",
+        "gap_minutes": 301.0
+      }
+    ],
+    "ticks": {
+      "first_tick_as_if_utc": "2026-01-01 23:05:00",
+      "ticks_in_day_before_first": 0,
+      "month_sample_search": {
+        "first_month_with_ticks": "2026-01",
+        "probes": [
+          {
+            "month": "2015-11",
+            "ticks_in_hour": 0
+          },
+          {
+            "month": "2021-05",
+            "ticks_in_hour": 0
+          },
+          {
+            "month": "2024-02",
+            "ticks_in_hour": 0
+          },
+          {
+            "month": "2025-06",
+            "ticks_in_hour": 0
+          },
+          {
+            "month": "2026-02",
+            "ticks_in_hour": 6175
+          },
+          {
+            "month": "2025-10",
+            "ticks_in_hour": 0
+          },
+          {
+            "month": "2025-12",
+            "ticks_in_hour": 0
+          },
+          {
+            "month": "2026-01",
+            "ticks_in_hour": 11446
+          }
+        ],
+        "method": "supplementary binary search on one mid-month weekday hour; assumes contiguous history and cannot locate the first day"
+      }
+    }
+  }
+}

@@ -1,8 +1,8 @@
 # TASK BOOT-001 — Project bootstrap: process rules, controls, skills, initial architecture
 
-Version v1 · Owner: เจ้าของ repository · Parent: Handbook v5 "เริ่มโปรเจกต์ใหม่ใน 1 หน้า" ขั้น 1–4 · Tier **High** · Branch `chore/BOOT-001-project-bootstrap`
-Status: draft (เขียนระหว่างทำงาน ตามคำขอของเจ้าของ "วาง architecture, ตั้ง project rule ตาม handbook, หา skill/agent") — **รอเจ้าของรับรอง**
-Review r1 (Codex, `docs/reviews/BOOT-001-r1.md`): ยอมรับ F1–F6 ทั้งหมด คำตอบและหลักฐานอยู่ใน `docs/handoff/BOOT-001.md` · apply patch แล้ว (`cca98c7`, ตามคำสั่งเจ้าของ 2026-10-19) · รอ Codex review round 2
+Version v1.1 · Owner: เจ้าของ repository · Parent: Handbook v5 "เริ่มโปรเจกต์ใหม่ใน 1 หน้า" ขั้น 1–4 · Tier **High** · Branch `chore/BOOT-001-project-bootstrap`
+Status: **merged** · เจ้าของ merge PR #1 เมื่อ 2026-10-20 23:07 +07 (`7b6a841`, มี label `owner-approved-control-change`) · AC-05 พิสูจน์แล้วบน PR #2 (`0916776`) · ข้อยกเว้นที่เจ้าของยอมรับอยู่ใน D-007 และ D-008 · สรุป AC อยู่ใน `docs/handoff/BOOT-001.md`
+Review: r1 (Codex) ยอมรับ F1–F6 ทั้งหมด และ apply แล้ว (`cca98c7`) · รอบ r2–r11 และ AC-08 อยู่ใน `docs/reviews/` · คำตอบและหลักฐานทุกรอบอยู่ใน `docs/handoff/BOOT-001.md`
 v1.1 (2026-10-20, เจ้าของสั่งในแชท Claude หลัง review r9): แก้ AC-04 ให้ตรงกับ D-006 ตามข้อเสนอของ Codex คือยกเว้นการ push branch งานและการ apply patch ใน `docs/proposals/` ที่เข้าเงื่อนไข D-006 ส่วนการเขียนไฟล์ล็อกด้วยวิธีอื่นยังต้องถูกบล็อก · การแก้ข้อความนี้ไม่ทำให้ Medium ที่ค้าง (F11–F15, F19, F20) กลายเป็น PASS · การยอมรับความเสี่ยงที่เหลืออยู่บันทึกไว้ใน D-007
 
 ## Risk tier (Q1–Q6)
@@ -48,7 +48,7 @@ v1.1 (2026-10-20, เจ้าของสั่งในแชท Claude หล
 | 08 | เจ้าของ + Codex | อ่าน SPEC/architecture; `$adversarial-design-review` | L5 |
 
 ## Risk, data and external side effects
-ไม่มี action ภายนอก (ไม่ push, ไม่เชื่อมโบรกเกอร์) ความเสี่ยงหลักคือ hook บล็อกงานปกติ (false positive) หรือมีช่องให้เลี่ยง ซึ่งรับมือด้วย test suite, CI และ D-004
+action ภายนอกมีเพียงการ push branch งานตาม D-006 (ตั้งแต่ v1.1) · ไม่เชื่อมโบรกเกอร์ · ความเสี่ยงหลักคือ hook บล็อกงานปกติ (false positive) หรือมีช่องให้เลี่ยง ซึ่งรับมือด้วย test suite, CI, D-004 และ D-007
 
 ## Authorization
 เจ้าของขอให้ตั้งโปรเจกต์ (แชท 2026-10-18) การรับรองว่า controls ใช้ได้, การ merge และการเปิด branch protection เป็นของเจ้าของ

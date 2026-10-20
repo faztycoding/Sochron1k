@@ -92,3 +92,20 @@ Decision:
 Why: ค่าทุกตัวที่ยังไม่รู้ที่มายังติดป้ายและถูกกั้นด้วยคำถามที่เปิดอยู่ จึงไม่มีค่าไหนถูกใช้เป็นข้อกำหนดโดยไม่มีเจ้าของยืนยัน · โหมด exec ไม่มีคนตอบ approval จึงมีค่า `never` เป็นปกติ
 Not accepted here: ไม่มีข้อไหนกลายเป็น PASS · AC-05 ยังต้องพิสูจน์บน PR ถัดไป
 Review when: เริ่ม task ที่ใช้ค่า `[A]` เหล่านี้ · เริ่มใช้ Codex ผ่านแชทของ VS Code
+
+## D-009 ใช้ MetaTrader5 5.0.6231 และ NumPy 2.5.4 ใน SPIKE-001 แบบ SPIKE FIRST — 2026-10-21 — accepted (เจ้าของอนุมัติในแชท Claude ราว 02:49)
+Decision: ใช้ `MetaTrader5==5.0.6231` คู่กับ `numpy==2.5.4` เฉพาะใน environment ชั่วคราว (`uv run --with`) ของ SPIKE-001 บน Python 3.12 / Windows x64 · ไม่เพิ่ม dependency ให้โปรเจกต์ และไม่มี lockfile
+Why: เป็นแพ็กเกจทางการของ MetaQuotes และ pin นี้มี wheel `cp312-cp312-win_amd64` · OSV ไม่พบ advisory ที่ตรงกับเวอร์ชันนี้ ณ เวลาตรวจ (`docs/reviews/SPIKE-001-dependency-admission.md`)
+Conditions:
+- ต้องพิสูจน์ใน spike ก่อนว่า import ได้, บันทึกเวอร์ชันได้ และอ่านข้อมูลจากบัญชี Demo ได้ เพราะ native ABI และความเข้ากันกับ terminal ยังไม่รู้
+- ถ้า import ไม่ผ่าน ให้เก็บ error จริงไว้ แล้ว review รุ่นอื่นแยกต่างหาก ห้ามลดรุ่นหรือคลาย pin เอง
+Review when: ผล SPIKE-001 ใช้ตัดสิน D-001 · มี advisory ใหม่ของสองแพ็กเกจนี้
+
+## D-010 ใช้ tzdata 2026.5 ใน SPIKE-001 — 2026-10-21 — accepted (เจ้าของอนุมัติในแชท Claude ราว 02:49)
+Decision: ADMIT `tzdata==2026.5` เฉพาะใน environment ชั่วคราวของ SPIKE-001 เพื่อให้ `zoneinfo` ของ stdlib มีข้อมูล IANA บน Windows · การมีข้อมูล timezone ไม่ได้ตัดสินความหมายของ timestamp ดิบจาก MT5 แทน AC-04
+Review when: เริ่มใช้นอก spike
+
+## D-011 ใช้ pytest 9.1.1 และ transitive 5 ตัวใน SPIKE-001 — 2026-10-21 — accepted (เจ้าของอนุมัติในแชท Claude ราว 02:49)
+Decision: ADMIT `pytest==9.1.1` พร้อม `colorama==0.4.6`, `iniconfig==2.3.1`, `packaging==26.3`, `pluggy==1.7.0` และ `Pygments==2.21.0` เฉพาะ tests ของ SPIKE-001 · ไม่ใช้ extras · ไม่เพิ่ม dependency หรือ lockfile ให้โปรเจกต์
+Why: เวอร์ชัน 9.1.1 พ้นช่วงที่ได้รับผลจาก GHSA-6w46-j5rx-g56g (แก้แล้วใน 9.0.3)
+Review when: เลือก test runner ของโปรเจกต์ใน D-001

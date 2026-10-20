@@ -80,8 +80,8 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 | ID | Assumption or question | How to verify | Review date | Status |
 |----|------------------------|---------------|-------------|--------|
 | Q-01 | Sochron1k ยังเป็นระบบวิจัย + เทรดอัตโนมัติ XAU/USD บน MT5 Demo เหมือนรอบก่อน | เจ้าของยืนยัน | ก่อน SPIKE-001 | TBD (open) |
-| Q-02 | โบรกเกอร์, Demo server, สกุลเงินบัญชี, leverage, netting/hedging | เจ้าของ + SPIKE-001 | ก่อน SPIKE-001 | TBD (open) |
-| Q-03 | ชื่อสัญลักษณ์และ contract spec ของ XAU/USD ที่โบรกเกอร์ใช้ | SPIKE-001 | — | TBD (open) |
+| Q-02 | โบรกเกอร์, Demo server, สกุลเงินบัญชี, leverage, netting/hedging | เจ้าของ + SPIKE-001 | ก่อน SPIKE-001 | บางส่วนตอบแล้ว (เจ้าของ 2026-10-21): Exness, `Exness-MT5Trial14`, hedging · สกุลเงินและ leverage ยัง TBD (SPIKE-001 AC-01) |
+| Q-03 | ชื่อสัญลักษณ์และ contract spec ของ XAU/USD ที่โบรกเกอร์ใช้ | SPIKE-001 | — | บางส่วนตอบแล้ว: ชื่อ `XAUUSDm` (เจ้าของ 2026-10-21) · contract spec ยัง TBD (SPIKE-001 AC-03) |
 | Q-04 | ค่า risk policy 0.25% / 0.75% / 2% และผู้มีสิทธิ์ปลด halt | เจ้าของ | ก่อน SLICE-E1 | TBD (open) |
 | Q-05 | ชั่วโมงเทรดและนโยบายถือข้ามคืน | เจ้าของ | ก่อน H001 | TBD (open) |
 | Q-06 | สมมติฐานแรก (PA01 จากรอบก่อน หรือไอเดียใหม่) | `/register-hypothesis` | ก่อน SLICE-R1 | TBD (open) |
@@ -99,3 +99,4 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 |------|--------|--------------|--------------------------------|
 | 2026-10-18 | ร่าง 0.1 จากข้อมูลรอบก่อน + Handbook v5 | เจ้าของ (ขอให้ตั้งโปรเจกต์ใหม่) | ยังไม่มี: รอเจ้าของรับรอง |
 | 2026-10-20 | ติดป้าย [A]/TBD ตาม review AC-08 (F1, F3): retention ในข้อ 5, คอลัมน์ Status ในข้อ 9 และเพิ่ม Q-12 · ไม่เปลี่ยนค่าใดๆ | เจ้าของ (ให้ปิด AC ของ BOOT-001) | ไม่มีผลต่อเวลา/ค่าใช้จ่าย · แก้ AC-08 |
+| 2026-10-21 | Q-02 และ Q-03 ตอบบางส่วนจากข้อมูลบัญชี Demo ที่เจ้าของแจ้ง (Exness, server, hedging, `XAUUSDm`) | เจ้าของ (เตรียม SPIKE-001) | ไม่มีผลต่อเวลา/ค่าใช้จ่าย |
