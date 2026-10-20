@@ -1,12 +1,13 @@
 # TASK SPIKE-001 — MT5 connectivity, time semantics and data depth (read-only)
 
 Version v1.1 · Owner: เจ้าของ repository · Parent: docs/architecture.md §12 (U1–U3) · Tier **Standard** · Branch `spike/SPIKE-001-mt5-time`
-Status: **draft** · รอเจ้าของ:
-1. อนุมัติ contract นี้
-2. อนุมัติผล `$dependency-admission` ใน `docs/reviews/SPIKE-001-dependency-admission.md` ซึ่งเสนอให้:
+Status: **approved** · เจ้าของอนุมัติในแชท Claude เมื่อ 2026-10-21 ราว 02:49 +07 ทั้ง:
+1. contract v1.1 นี้
+2. ผล `$dependency-admission` ใน `docs/reviews/SPIKE-001-dependency-admission.md`:
    - `MetaTrader5` กับ `numpy` เป็น SPIKE FIRST
    - `tzdata`, `pytest` และ transitive อีก 5 ตัว ADMIT เฉพาะใน spike
-3. ~~ติดตั้ง MT5 และ login บัญชี Demo~~ เจ้าของทำแล้ว (ดู Authorization)
+   - บันทึกไว้ใน D-009, D-010 และ D-011
+3. บัญชี Demo และวันหมดสิทธิ์ใน Authorization (เจ้าของ login ใน terminal เองแล้ว)
 
 **ไม่ต้องรอ D-001** เพราะ spike นี้คือหลักฐานที่ใช้ตัดสิน D-001 (แก้ตาม review BOOT-001 F5)
 v1.1 (2026-10-21): กรอก Authorization ตามข้อมูลจากเจ้าของ, pin เวอร์ชันครบตามผล dependency admission และใช้ชื่อสัญลักษณ์ `XAUUSDm` ตามที่เจ้าของแจ้ง
@@ -65,7 +66,7 @@ terminal ไม่ได้เปิดหรือไม่ได้ login · �
 
 เจ้าของ login ใน terminal เอง ไม่มี credential ในไฟล์ใดๆ
 
-สถานะการอนุมัติ: เจ้าของให้ข้อมูลบัญชีและวันหมดสิทธิ์แล้ว แต่ **การเชื่อมต่อด้วยโปรแกรมเริ่มได้ก็ต่อเมื่อเจ้าของอนุมัติ contract นี้และผล dependency admission**
+สถานะการอนุมัติ: **อนุมัติแล้ว** (2026-10-21 ราว 02:49 +07) ใช้ได้จนถึงวันหมดสิทธิ์ในตาราง
 
 ## Budget
 1 session · ทดลองไม่เกิน 3 รอบโดยไม่มีหลักฐานใหม่ · ค่าใช้จ่าย 0
