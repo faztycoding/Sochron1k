@@ -1,14 +1,18 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-21 +07 by Claude Code · D-001 ผ่าน review r1–r3 (F1–F3 ปิดหมด) · Codex แนะนำให้รับโดยคงด่าน ENV-1/R1/E1 · รอเจ้าของตัดสิน D-001
+Updated 2026-10-21 +07 by Claude Code · **D-001 accepted** โดยเจ้าของ (ราว 06:55) หลัง review r1–r3 · ถัดไป: แก้ข้อความ Phase ใน AGENTS.md (ไฟล์ล็อก ต้องใช้ patch) และเขียน contract ENV-1 หรือส่วน pure
 
 ## Current task
-**D-001 · State: reviewed (r1–r3 ปิดหมด); proposed รอเจ้าของตัดสิน** · branch `chore/D-001-architecture-revision` (ต่อจาก `ddffeb4`) · ย้ายกลับมาทำที่โฟลเดอร์หลักแล้ว ลบ worktree แยกที่สะอาดไปแล้ว
+**D-001 · State: accepted (เจ้าของ 2026-10-21 ราว 06:55)** · ขอบเขตการอนุมัติอยู่ใน DECISIONS.md D-001 (ไม่รวม dependency, การวิจัยก่อน ENV-1 และการส่งคำสั่ง) · branch `chore/D-001-architecture-revision` (ต่อจาก `ddffeb4`) · ย้ายกลับมาทำที่โฟลเดอร์หลักแล้ว ลบ worktree แยกที่สะอาดไปแล้ว
 - เจ้าของตัดสิน F1 (2026-10-21):
   - เป้าหมายคือ MT5 บน Windows VPS ทำหน้าที่ acquisition/execution host
   - ระยะนี้ใช้เครื่องนี้ไปก่อน จึงห้ามตัด holdout, ห้าม ingest ข้อมูลวิจัย และห้ามทดลองกลยุทธ์ จนกว่าด่าน ENV-1 จะผ่าน
 - F2: execution scope ผูกกับบัญชี, server, terminal, action, สัญลักษณ์ และวันหมดอายุ ตรวจก่อนทุก action
 - review r2 (06:49): F1/F2 ปิด, เปิด F3 Low → แก้แล้ว `7e11c0f` · review r3 (06:52): F3 ปิด ไม่มี finding เหลือ
-- ถัดไป: เจ้าของรับหรือปฏิเสธ D-001 · ถ้ารับ งานถัดไปคือ ENV-1 (Windows VPS + synthetic sentinel) ก่อนวิจัย · ยังไม่สร้างระบบเทรดหรือติดตั้งแพ็กเกจ
+- ถัดไป:
+  1. patch แก้ AGENTS.md ที่ยังเขียนว่า "D-001 is proposed … do not scaffold" ให้ตรงสถานะใหม่ (ไฟล์ล็อก ต้อง apply ตาม D-006, review และติด label)
+  2. contract ENV-1 (Windows VPS + synthetic sentinel) ก่อนวิจัย ซึ่งต้องให้เจ้าของเช่า VPS
+  3. ระหว่างรอ VPS: contract ของส่วน pure ที่ไม่ใช้ข้อมูลตลาด (timebase, costs, risk)
+  - ยังไม่ติดตั้งแพ็กเกจของโปรเจกต์
 - PR แยกที่รอ merge: `chore/SPIKE-001-post-merge-review` (review r4 หลัง merge ของ SPIKE-001: F7 ปิด, ไม่มี finding ใหม่)
 
 ประวัติ review r1 (Codex):

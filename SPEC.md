@@ -65,7 +65,7 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 - Cost: งบรายเดือน (VPS/ข้อมูล/API) TBD บาท
 
 ## 7. Architecture summary
-- ดู `docs/architecture.md` (D-001: Python modular monolith + `MetaTrader5` บน Windows, วิจัยก่อน — **proposed**)
+- ดู `docs/architecture.md` (D-001: Python modular monolith + `MetaTrader5` บน Windows, วิจัยก่อน — **accepted** 2026-10-21 พร้อมด่าน ENV-1 ก่อนวิจัย)
 - External services: MT5 terminal + เซิร์ฟเวอร์ Demo ของโบรกเกอร์ (TBD: โบรกเกอร์ไหน), GitHub (repo + CI)
 - Key decisions: ดู `DECISIONS.md`
 

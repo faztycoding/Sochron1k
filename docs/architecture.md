@@ -1,6 +1,6 @@
 # สถาปัตยกรรมเริ่มต้นของ Sochron1k
 
-สถานะ: **Proposed (D-001)** — รอเจ้าของตัดสิน · ร่างเมื่อ 18 ต.ค. 2026 โดย Claude Code ตาม Handbook v5 บท 6 และบท 34 (P04)
+สถานะ: **Accepted (D-001)** — เจ้าของอนุมัติ 2026-10-21 ราว 06:55 +07 (ขอบเขตการอนุมัติอยู่ใน DECISIONS.md D-001) · ร่างเมื่อ 18 ต.ค. 2026 โดย Claude Code ตาม Handbook v5 บท 6 และบท 34 (P04)
 ปรับปรุง 2026-10-21 ตาม `docs/reviews/D-001-design-r1.md` (Codex adversarial design review หลัง SPIKE-001): F1 แยกเครื่อง (ข้อ 6.1), F2 execution scope (ข้อ 7.1), ข้อเท็จจริงจาก SPIKE-001 (ข้อ 2, 12) และ phase gates (ข้อ 13a) · ต้องผ่าน review รอบใหม่ก่อนเจ้าของตัดสิน
 
 ## 1. สรุปข้อเสนอ

@@ -3,7 +3,11 @@
 Decision log แบบย่อ (Handbook ภาคผนวก G) · สถานะที่ใช้: proposed · accepted · superseded · rejected
 เปลี่ยนสถานะเป็น accepted ได้เฉพาะเมื่อเจ้าของตัดสิน agent เขียนได้แค่ proposed
 
-## D-001 สถาปัตยกรรมเริ่มต้น: Python modular monolith + `MetaTrader5` บน Windows, วิจัยก่อน — 2026-10-18 — proposed
+## D-001 สถาปัตยกรรมเริ่มต้น: Python modular monolith + `MetaTrader5` บน Windows, วิจัยก่อน — 2026-10-18 — accepted (เจ้าของอนุมัติในแชท Claude 2026-10-21 ราว 06:55 หลัง SPIKE-001 และ review D-001 r1–r3)
+Acceptance scope:
+- รับสถาปัตยกรรม, ขอบเขตของเครื่อง (ข้อ 6.1), execution scope (ข้อ 7.1) และ phase gates (ข้อ 13a) ตาม `docs/architecture.md` ที่ commit `6495d94`
+- ไม่ได้อนุมัติ: ติดตั้ง dependency ของโปรเจกต์ (ต้องผ่าน dependency admission ทีละตัว), เริ่มวิจัยก่อน ENV-1 และส่งคำสั่งใดๆ ก่อนมี contract E1 ที่อนุญาต
+- งานแต่ละชิ้นยังต้องมี contract ที่อนุมัติ
 Context: เริ่มใหม่ทั้งหมด เครื่องพัฒนาเป็น Windows ซึ่งใช้แพ็กเกจ `MetaTrader5` ได้โดยตรง (wheel cp310–cp314) ผลลัพธ์ของโปรเจกต์คือหลักฐานว่ามี edge (บท 34) รอบก่อนยังไม่เคยใช้ข้อมูลจริง
 Decision: แอป Python 3.12 ตัวเดียว (uv) แบ่ง module ตาม `docs/architecture.md`; `broker/mt5` เป็นจุดเดียวที่ import MetaTrader5; strategy เป็น pure function ที่ใช้ร่วมกันระหว่าง backtest และ Demo; journal เป็น SQLite; dataset เป็น Parquet snapshot; ยังไม่มี web/DB server/Docker; ลำดับงาน BOOT-001 → SPIKE-001 → ENV-1 (Windows VPS + synthetic sentinel, ต้องผ่านก่อนวิจัย) → SLICE-R1 → SLICE-E1 → OPS-1
 Why: strategy ชุดเดียวทำได้ตรงที่สุด ทดสอบได้มากที่สุด ชิ้นส่วนน้อยที่สุดสำหรับเจ้าของคนเดียว และ AI ทำงานกับ Python ได้แม่น
