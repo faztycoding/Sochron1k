@@ -1,0 +1,58 @@
+# Secrets and local configuration: never commit real values (Handbook ch.20)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+
+# Proposed patches for locked files: the owner reviews and applies them; they are not committed
+docs/proposals/
+
+# Claude Code / Codex local state
+.claude/settings.local.json
+.claude/worktrees/
+CLAUDE.local.md
+.codex-log/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+htmlcov/
+.coverage
+
+# Node (control-plane scripts only; no packages yet)
+node_modules/
+
+# Market data, research runs and runtime state never go into git (Handbook ch.19, ch.34).
+# research/registry/*.jsonl is the exception: it is committed and append-only.
+data/
+research/runs/
+reports/out/
+journal/
+*.parquet
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+logs/
+*.log
+
+# The holdout set must never live inside the research checkout (Handbook ch.34)
+holdout/
+
+# MT5 artefacts
+*.ex5
+*.set
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

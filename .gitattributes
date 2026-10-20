@@ -1,0 +1,16 @@
+# This machine has core.autocrlf=true. Scripts must keep LF endings so they run in
+# Git Bash and on the Linux CI runner. Changing this file is a control change.
+* text=auto
+*.sh text eol=lf
+*.mjs text eol=lf
+*.js text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.docx binary
+*.pdf binary
+*.parquet binary

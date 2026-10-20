@@ -1,0 +1,33 @@
+name: ci
+
+# Runs the PR's OWN code: self-tests of the hooks and lock rules, and the red-flag scan.
+# Informational for reviewers. A PR can change these files, so this workflow is not the gate
+# for locked paths; that is control-gate.yml (review BOOT-001 F1).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  control-plane:
+    # Verifies the control plane (Handbook v5 App.A, App.O). Application checks are added once
+    # D-001 is accepted and the first Python code exists.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # Third-party actions are pinned to a full commit SHA (Handbook ch.21).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Control self-tests (hooks and lock rules)
+        run: node scripts/controls/test-controls.mjs
+
+      - name: Red-flag scan (informational; every hit is explained in the PR)
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: bash scripts/controls/red-flags.sh "origin/$BASE_REF"

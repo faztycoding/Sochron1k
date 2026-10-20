@@ -1,0 +1,39 @@
+name: control-gate
+
+# The merge gate for locked and append-only paths (Handbook v5 ch.19, App.O; review BOOT-001 F1).
+# pull_request_target runs THIS file and the verifier scripts from the BASE branch, so a PR cannot
+# weaken the check that judges it. The PR's commits are fetched as git data only: they are never
+# checked out, installed or executed. Make this job a required check in branch protection.
+# Bootstrap note: the PR that first adds this file is not judged by it (main has no gate yet);
+# the owner's review is the gate for that PR.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  locked-paths:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # Base revision only. Credentials stay in the git config so the next step can fetch the PR
+      # ref from a private repository; the token is read-only (contents: read) and no PR code runs.
+      - name: Check out the trusted base revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+
+      - name: Fetch the PR commits as data (never checked out or executed)
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: git fetch --no-tags origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/pr/head"
+
+      - name: Locked and append-only paths, judged by the base revision's verifier
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CONTROL_CHANGE_APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'owner-approved-control-change') }}
+        run: node scripts/controls/check-locked-paths.mjs --base "$BASE_SHA" --head "$HEAD_SHA"

@@ -1,0 +1,7 @@
+# Project-scoped Codex settings for Sochron1k (Handbook v5 ch.13, Appendix O).
+# Codex loads this file only after you mark the project as trusted.
+# Implementation and test-writing chats: write inside the workspace, ask before anything else.
+# Review chats: switch the chat to read-only before starting (/review against main).
+# Never use danger-full-access in this repository.
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
