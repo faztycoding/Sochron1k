@@ -80,16 +80,26 @@ function nextLogical(s, i, syntax) {
   return i;
 }
 
+const POSIX_WORD_BREAK = /[ \t\n;&|()<>]/;
+
 function splitSegments(s, syntax) {
   const segs = [];
   let cur = '';
   let quote = null;
   let braceDepth = 0;
+  const parameterQuotes = [];
+  let wordStart = true;
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
+    if (syntax === 'posix' && !quote && braceDepth === 0 && wordStart && c === '#') {
+      // Comments end at the physical newline; none of their contents are shell syntax.
+      const end = s.indexOf('\n', i);
+      i = end < 0 ? s.length : end - 1;
+      continue;
+    }
     if (posixEscape(s, i, quote, syntax)) {
       // Keep quoting for token decoding; a line continuation contributes no character.
-      if (s[i + 1] !== '\n') cur += c + s[i + 1];
+      if (s[i + 1] !== '\n') { cur += c + s[i + 1]; wordStart = false; }
       i++;
       continue;
     }
@@ -98,6 +108,16 @@ function splitSegments(s, syntax) {
       const end = substitutionEnd(s, next + 1, syntax);
       cur += '$(' + s.slice(next + 1, end + 1);
       i = end;
+      wordStart = false;
+      continue;
+    }
+    if (syntax === 'posix' && quote !== "'" && quote !== '`' && c === '$' && s[next] === '{') {
+      braceDepth++;
+      parameterQuotes.push(quote);
+      quote = null;
+      cur += '${';
+      i = next;
+      wordStart = false;
       continue;
     }
     if (quote) {
@@ -105,9 +125,18 @@ function splitSegments(s, syntax) {
       if (c === quote) quote = null;
       continue;
     }
-    if (c === '"' || c === "'" || (c === '`' && syntax === 'posix')) { quote = c; cur += c; continue; }
-    if (c === '{' && (s[i - 1] === '$' || s[i - 1] === '@')) { braceDepth++; cur += c; continue; }
-    if (c === '}' && braceDepth > 0) { braceDepth--; cur += c; continue; }
+    // An apostrophe in a parameter default under double quotes is literal.
+    if (c === '"' || (c === "'" && !parameterQuotes.includes('"')) || (c === '`' && syntax === 'posix')) { quote = c; cur += c; wordStart = false; continue; }
+    if (syntax !== 'posix' && c === '{' && (s[i - 1] === '$' || s[i - 1] === '@')) { braceDepth++; cur += c; continue; }
+    if (c === '}' && braceDepth > 0) {
+      braceDepth--;
+      if (syntax === 'posix') quote = parameterQuotes.pop();
+      cur += c;
+      wordStart = false;
+      continue;
+    }
+    if (syntax === 'posix' && braceDepth > 0) { cur += c; wordStart = false; continue; }
+    wordStart = braceDepth === 0 && POSIX_WORD_BREAK.test(c);
     const pairOp = (c === '&' || c === '|') && s[next] === c;
     if (c === ';' || c === '\n' || c === '|' || pairOp || c === '(' || c === ')' || c === '{' || c === '}') {
       segs.push(cur);
@@ -118,6 +147,7 @@ function splitSegments(s, syntax) {
     }
     cur += c;
   }
+  if (parameterQuotes.length) block('unterminated parameter expansion');
   segs.push(cur);
   return segs.filter((x) => x.trim() !== '');
 }
@@ -126,14 +156,37 @@ function substitutionEnd(s, start, syntax, level = 0) {
   if (level > 4) block('command substitution nests too deeply to inspect');
   let quote = null;
   let depth = 1;
+  let braceDepth = 0;
+  const parameterQuotes = [];
+  let wordStart = true;
   for (let i = start; i < s.length; i++) {
     const c = s[i];
-    if (posixEscape(s, i, quote, syntax)) { i++; continue; }
+    if (syntax === 'posix' && !quote && braceDepth === 0 && wordStart && c === '#') {
+      const end = s.indexOf('\n', i);
+      i = end < 0 ? s.length : end - 1;
+      continue;
+    }
+    if (posixEscape(s, i, quote, syntax)) {
+      if (s[i + 1] !== '\n') wordStart = false;
+      i++;
+      continue;
+    }
     if (quote === "'") { if (c === quote) quote = null; continue; }
     const next = nextLogical(s, i + 1, syntax);
-    if (c === '$' && s[next] === '(') { i = substitutionEnd(s, next + 1, syntax, level + 1); continue; }
+    if (c === '$' && s[next] === '(') { i = substitutionEnd(s, next + 1, syntax, level + 1); wordStart = false; continue; }
+    if (syntax === 'posix' && c === '$' && s[next] === '{') {
+      braceDepth++;
+      parameterQuotes.push(quote);
+      quote = null;
+      i = next;
+      wordStart = false;
+      continue;
+    }
     if (quote) { if (c === quote) quote = null; continue; }
-    if (c === '"' || c === "'") { quote = c; continue; }
+    if (c === '"' || (c === "'" && !parameterQuotes.includes('"'))) { quote = c; wordStart = false; continue; }
+    if (c === '}' && braceDepth > 0) { braceDepth--; quote = parameterQuotes.pop(); wordStart = false; continue; }
+    if (braceDepth > 0) { wordStart = false; continue; }
+    wordStart = braceDepth === 0 && POSIX_WORD_BREAK.test(c);
     if (c === '(') depth++;
     else if (c === ')' && --depth === 0) return i;
   }

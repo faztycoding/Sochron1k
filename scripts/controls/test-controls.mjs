@@ -474,6 +474,149 @@ test('F3: a branch switch earlier in the same command is honored', () => {
   }
 });
 
+// ---- F10: POSIX comments end at physical newlines ------------------------------------------
+// Hook JSON input only; none of these strings is executed by a shell.
+test('F10: a backslash in a comment cannot hide the following directory change', () => {
+  for (const cmd of [
+    'echo ok # C:\\\ncd .claude; echo {} > settings.json',
+    'echo ok # trailing \\\ncd .claude\necho {} > settings.json',
+    '# trailing \\\ncd .claude; echo {} > settings.json',
+    'echo ok;# trailing \\\ncd .claude; echo {} > settings.json',
+    'echo ok\t# trailing \\\ncd .claude; echo {} > settings.json',
+    "bash -c 'echo ok # trailing \\\ncd .claude; echo {} > settings.json'",
+  ]) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
+    assert.match(r.stderr, /redirecting output into settings\.json \(Claude Code settings/, cmd);
+  }
+});
+
+test('F10: quotes, operators and substitutions inside comments are inert', () => {
+  for (const cmd of [
+    "echo ok # it's fine\necho ok > out.txt",
+    'echo ok # "notes ( $( \\\necho ok > out.txt',
+    'echo ok # ) " ` $( \\\necho ok > out.txt',
+    '# cd .claude; echo {} > settings.json\necho ok > out.txt',
+    'echo ok;# cd .claude; echo {} > settings.json\necho ok > out.txt',
+    'echo ok # unterminated $( " ( \\',
+    '# comment without a final newline',
+    '(echo ok # ) \\\n); echo ok > out.txt',
+    'echo ok |# comment \\\ncat > out.txt',
+    'echo ok &&# comment \\\necho ok > out.txt',
+    'echo ok & # comment \\\necho ok > out.txt',
+  ]) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 0, `${cmd}: ${r.stderr}`);
+  }
+});
+
+test('F10: a hash within a word or quoted fragment does not start a comment', () => {
+  const words = [
+    'a#b', '$#', '${#x}', "''#", '""#', String.raw`\#`, String.raw`\ #`,
+    String.raw`\;#`, String.raw`\|#`, String.raw`\(#`, '{#', '}#',
+    '${x}#', '$(echo x)#', '${x:- #}', '${x:-${y:- #}}',
+    String.raw`\${x`, String.raw`\$`, '@{x',
+  ];
+  for (const word of words) {
+    const cmd = `echo ${word}; cd .claude; echo {} > settings.json`;
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
+    assert.match(r.stderr, /redirecting output into settings\.json \(Claude Code settings/, cmd);
+  }
+  for (const cmd of ['echo a#b', 'echo $#', 'echo ${#x}',
+    'echo "# cd .claude; echo {} > settings.json"',
+    "echo '# cd .claude; echo {} > settings.json'"]) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 0, `${cmd}: ${r.stderr}`);
+  }
+});
+
+test('F10: line continuations preserve the word boundary before a hash', () => {
+  for (const cmd of [
+    'echo a\\\n#; cd .claude; echo {} > settings.json',
+    'echo \\\n# trailing \\\ncd .claude; echo {} > settings.json',
+    'echo \\\n\\\n# trailing \\\ncd .claude; echo {} > settings.json',
+    'echo a\\\n\\\n#; cd .claude; echo {} > settings.json',
+    'echo $\\\n{#x}; cd .claude; echo {} > settings.json',
+    'echo $\\\n{x:- #}; cd .claude; echo {} > settings.json',
+    'echo \\\\#; cd .claude; echo {} > settings.json',
+    'echo ok \\\n# comment \\\ncd .claude; echo {} > settings.json',
+  ]) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
+    assert.match(r.stderr, /redirecting output into settings\.json \(Claude Code settings/, cmd);
+  }
+  // Outside a comment the newline really is removed: "cd .claude" stays echo arguments.
+  assert.equal(runHook('guard-bash.mjs',
+    shellInput('echo ok \\\ncd .claude; echo {} > settings.json')).code, 0);
+});
+
+test('F10: substitution comments cannot close a substitution or hide its next line', () => {
+  for (const cmd of [
+    'echo "$(echo ok # ) \\\ncd .claude; echo {} > settings.json)"',
+    'echo "$(echo ok # \' " $( ) \\\ncd .claude; echo {} > settings.json)"',
+    'echo "$(echo "$(echo ok # ) \\\ncd .claude; echo {} > settings.json)")"',
+    'echo "$(echo ${x:- #}; cd .claude; echo {} > settings.json)"',
+    'echo "$(echo $\\\n{x:- #}; cd .claude; echo {} > settings.json)"',
+  ]) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
+    assert.match(r.stderr, /redirecting output into settings\.json \(Claude Code settings/, cmd);
+  }
+  for (const cmd of [
+    'echo "$(echo ok # ) \\\necho ok > out.txt)"',
+    'echo "$(echo ok # \' " $( ) \\\necho ok > out.txt)"',
+    'echo "$(echo ${#x})"',
+    'echo "$(echo ${x:- #})"',
+    'echo "$(echo ok # comment \\\ncd .claude)"; echo {} > settings.json',
+  ]) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 0, `${cmd}: ${r.stderr}`);
+  }
+  const unclosed = runHook('guard-bash.mjs', shellInput('echo "$(echo ok # )"'));
+  assert.equal(unclosed.code, 2);
+  assert.match(unclosed.stderr, /unterminated command substitution/);
+});
+
+test('F10: parameter quote contexts cannot turn literal hashes into comments', () => {
+  for (const expr of [
+    '"${x:-" # "}"', '"${x:-it\'s}"', '"${x:- #}"', '"${#x}"',
+    '"${x:-${y:-" # "}}"', '"${x:-"} # "}"', '"${x:-\\} #}"',
+    '"${x:-$(echo "}") #}"', '"${x:-; cd .claude;}"',
+  ]) {
+    for (const suffix of ['; echo ok > out.txt', '; cd .claude; echo {} > settings.json']) {
+      const cmd = `echo ${expr}${suffix}`;
+      const r = runHook('guard-bash.mjs', shellInput(cmd));
+      const denied = suffix.includes('cd .claude');
+      assert.equal(r.code, denied ? 2 : 0, `${cmd}: ${r.stderr}`);
+      if (denied) assert.match(r.stderr, /redirecting output into settings\.json \(Claude Code settings/, cmd);
+    }
+  }
+  for (const cmd of [
+    'echo "$(echo "${x:-" # "}"; cd .claude; echo {} > settings.json)"',
+    'echo "$(echo "${x:-it\'s}"; cd .claude; echo {} > settings.json)"',
+    'echo "${x:-$(echo ok # ) \\\ncd .claude; echo {} > settings.json)}"',
+  ]) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
+    assert.match(r.stderr, /redirecting output into settings\.json \(Claude Code settings/, cmd);
+  }
+  const r = runHook('guard-bash.mjs', shellInput('echo "${x:- #"; echo ok'));
+  assert.equal(r.code, 2);
+  assert.match(r.stderr, /unterminated parameter expansion/);
+});
+
+test('F10: comment handling does not change non-POSIX tool parsing', () => {
+  for (const [tool, cmd] of [
+    ['PowerShell', 'Write-Output x # text; Set-Content AGENTS.md x'],
+    ['Bash', 'cmd /c "echo x # text & echo x > AGENTS.md"'],
+    ['Monitor', 'echo x # text; echo x > AGENTS.md'],
+  ]) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd, { tool }));
+    assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
+  }
+});
+
 // ---- F7: escaped POSIX parentheses must not change directory scope --------------------------
 // Hook input only: none of these command strings is executed by a shell.
 test('F7: escaped parentheses do not scope parent directory changes', () => {
