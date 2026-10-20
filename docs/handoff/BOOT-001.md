@@ -1574,6 +1574,35 @@ Evidence collected since:
 CI: `control-plane` success on `2f2b6ca` (run 39438962998) and `77a8139`. Merging and the
 label are the owner's alone.
 
+## After merge: AC-05 proof PR with the F23 fix (r10, Claude), 2026-10-20
+
+PR #1 was merged by the owner at 23:07:40 +07 (merge commit `7b6a841`, label
+`owner-approved-control-change`, confirmed through the GitHub API at 23:11). `main` now holds
+`control-gate`, so the next PR that touches a locked path can prove AC-05.
+
+Owner-approved plan (about 23:12): branch `chore/BOOT-001-ac05-control-gate` from `7b6a841`.
+Its locked-path change is the pending F23 fix: remove the extra blank line at the end of
+`scripts/controls/test-controls.mjs`. Behavior and tests are unchanged.
+
+| Artifact | SHA256 | Git blob |
+|----------|--------|----------|
+| `docs/proposals/BOOT-001-r10-controls.patch` (gitignored) | `9dc4b6e2d91297370ef717bbd05a0afcdf16f3c91b771bb135a54a1a440d175c` | n/a |
+| `scripts/controls/test-controls.mjs` before | `a7ef3e4b1589a0df30cc37c9fdb02d495a7dfad26089cb3388e348963018e603` | `14c58e680a85a1927e9469bdc2932b13367bf7bd` |
+| `scripts/controls/test-controls.mjs` expected after | `d60f06868da29ac8ae5f6b8ae8ff3419e04993e45380ee1f68715b083d98f0bc` | `474ccde7edaf3595cb6e60b690b9da3bfd2b5d90` |
+
+The patch removes one empty line (1247). `git apply --check`, run standalone, passed at 23:13.
+That run was standalone because the first attempt chained a `cd` and was blocked (F21); the
+owner then made "rerun standalone" a standing answer.
+
+Sequence:
+1. Claude applies r10 under D-006, verifies the hashes above, and a fresh headless Claude
+   session reviews it and commits.
+2. Claude pushes the branch, and the owner creates the PR from the prefilled compare link.
+3. Without the label, `control-gate / locked-paths` is expected to FAIL.
+4. The owner adds `owner-approved-control-change`, and `locked-paths` is expected to PASS (AC-05).
+5. Claude records both runs and writes the steps for required checks (`control-plane`,
+   `locked-paths`, as GitHub reports them). The owner sets branch protection and merges.
+
 ## Acceptance evidence: AC-01 (Claude), AC-02, AC-03
 
 Fresh headless Claude Code session (`claude -p`, entrypoint `claude-vscode`, extension

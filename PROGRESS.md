@@ -1,9 +1,9 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-20 by Claude Code · เจ้าของตัดสินแล้ว: AC-04 v1.1, F20 ไปงาน guard-fix ถัดไป, ยอมรับความเสี่ยงที่เหลือ (D-007) · AC-01 ฝั่ง Claude, AC-02, AC-03 PASS (session headless 21:47–21:50) · เหลือ P25 ฝั่ง Codex (AC-01) และ AC-08 ก่อนเจ้าของติด label และ merge
+Updated 2026-10-20 by Claude Code · **PR #1 merged** โดยเจ้าของ 23:07:40 (`7b6a841`, มี label) · กำลังพิสูจน์ AC-05 บน branch `chore/BOOT-001-ac05-control-gate` ด้วยการแก้ F23 (patch r10) ตามแผนที่เจ้าของอนุมัติ
 
 ## Current task
 BOOT-001 v1 · State FIXING · F3, F7, F10 และ F18 ปิดแล้ว (F18 ใน review r9) · F9 ปิดสำหรับรูปแบบที่บันทึกไว้ (review r7) · ไม่มี finding High ค้าง · **F20 Medium ใหม่ (ต้นเหตุเดียวกับ F18 แต่ไม่ใช่ regression):** `#` ที่ติดหลัง `)` ของ `@(…)` หรือ `a=(…)` ถูก guard อ่านเป็น comment → เจ้าของเลือกที่วาง · F19 และ F11–F15 Medium ไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน · Low ที่ค้าง: F8 ส่วน Monitor/case, F16, F17, F21 (inspection ที่พ่วงคำสั่งอื่นถูกบล็อก), F22 (ตัวพิมพ์ของ path ทำให้สิทธิ์ apply ไม่ทำงาน แต่บล็อกอย่างปลอดภัย), F23 (blank line ท้ายไฟล์ test) · AC-04 FAIL ตามข้อความ contract: ข้อ push ต้องแก้ตาม D-006 และ Medium ที่ค้างยังเขียนไฟล์ล็อกผ่านได้
-Branch `chore/BOOT-001-project-bootstrap` · controls r9 + review r9 อยู่ใน commit ของ session นี้ (ดู Done) · push แล้วถึง `2f2b6ca` (D-006) · Linux CI ล่าสุด: run 39438962998 success บน `2f2b6ca`
+Branch `chore/BOOT-001-project-bootstrap` merge แล้วผ่าน PR #1 (`7b6a841`, 23:07:40) · งานต่อหลัง merge อยู่บน branch `chore/BOOT-001-ac05-control-gate` จาก `7b6a841` ตามแผนใน handoff หัวข้อ "After merge: AC-05 proof PR" · CI ล่าสุดก่อน merge: `control-plane` success บน `5fa6667`
 
 ## Done (with evidence)
 - 2026-10-20 21:47–21:50 +07: Claude session ใหม่ (headless, parent session เริ่มตามคำขอเจ้าของ) รัน `/verify-agent-setup` (P25) และ probe ของ AC-02/AC-03 บน `b55eb94` ตาม contract v1.1 · ตารางอยู่ใน `docs/tooling/compatibility.md` ข้อความบล็อกเต็มอยู่ใน handoff หัวข้อ "Acceptance evidence: AC-01 (Claude), AC-02, AC-03"
