@@ -1178,3 +1178,50 @@ Owner:
 - Decide F18's place relative to r9, and where F19 goes.
 - Push when ready. CI on the new head gives Linux evidence for the 61 tests.
 - Do not add the label while F18 is open.
+
+## D-006 revised: no prompt; F18 in r9 (owner, 2026-10-20)
+
+Owner decisions after review r8, given in the Claude chat:
+
+- **No approval prompt.** "เอากฎ ask ออก ... คำสั่งจากเจ้าของโปรเจค". Claude runs `git apply` of
+  `docs/proposals/` patches and non-force `git push` of the task branch itself, with no `ask`
+  rule and no prompt. DECISIONS.md D-006 is updated.
+- **F18 goes into r9**, together with D-006.
+- **F19 goes to the next guard-fix task**, with F11–F17.
+
+These decisions replace the following requirements of "Owner decision D-006" above.
+Requirements 2, 3, 4, 6 and 7 still apply, with test assertions adjusted to the revised rules.
+
+- **1 (settings).** Remove `Bash(git push)` and `Bash(git push *)` from `deny`. Add no `ask`
+  or `allow` rule for push or apply. Keep the deny rules for `git reset --hard` and `git clean`.
+- **5 (post-run check).** Change CLAUDE.md so Claude may run the two commands without asking.
+  When the post-run check reports exactly the target files of the `docs/proposals/` patch
+  Claude just applied, Claude verifies the handoff's expected applied hashes and continues. A
+  hash mismatch, or any other report, still means stop and ask (N6).
+  - Order per patch: apply, then a fresh-session review, then commit.
+- **6 (text).** In AGENTS.md "Agent roles", "Authority" and "Git", and in CLAUDE.md "Claude Code
+  only", allow Claude to apply `docs/proposals/` patches and push the task branch without force.
+  Merging, labels and every other external write stay with the owner.
+- **8 (live check).** After r9 is applied and reviewed, Claude pushes the task branch from the
+  owner's session and records the result. No prompt is expected. CI must name the pushed head.
+
+F18 in the same patch:
+- Follow the "Request to Codex" list in "Review r8" above: both F18 inputs return 2, the
+  spaced-comment form returns 0, the `(pwd)# C:\` form returns 2, and the F10 tests still pass.
+- Give fail-before/pass-after evidence separately for F18 and for the D-006 parts.
+
+Documentation notes. These correct the bypassPermissions statement in D-004; the revised
+D-006 no longer depends on them.
+- Per the current [permission modes](https://code.claude.com/docs/en/permission-modes) page:
+  - explicit `ask` rules still prompt in bypassPermissions;
+  - deny rules block in every mode;
+  - allow rules have no effect in bypassPermissions.
+- Per the [hooks](https://code.claude.com/docs/en/hooks) reference:
+  - a PreToolUse hook returning `ask` forces a prompt in auto mode, where the classifier can
+    deny the call but cannot approve it silently;
+  - deny and ask rules are evaluated whatever the hook returns.
+- Codex noted that in headless `-p` sessions, which have no way to answer, an `ask` may be
+  denied instead of prompting. Interactive and headless use must be tested separately.
+
+Next: Codex writes `docs/proposals/BOOT-001-r9-controls.patch` on head `b7fccc8` or later,
+following this section.

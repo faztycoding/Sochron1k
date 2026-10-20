@@ -33,7 +33,7 @@ Context: หลัก 6 "บังคับด้วยระบบ ไม่ใ
 Decision: (1) deny rules ใน `.claude/settings.json` (2) PreToolUse hooks `protect-paths` / `guard-bash` (Node, รองรับ worktree; guard ตีความปลายทางจริงของคำสั่ง shell ตาม review F3) (3) CI gate `control-gate.yml` (pull_request_target) ที่รัน `check-locked-paths.mjs` ฉบับจาก base revision กับ commits ของ PR โดยไม่รันโค้ดจาก PR ตรวจทุก commit สำหรับไฟล์ append-only และ fail เมื่อไม่มี label `owner-approved-control-change` (review F1, F2) · `ci.yml` รัน self-tests ของ PR เป็นข้อมูลประกอบ ไม่ใช่ gate · Codex ใช้ `workspace-write` + `on-request` (`.codex/config.toml`, มีผลเมื่อ trust โปรเจกต์) · agent ห้าม push/merge
 การแก้ไฟล์ที่ล็อก: agent ทำเป็น patch ใน `docs/proposals/` (gitignored) ให้ Codex รีวิว แล้วเจ้าของเป็นคน `git apply` เอง
 Why: ไฟล์คำสั่ง (AGENTS.md) เป็นแค่ context ส่วนการบล็อกจริงต้องใช้ hook/permission/CI (Claude Code docs: memory) และ test ที่ล็อกกัน F02
-Consequences: Claude แก้กติกา, hooks, skills และ test ที่ล็อกไม่ได้ เจ้าของต้องแก้เอง, apply patch ที่รีวิวแล้ว หรือปลดล็อกชั่วคราว · ชั้น CI มีผลจริงเมื่อเจ้าของเปิด branch protection ให้ check `control-gate / locked-paths` เป็น required · PR แรกที่เพิ่ม `control-gate.yml` จะไม่ถูก gate นี้ตัดสิน เพราะ main ยังไม่มี gate การรีวิวของเจ้าของจึงเป็น gate ของ BOOT-001 · label ที่ติดแล้วยังค้างอยู่เมื่อมี commit ใหม่ (N1 ใน `docs/handoff/BOOT-001.md`) ยังไม่ได้แก้ · โหมด bypassPermissions ทำให้ ask rules ไม่ถาม แต่ deny rules และ hooks ยังบังคับ
+Consequences: Claude แก้กติกา, hooks, skills และ test ที่ล็อกไม่ได้ เจ้าของต้องแก้เอง, apply patch ที่รีวิวแล้ว หรือปลดล็อกชั่วคราว · ชั้น CI มีผลจริงเมื่อเจ้าของเปิด branch protection ให้ check `control-gate / locked-paths` เป็น required · PR แรกที่เพิ่ม `control-gate.yml` จะไม่ถูก gate นี้ตัดสิน เพราะ main ยังไม่มี gate การรีวิวของเจ้าของจึงเป็น gate ของ BOOT-001 · label ที่ติดแล้วยังค้างอยู่เมื่อมี commit ใหม่ (N1 ใน `docs/handoff/BOOT-001.md`) ยังไม่ได้แก้ · (แก้ 2026-10-20 ให้ตรงเอกสาร permission-modes ปัจจุบัน) ในโหมด bypassPermissions: ask rules ที่เขียนไว้ชัดเจนยังถาม, deny rules บล็อกทุกโหมด, allow rules ไม่มีผล และ hooks ยังทำงาน
 Review when: hook บล็อกงานปกติซ้ำ (false positive) · Claude Code หรือ Codex เปลี่ยน format ของ hook/permission · มี failure ที่หลุดผ่านทั้งสามชั้น
 
 ## D-005 Skills และ agents ของโปรเจกต์ — 2026-10-18 — proposed
@@ -43,22 +43,21 @@ Why: ขั้นตอนตรงกับ handbook ทุกตัว ไม�
 Consequences: ยังไม่ได้ทำ eval อัตโนมัติของ skills (SKIPPED) วัดผลจากการใช้งานจริงและ rules-review รายสัปดาห์แทน
 Review when: D-001 ได้รับการยอมรับ (พิจารณา candidate ด้าน Python เช่น pyright-lsp, astral) · skill ไม่ถูกเรียกเมื่อควรถูกเรียก หรือถูกเรียกผิดงาน
 
-## D-006 เจ้าของอนุมัติด้วยปุ่ม Allow: Claude รัน `git apply` ของ patch ใน `docs/proposals/` และ `git push` เอง — 2026-10-20 — accepted (เจ้าของเลือกในแชท Claude) · ยังไม่ implement
-Context: ตาม D-004 และ AGENTS.md เจ้าของต้อง copy คำสั่งไปวางเองทุกครั้งที่ apply patch ไฟล์ล็อกหรือ push · 2026-10-20 guard บล็อก `git apply` ของ r8 ที่เจ้าของสั่งให้ Claude รัน เจ้าของไม่ต้องการรันเองอีก ("ตั้ง project rule ให้มึงรัน terminal ให้กู")
-Decision: ย้ายการอนุมัติจาก "เจ้าของพิมพ์คำสั่งเอง" ไปเป็น "หน้าต่างขออนุญาตของ Claude Code ที่เจ้าของกด Allow" สำหรับสองคำสั่งเท่านั้น:
+## D-006 Claude รัน `git apply` ของ patch ใน `docs/proposals/` และ `git push` ของ branch งานเองโดยไม่ต้องขออนุมัติ — 2026-10-20 — accepted (เจ้าของสั่งในแชท Claude) · ยังไม่ implement
+Context: ตาม D-004 และ AGENTS.md เจ้าของต้อง copy คำสั่งไปวางเองทุกครั้งที่ apply patch ไฟล์ล็อกหรือ push · 2026-10-20 guard บล็อก `git apply` ของ r8 ที่เจ้าของสั่งให้ Claude รัน · เจ้าของเลือกให้เปลี่ยนเป็นกดปุ่ม Allow ก่อน แล้วสั่งตามมาว่า "เอากฎ ask ออก ... คำสั่งจากเจ้าของโปรเจค" คือไม่ต้องมีหน้าต่างอนุมัติเลย
+Decision: Claude รันสองคำสั่งนี้ได้เองโดยไม่ถามและไม่มีหน้าต่างอนุญาต:
 - `git apply` ของไฟล์ patch ใน `docs/proposals/`
 - `git push` ไป branch งาน แบบไม่ force
 
-ที่ยังบล็อกเหมือนเดิม:
+ที่ยังบล็อกเหมือนเดิม (ไม่ต้องให้เจ้าของทำอะไรเพิ่ม):
 - force push (`-f`, `--force`, `--force-with-lease`, refspec ที่ขึ้นต้นด้วย `+`)
 - push ไป main
 - reset --hard และ clean
 - การเขียนไฟล์ล็อกด้วยวิธีอื่น
 - การอ่าน credential
 
-ส่วน review โดย session ใหม่, CI control-gate และ label ของเจ้าของ ยังเป็น gate ก่อน merge เหมือนเดิม
-Implementation: ต้องแก้ไฟล์ล็อก ได้แก่ `.claude/settings.json` (ย้ายไปอยู่ใน ask), `guard-bash.mjs`, `test-controls.mjs`, CLAUDE.md และ AGENTS.md · Codex ทำเป็น patch, เจ้าของ apply เป็นครั้งสุดท้ายตามกฎเดิม, แล้ว Claude session ใหม่ตรวจ · รายละเอียดอยู่ใน `docs/handoff/BOOT-001.md` หัวข้อ "Owner decision D-006"
-Before use: ต้องพิสูจน์ใน session จริงของเจ้าของว่าหน้าต่าง Allow เด้งขึ้นสำหรับทั้งสองคำสั่ง ในโหมด permission ที่เจ้าของใช้อยู่ เพราะ D-004 บันทึกไว้ว่า bypassPermissions ทำให้ ask rules ไม่ถาม และ auto mode ยังไม่ได้พิสูจน์ · ถ้าหน้าต่างไม่เด้ง ห้ามเปิดใช้
-Risk: ปุ่ม Allow เป็นด่านเดียวก่อนไฟล์ล็อกเปลี่ยน หรือก่อน push ออกนอกเครื่อง · ถ้ากดโดยไม่อ่านคำสั่ง จะเหลือแค่ review, CI และ label ที่กั้นก่อน merge · patch ใน `docs/proposals/` ถูกเขียนโดย agent
-Supersedes (เมื่อ implement และพิสูจน์แล้ว): ส่วนของ D-004 ที่ให้ "เจ้าของเป็นคน `git apply` เอง" และ "agent ห้าม push"
-Review when: มีการ apply หรือ push ที่เจ้าของไม่ได้ตั้งใจ · Claude Code เปลี่ยนพฤติกรรมของ ask rule หรือโหมด permission
+merge ยังเป็นของเจ้าของเท่านั้น
+Implementation: ต้องแก้ไฟล์ล็อก ได้แก่ `.claude/settings.json` (เอา push ออกจาก deny), `guard-bash.mjs`, `test-controls.mjs`, CLAUDE.md และ AGENTS.md · Codex ทำเป็น patch r9 (รวมการแก้ F18 ตามที่เจ้าของเลือก), เจ้าของ apply เป็นครั้งสุดท้ายตามกฎเดิม, แล้ว Claude session ใหม่ตรวจ · รายละเอียดอยู่ใน `docs/handoff/BOOT-001.md` หัวข้อ "Owner decision D-006" และ "D-006 revised: no prompt; F18 in r9"
+Risk: ก่อนถึงขั้น merge ไม่มีคนอนุมัติแล้ว ทั้งตอน patch แก้ไฟล์ควบคุม และตอน push ออกนอกเครื่อง · patch ใน `docs/proposals/` เขียนโดย agent และถูกตรวจโดย Claude session ใหม่หลังจาก apply แล้ว ไม่ใช่ก่อน · ด่านที่เหลือก่อน merge คือ CI control-gate และ label ของเจ้าของ · hook ตรวจหลังรันยังรายงานการเปลี่ยนไฟล์ล็อกทุกครั้ง
+Supersedes (เมื่อ implement แล้ว): ส่วนของ D-004 ที่ให้ "เจ้าของเป็นคน `git apply` เอง" และ "agent ห้าม push"
+Review when: มีการ apply หรือ push ที่เจ้าของไม่ได้ตั้งใจ · patch ที่ apply แล้วถูกพบว่าเปลี่ยนสิ่งที่ไม่ได้อยู่ใน handoff

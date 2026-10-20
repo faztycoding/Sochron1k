@@ -1,8 +1,8 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-20 by Claude Code · review r8 เสร็จ: F10 ปิด แต่ r8 ทำให้เกิด F18 High (regression) · รอเจ้าของเลือกลำดับ F18 กับ r9 (D-006)
+Updated 2026-10-20 by Claude Code · review r8 เสร็จ (F10 ปิด, F18 High เปิด) · เจ้าของตัดสิน: D-006 ไม่มีหน้าต่างอนุมัติ, F18 รวมใน r9, F19 ไปงาน guard-fix ถัดไป · รอ Codex ทำ r9
 
 ## Current task
-BOOT-001 v1 · State FIXING · F3, F7 และ F10 ปิดแล้ว · F9 ปิดสำหรับรูปแบบที่บันทึกไว้ (review r7) · **F18 High เปิดอยู่ (regression จาก r8):** `#` ที่ติดหลัง `)` ของ process substitution `<(…)` ถูก guard อ่านเป็น comment แต่ Bash อ่านเป็นส่วนของคำเดิม ทำให้ guard มองไม่เห็น `cd` และการเขียนที่ตามมา → AC-04 FAIL · F19 Medium (มีอยู่แล้วก่อน r8) รอเจ้าของจัดที่ · F11–F15 Medium ย้ายไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน · Low ที่ค้าง: F8 ส่วน Monitor/case, F16, F17
+BOOT-001 v1 · State FIXING · F3, F7 และ F10 ปิดแล้ว · F9 ปิดสำหรับรูปแบบที่บันทึกไว้ (review r7) · **F18 High เปิดอยู่ (regression จาก r8):** `#` ที่ติดหลัง `)` ของ process substitution `<(…)` ถูก guard อ่านเป็น comment แต่ Bash อ่านเป็นส่วนของคำเดิม ทำให้ guard มองไม่เห็น `cd` และการเขียนที่ตามมา → AC-04 FAIL · F19 Medium (มีอยู่แล้วก่อน r8) ไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน · F11–F15 Medium ย้ายไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน · Low ที่ค้าง: F8 ส่วน Monitor/case, F16, F17
 Branch `chore/BOOT-001-project-bootstrap` · controls r8 อยู่ที่ `a7e14e7` (ต่อจาก D-006 `09360db`), review r8 อยู่ใน commit ถัดไป · ไม่ push · Linux CI ล่าสุดที่ยืนยันยังเป็นของ `7eae474`
 
 ## Done (with evidence)
@@ -126,14 +126,13 @@ Codex ชี้ (หลัง review r5 static) ว่า Claude เปลี่
 - Approved: เจ้าของขอให้ตั้งโปรเจกต์ (2026-10-18), ส่ง review r1 มาให้แก้, สั่ง commit แยกส่วน สั่งให้ apply patch r1 (2026-10-19, ครั้งเดียวสำหรับ patch นี้), ให้ส่งงานไปมาระหว่าง Claude กับ Codex ได้ และให้ checkpoint ตามกติกาทุกครั้งที่จบงานหนึ่งขั้น · ไม่มีอนุมัติให้ agent merge หรือเชื่อมโบรกเกอร์ · push ถูกบล็อกด้วย deny rule จึงเป็นของเจ้าของ
 
 ## Next safe action
-- เจ้าของ: เลือกลำดับ F18 กับ r9 (คำแนะนำ: patch F18 แยกก่อน เพื่อให้แต่ละการเปลี่ยน control มี fail-before/pass-after และ review ของตัวเอง) และตัดสินที่ของ F19 → Codex เขียน patch F18 พร้อม regression ตามข้อกำหนดใน handoff หัวข้อ "Review r8" → เจ้าของ apply → Claude session ใหม่ตรวจ
-- **D-006 (เจ้าของตัดสิน 2026-10-20):** Claude รัน `git apply` ของ patch ใน `docs/proposals/` และ `git push` (branch งาน, ไม่ force) เอง โดยเจ้าของกด Allow แทนการวางคำสั่ง · Codex ทำ `BOOT-001-r9-controls.patch` บน head ที่มี r8 ตามข้อกำหนดใน handoff หัวข้อ "Owner decision D-006" → เจ้าของ apply เป็นครั้งสุดท้าย → Claude session ใหม่ตรวจ → พิสูจน์ใน session จริงว่าหน้าต่าง Allow เด้งก่อนเปิดใช้
-- เจ้าของ: push ได้ตลอดด้วยการวางคำสั่ง จนกว่า D-006 จะใช้งานได้ · ดู Linux CI บน head ที่ push จริง
+- **เจ้าของตัดสินหลัง review r8 (2026-10-20):** D-006 ไม่มีหน้าต่างอนุมัติ ("เอากฎ ask ออก") · F18 รวมอยู่ใน r9 · F19 ไปงาน guard-fix ถัดไป → Claude สั่ง Codex ผ่าน `codex exec` ให้ทำ `docs/proposals/BOOT-001-r9-controls.patch` ตาม handoff หัวข้อ "D-006 revised: no prompt; F18 in r9" → เจ้าของ apply r9 เป็นครั้งสุดท้ายตามกฎเดิม → Claude เปิด session ใหม่แบบ headless ตรวจและ commit → Claude push branch งานเองและบันทึกผล CI ของ head ที่ push
+- จนกว่า r9 จะใช้งานได้ push ยังเป็นของเจ้าของ · ดู Linux CI บน head ที่ push จริง
 - F8 ส่วนที่เหลือต้องมี contract/หลักฐาน shell ของ Monitor และการวิเคราะห์ branch ของ case ก่อนแก้; ไม่เดา syntax เพื่อทำให้คำสั่งผ่าน
 - ยังไม่ติด label `owner-approved-control-change`: F18 High ยังเปิด · ติดได้เมื่อไม่มี finding High ค้างและ CI เขียว
 - หลัง merge: ตั้ง branch protection ให้ `control-gate / locked-paths` และ `ci / control-plane` เป็น required
 - งานถัดไปหลัง BOOT-001 (ยังไม่มี contract): แก้ false positive ของ guard-bash พร้อม regression tests → (1) เนื้อหาใน heredoc ถูกอ่านเป็นคำสั่ง (2) regex pipe-to-shell จับคำ curl/bash ที่อยู่ใน pattern ของ grep (3) F8 ส่วนที่เหลือ: Monitor ที่มี `$(...)`, `case` pattern (4) F16 backtick ที่มี backslash
-- งาน guard-fix ถัดไป (ยังไม่มี contract): F11–F15 และ F17 จาก review r7 ตามที่เจ้าของตัดสินเมื่อ 2026-10-20
-- Waiting for owner action/decision: ลำดับ F18 กับ r9, ที่ของ F19, push head ที่มี r8, N1–N4, D-002..D-005, contract SPIKE-001
+- งาน guard-fix ถัดไป (ยังไม่มี contract): F11–F15 และ F17 จาก review r7 และ F19 จาก review r8 ตามที่เจ้าของตัดสินเมื่อ 2026-10-20
+- Waiting for owner action/decision: apply r9 เมื่อพร้อม, N1–N4, D-002..D-005, contract SPIKE-001
 
 On resume: re-check git state and every pending external operation first.
