@@ -1574,6 +1574,35 @@ Evidence collected since:
 CI: `control-plane` success on `2f2b6ca` (run 39438962998) and `77a8139`. Merging and the
 label are the owner's alone.
 
+## After merge: AC-05 proof PR with the F23 fix (r10, Claude), 2026-10-20
+
+PR #1 was merged by the owner at 23:07:40 +07 (merge commit `7b6a841`, label
+`owner-approved-control-change`, confirmed through the GitHub API at 23:11). `main` now holds
+`control-gate`, so the next PR that touches a locked path can prove AC-05.
+
+Owner-approved plan (about 23:12): branch `chore/BOOT-001-ac05-control-gate` from `7b6a841`.
+Its locked-path change is the pending F23 fix: remove the extra blank line at the end of
+`scripts/controls/test-controls.mjs`. Behavior and tests are unchanged.
+
+| Artifact | SHA256 | Git blob |
+|----------|--------|----------|
+| `docs/proposals/BOOT-001-r10-controls.patch` (gitignored) | `9dc4b6e2d91297370ef717bbd05a0afcdf16f3c91b771bb135a54a1a440d175c` | n/a |
+| `scripts/controls/test-controls.mjs` before | `a7ef3e4b1589a0df30cc37c9fdb02d495a7dfad26089cb3388e348963018e603` | `14c58e680a85a1927e9469bdc2932b13367bf7bd` |
+| `scripts/controls/test-controls.mjs` expected after | `d60f06868da29ac8ae5f6b8ae8ff3419e04993e45380ee1f68715b083d98f0bc` | `474ccde7edaf3595cb6e60b690b9da3bfd2b5d90` |
+
+The patch removes one empty line (1247). `git apply --check`, run standalone, passed at 23:13.
+That run was standalone because the first attempt chained a `cd` and was blocked (F21); the
+owner then made "rerun standalone" a standing answer.
+
+Sequence:
+1. Claude applies r10 under D-006, verifies the hashes above, and a fresh headless Claude
+   session reviews it and commits.
+2. Claude pushes the branch, and the owner creates the PR from the prefilled compare link.
+3. Without the label, `control-gate / locked-paths` is expected to FAIL.
+4. The owner adds `owner-approved-control-change`, and `locked-paths` is expected to PASS (AC-05).
+5. Claude records both runs and writes the steps for required checks (`control-plane`,
+   `locked-paths`, as GitHub reports them). The owner sets branch protection and merges.
+
 ## Acceptance evidence: AC-01 (Claude), AC-02, AC-03
 
 Fresh headless Claude Code session (`claude -p`, entrypoint `claude-vscode`, extension
@@ -1638,3 +1667,263 @@ Not established by this run:
 - AC-05 can only be checked after merge.
 
 No unexpected block occurred, and none of the standing owner answers was needed.
+
+## R11 proposal: F22 Windows path spelling and F23 EOF (Codex), 2026-10-20
+
+Owner authorization relayed by Claude at about 23:20 +07: one proposal fixes F22 and F23
+together. This section supersedes the unapplied r10 in "After merge: AC-05 proof PR with the
+F23 fix (r10, Claude)". Do not apply both. Branch `chore/BOOT-001-ac05-control-gate`, source HEAD
+`641fd490f4b1a4f9d9126a1556bd4bb7c526c11a`. The starting tree and index were clean.
+Codex acted as implementer and regression author, using `.claude/skills/fix-findings/SKILL.md`
+as a plain procedure. D-008 and the owner's explicit instruction require leaving every file
+unstaged: Claude verifies, stages, scans and commits. No root `.git` write was attempted.
+
+### Findings response
+
+| ID | Accept/Dispute | Commit | Evidence |
+|----|----------------|--------|----------|
+| F22 | Accept | Uncommitted r11 proposal on `641fd49` | Six mismatched-path positive groups fail before and pass after; all seven spelling groups allow after. The 28 repeated D-006 negative groups pass before and after. |
+| F23 | Accept | Same proposal | Permanent EOF assertion fails before and passes after; candidate ends in exactly one newline; scratch `git diff --check` exits 0. |
+
+Neither finding is closed by this author. A fresh Claude session must re-check them after
+authorized application. The owner explicitly combined the findings, superseding the procedure's
+one-commit-per-finding default; this Codex run makes no commit.
+
+The guard change is confined to `proposalApply`: use `realpathSync.native` on Windows for the
+project root, proposals directory and patch file, matching `locate()`'s on-disk spelling.
+On other platforms it uses the original `realpathSync`; exact equality remains unchanged.
+No string case-folding, parser change, standalone exception expansion, push change, settings
+change or posthook change is included. Existing canonical-parent equality and the regular-file
+check still reject nested paths, junction escapes and a redirected proposals directory.
+
+### Patch and expected applied files
+
+Patch: `docs/proposals/BOOT-001-r11-controls.patch` (local, gitignored).
+SHA256: `c0a10ce8382695b32327bb5c49bc9a58a599ccd63893b923302fe43dc425376b`.
+It targets exactly these two files:
+
+| Target | Expected applied SHA256 | Expected applied Git blob |
+|--------|------------------------|---------------------------|
+| `.claude/hooks/guard-bash.mjs` | `30114a6bc917bfcaeb1b5df1b65ea626289f92538a9e435d5379d81800b1085f` | `8d2715dd97f1672443a28cf726b875d106d0af7c` |
+| `scripts/controls/test-controls.mjs` | `8cfa2970cdbdd17fba1e84df75fc8696080378d26007e7b360b2cfa49a0182a7` | `e0b81034c672da3fc7a26fe92d2f03e1d9959db0` |
+
+| Unchanged actual target before application | SHA256 | Git blob |
+|-------------------------------------------|--------|----------|
+| `.claude/hooks/guard-bash.mjs` | `cab5ddf3e26e18e526b100ba537d4f6b6040a106fc373be83ba19ba139c404c9` | `8fdef64c6cd40f852a521c5d2eafb74e30e2e495` |
+| `scripts/controls/test-controls.mjs` | `a7ef3e4b1589a0df30cc37c9fdb02d495a7dfad26089cb3388e348963018e603` | `14c58e680a85a1927e9469bdc2932b13367bf7bd` |
+
+Both verification runs also checked that the actual posthook, rules, settings, AGENTS.md and
+CLAUDE.md hashes stayed unchanged. The posthook remains SHA256
+`28c6283c38c3514dc6112c650f3d2ae09251e56d2873292f59929e55c0e384b9`.
+The checks script independently reconstructed every patch hunk in memory and verified both
+applied SHA256 values and Git blobs, without applying it.
+
+### Permanent regression coverage and fail-before/pass-after
+
+The entire 65,573-byte original `test-controls.mjs`, including all 69 test definitions and every
+assertion, is an exact prefix of the candidate. **Changed original assertions: none.**
+F23's former trailing blank line becomes the separator before the added regression block;
+the final file has no blank line at EOF. A new test enforces that property.
+
+Seven path combinations each have one allow group and four existing negative scenario groups.
+Allowed forms are exercised in both Bash and PowerShell. Negative scenarios retain the
+existing Bash/explicit Monitor inputs: unsafe push flags/destinations/forms, push config,
+direct regular proposal boundaries, and whole-invocation requirements. Their copied positive
+controls are separated from the new negative groups so fail-before cannot short-circuit the
+negative boundary checks. The originals retain those positive assertions.
+Each scenario has a fresh fixture; its branch changes or junction mutations cannot affect
+another scenario. No push, apply, patch or malicious command payload is executed: input goes
+only to the hook as JSON. Fixture-local Git initialization/config/commits are isolated.
+
+Real-repository hook-only reproduction, exact command string
+`git apply docs/proposals/BOOT-001-r11-controls.patch`:
+
+| Project directory spelling | Input cwd spelling | Before exit | After exit |
+|----------------------------|--------------------|-------------|------------|
+| On-disk case, forward slashes | Entire path lowercase, forward slashes | 0 | 0 |
+| Lowercase drive only, forward slashes | On-disk case | 2 | 0 |
+| Lowercase drive only, forward slashes | Entire path lowercase | 2 | 0 |
+| Lowercase drive only, backslashes | On-disk case | 2 | 0 |
+| Lowercase drive only, backslashes | Entire path lowercase | 2 | 0 |
+| Entire path lowercase, forward slashes | Same | 2 | 0 |
+| Entire path lowercase, backslashes | Same | 2 | 0 |
+
+All after outputs are empty, with no allow/ask decision. Before failures have the locked-path
+reason. The first five rows reproduce the owner's live probe matrix.
+
+Windows: 69 original tests + 35 matrix groups + 1 EOF test = 105, no skipped.
+Before: 98 pass, 7 fail (6 F22 positive groups and F23); after: 105 pass, 0 fail.
+All 69 originals and all 28 negative matrix groups pass in both runs.
+The POSIX branch includes native-path matrix checks plus a real case-distinct `docs/PROPOSALS`
+sibling and direct file-symlink escape regression. These POSIX-only checks were not run here;
+the platform branch does not pretend to verify Linux on Windows.
+
+### Commands and evidence
+
+All times below are 2026-10-20, +07. Revision is `641fd49` plus ignored r11 candidate files.
+Node `v26.12.0`, platform `win32`. Adapters change module locations and, for the after run only,
+the selected guard and source inspected by the EOF test; they do not change test assertions.
+
+| Command / scope | Result | Source commit | Time |
+|-----------------|--------|---------------|------|
+| `node docs/proposals/BOOT-001-r11-build.mjs` | PASS: two-target patch, original69 exact prefix, manifest | `641fd49` | 23:24–23:25 |
+| `node docs/proposals/BOOT-001-r11-verify.mjs before` | FAIL as intended: 98/105, 7 failures, skipped 0 | `641fd49`, old guard and old EOF | 23:25:02–23:27:36 |
+| `node docs/proposals/BOOT-001-r11-verify.mjs after` | PASS: 105/105, skipped 0 | `641fd49` + candidate hashes above | 23:25:02–23:27:42 |
+| `git apply --check docs/proposals/BOOT-001-r11-controls.patch` (standalone) | PASS, exit 0, dry run only | `641fd49` + proposal | 23:25 |
+| `git apply --check --whitespace=error docs/proposals/BOOT-001-r11-controls.patch` (standalone) | PASS, exit 0, dry run only | same | 23:26 |
+| `node docs/proposals/BOOT-001-r11-checks.mjs` | PASS: independent in-memory reconstruction and all expected hashes | same | 23:27:05–23:27:06 |
+| `git diff --check` in the disposable proposal fixture, invoked by checks script | PASS, exit 0 | candidate bytes from `641fd49` | 23:27:05 |
+| `C:/Program Files/Git/bin/bash.exe scripts/controls/red-flags.sh main` in that fixture | PASS execution, 1 explained group; both secret groups empty | same | 23:27:05–23:27:06 |
+| Actual `check-locked-paths.mjs main` invoked with that fixture as cwd | FAIL as expected, exit 1: exactly the two proposed control targets need owner approval | same | 23:27:06 |
+| `C:/Program Files/Git/bin/bash.exe scripts/controls/red-flags.sh main` in the real working tree | PASS execution, 6 existing explained groups; both secret groups and untracked list empty | `641fd49` + unstaged records | 23:29:40–23:29:42 |
+| `node scripts/controls/check-locked-paths.mjs main` in the real working tree | FAIL, exit 1: 42 existing bootstrap control targets | same | 23:29:40–23:29:41 |
+| `git diff --check`; `git diff --cached --name-only`; `git status --short` (real tree) | PASS whitespace, empty index diff, only two modified tracked documents | same | 23:29:40 |
+
+The scratch scan's single group is "Destructive or bypass commands": four lines of command
+strings copied from existing negative tests. They are hook inputs, not executed payloads.
+There are no deleted/renamed tests, untracked fixture files or secret-pattern hits. The locked-path
+FAIL is retained as FAIL, not treated as approval or proof of AC-05's real GitHub behavior.
+The disposable scan repository was removed after checking its resolved path and task prefix.
+
+The real local `main` still points to `951ee986b853be11f89096c53c6aa94f37316f06`, not the
+already-merged remote revision. Thus those two real-tree checks include the complete bootstrap:
+six existing scan groups and 42 locked paths. No reference was moved to make a check pass.
+The six groups are the existing optional Bash-unavailable skip (not taken in either run),
+type/lint prohibition text and scanner regexes, synthetic scanner-test data, guard/negative-test
+destructive-command strings, and the scanner's own account-mutation pattern. No new suppression
+or secret was introduced. The ignored proposal was scanned separately in the fixture above.
+
+Reproduction artifacts are all under `docs/proposals/BOOT-001-r11-` (gitignored):
+
+| Suffix | SHA256 |
+|--------|--------|
+| `before-evidence.json` | `c7b033102933a1ecdae977c22f40a4cf384d33b45b28cd67d48d39fa80ce03b8` |
+| `after-evidence.json` | `01476d34dc74350aef1abaa439397e9c2fc7ef99d3e5c70dc4c33f47a99d2b46` |
+| `checks-evidence.json` | `922a451942f5e0a573b694eb04ba0ca092b3c9e2af1d098d931a46a4f318e7d3` |
+| `verify.mjs` | `0f90be3521ce45cdf1225e7362c652c650ee65aebb408ebf9f7e3f497e9f0886` |
+| `checks.mjs` | `7a73139638a19281da2c6bc204ac6496da4d5fddaccf9ad7dfd55d326af62ba9` |
+
+Also retained: `build.mjs`, `manifest.json`, `tests-additions.txt`, the two candidate modules,
+adapted before/after runners, and full TAP logs (`before.log`, `after.log`).
+
+Supporting security pre-review: a separate read-only agent followed the security-review
+procedure and inspected this exact patch, confirming the hash and unchanged-original-test
+prefix at 23:26:01. No blocking issue found in the scoped diff. Relevant boundary: hook JSON
+must not grant unintended locked-control writes (ASI02 tool misuse / ASI03 privilege abuse).
+No files were written by that agent. This is a supporting pre-review, not the required fresh
+Claude review and not a finding closure.
+
+### Limits, delivery and next action
+
+Delivery: proposal implemented and locally verified, not applied, staged, committed, pushed,
+merged or deployed. Tracked changes are only this handoff and PROGRESS.md; proposal/evidence
+remain ignored. There are no new dependencies.
+
+Not tested: Linux execution (CI uses Ubuntu); direct Windows file symlinks (Windows directory
+junctions were exercised); negative matrix expansion to every PowerShell form; actual VS Code
+apply dispatch; fresh-session applied review; real PR label transition or branch protection.
+Existing deferred findings and their D-007 dispositions are unchanged. AC-04 remains FAIL for
+its previously recorded broader scope; the F22/D-006 portion passes locally. AC-05 remains UNKNOWN.
+
+Claude should verify the patch and before hashes, arrange application within the existing
+authorization, verify both applied hashes/blobs and the unchanged posthook, then obtain fresh
+Claude review of F22/F23 before staging, scanning and committing under D-008. Read-only
+`git apply --check` and `git apply -R --check` must be standalone. The still-installed old guard
+can still exhibit F22; no permission or environment workaround is authorized by this handoff.
+A runtime block still invokes N6.
+
+After that, the prior AC-05 PR sequence remains: Claude's authorized task-branch push, owner
+PR/label actions, record the actual locked-path gate failing without the label and passing with
+it, then owner branch-protection/merge decisions. This session does not perform those actions.
+
+## Review r11 of the applied controls (fresh Claude session), 2026-10-20
+
+The owner applied `docs/proposals/BOOT-001-r11-controls.patch`. A fresh headless Claude Code
+session (`claude -p`) then reviewed it. The parent session started that session at the owner's
+request. The reviewer did not author r11 and did not propose its approach. The review, with
+findings and evidence, is `docs/reviews/BOOT-001-r11.md`. Branch `chore/BOOT-001-ac05-control-gate`,
+HEAD `71a46ff` before this commit.
+
+Verification of the application (23:34:19 +07):
+
+| File | Applied SHA256 | Applied blob | Handoff |
+|------|----------------|--------------|---------|
+| `.claude/hooks/guard-bash.mjs` | `30114a6bc917bfcaeb1b5df1b65ea626289f92538a9e435d5379d81800b1085f` | `8d2715dd97f1672443a28cf726b875d106d0af7c` | match |
+| `scripts/controls/test-controls.mjs` | `8cfa2970cdbdd17fba1e84df75fc8696080378d26007e7b360b2cfa49a0182a7` | `e0b81034c672da3fc7a26fe92d2f03e1d9959db0` | match |
+
+- Patch SHA256 `c0a10ce8…376b` matches.
+- The posthook is unchanged (`28c6283c…84b9`).
+- The index held the r9 blobs.
+- `git apply -R --check`, run standalone, exits 0.
+- The post-run detector reported exactly these two targets, so the session continued (N6 not triggered).
+
+Results:
+
+- **F22: closed on Windows, Linux pending CI.**
+  - In 66 combinations of project and cwd spelling (drive case, path case, slash direction, mixed
+    slashes, trailing separators), the HEAD guard allowed the direct proposal patch only with the
+    on-disk project spelling. The applied guard allowed every combination, with empty stdout.
+  - Real repository, hook only, `git apply docs/proposals/BOOT-001-r11-controls.patch`: HEAD 24/132,
+    applied 132/132.
+- **The exception is not wider than D-006.** In every spelling and with both guards, these stay
+  blocked:
+  - outside, nested and missing patches, and a directory;
+  - junction, file-symlink, redirected-`docs/proposals` and redirected-`docs` escapes;
+  - unsafe flags, `git am` and `patch`;
+  - chained, subshell and nested-shell forms, `-C`, and Monitor.
+
+  That is 11,356 hook runs with 0 mismatches.
+- **Linux:** unchanged by construction, because non-win32 keeps `realpathSync` at all three sites.
+  The POSIX-only tests were not run here; CI on the pushed head is the first Linux run. 76 tests are
+  expected there.
+- **F23: closed.** `git diff --check` is clean for both files.
+- **Tests:** `node scripts/controls/test-controls.mjs` → 105/105, 0 skipped, 23:35:51–23:38:17.
+- **New Low findings,** recorded at the owner's request. Neither is a regression: each behaves the
+  same at HEAD with the on-disk project spelling, so r11 adds no permission.
+  - **F24:** an NTFS alternate data stream, `docs/proposals/<file>.patch:<stream>`, gets the
+    exception. The handoff hash of the main stream does not cover its bytes.
+  - **F25:** a hard link in `docs/proposals/` to a file kept elsewhere gets the exception.
+- **Also observed:** a doubled comment at `test-controls.mjs:1330` (cosmetic only).
+
+### Stop event, exact text (F8 class)
+
+At about 23:44 the session waited for its own background probe with a Monitor `until` loop. The
+loop's final `echo` contained `$(date '+%H:%M:%S')`. It was blocked:
+
+`PreToolUse:Monitor hook error: [node "$CLAUDE_PROJECT_DIR/.claude/hooks/guard-bash.mjs"]: Blocked by .claude/hooks/guard-bash.mjs: cannot determine directory scope of this substitution. Use an explicit shell.`
+
+This matches none of the session's three standing answers, so the session stopped and asked. The
+probe finished on its own. The owner's answer, relayed by the parent session:
+
+- carry on to commit, and do not rerun the Monitor command;
+- record the block as an F8-class false positive;
+- record the ADS and hard-link observations as Low findings.
+
+None of the three standing answers was needed in this session.
+
+### Staging, scan and commit
+
+Staged: the two owner-applied files, `docs/reviews/BOOT-001-r11.md`, this handoff and `PROGRESS.md`.
+The staged blobs of the two control files are `8d2715dd…` and `e0b81034…`, as in the handoff.
+
+| Command | Result | Time (+07) |
+|---------|--------|------------|
+| `git diff --cached --check` | PASS, exit 0 | 23:57:09 |
+| `bash scripts/controls/red-flags.sh main` (local `main` is still `951ee98`, the bootstrap base) | exit 0, the same 6 explained groups as before; both secret groups empty; no untracked files | 23:57:09–11 |
+| `node scripts/controls/check-locked-paths.mjs main` | FAIL, exit 1, as expected: 42 bootstrap control changes | 23:57:39 |
+| `bash scripts/controls/red-flags.sh origin/main` (PR base `7b6a841`) | exit 0, 1 group: "Destructive or bypass commands", 4 lines of hook-input strings in the copied F22 negative tests; no deleted tests, no secret hits, no untracked files | 23:57:41 |
+| `node scripts/controls/check-locked-paths.mjs origin/main` | FAIL, exit 1, as expected without the label: exactly `.claude/hooks/guard-bash.mjs` and `scripts/controls/test-controls.mjs` | 23:57:40 |
+
+No reference was moved. The FAIL results wait for the owner's label on the PR; they are not
+AC-05 evidence.
+
+### Next
+
+- **Parent session:** run `git push origin HEAD:refs/heads/chore/BOOT-001-ac05-control-gate` as a
+  standalone command. Record the pushed head and the CI result for it, including the Linux test
+  count.
+- **Owner:** create the PR. Without `owner-approved-control-change`, `control-gate / locked-paths`
+  is expected to FAIL. With the label, it is expected to PASS (AC-05). Then decide branch
+  protection and merge.
+- **F24 and F25:** the owner chooses their placement (next guard-fix task, or accept F25 as by
+  design). F8's Monitor part stays in the false-positive task.

@@ -1245,3 +1245,170 @@ test('D-006: settings remove push denial without adding ask or allow', () => {
   }
 });
 
+// ---- F22: repeat the D-006 boundary checks with independently spelled Windows paths --------
+const f22Spellings = process.platform === 'win32' ? [
+  ['disk project, lowercase cwd', 0, 1],
+  ['lower drive forward project, disk cwd', 2, 0],
+  ['lower drive forward project, lowercase cwd', 2, 1],
+  ['lower drive backslash project, disk cwd', 3, 0],
+  ['lower drive backslash project, lowercase cwd', 3, 1],
+  ['lowercase forward project and cwd', 1, 1],
+  ['lowercase backslash project and cwd', 4, 4],
+] : [['native POSIX project and cwd', 0, 0]];
+
+function withF22Fixture(spelling, body) {
+  withD006Fixture(fixture => {
+    const disk = fs.realpathSync.native(fixture.dir).replace(/\\/g, '/');
+    const lowerDrive = disk.replace(/^[A-Z]:/, drive => drive.toLowerCase());
+    const paths = [disk, disk.toLowerCase(), lowerDrive,
+      lowerDrive.replace(/\//g, '\\'), disk.toLowerCase().replace(/\//g, '\\')];
+    const [, projectIndex, cwdIndex] = spelling;
+    const projectDir = paths[projectIndex];
+    const cwd = paths[cwdIndex];
+    if (process.platform === 'win32') {
+      assert.match(disk, /^[A-Z]:\//, 'fixture must have a native uppercase drive letter');
+      assert.notEqual(projectDir + cwd, disk + disk, 'exercise a spelling different from the on-disk path');
+      assert.equal(fs.realpathSync.native(projectDir), fs.realpathSync.native(fixture.dir));
+      assert.equal(fs.realpathSync.native(cwd), fs.realpathSync.native(fixture.dir));
+    }
+    const probe = (command, expected, tool = 'Bash') => {
+      const r = runHook('guard-bash.mjs', shellInput(command, { cwd, tool }), { projectDir });
+      assert.equal(r.code, expected, `${spelling[0]}: ${tool}: ${command}: ${r.stderr}`);
+      if (expected === 0) assert.equal(r.stdout, '', 'hook must not emit allow/ask decisions');
+      return r;
+    };
+    body({ ...fixture, probe });
+  });
+}
+
+// These are copies of the existing negative scenarios. The original tests and assertions
+// above stay unchanged. Positive controls have a separate matrix so fail-before still
+// executes every negative boundary, even when the allowed apply itself fails.
+const f22NegativeScenarios = [
+  { name: "unsafe push flags, destinations and unknown forms stay blocked", run: ({ dir, branch, probe }) => {
+    const ref = `HEAD:refs/heads/${branch}`;
+    for (const flag of ['-f', '--force', '--force-with-lease', '--force-with-lease=refs/heads/x:',
+      '--force-if-includes', '--mirror', '--delete', '-d', '--all', '--tags', '--follow-tags',
+      '-uf', '--for', '--no-verify', '--receive-pack=anything', '--repo=origin',
+      '--recurse-submodules=on-demand', '--push-option=anything', '--unknown']) {
+      probe(`git push ${flag} origin ${ref}`, 2);
+      probe(`git push origin ${ref} ${flag}`, 2);
+    }
+    for (const dest of ['main', 'master', 'refs/heads/main', 'refs/heads/master', 'HEAD',
+      'refs/tags/v1', 'refs/heads/chore/OTHER-001-x', 'refs/heads/Main']) {
+      probe(`git push origin HEAD:${dest}`, 2);
+    }
+    for (const cmd of ['git push', 'git push origin', 'git push origin HEAD',
+      `git push origin +${ref}`, 'git push origin :main', 'git push origin :',
+      `git push origin ${ref} ${ref}`, `git push origin other:refs/heads/${branch}`,
+      `git push unknown ${ref}`, `git -C . push origin ${ref}`,
+      `git -c push.default=matching push origin ${ref}`,
+      `git push https://example.invalid/fixture.git ${ref}`]) probe(cmd, 2);
+    for (const name of ['main', 'master', 'ordinary']) {
+      gitIn(dir, 'switch', '-q', '-c', name);
+      probe(`git push origin HEAD:refs/heads/${branch}`, 2);
+      probe('git push', 2);
+    }
+    gitIn(dir, 'checkout', '-q', '--detach');
+    probe(`git push origin ${ref}`, 2);
+    probe(`git push origin ${ref}`, 2, 'Monitor');
+  } },
+  { name: "push config cannot silently widen or remap the destination", run: ({ dir, branch, probe }) => {
+    const explicit = `git push origin HEAD:refs/heads/${branch}`;
+    for (const [key, value] of [
+      ['remote.origin.mirror', 'true'], ['push.followTags', 'true'],
+      ['push.recurseSubmodules', 'on-demand'], ['push.gpgSign', 'true'],
+      ['push.useForceIfIncludes', 'true'], ['submodule.recurse', 'true'],
+      ['push.pushOption', 'anything'],
+    ]) {
+      gitIn(dir, 'config', key, value);
+      probe(explicit, 2);
+      gitIn(dir, 'config', '--unset', key);
+    }
+    gitIn(dir, 'config', 'remote.origin.push', `+refs/heads/${branch}:refs/heads/main`);
+    probe(`git push origin ${branch}`, 2);
+    // Positive explicit push is covered by the original D-006 scenario. // A fully explicit destination overrides remote.push.
+    gitIn(dir, 'config', 'push.default', 'matching');
+    probe('git push', 2);
+    // Positive explicit push is covered by the original D-006 scenario.
+  } },
+  { name: "every proposal must resolve to a direct regular file", run: ({ dir, patch, probe }) => {
+    for (const cmd of ['git apply docs/outside.patch',
+      'git apply docs/proposals/nested/control.patch', 'git apply docs/proposals/missing.patch',
+      'git apply docs/proposals', 'git apply docs/proposals/nested',
+      `git apply ${patch} docs/outside.patch`, `git apply ${patch} docs/proposals/missing.patch`,
+      `git apply ${patch} -`, `git apply --directory=.claude ${patch}`,
+      `git apply --unsafe-paths ${patch}`, `git apply -p0 ${patch}`,
+      `git apply --3way ${patch}`, `git apply --index ${patch}`,
+      `git apply --check --apply ${patch}`, `git am ${patch}`, `patch -p1 -i ${patch}`,
+      `patch -p1 < ${patch}`]) probe(cmd, 2);
+    probe(`git apply ${patch}`, 2, 'Monitor');
+    // A directory junction works without Windows symlink privilege. Its target is outside
+    // docs/proposals even though its spelling appears inside it.
+    writeIn(dir, 'outside/control.patch', fs.readFileSync(path.join(dir, patch), 'utf8'));
+    fs.symlinkSync(path.join(dir, 'outside'), path.join(dir, 'docs/proposals/link'), 'junction');
+    probe('git apply docs/proposals/link/control.patch', 2);
+    const moved = path.join(dir, 'docs/proposals-real');
+    fs.renameSync(path.join(dir, 'docs/proposals'), moved);
+    fs.symlinkSync(moved, path.join(dir, 'docs/proposals'), 'junction');
+    probe(`git apply ${patch}`, 2); // Even the proposals directory may not redirect the boundary.
+  } },
+  { name: "apply and push must each occupy the entire invocation", run: ({ branch, patch, probe }) => {
+    for (const action of [`git apply ${patch}`, `git push origin HEAD:refs/heads/${branch}`,
+      'git apply docs/proposals/ordinary.patch', `git apply --check ${patch}`]) {
+      for (const cmd of [
+        `${action}; echo done`, `echo ready; ${action}`, `${action} && echo done`,
+        `${action} || echo failed`, `${action} | cat`, `${action} &`, `${action}\necho done`,
+        `${action} > out.txt`, `${action} < input.patch`, `(${action})`, `{ ${action}; }`,
+        `bash -c "${action}"`, `cmd /c "${action}"`, `powershell -Command "${action}"`,
+        `echo "$(${action})"`, `echo \`${action}\``, `echo <(${action})`,
+        `env ${action}`, `command ${action}`, `FOO=x ${action}`, `${action} # comment`,
+      ]) probe(cmd, 2);
+    }
+    // The original D-006 scenario retains the positive inspection assertion.
+    probe('git reset --hard', 2);
+    probe('git clean -fdx', 2);
+  } },
+];
+
+for (const spelling of f22Spellings) {
+  test(`F22: direct proposal allows ${spelling[0]}`, () => {
+    withF22Fixture(spelling, ({ dir, patch, probe }) => {
+      for (const tool of ['Bash', 'PowerShell']) {
+        for (const command of [
+          `git apply ${patch}`, `git apply -- ${patch}`,
+          `git apply ${patch} "docs/proposals/second patch.patch"`,
+          `git apply "${path.join(dir, patch).replace(/\\/g, '/')}"`,
+          'git apply docs/proposals/nested/../control.patch',
+        ]) probe(command, 0, tool);
+      }
+    });
+  });
+  for (const scenario of f22NegativeScenarios) {
+    test(`F22: ${scenario.name}; ${spelling[0]}`, () => {
+      withF22Fixture(spelling, scenario.run);
+    });
+  }
+}
+
+if (process.platform !== 'win32') {
+  test('F22: POSIX keeps case-distinct proposal paths outside the exception', () => {
+    withD006Fixture(({ dir, patch, probe }) => {
+      const contents = fs.readFileSync(path.join(dir, patch), 'utf8');
+      writeIn(dir, 'docs/PROPOSALS/control.patch', contents);
+      probe('git apply docs/PROPOSALS/control.patch', 2);
+      // A symlinked file can be created without special privileges on POSIX.
+      fs.symlinkSync(path.join(dir, 'docs/outside.patch'), path.join(dir, 'docs/proposals/escape.patch'));
+      probe('git apply docs/proposals/escape.patch', 2);
+      const moved = path.join(dir, 'docs/PROPOSALS');
+      fs.renameSync(path.join(dir, 'docs/proposals'), path.join(dir, 'docs/proposals-saved'));
+      fs.symlinkSync(moved, path.join(dir, 'docs/proposals'));
+      probe(`git apply ${patch}`, 2);
+    });
+  });
+}
+
+test('F23: control tests end with exactly one newline', () => {
+  const source = fs.readFileSync(path.join(here, 'test-controls.mjs'), 'utf8');
+  assert.match(source, /[^\r\n]\r?\n$/, 'no extra blank line at EOF');
+});

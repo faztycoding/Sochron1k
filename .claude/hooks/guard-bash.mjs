@@ -473,14 +473,16 @@ function proposalApply(words, k, i, args, dir, stdinFiles) {
   const files = args[0] === '--' ? args.slice(1) : args;
   if (files.length === 0 || files.some(file => file.startsWith('-'))) return false;
   try {
-    const root = realpathSync(projectDir);
+    // Match locate()'s on-disk spelling on Windows; retain exact POSIX path checks.
+    const realpath = process.platform === 'win32' ? realpathSync.native : realpathSync;
+    const root = realpath(projectDir);
     const proposalDir = path.join(root, 'docs', 'proposals');
     // Do not let a symlink or junction move the permitted directory itself.
-    if (realpathSync(proposalDir) !== proposalDir) return false;
+    if (realpath(proposalDir) !== proposalDir) return false;
     return files.every(file => {
       const loc = locate(file, dir);
       if (!loc.abs) return false;
-      const actual = realpathSync(loc.abs);
+      const actual = realpath(loc.abs);
       return path.dirname(actual) === proposalDir && statSync(actual).isFile();
     });
   } catch {
