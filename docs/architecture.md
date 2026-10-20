@@ -75,16 +75,46 @@ flowchart LR
   CC[Claude Code: planner + implementer] -->|task-branch commits| Repo
   CX[Codex: test author + reviewer] -->|tests, reviews| Repo
   CI[GitHub Actions: verifier] -->|required checks| Repo
-  subgraph Host[Windows host - owner PC first]
-    App[Sochron1k Python app]
-    Term[MT5 terminal logged in to Demo]
+  subgraph Acq[Acquisition and execution host - Windows VPS, target]
+    Term[MT5 terminal logged in to Demo + its history cache]
+    AcqApp[data.acquire + execution runner]
+    Raw[(Raw captures, journal, backups)]
+    Vault[(Holdout vault)]
   end
-  App <-->|MetaTrader5 package, local IPC| Term
+  subgraph Res[Research host - owner PC, where the agents work]
+    App[research, backtest, strategy]
+    Snap[(Approved pre-cutoff snapshots only)]
+  end
+  AcqApp <-->|MetaTrader5 package, local IPC| Term
   Term <-->|broker protocol| Broker[(Broker trade server - Demo)]
-  App --> Store[(Local data: Parquet snapshots, SQLite journal)]
+  AcqApp --> Raw
+  AcqApp -->|pre-cutoff snapshot + manifest hash| Snap
+  Snap --> App
+  Vault -.->|evaluation day only, frozen strategy version run on the acquisition host| AcqApp
   Owner -->|reads reports| App
-  Vault[(Holdout vault outside research checkout)] -.->|only on evaluation day| App
 ```
+
+### 6.1 ขอบเขตของเครื่อง (ตอบ review D-001 r1 F1)
+
+เป้าหมาย (เจ้าของตัดสิน 2026-10-21 ว่าจะขึ้น MT5 บน Windows VPS):
+
+| อยู่บน acquisition/execution host (Windows VPS) | อยู่บน research host (เครื่องเจ้าของ ที่ Claude และ Codex ทำงาน) |
+|---|---|
+| MT5 terminal และ history cache ของมัน · `data.acquire` · raw captures · journal และ backup · holdout vault · Demo runner (E1/OPS-1) · การประเมิน holdout ด้วย strategy version ที่ freeze แล้ว | `research`, `backtest`, `strategy`, `costs`, `data.snapshot` · snapshot ก่อน cutoff ที่อนุมัติแล้ว พร้อม manifest hash · **ไม่มี** MT5 terminal, terminal cache, ความสามารถดึงข้อมูลจากโบรกเกอร์ หรือ holdout |
+
+- โฟลเดอร์คนละที่, VM บนเครื่องเดียวกัน หรือการแยกสิทธิ์ผู้ใช้ **ไม่ถือว่า** อยู่นอกเครื่องวิจัย ถ้าจะใช้แทนต้องเป็นการตัดสินเปลี่ยนกฎของเจ้าของที่บันทึกใน DECISIONS
+- ค่าใช้จ่ายของ VPS นับใน Q-10 (ยัง TBD) ไม่ถือว่าเป็น 0 อีกต่อไป
+
+**ระยะนี้ (เจ้าของตัดสิน 2026-10-21: "ตอนนี้เอาบนเครื่องนี้ก่อน"):**
+- ทั้งสองบทบาทอยู่บนเครื่องเจ้าของ เครื่องนี้จึง**ยังไม่ใช่** research host ที่แยกตามข้อกำหนด
+- ระหว่างนี้ **ห้ามตัด holdout, ห้าม ingest ข้อมูลเพื่อวิจัย และห้ามทดลองกลยุทธ์ใน SLICE-R1**
+- งานที่ทำได้: ตัดสินและเตรียมสถาปัตยกรรม, เขียนโค้ดที่ไม่ใช้ข้อมูลตลาดจริง (เช่น timebase, costs, risk แบบ pure พร้อม tests) ภายใต้ contract ที่อนุมัติ และงานเตรียม VPS
+- ถ้าเจ้าของต้องการเริ่มวิจัยก่อนมี VPS ต้องตัดสินเปลี่ยนกฎแยกต่างหาก
+
+**ด่านก่อน SLICE-R1 (ENV-1):**
+- VPS พร้อมใช้งาน และย้าย terminal, raw captures และ holdout ไปแล้ว
+- ลบ terminal และ history cache ออกจาก research host
+- environment check พร้อม **synthetic excluded-period sentinel** (ข้อมูลปลอมช่วงที่ตัดออก ไม่ใช้ holdout จริง) พิสูจน์ว่า research identity อ่านหรือดึงช่วงนั้นไม่ได้ ทั้งโดยตรงและผ่าน `data`
 
 ## 7. Data flow และ trust boundaries
 
@@ -116,7 +146,7 @@ Trust boundaries ที่ต้องบังคับจริง:
 - ข้อมูลจากโบรกเกอร์เป็น input ที่ไม่น่าเชื่อถือ ตรวจที่ boundary (bid > ask, เวลาถอยหลัง, ช่องว่าง) แล้วรายงาน ห้ามซ่อมเงียบ
 - ระหว่าง strategy กับ execution: strategy ส่งได้แค่ "การตัดสินใจ" ส่วนสิทธิ์ส่งคำสั่งอยู่ที่ risk gate + execution เท่านั้น
 - ระหว่างแอปกับบัญชี: ก่อนส่งทุกคำสั่ง ตรวจ `account_info().trade_mode` ว่าเป็น Demo ถ้าไม่ใช่ ให้ปฏิเสธและหยุด
-- ระหว่าง research กับ holdout: โค้ดวิจัยอ่าน holdout ไม่ได้ (ข้อมูลไม่อยู่ในเครื่องวิจัยจนถึงวันประเมิน)
+- ระหว่าง research กับ holdout: research host ไม่มี holdout, terminal, terminal cache หรือ `data.acquire` (ข้อ 6.1) รับเฉพาะ snapshot ก่อน cutoff ที่ตรวจ manifest hash แล้ว · การประเมิน holdout รันบน acquisition host ด้วย strategy version ที่ freeze แล้ว · ระยะนี้ที่ยังใช้เครื่องเดียว ขอบเขตนี้**ยังไม่มีผล** จึงห้ามงานที่ต้องพึ่ง holdout
 - ระหว่าง agent กับ repo: locked paths บังคับด้วย deny rules + hooks + CI (D-004)
 
 ## 8. Module map และกฎ import
@@ -127,11 +157,12 @@ Trust boundaries ที่ต้องบังคับจริง:
 |---|---|---|---|
 | `core` | ชนิดข้อมูลกลาง: Instrument, Bar, Tick, Side, Money (Decimal) | I/O | – |
 | `timebase` | แปลงเวลาดิบจาก MT5 ↔ UTC ตามกติกาที่ SPIKE-001 วัดได้, DST, sessions, วันเทรดแบบไทย | เรียกนาฬิกาเอง (รับ `now` เป็น argument) หรือสมมติ offset เอง | core |
-| `data` | ดึงข้อมูลผ่าน broker port, สร้าง snapshot + manifest, validation report | แก้ข้อมูลดิบเงียบๆ | core, timebase, broker (port) |
+| `data.snapshot` | อ่าน snapshot + manifest ที่อนุมัติแล้วแบบ offline, ตรวจ hash, validation report | แก้ข้อมูลดิบเงียบๆ, เรียก broker | core, timebase |
+| `data.acquire` | ดึงข้อมูลผ่าน broker port, สร้าง snapshot + manifest (รันบน acquisition host เท่านั้น) | ถูก import โดย research, backtest หรือ strategy | core, timebase, broker (port), data.snapshot |
 | `strategy` | features + `decide()` แบบ pure และมี version | I/O, clock, MetaTrader5, random ที่ไม่มี seed | core, timebase |
 | `costs` | spread, commission, slippage, swap และ stress ×2 | – | core |
 | `backtest` | จำลองการเทรดด้วย bid/ask, ติดป้าย ambiguous เมื่อ SL/TP อยู่ในแท่งเดียวกัน | อ่าน holdout | core, timebase, strategy, costs |
-| `research` | runner, registry, random-entry baseline, holdout gate, สถิติ, รายงาน | เรียก broker หรือ execution | core, timebase, data, strategy, costs, backtest |
+| `research` | runner, registry, random-entry baseline, holdout gate, สถิติ, รายงาน | เรียก broker, execution หรือ `data.acquire` | core, timebase, data.snapshot, strategy, costs, backtest |
 | `risk` | sizing ด้วย Decimal, limits, halt state | ถูกเปลี่ยนโดย AI หรือ config ระหว่างรัน | core, costs |
 | `execution` | วงจรชีวิตคำสั่ง, idempotency, reconcile | ส่งคำสั่งโดยไม่ผ่าน risk gate และ journal | core, risk, journal, broker (port) |
 | `broker` | port + `mt5` adapter (ตัวเดียวที่ import MetaTrader5) | ตัดสินใจเชิงกลยุทธ์ | core, timebase |
@@ -159,7 +190,7 @@ data/ journal/ reports/out/   # runtime data, gitignored
 | Strategy ไม่มี I/O และไม่ import MetaTrader5 | architecture test (AST) ใน `tests/architecture/` |
 | เวลาแปลงผ่าน timebase เท่านั้น | architecture test + leakage audit |
 | สมมติฐานแก้ไม่ได้หลัง commit / registry เพิ่มได้อย่างเดียว | hook + `control-gate` (ตรวจทุก commit ด้วยตัวตรวจจาก base revision) |
-| Holdout ไม่อยู่ในเครื่องวิจัย | ขั้นตอนของเจ้าของ + loader ปฏิเสธช่วงเวลาหลัง cutoff + `.gitignore` |
+| Holdout ไม่อยู่ในเครื่องวิจัย และเครื่องวิจัยดึงช่วงนั้นไม่ได้ | แยกเครื่องตามข้อ 6.1 · ด่าน ENV-1 ก่อน R1: environment check + synthetic excluded-period sentinel · architecture test: `research`/`backtest`/`strategy` ห้าม import `data.acquire` หรือ `broker` · loader ปฏิเสธช่วงหลัง cutoff เป็นชั้นเสริม ไม่ใช่ขอบเขตหลัก · ระยะนี้ที่ยังใช้เครื่องเดียว: ห้ามตัด holdout และห้ามทดลองกลยุทธ์ |
 | ไม่มี secret ใน repo/log | `.gitignore`, deny rules, red-flag scan |
 
 ## 10. ลำดับการสร้าง (vertical slices)
@@ -169,7 +200,8 @@ data/ journal/ reports/out/   # runtime data, gitignored
 | 0 | BOOT-001 | กติกา, controls, skills/agents, architecture ร่าง | เจ้าของรับ D-002 ถึง D-005 และ P25 ผ่านทั้งสองเครื่องมือ (D-001 ยัง proposed) | High (Q6) |
 | 1 | SPIKE-001 | พิสูจน์ว่าเชื่อม MT5 ได้, รู้ว่า timestamp เป็น UTC หรือเวลา server และพฤติกรรมช่วง DST, รู้ความลึกของข้อมูล (อ่านอย่างเดียว, environment uv ชั่วคราว, ไม่ต้องรอ D-001) | evidence report และไม่มีการส่งคำสั่งใดๆ | Standard |
 | 1b | ตัดสิน D-001 | Codex `$adversarial-design-review` พร้อมหลักฐานจาก SPIKE-001 แล้วเจ้าของรับหรือปฏิเสธ D-001 | ADR เปลี่ยนเป็น accepted หรือ rejected | – |
-| 2 | SLICE-R1 | วงวิจัยครบ: snapshot → validation → H001 → golden tests → backtest + costs → registry → รายงานเทียบ random-entry | เจ้าของตัดสิน go/stop/insufficient จาก 3 รายงาน (ข้อมูล, golden, registry) | Standard |
+| 1c | ENV-1 | Windows VPS เป็น acquisition/execution host, ย้าย terminal/raw/holdout, ลบ terminal และ cache ออกจาก research host, environment check + synthetic sentinel (ข้อ 6.1) | sentinel พิสูจน์ว่า research identity อ่านหรือดึงช่วงที่ตัดออกไม่ได้ | Standard (มีค่าใช้จ่าย, Q-10) |
+| 2 | SLICE-R1 (เริ่มได้หลัง ENV-1 ผ่าน) | วงวิจัยครบ: snapshot → validation → H001 → golden tests → backtest + costs → registry → รายงานเทียบ random-entry | เจ้าของตัดสิน go/stop/insufficient จาก 3 รายงาน (ข้อมูล, golden, registry) | Standard |
 | 3 | SLICE-E1 | วง Demo ครบ: risk gate → คำสั่งพร้อม SL → MT5 ยืนยัน → journal → ปิด → reconcile → restart recovery | round trip ที่ MT5 ยืนยัน พร้อม negative cases | Standard + external-action controls |
 | 4 | OPS-1 | รัน Demo แบบไม่ต้องเฝ้า: scheduler, alert, backup/restore | ซ้อม restore และ alert จริงผ่าน | Standard/High |
 | – | เงินจริง | อยู่นอกขอบเขต | ต้องมี SPEC รุ่นใหม่, threat model, ADR และ controls ระดับ High | High |
@@ -182,7 +214,7 @@ SLICE-E1 เริ่มได้เมื่อ (ก) มี strategy version �
 |---|---|
 | Web dashboard / ดูผลจากที่อื่น | E1 รันแบบไม่เฝ้า และเจ้าของต้องดูจากนอกเครื่อง |
 | Database server ภายนอก (เช่น Supabase) | ต้องแชร์ข้อมูลข้ามเครื่องหรือ dashboard ต้องใช้ |
-| VPS | ต้องการ uptime เกินกว่าเครื่องเจ้าของ (Windows VPS; ถ้าเป็น Linux ต้องทบทวน D-001) |
+| VPS | **เจ้าของวางแผนแล้ว (2026-10-21)**: Windows VPS เป็น acquisition/execution host ต้องมีก่อน SLICE-R1 (ENV-1) เพื่อแยก holdout และใช้เป็น Demo runner ต่อไป (U5) · ถ้าเป็น Linux ต้องทบทวน D-001 |
 | News/AI classification | ลงทะเบียนเป็นสมมติฐานแยกพร้อม evals (บท 30) |
 | ML models | ต้องชนะ baseline แบบง่ายภายใต้การทดสอบที่ยุติธรรม (บท 34) |
 | MQL5 EA | ต้องการ logic ฝั่ง terminal ที่ Python ทำแทนไม่ได้ |
@@ -202,6 +234,7 @@ SLICE-E1 เริ่มได้เมื่อ (ก) มี strategy version �
 
 ## 13. Architecture fitness checks ที่วางแผนไว้
 
-- `tests/architecture/` (เขียนโดย test author, locked): ตรวจกฎ import ตามตารางในข้อ 8 ด้วย AST (ไม่ต้องเพิ่ม dependency) เช่น ห้าม import `MetaTrader5` นอก `broker/mt5` และ `strategy` import ได้เฉพาะ `core` และ `timebase`
+- `tests/architecture/` (เขียนโดย test author, locked): ตรวจกฎ import ตามตารางในข้อ 8 ด้วย AST (ไม่ต้องเพิ่ม dependency) เช่น ห้าม import `MetaTrader5` นอก `broker/mt5`, `strategy` import ได้เฉพาะ `core` และ `timebase` และ `research`/`backtest`/`strategy` ห้าม import `data.acquire` หรือ `broker` (F1)
+- ENV-1 (ก่อน R1): environment check + synthetic excluded-period sentinel บน research host ตามข้อ 6.1
 - CI ที่มีอยู่แล้ว: `control-gate` (pull_request_target ใช้ตัวตรวจจาก base revision และไม่รันโค้ดจาก PR) ตรวจ locked paths, สมมติฐาน immutable และ registry append-only ทีละ commit; `ci` รัน self-tests และ red-flag scan
 - ตั้งแต่ E1: negative test ว่า trade mode ที่ไม่ใช่ Demo ทำให้การส่งคำสั่งถูกปฏิเสธเสมอ

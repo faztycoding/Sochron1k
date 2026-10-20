@@ -86,8 +86,8 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 | Q-05 | ชั่วโมงเทรดและนโยบายถือข้ามคืน | เจ้าของ | ก่อน H001 | TBD (open) |
 | Q-06 | สมมติฐานแรก (PA01 จากรอบก่อน หรือไอเดียใหม่) | `/register-hypothesis` | ก่อน SLICE-R1 | TBD (open) |
 | Q-07 | ความลึกข้อมูลจากโบรกเกอร์พอไหม ถ้าไม่พอจะใช้แหล่งอื่นหรือไม่ (license) | SPIKE-001 | — | TBD (open) |
-| Q-08 | วัน cutoff ของ holdout และที่เก็บนอกเครื่องวิจัย | เจ้าของ | ก่อน SLICE-R1 | TBD (open) |
-| Q-09 | Demo runner จะรันที่ไหน (เครื่องนี้ หรือ Windows VPS) | เจ้าของ | ก่อน OPS-1 | TBD (open) |
+| Q-08 | วัน cutoff ของ holdout และที่เก็บนอกเครื่องวิจัย | เจ้าของ | ก่อน SLICE-R1 | ที่เก็บตอบแล้ว (เจ้าของ 2026-10-21): Windows VPS ที่เป็น acquisition host · วัน cutoff ยัง TBD |
+| Q-09 | Demo runner จะรันที่ไหน (เครื่องนี้ หรือ Windows VPS) | เจ้าของ | ก่อน OPS-1 | ตอบแล้ว (เจ้าของ 2026-10-21): Windows VPS ในอนาคต ส่วนระยะนี้ใช้เครื่องนี้ไปก่อน (`docs/architecture.md` ข้อ 6.1) |
 | Q-10 | งบรายเดือน และ kill criteria ของทั้งโปรเจกต์ | เจ้าของ | ก่อน SLICE-R1 | TBD (open) |
 | Q-11 | ใช้ Codex เป็น test author + reviewer ตาม binding ค่าเริ่มต้น (D-002) | เจ้าของ | ก่อน contract แรก | TBD (open) |
 | Q-12 | ระยะเวลาเก็บ holdout และ registry ในข้อ 5 (ตอนนี้เป็น [A]) | เจ้าของ | ก่อน SLICE-R1 | TBD (open) |
