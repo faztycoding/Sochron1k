@@ -170,14 +170,17 @@ def time_samples(mt5: object, samples: int, interval: float) -> dict:
 
 
 # ---- AC-05 / AC-06 helpers ----------------------------------------------------------------------
-def times_in_range(mt5: object, timeframe: int, start: datetime, end: datetime) -> list[int]:
-    """Bar open times inside [start, end). When a range holds no data, the terminal still returns
-    the earliest bar it has (observed in round 2), so out-of-range bars must be dropped."""
+def times_in_range(mt5: object, timeframe: int, start: datetime, end: datetime) -> tuple[list[int], list | None]:
+    """Bar open times inside [start, end), plus the terminal error when the call failed.
+
+    None from the terminal is an error, not "no data" (review r1 F3), so it is returned
+    separately. When a range holds no data, the terminal still returns the earliest bar it has
+    (observed in round 2), so out-of-range bars are dropped."""
     rates = mt5.copy_rates_range(SYMBOL, timeframe, start, end)
-    if rates is None or not len(rates):
-        return []
+    if rates is None:
+        return [], list(mt5.last_error())
     lo, hi = int(start.timestamp()), int(end.timestamp())
-    return [int(t) for t in rates["time"] if lo <= int(t) < hi]
+    return [int(t) for t in rates["time"] if lo <= int(t) < hi], None
 
 
 def daily_breaks(times) -> list[dict]:
@@ -211,12 +214,12 @@ def dst_study(mt5: object) -> dict:
     for label, change in DST_CHANGES.items():
         entry = {}
         for tf_name in ("TIMEFRAME_M1", "TIMEFRAME_M5"):
-            times = times_in_range(mt5, getattr(mt5, tf_name), change - timedelta(days=10),
-                                   change + timedelta(days=10))
+            times, error = times_in_range(mt5, getattr(mt5, tf_name), change - timedelta(days=10),
+                                          change + timedelta(days=10))
             entry[tf_name[10:]] = {
                 "bars": len(times),
                 "first_as_if_utc": as_if_utc(times[0]) if times else None,
-                "last_error": list(mt5.last_error()),
+                "call_error": error,
                 "daily_breaks": daily_breaks(times),
                 "week_edges": week_edges(times),
             }
@@ -252,11 +255,14 @@ def history_depth(mt5: object, now: datetime) -> dict:
     years: dict[int, dict] = {}
     first_month = None
     other_gaps: list[dict] = []
+    call_errors: list[dict] = []
     y, m = 2005, 1
     while (y, m) <= (now.year, now.month):
         start = datetime(y, m, 1, tzinfo=timezone.utc)
         nxt = datetime(y + (m == 12), 1 if m == 12 else m + 1, 1, tzinfo=timezone.utc)
-        times = times_in_range(mt5, mt5.TIMEFRAME_M1, start, min(nxt, now))
+        times, error = times_in_range(mt5, mt5.TIMEFRAME_M1, start, min(nxt, now))
+        if error is not None:
+            call_errors.append({"month": f"{y}-{m:02d}", "error": error})
         row = years.setdefault(y, {"year": y, "m1_bars": 0, "months_with_data": 0, "gaps_weekend_or_holiday": 0,
                                    "gaps_15m_to_3h": 0, "gaps_5_to_15m_or_over_3h": 0})
         if times:
@@ -277,6 +283,7 @@ def history_depth(mt5: object, now: datetime) -> dict:
         y, m = (y + 1, 1) if m == 12 else (y, m + 1)
     out["m1_by_month_range"] = [r for r in years.values() if r["m1_bars"]]
     out["m1_first_month_with_data"] = first_month
+    out["m1_range_call_errors"] = call_errors  # failed calls: unknown, not "no data"
     first_year = int(first_month[:4]) if first_month else None
     out["m1_largest_other_gaps"] = sorted(other_gaps, key=lambda g: -g["gap_minutes"])[:20]
     out["ticks"] = tick_depth(mt5, first_year or now.year, now)
@@ -291,20 +298,25 @@ def tick_depth(mt5: object, from_year: int, now: datetime) -> dict:
         months.append((y, m))
         y, m = (y + 1, 1) if m == 12 else (y, m + 1)
 
-    def has_ticks(ym: tuple[int, int]) -> int:
+    def has_ticks(ym: tuple[int, int]) -> int | None:
         day = datetime(ym[0], ym[1], 15, 12, tzinfo=timezone.utc)
         while day.weekday() >= 5:
             day += timedelta(days=1)
         ticks = mt5.copy_ticks_range(SYMBOL, day, day + timedelta(hours=1), mt5.COPY_TICKS_ALL)
-        return 0 if ticks is None else len(ticks)
+        return None if ticks is None else len(ticks)  # None: the call failed (F3)
 
     lo, hi, probes = 0, len(months) - 1, []
-    if not months or not has_ticks(months[-1]):
-        return {"first_month_with_ticks": None, "note": "no ticks found even in the current month",
-                "last_error": list(mt5.last_error())}
+    latest = has_ticks(months[-1]) if months else 0
+    if latest is None:
+        return {"first_month_with_ticks": "UNKNOWN", "call_error": list(mt5.last_error())}
+    if not latest:
+        return {"first_month_with_ticks": None, "note": "no ticks found even in the current month"}
     while lo < hi:
         mid = (lo + hi) // 2
         n = has_ticks(months[mid])
+        if n is None:
+            return {"first_month_with_ticks": "UNKNOWN", "probes": probes,
+                    "call_error": {"month": f"{months[mid][0]}-{months[mid][1]:02d}", "error": list(mt5.last_error())}}
         probes.append({"month": f"{months[mid][0]}-{months[mid][1]:02d}", "ticks_in_hour": n})
         if n:
             hi = mid

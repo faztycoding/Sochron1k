@@ -124,10 +124,27 @@ def test_out_of_range_bar_returned_for_an_empty_range_is_dropped():
     later_bar = int(datetime(2026, 7, 10, 4, 2, tzinfo=probe.timezone.utc).timestamp())
     term = SimpleNamespace(copy_rates_range=lambda *a: RatesStub([later_bar]))
     start = datetime(2005, 1, 1, tzinfo=probe.timezone.utc)
-    assert probe.times_in_range(term, 1, start, datetime(2005, 2, 1, tzinfo=probe.timezone.utc)) == []
+    assert probe.times_in_range(term, 1, start, datetime(2005, 2, 1, tzinfo=probe.timezone.utc)) == ([], None)
     inside = int(datetime(2026, 7, 10, 4, 2, tzinfo=probe.timezone.utc).timestamp())
     assert probe.times_in_range(term, 1, datetime(2026, 7, 1, tzinfo=probe.timezone.utc),
-                                datetime(2026, 8, 1, tzinfo=probe.timezone.utc)) == [inside]
+                                datetime(2026, 8, 1, tzinfo=probe.timezone.utc)) == ([inside], None)
+
+
+UTC = probe.timezone.utc
+
+
+def test_failed_range_call_is_reported_as_an_error_not_as_no_data():
+    # Review r1 F3: None from the terminal is an error and must not read as "no bars".
+    term = SimpleNamespace(copy_rates_range=lambda *a: None, last_error=lambda: (-10005, "IPC timeout"))
+    times, error = probe.times_in_range(term, 1, datetime(2026, 1, 1, tzinfo=UTC), datetime(2026, 2, 1, tzinfo=UTC))
+    assert times == [] and error == [-10005, "IPC timeout"]
+
+
+def test_failed_tick_probe_makes_the_month_search_unknown():
+    term = SimpleNamespace(COPY_TICKS_ALL=-1, copy_ticks_range=lambda *a: None,
+                           copy_ticks_from=lambda *a: None, last_error=lambda: (-10005, "IPC timeout"))
+    result = probe.tick_depth(term, 2026, datetime(2026, 10, 21, tzinfo=UTC))
+    assert result["first_month_with_ticks"] == "UNKNOWN"
 
 
 def test_daily_break_and_week_edges_from_raw_times():
