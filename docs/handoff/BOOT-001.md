@@ -914,3 +914,145 @@ Request to Codex (next round):
 Owner:
 - Push when ready. CI on the new head gives Linux evidence for the 54 tests.
 - Do not add the label while F10 is open.
+
+## Findings response (round 8): F10 comment-boundary proposal (Codex), 2026-10-20
+
+The owner's latest handoff confirms r7 was reviewed and committed, and requests the F10 fix.
+Starting state was clean at `b662232345fa0105df29895653aeec87c76ddb77`; actual r7 controls are
+committed in `077c3a1`. Codex acts as implementer/test author under that handoff and follows
+`.claude/skills/fix-findings/SKILL.md` as a plain procedure. This is not a closure review.
+
+| ID | Accept/Dispute | Commit / artifact | Evidence |
+|----|----------------|-------------------|----------|
+| F10 High | Accept | This docs-only checkpoint; `docs/proposals/BOOT-001-r8-controls.patch` for owner application | Both recorded inputs return 0 before and 2 after, with the locked-settings reason. Original 54 tests preserved; expanded suite before 56 pass/5 fail, after 61/61, no skips. |
+| F11–F15, F17 | Deferred per recorded owner decision | No separate fix or closure in r8 | Comment handling may incidentally affect comment-related forms, but those findings retain their prior status pending their own review. |
+| F8 remainder, F16 | Existing false-positive follow-up | Unchanged scope | No Monitor/case/legacy-backtick support added. |
+
+### Artifact and expected applied files
+
+Apply only `docs/proposals/BOOT-001-r8-controls.patch` on the already committed r7 files.
+Do not reapply r6/r7. This incremental patch targets exactly guard-bash and test-controls,
+with 203 insertions and 7 deletions. Actual controls, posthook/settings and workflows remain
+untouched by Codex. The proposal/evidence are local and gitignored; only handoff and PROGRESS
+are committed. No dependencies were added.
+
+| Artifact | SHA256 | Git blob after application |
+|----------|--------|----------------------------|
+| `BOOT-001-r8-controls.patch` | `20cde61370c60ace51f55b35a2222ace850dfa93c72854bba1babaad92ecf1b6` | n/a |
+| `.claude/hooks/guard-bash.mjs` | `f3a525c53eb8506771203b5311f14f18f9ffb14824d20e28f64d2d7eafdcb212` | `98ab688b480f4ad0904359d96dbaffe1c0566f13` |
+| `scripts/controls/test-controls.mjs` | `1daf54a876307b5d710eac5ae3745e0d635360fa35bbf6ce73b606ca333a5d8a` | `ec961f6bbd056365daf293141c5009da4f7794ee` |
+
+### Scope of the fix
+
+Both `splitSegments` and `substitutionEnd` recognize POSIX comments only at an unquoted word
+boundary. They skip raw comment text to the physical LF before interpreting any escapes,
+quotes, parentheses or substitutions. Outside comments, existing line continuation still
+removes the backslash/LF pair. Quoted/escaped fragments and complete substitutions continue
+the same word; literal hashes in words and parameters are preserved.
+
+Parameter quote context is tracked so a hash in a parameter default cannot become a comment
+by accidentally closing an enclosing quote. The enclosing quote is restored when the parameter
+closes, apostrophes under enclosing double quotes remain literal, and ordinary parameter
+contents do not become command segments. Inspection of recognized nested command substitutions
+is retained.
+An unclosed parameter fails closed. These rules protect the comment boundary; they do not
+claim full parameter expansion or shell grammar support.
+
+The first draft's 60-test suite passed but a supporting reviewer found a new 2-to-0 regression:
+`echo "${x:-" # "}"; cd .claude; echo {} > settings.json`. That draft was not delivered.
+The quote-context fix and paired ordinary/protected regressions address it, including
+apostrophes, quoted/escaped closing braces, nested parameters and substitutions. Draft1 patch
+and after-log/evidence remain locally for audit only; do not apply `BOOT-001-r8-draft1.patch`.
+
+Primary syntax references:
+[Bash comments](https://www.gnu.org/s/bash/manual/html_node/Comments.html),
+[metacharacters](https://www.gnu.org/s/bash/manual/html_node/Definitions.html),
+[escape character](https://www.gnu.org/s/bash/manual/html_node/Escape-Character.html), and
+[parameter expansion](https://www.gnu.org/s/bash/manual/html_node/Shell-Parameter-Expansion.html).
+Direct GNU fetches timed out; the primary GNU search excerpts supplied the referenced rules.
+No shell payload or live shell analogue was executed in this round.
+
+### Checks and evidence
+
+All checks below used base `b662232`, Windows, Node `v26.12.0`, Git `2.46.1.windows.1`;
+times are 2026-10-20, +07:00.
+The verification adapter only changes module/import locations and which guard is selected.
+It confirms the original 54-test source remains byte-identical outside the new block, excludes
+system/global Git config and inherited Git identity/config variables, and retains the existing
+isolated TMP/TEMP/TMPDIR fixtures. Every guard reproduction is JSON on stdin, never a shell
+command execution.
+
+| Command / check | Result | Time |
+|-----------------|--------|------|
+| `node docs/proposals/BOOT-001-r8-verify.mjs before` | FAIL as required: 61 total, 56 pass, 5 fail, 0 skipped; original 54 all pass | 19:20:52–19:21:25 |
+| `node docs/proposals/BOOT-001-r8-verify.mjs after` | PASS 61/61, 0 skipped | 19:20:52–19:21:27 |
+| Both original F10 inputs | 0 before, 2 after, locked-settings reason | Same runs |
+| Ordinary commented write; `a#b`, `$#`, `${#x}` | 0 before and after | Same runs |
+| `git apply --check docs/proposals/BOOT-001-r8-controls.patch` | PASS, dry run only | 19:21:40 |
+| `node scripts/controls/check-locked-paths.mjs main` | FAIL: 42 bootstrap control changes need owner approval; not waived | 19:17:53 |
+| Fresh read-only supporting reviewer, JSON-only expected cases | PASS 124/124 on final candidate | 19:21:49–19:21:58 |
+| Same reviewer: in-memory patch reconstruction, hashes, original-suite preservation and dry run | PASS: exact two target contents, original 54 tests unchanged | 19:22:17 |
+| Separate design helper: final boundary and parameter-context reprobes | PASS 26/26 boundaries and 19/19 parameter-context checks | 19:22:28 / 19:21:47 |
+| Supporting reviewer's bare `bash scripts/controls/red-flags.sh main` | BLOCKED: PowerShell could not find `bash`; no configuration changed | 19:22:36 |
+| Root: `& 'C:/Program Files/Git/bin/bash.exe' scripts/controls/red-flags.sh main`, staged docs | PASS: six existing groups, both secret groups empty; ignored proposals excluded | 19:23:39 |
+| `git diff --cached --check` | PASS; only PROGRESS/handoff staged | 19:23:39 |
+
+The six scan groups retain the earlier explanations: an existing Bash-unavailable skip that
+was not taken, type/lint rules and scanner definitions, synthetic scanner fixtures, prohibited
+command examples/denial tests, and the scanner's own order/account pattern. There are no new
+groups or secret hits. The successful root scan uses the already verified Git Bash executable;
+it does not change configuration or turn the helper's failed bare-name invocation into a pass.
+
+Acceptance in this round: AC-04 FAIL on actual controls pending application/review; AC-06 PASS
+and AC-07 PASS within the tracked-file scan; AC-01/02/03/05/08 UNKNOWN as complete acceptance
+conditions. Local candidate test passes do not establish CI or live integration.
+
+Supporting review was read-only and did not execute payloads, change files or write a finding
+closure report. The final 124-case probe records' digest was
+`b6023065d73a979794b62524c77a3a08ce5d3c14ca22e7e7f6060b2d2df90517`; those independent records
+were emitted in tool output, not saved as a local artifact. They supplement the retained suite
+logs, and do not replace fresh Claude review after the owner applies the patch.
+
+Reproduction files under `docs/proposals/`: `BOOT-001-r8-verify.mjs`,
+`BOOT-001-r8-build-patch.mjs`, guard/tests candidate files, before/after logs and
+`BOOT-001-r8-before-evidence.json` / `BOOT-001-r8-after-evidence.json`. The evidence records
+the selected guard hash and full timestamps, with `originalSuitePreserved: true` and
+`controlsUnchanged: true`. Seven permanent test groups cover comment line endings, inert
+comment contents, literal hash boundaries, logical continuations, nested substitutions,
+parameter quote contexts and unchanged non-POSIX behavior.
+
+Actual file SHA256 values stayed unchanged:
+
+| File | SHA256 |
+|------|--------|
+| `.claude/hooks/guard-bash.mjs` | `2986d0e1324d292e4abbf6ecf14f07d5b8abe8b3c73c6f8c26a32303e52fa3c0` |
+| `scripts/controls/test-controls.mjs` | `0664b0fef1891c49861f6c0b74f4692fd2c12fd1dabfdbd1f007e606a527dfe4` |
+| `.claude/hooks/check-locked-after.mjs` | `28c6283c38c3514dc6112c650f3d2ae09251e56d2873292f59929e55c0e384b9` |
+| `.claude/settings.json` | `9de3df7d0decc7d4eafb7280eaf39f48b58c210ec55f8c2de422fe485c1edf2e` |
+
+### Limits and next action
+
+F10 remains OPEN High and AC-04 remains FAIL on actual r7 controls until owner application and
+independent review. No Linux result, live dispatch, P25, approval label, merge or push is
+claimed. Whole-command regex checks still inspect raw comments; this patch does not address
+their false positives. Existing deferred findings and prior posthook limitations remain.
+
+Supporting probes also observed pre-existing nested parameter/substitution quote variants,
+`echo "${x:-"'"$(echo {} > AGENTS.md)}"` and
+`echo "${x:-"it's $(cd .claude; echo {} > settings.json)"}"`, returning 0 in both r7 and the
+candidate through unchanged substitution quote tracking. They need follow-up triage; r8 does
+not certify that broader grammar or accept its risk.
+
+Owner applies:
+
+```powershell
+git apply docs/proposals/BOOT-001-r8-controls.patch
+```
+
+A fresh Claude session then reads AGENTS.md, review r7 and this final r8 section; verifies both
+applied hashes, runs `node scripts/controls/test-controls.mjs` (expected 61/61 with no skips),
+and reviews F10 plus the comment/parameter boundary regressions using hook JSON only. Record
+the scoped result and limits in `docs/reviews/BOOT-001-r8.md`, update handoff/PROGRESS, then
+stage, scan and commit if checks pass. Do not edit controls or push. The owner confirms the
+application when handing off, and pushes separately after review. CI evidence must identify
+the exact pushed head; do not add the approval label while F10 is open.
