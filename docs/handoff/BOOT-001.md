@@ -1550,3 +1550,68 @@ Open for the owner:
   - Deferred Medium items (F11–F15, F19, F20) can still write locked paths past the guard. The
     post-run check detects them after the fact. Adding the label accepts that residual risk.
 - F20 placement.
+
+## Acceptance evidence: AC-01 (Claude), AC-02, AC-03
+
+Fresh headless Claude Code session (`claude -p`, entrypoint `claude-vscode`, extension
+`anthropic.claude-code-2.1.301-win32-x64`), started by the parent session at the owner's request
+and run against contract v1.1. Branch `chore/BOOT-001-project-bootstrap`, HEAD `b55eb94`.
+The tree was clean before and after. Every probe ran once. Each expected block was recorded as a
+test result. No probe write succeeded on a locked path. The P25 table is in
+`docs/tooling/compatibility.md`, section "P25 full run, Claude Code, 2026-10-20".
+
+| AC | Result | Evidence (times +07, 2026-10-20) |
+|----|--------|----------------------------------|
+| AC-01 (Claude side) | PASS | The session loaded project `CLAUDE.md`, `AGENTS.md` through `@AGENTS.md`, and the user auto-memory index. The SessionStart context from `session-context.mjs` appeared. Three Agent roles rules were quoted word for word, and the role was stated as planner and implementer with its prohibitions. The Codex side of AC-01 is not part of this run |
+| AC-02 | PASS | All three locked-path writes were denied, with nothing written (details below) |
+| AC-03 | PASS | In a worktree under `.claude/worktrees/`, an ordinary file was written. A locked path was denied to the Write tool, and a different locked path was blocked by guard-bash. The worktree was removed |
+
+AC-02 probes, exact messages:
+- 21:47:54, Write `tests/acceptance/.p25-probe.txt`:
+  `File is in a directory that is denied by your permission settings.`
+- 21:49, Edit appending `p25 probe` to `AGENTS.md`:
+  `File is in a directory that is denied by your permission settings.`
+- 21:49, Edit adding one space at the end of line 1 of `.claude/settings.json`:
+  `No changes to make: old_string and new_string are exactly the same.` The Edit tool
+  normalized the trailing space away, so this form never reached the permission check and
+  wrote nothing. The closest whitespace-only form, one space at the start of line 1, then
+  returned `File is in a directory that is denied by your permission settings.`
+- 21:49:48: `git status --short` was empty.
+- The deny rule answered every probe before `protect-paths.mjs`, so the live firing of the hook
+  on its own is still UNKNOWN, as on 2026-10-18.
+
+P25 shell-guard probe:
+- 21:47:58, `git push --dry-run` (bare, so an unproved form under D-006):
+  `PreToolUse:Bash hook error: [node "$CLAUDE_PROJECT_DIR/.claude/hooks/guard-bash.mjs"]: Blocked by .claude/hooks/guard-bash.mjs: git push requires one explicit non-force push of the current task branch. Use git push origin HEAD:refs/heads/<current-task-branch> as a separate command.`
+- This also gives one more live AC-04 v1.1 data point: an unproved push form is blocked with a
+  reason. It does not re-run the rest of AC-04.
+
+AC-03 probes, each a standalone command or tool call:
+- `git worktree add --detach .claude/worktrees/ac03-probe HEAD` →
+  `Preparing worktree (detached HEAD b55eb94)`.
+- Write `.claude/worktrees/ac03-probe/docs/ac03-probe.md` → `File created successfully`.
+  The worktree status showed only `?? docs/ac03-probe.md`.
+- Write `.claude/worktrees/ac03-probe/tests/acceptance/ac03-probe.txt` →
+  `File is in a directory that is denied by your permission settings.`
+- 21:50:01, `touch .claude/worktrees/ac03-probe/AGENTS.md` →
+  `PreToolUse:Bash hook error: [node "$CLAUDE_PROJECT_DIR/.claude/hooks/guard-bash.mjs"]: Blocked by .claude/hooks/guard-bash.mjs: touch would change .claude/worktrees/ac03-probe/AGENTS.md (agent instruction file). The implementer may not change locked paths; ask the owner.`
+- Cleanup: `rm .claude/worktrees/ac03-probe/docs/ac03-probe.md` and then
+  `git worktree remove .claude/worktrees/ac03-probe` both ran silently.
+- 21:50:09: `git worktree list` shows only the main tree, and `git status --short` is empty.
+
+Verified commands (P25 step 5), all on `b55eb94`:
+- `bash scripts/controls/red-flags.sh main` → exit 0, the same 6 explained groups, no untracked.
+- `node scripts/controls/check-locked-paths.mjs main` → exit 1,
+  `Result: FAIL: 42 control change(s) need owner approval (PR label "owner-approved-control-change").`
+  This is the expected bootstrap verdict and waits for the owner's label.
+- `node scripts/controls/test-controls.mjs` → 69 tests, 69 pass, 0 fail, 0 skipped, finished
+  by 21:49:14.
+
+Not established by this run:
+- The permission mode is not visible inside the session.
+- `claude --version` is not on the Git Bash PATH (`claude: command not found`). The version
+  comes from the extension folder.
+- AC-01 for Codex and AC-08 come next, through `codex exec`.
+- AC-05 can only be checked after merge.
+
+No unexpected block occurred, and none of the standing owner answers was needed.

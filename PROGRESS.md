@@ -1,11 +1,18 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-20 by Claude Code · เจ้าของตัดสินแล้ว: AC-04 v1.1, F20 ไปงาน guard-fix ถัดไป, ยอมรับความเสี่ยงที่เหลือ (D-007) · กำลังรวบรวมหลักฐาน AC-01/02/03/08 ก่อนเจ้าของติด label และ merge
+Updated 2026-10-20 by Claude Code · เจ้าของตัดสินแล้ว: AC-04 v1.1, F20 ไปงาน guard-fix ถัดไป, ยอมรับความเสี่ยงที่เหลือ (D-007) · AC-01 ฝั่ง Claude, AC-02, AC-03 PASS (session headless 21:47–21:50) · เหลือ P25 ฝั่ง Codex (AC-01) และ AC-08 ก่อนเจ้าของติด label และ merge
 
 ## Current task
 BOOT-001 v1 · State FIXING · F3, F7, F10 และ F18 ปิดแล้ว (F18 ใน review r9) · F9 ปิดสำหรับรูปแบบที่บันทึกไว้ (review r7) · ไม่มี finding High ค้าง · **F20 Medium ใหม่ (ต้นเหตุเดียวกับ F18 แต่ไม่ใช่ regression):** `#` ที่ติดหลัง `)` ของ `@(…)` หรือ `a=(…)` ถูก guard อ่านเป็น comment → เจ้าของเลือกที่วาง · F19 และ F11–F15 Medium ไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน · Low ที่ค้าง: F8 ส่วน Monitor/case, F16, F17, F21 (inspection ที่พ่วงคำสั่งอื่นถูกบล็อก), F22 (ตัวพิมพ์ของ path ทำให้สิทธิ์ apply ไม่ทำงาน แต่บล็อกอย่างปลอดภัย), F23 (blank line ท้ายไฟล์ test) · AC-04 FAIL ตามข้อความ contract: ข้อ push ต้องแก้ตาม D-006 และ Medium ที่ค้างยังเขียนไฟล์ล็อกผ่านได้
 Branch `chore/BOOT-001-project-bootstrap` · controls r9 + review r9 อยู่ใน commit ของ session นี้ (ดู Done) · push แล้วถึง `2f2b6ca` (D-006) · Linux CI ล่าสุด: run 39438962998 success บน `2f2b6ca`
 
 ## Done (with evidence)
+- 2026-10-20 21:47–21:50 +07: Claude session ใหม่ (headless, parent session เริ่มตามคำขอเจ้าของ) รัน `/verify-agent-setup` (P25) และ probe ของ AC-02/AC-03 บน `b55eb94` ตาม contract v1.1 · ตารางอยู่ใน `docs/tooling/compatibility.md` ข้อความบล็อกเต็มอยู่ใน handoff หัวข้อ "Acceptance evidence: AC-01 (Claude), AC-02, AC-03"
+  - AC-01 ฝั่ง Claude PASS: โหลด CLAUDE.md, AGENTS.md (ผ่าน `@AGENTS.md`) และ memory index · SessionStart context ขึ้น · ยกกฎ Agent roles 3 ข้อตรงตัวอักษร และบอกบทบาทถูก
+  - AC-02 PASS: Write `tests/acceptance/.p25-probe.txt` (21:47:54), Edit `AGENTS.md`, Edit `.claude/settings.json` → deny rule ทุกครั้ง "File is in a directory that is denied by your permission settings." · ช่องว่างท้ายบรรทัดถูก Edit tool ตัดทิ้งเลยไม่ถึงชั้นสิทธิ์ ("No changes to make") จึงลองช่องว่างต้นบรรทัดแทน → deny · `git status` ว่าง
+  - AC-03 PASS: worktree `.claude/worktrees/ac03-probe` · เขียน `docs/` ได้ · `tests/acceptance/` → deny · `touch …/AGENTS.md` → guard-bash บล็อก (21:50:01) · ลบไฟล์และ worktree แล้ว tree สะอาด (21:50:09)
+  - P25 ข้อ 4: `git push --dry-run` → guard-bash บล็อกพร้อมเหตุผลของ D-006 (21:47:58) · ข้อ 5: red-flags exit 0 ได้ 6 กลุ่มเดิม · locked-paths FAIL 42 ตามคาด (ต้องใช้ label ของเจ้าของ) · test-controls 69/69 skipped 0 (เสร็จภายใน 21:49:14)
+  - UNKNOWN: permission mode มองไม่เห็นใน session · `claude --version` ไม่มีใน PATH ของ Git Bash จึงใช้เวอร์ชันจากโฟลเดอร์ extension (2.1.301) · protect-paths ทำงานเองยังไม่เห็น เพราะ deny rule ตอบก่อนทุกครั้ง
+  - ไม่มีบล็อกที่ไม่คาดไว้ และไม่ต้องใช้คำตอบถาวรของเจ้าของ
 - 2026-10-20 21:01–21:20 +07: Claude session ใหม่ (headless, parent session เริ่มตามคำขอเจ้าของ) review r9 ที่เจ้าของ apply → `docs/reviews/BOOT-001-r9.md`
   - posthook รายงานไฟล์ล็อก 5 ไฟล์ตั้งแต่คำสั่งแรก ตรงกับ target ของ r9 พอดี → ตรวจ SHA256 และ blob ครบทั้ง 5 ไฟล์ ตรง handoff (21:01:57) แล้วจึงทำต่อตามกฎใหม่ใน CLAUDE.md · posthook `28c6283c…` และ patch `68351d1f…` ตรง · `git apply -R --check` แบบคำสั่งเดี่ยว PASS (21:16)
   - `node scripts/controls/test-controls.mjs` → PASS 69/69, fail 0, skipped 0 (21:07:33–21:08:18)
@@ -104,7 +111,7 @@ Branch `chore/BOOT-001-project-bootstrap` · controls r9 + review r9 อยู�
 - F11–F15 Medium และ F17 Low: งาน guard-fix ถัดไป (เจ้าของตัดสิน 2026-10-20) · F8 ส่วน Monitor/case และ F16 Low: งาน false-positive
 - Permanent regressions 54 ข้อเข้า tracked source แล้ว (`077c3a1`) แต่ยังไม่มีผล Linux บน head ที่มี r5 หรือ r7 · live fresh-session baseline / การแยก failure event ที่ dispatch ยังไม่ยืนยัน
 - เจ้าของ push; ผล Linux CI ที่ยืนยันแล้วยังอ้างถึง `7eae474`
-- P25 ใน session ใหม่ของ Claude Code และของ Codex
+- P25 ใน chat ใหม่ของ Codex (AC-01 ฝั่ง Codex) และ AC-08 · ฝั่ง Claude PASS แล้ว (2026-10-20 21:47–21:50)
 - CI ล่าสุดที่ยืนยันคือ run 39229522531 PASS (แทน run 39219308064 FAIL สำหรับ fixture เก่า); control-gate และ branch protection ยังต้องยืนยันแยก
 - รอเจ้าของตัดสิน N1–N4 ใน `docs/handoff/BOOT-001.md`; N5 แก้แล้วที่ `4ee6d09`
 
@@ -134,9 +141,10 @@ Codex ชี้ (หลัง review r5 static) ว่า Claude เปลี่
 หมายเหตุจาก Codex: ข้อความ "ไม่แตะไฟล์ล็อก" ของทั้ง 5 เหตุการณ์เป็นรายงานของ Claude เอง ยังไม่มีใครตรวจย้อนหลัง
 
 ## Pending external operations
-- none · Claude push `2f2b6ca` ตาม D-006 แล้ว (21:24 +07) และ CI run 39438962998 completed/success · ยังไม่มี label หรือ merge · commit checkpoint นี้จะ push ตามมาเป็นคำสั่งเดี่ยว
+- none · Claude push `2f2b6ca` ตาม D-006 แล้ว (21:24 +07) และ CI run 39438962998 completed/success · ยังไม่มี label หรือ merge · commit หลักฐาน AC-01/02/03 ของ session headless ยังไม่ push: parent session push เองเป็นคำสั่งเดี่ยว
 
 ## Authority and budget left
+- รอบหลักฐาน acceptance (Claude, 2026-10-20, headless ตามคำขอเจ้าของผ่าน parent session): รัน P25, probe เขียนไฟล์ล็อกครั้งเดียวต่อรายการ, สร้างและลบ worktree ทดสอบ, บันทึกผลใน compatibility/handoff/PROGRESS แล้ว stage → scan → commit · ห้าม push (parent session push เอง) และห้ามแตะไฟล์ล็อก · คำตอบถาวร 3 ประเภทใช้เฉพาะ session นี้ · ทำครบแล้ว
 - รอบ r9 review (Claude, 2026-10-20, เจ้าของสั่งผ่าน parent session แบบ headless): ตรวจ r9 ที่เจ้าของ apply, รัน tests 69 ข้อ, ส่ง input ให้ hook อย่างเดียว, analogue ใน scratch ด้วย cd/pwd/echo เท่านั้น, เขียน review r9, อัปเดต handoff/PROGRESS แล้ว stage → scan → commit รวมไฟล์ล็อก 5 ไฟล์ที่เจ้าของ apply · ห้ามแก้ controls, ห้าม push (parent session push เอง), F11–F17 และ F19 ยังพักไว้ · คำตอบถาวรเฉพาะ session นี้สองประเภท (path ตัวแปรที่ชี้ไป scratchpad และ apply/push ที่ต้องเป็นคำสั่งเดี่ยว) ไม่ใช้กับ session อื่น · ทำครบแล้ว
 - รอบ r9 (Codex, headless ตามคำขอเจ้าของผ่าน Claude): implementer และ regression author เฉพาะ proposal F18 + D-006 revised บน `be2e02a`; เขียน patch/evidence ใน docs/proposals, อัปเดต PROGRESS/handoff, stage → scan ด้วย Git Bash absolute path → commit docs only · ห้าม apply patch, แก้ controls จริง หรือ push; ไม่ปิด finding เอง
 - รอบ r8 review (Claude, 2026-10-20, เจ้าของสั่งผ่าน parent session แบบ headless): ตรวจ r8 ที่เจ้าของ apply, รัน tests 61 ข้อ, ส่ง input ให้ hook อย่างเดียว, analogue ใน scratch ด้วย cd/pwd เท่านั้น, เขียน review r8, อัปเดต handoff/PROGRESS แล้ว stage → scan → commit รวมไฟล์ล็อก 2 ไฟล์ที่เจ้าของ apply · ห้ามแก้ controls, ห้าม push, ห้ามเปิด F11–F17 ใหม่เว้นแต่ r8 ทำให้แย่ลง · ทำครบแล้ว
@@ -156,8 +164,8 @@ Codex ชี้ (หลัง review r5 static) ว่า Claude เปลี่
   - ยอมรับความเสี่ยงที่เหลือของ guard ตาม D-007
   - ให้ Claude ปิด AC ที่ยัง UNKNOWN ก่อนติด label
 - Claude กำลังรวบรวมหลักฐาน acceptance:
-  - session Claude ใหม่แบบ headless รัน P25 (AC-01 ฝั่ง Claude), ลองเขียนไฟล์ล็อก (AC-02) และทดสอบใน worktree (AC-03)
-  - จากนั้น `codex exec` รัน P25 ฝั่ง Codex (AC-01) และตรวจ AC-08
+  - เสร็จแล้ว (21:47–21:50): session Claude ใหม่แบบ headless รัน P25 (AC-01 ฝั่ง Claude), ลองเขียนไฟล์ล็อก (AC-02) และทดสอบใน worktree (AC-03) → PASS ทั้งสาม · parent session push commit นี้เป็นคำสั่งเดี่ยวตาม D-006
+  - ถัดไป: `codex exec` รัน P25 ฝั่ง Codex (AC-01) และตรวจ AC-08
   - ผลจะบันทึกใน handoff หัวข้อ "Acceptance evidence"
   - AC-05 ตรวจได้หลัง merge ตาม contract
 - เจ้าของ: ติด label และ merge เมื่อหลักฐานครบ (merge เป็นของเจ้าของเท่านั้น)
