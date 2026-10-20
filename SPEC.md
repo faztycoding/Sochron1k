@@ -49,8 +49,8 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 | Data | Class | Source of truth | Retention | Who can access |
 |------|-------|-----------------|-----------|----------------|
 | ราคา/ticks/bars จากโบรกเกอร์ | contract-limited (ตามเงื่อนไขโบรกเกอร์) | MT5 terminal → snapshot ที่บันทึก manifest | TBD | เครื่องเจ้าของ |
-| Holdout | internal, ปิดผนึก | ที่เก็บแยกนอกเครื่องวิจัย — TBD: ที่ไหน ใครถือ | ตลอดอายุการทดลอง | เจ้าของ (เปิดเฉพาะวันประเมิน) |
-| Registry การทดลอง | internal | `research/registry/*.jsonl` (append-only) | ตลอดอายุโปรเจกต์ | repo |
+| Holdout | internal, ปิดผนึก | ที่เก็บแยกนอกเครื่องวิจัย — TBD: ที่ไหน ใครถือ | ตลอดอายุการทดลอง [A] (รอเจ้าของยืนยัน, Q-12) | เจ้าของ (เปิดเฉพาะวันประเมิน) |
+| Registry การทดลอง | internal | `research/registry/*.jsonl` (append-only) | ตลอดอายุโปรเจกต์ [A] (รอเจ้าของยืนยัน, Q-12) | repo |
 | คำสั่ง/deals/positions | confidential operational | MT5 (ความจริง) + journal ในเครื่อง | TBD | เครื่องเจ้าของ |
 | Login/รหัสผ่าน MT5 | restricted | ใน terminal หรือ .env บนเครื่อง runner เท่านั้น | – | เจ้าของ |
 - Personal data: ไม่มีข้อมูลส่วนบุคคลของผู้อื่น ข้อมูลบัญชีของเจ้าของไม่ลง log/prompt/report แบบเต็ม
@@ -89,6 +89,7 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 | Q-09 | Demo runner จะรันที่ไหน (เครื่องนี้ หรือ Windows VPS) | เจ้าของ | ก่อน OPS-1 | open |
 | Q-10 | งบรายเดือน และ kill criteria ของทั้งโปรเจกต์ | เจ้าของ | ก่อน SLICE-R1 | open |
 | Q-11 | ใช้ Codex เป็น test author + reviewer ตาม binding ค่าเริ่มต้น (D-002) | เจ้าของ | ก่อน contract แรก | open |
+| Q-12 | ระยะเวลาเก็บ holdout และ registry ในข้อ 5 (ตอนนี้เป็น [A]) | เจ้าของ | ก่อน SLICE-R1 | open |
 | A-01 | เอกสารฝั่งเจ้าของเป็นภาษาไทย ส่วนโค้ด/commit/คำสั่ง agent เป็นอังกฤษ | เจ้าของยืนยัน | ก่อน contract แรก | assumed |
 | A-02 | Blueprint v1.1 และโค้ดรอบก่อนเป็นเพียงข้อมูลอ้างอิงใน git history ไม่ใช่ข้อกำหนด | เจ้าของยืนยัน (D-003) | ก่อน contract แรก | assumed |
 
