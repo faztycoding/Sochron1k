@@ -5,7 +5,7 @@ Decision log แบบย่อ (Handbook ภาคผนวก G) · สถา�
 
 ## D-001 สถาปัตยกรรมเริ่มต้น: Python modular monolith + `MetaTrader5` บน Windows, วิจัยก่อน — 2026-10-18 — proposed
 Context: เริ่มใหม่ทั้งหมด เครื่องพัฒนาเป็น Windows ซึ่งใช้แพ็กเกจ `MetaTrader5` ได้โดยตรง (wheel cp310–cp314) ผลลัพธ์ของโปรเจกต์คือหลักฐานว่ามี edge (บท 34) รอบก่อนยังไม่เคยใช้ข้อมูลจริง
-Decision: แอป Python 3.12 ตัวเดียว (uv) แบ่ง module ตาม `docs/architecture.md`; `broker/mt5` เป็นจุดเดียวที่ import MetaTrader5; strategy เป็น pure function ที่ใช้ร่วมกันระหว่าง backtest และ Demo; journal เป็น SQLite; dataset เป็น Parquet snapshot; ยังไม่มี web/DB server/Docker; ลำดับงาน BOOT-001 → SPIKE-001 → SLICE-R1 → SLICE-E1 → OPS-1
+Decision: แอป Python 3.12 ตัวเดียว (uv) แบ่ง module ตาม `docs/architecture.md`; `broker/mt5` เป็นจุดเดียวที่ import MetaTrader5; strategy เป็น pure function ที่ใช้ร่วมกันระหว่าง backtest และ Demo; journal เป็น SQLite; dataset เป็น Parquet snapshot; ยังไม่มี web/DB server/Docker; ลำดับงาน BOOT-001 → SPIKE-001 → ENV-1 (Windows VPS + synthetic sentinel, ต้องผ่านก่อนวิจัย) → SLICE-R1 → SLICE-E1 → OPS-1
 Why: strategy ชุดเดียวทำได้ตรงที่สุด ทดสอบได้มากที่สุด ชิ้นส่วนน้อยที่สุดสำหรับเจ้าของคนเดียว และ AI ทำงานกับ Python ได้แม่น
 Rejected: (B) MQL5 EA + bridge: สองภาษา, protocol ซับซ้อน, เสี่ยงมี strategy สองชุด; เหตุผลเดิมคือพัฒนาบน macOS ซึ่งไม่มีแล้ว · (C) MQL5 ล้วน: เครื่องมือวิจัยอ่อน, optimizer ชวน overfit, ทดสอบอัตโนมัติยาก
 Consequences: runner ต้องอยู่บน Windows ที่มี terminal; CI (Linux) ทดสอบส่วน MT5 จริงไม่ได้ จึงต้องมี evidence จากเครื่อง Windows; Python ต้อง ≤ 3.14 จนกว่า MetaTrader5 จะออก wheel ใหม่
