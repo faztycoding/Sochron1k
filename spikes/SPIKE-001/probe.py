@@ -311,8 +311,12 @@ def history_depth(mt5: object, now: datetime) -> dict:
             prev_last = times[-1]
         y, m = (y + 1, 1) if m == 12 else (y, m + 1)
     out["m1_by_month_range"] = [r for r in years.values() if r["m1_bars"]]
-    out["m1_first_month_with_data"] = first_month
+    out["m1_first_month_with_data"] = first_month  # earliest observed, not a proven boundary
     out["m1_range_call_errors"] = call_errors  # failed calls: unknown, not "no data"
+    failed_before = [e["month"] for e in call_errors if first_month is None or e["month"] < first_month[:7]]
+    out["m1_first_month_boundary"] = (
+        f"UNKNOWN: requests failed for earlier months {failed_before}" if failed_before
+        else "no failed request before it" if first_month else "no data observed")
     out["m1_largest_other_gaps"] = sorted(other_gaps, key=lambda g: -g["gap_minutes"])[:20]
     out["ticks"] = tick_depth(mt5, now)
     return out
@@ -336,9 +340,17 @@ def tick_depth(mt5: object, now: datetime) -> dict:
     else:
         t = int(first["time"][0])
         out["first_tick_as_if_utc"] = as_if_utc(t)
-        before = mt5.copy_ticks_range(SYMBOL, datetime.fromtimestamp(t - 86400, tz=timezone.utc),
-                                      datetime.fromtimestamp(t, tz=timezone.utc), mt5.COPY_TICKS_ALL)
-        out["ticks_in_day_before_first"] = None if before is None else len(before)  # expected 0
+        day_before = (datetime.fromtimestamp(t - 86400, tz=timezone.utc), datetime.fromtimestamp(t, tz=timezone.utc))
+        before = mt5.copy_ticks_range(SYMBOL, *day_before, mt5.COPY_TICKS_ALL)
+        if before is None:  # review r2 F3: keep the failure and do not call the boundary checked
+            out["ticks_in_day_before_first"] = "UNKNOWN"
+            out["day_before_call_error"] = {"from": day_before[0].isoformat(), "to": day_before[1].isoformat(),
+                                            "error": list(mt5.last_error())}
+            out["first_tick_boundary"] = "UNKNOWN: the day-before check failed"
+        else:
+            out["ticks_in_day_before_first"] = len(before)
+            out["first_tick_boundary"] = ("no ticks in the day before" if not len(before)
+                                          else "UNKNOWN: ticks exist in the day before")
     out["month_sample_search"] = month_sample_search(mt5, TICK_SEARCH_FROM.year, now)
     return out
 

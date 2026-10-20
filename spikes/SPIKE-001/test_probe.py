@@ -165,6 +165,61 @@ def test_first_tick_day_comes_from_the_first_tick_not_a_mid_month_sample():
     assert result["month_sample_search"]["first_month_with_ticks"] == "2026-02"  # why it is only supplementary
 
 
+class HistoryTerminal:
+    """Fake terminal for history_depth: M1 month requests fail before 2026, then return data."""
+    TIMEFRAME_M1, TIMEFRAME_M5, TIMEFRAME_H1, TIMEFRAME_D1, COPY_TICKS_ALL = 1, 5, 16385, 16408, -1
+
+    def __init__(self, fail_m1_before=None, fail_day_before=False):
+        self.fail_m1_before = fail_m1_before
+        self.fail_day_before = fail_day_before
+        self.first_tick = int(datetime(2026, 1, 1, 23, 5, tzinfo=UTC).timestamp())
+
+    def terminal_info(self):
+        return SimpleNamespace(maxbars=1000)
+
+    def copy_rates_from_pos(self, *_):
+        return None
+
+    def copy_rates_range(self, _symbol, _tf, start, end):
+        if self.fail_m1_before and start < self.fail_m1_before:
+            return None
+        lo = max(int(start.timestamp()), int(datetime(2026, 7, 10, tzinfo=UTC).timestamp()))
+        return RatesStub(list(range(lo, min(int(end.timestamp()), lo + 600), 60)))
+
+    def copy_ticks_from(self, *_):
+        return RatesStub([self.first_tick])
+
+    def copy_ticks_range(self, _symbol, frm, to, _flags):
+        if self.fail_day_before and int(to.timestamp()) == self.first_tick:
+            return None
+        return RatesStub([t for t in range(max(int(frm.timestamp()), self.first_tick), int(to.timestamp()), 600)])
+
+    def last_error(self):
+        return (-10005, "IPC timeout")
+
+
+def test_failed_earlier_month_makes_the_first_m1_month_boundary_unknown():
+    # Review r2 F3: an earlier failed month followed by data must not read as a proven start.
+    out = probe.history_depth(HistoryTerminal(fail_m1_before=datetime(2006, 1, 1, tzinfo=UTC)),
+                              datetime(2026, 8, 1, tzinfo=UTC))
+    assert out["m1_first_month_with_data"].startswith("2026-07")
+    assert out["m1_first_month_boundary"].startswith("UNKNOWN")
+    assert len(out["m1_range_call_errors"]) == 12 and out["m1_range_call_errors"][0]["error"] == [-10005, "IPC timeout"]
+    clean = probe.history_depth(HistoryTerminal(), datetime(2026, 8, 1, tzinfo=UTC))
+    assert clean["m1_first_month_boundary"] == "no failed request before it"
+
+
+def test_failed_day_before_check_keeps_its_error_and_makes_the_tick_boundary_unknown():
+    term = HistoryTerminal(fail_day_before=True)
+    out = probe.tick_depth(term, datetime(2026, 3, 1, tzinfo=UTC))
+    assert out["first_tick_as_if_utc"] == "2026-01-01 23:05:00"
+    assert out["ticks_in_day_before_first"] == "UNKNOWN"
+    assert out["first_tick_boundary"].startswith("UNKNOWN")
+    assert out["day_before_call_error"]["error"] == [-10005, "IPC timeout"]
+    ok = probe.tick_depth(HistoryTerminal(), datetime(2026, 3, 1, tzinfo=UTC))
+    assert ok["ticks_in_day_before_first"] == 0 and ok["first_tick_boundary"] == "no ticks in the day before"
+
+
 def test_gap_census_counts_every_interval_and_month_boundaries():
     # Review r1 F1: 2-5 minute gaps had no bucket, and a gap across a month boundary was lost.
     july_last = int(datetime(2026, 7, 31, 20, 59, tzinfo=UTC).timestamp())
