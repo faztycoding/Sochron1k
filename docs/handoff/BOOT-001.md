@@ -1927,3 +1927,40 @@ AC-05 evidence.
   protection and merge.
 - **F24 and F25:** the owner chooses their placement (next guard-fix task, or accept F25 as by
   design). F8's Monitor part stays in the false-positive task.
+
+## AC-05 proved on PR #2, and main protected (Claude), 2026-10-21
+
+The owner opened PR #2 without the label at 00:42:19 +07; it was later labelled and merged.
+- Head `0890ef228b2a62affd592dd379c6762a112a2b75`.
+- Base `7b6a84144170393a528c50a43ed5409490c26b62`.
+
+Evidence was collected through the GitHub REST API at 02:38–02:39. It is late because an
+earlier 20 s polling loop used up the unauthenticated rate limit at 00:20.
+
+| Time (+07) | Check | Result | Link |
+|------------|-------|--------|------|
+| 00:42:23–00:42:35 | `locked-paths` (control-gate, `pull_request_target`), no label | **failure**, as required | [run 39468400020 / job 118785737011](https://github.com/faztycoding/Sochron1k/actions/runs/39468400020/job/118785737011) |
+| ≈00:42–00:43:08 | `control-plane` (Ubuntu, full self-tests) | success | [run 39468405976 / job 118785755267](https://github.com/faztycoding/Sochron1k/actions/runs/39468405976/job/118785755267) |
+| 01:03:28–01:03:38 | `locked-paths` after the owner added `owner-approved-control-change`, same head | **success** | [run 39471421360 / job 118796177794](https://github.com/faztycoding/Sochron1k/actions/runs/39471421360/job/118796177794) |
+| 01:06:05 | PR #2 merged by the owner | merge commit `0916776c58b78c34677ffb4ba73a7a0f789ca8ae` | – |
+
+What this proves:
+- **AC-05 PASS:** without the label the gate fails on locked-path changes, and with the label it
+  passes, on the same head and base.
+- **F22 on Linux:** `control-plane` succeeded on Ubuntu for this head. It ran the POSIX-specific
+  tests added in r11, which closes the Linux part review r11 left pending. Only the job
+  conclusion was read, not its log.
+
+GitHub settings:
+- Branch protection on `main` was confirmed through the API at 02:40:31: `protected: true`,
+  `required_status_checks.contexts = ["control-plane", "locked-paths"]`,
+  `enforcement_level: everyone`. Both checks succeeded within the last 7 days, as GitHub
+  requires.
+- The owner also set an Actions policy for `.github/workflows/control-gate.yml`, reported by the
+  owner at about 02:40 and not verified by Claude. It is active, allows only
+  `pull_request_target`, and has Restrict actors and Require lockfile off. Its live effect is
+  verifiable on the next control-gate run.
+
+BOOT-001 contract text was updated to v1.1, merged, with the current review and push wording.
+BOOT-001 is merged. The remaining open items are those listed in D-007, D-008 and review r11:
+F8 Monitor/case, F11–F17, F19–F21, F24 and F25.
