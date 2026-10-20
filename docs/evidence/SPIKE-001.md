@@ -10,7 +10,7 @@ Branch `spike/SPIKE-001-mt5-time` · สคริปต์ `spikes/SPIKE-001/pro
 |----|----|------|
 | AC-01 เชื่อมต่อ | **PASS** | Python 3.12 + `MetaTrader5` 5.0.6231 + `numpy` 2.5.4 คุยกับ terminal build 6274 ได้ บัญชี Exness Demo `*****8107` |
 | AC-02 หยุดเมื่อบัญชีไม่ถูกต้อง | **PASS** | tests 19/19 ครอบกรณี ไม่ login, ไม่ใช่ Demo, server อื่น, บัญชีอื่น, เลยวันหมดสิทธิ์ และ initialize ล้ม (และ regression ของ review r1) |
-| AC-03 spec ของสัญลักษณ์ | **PASS** ยกเว้นเวลาเปิดตลาด | ได้ spec ครบ แต่ Python API ไม่มีฟังก์ชันอ่าน trade sessions |
+| AC-03 spec ของสัญลักษณ์ | **UNKNOWN** (F4) | ได้ทุก field ตัวเลข แต่ AC-03 ต้องการ trade sessions ด้วย ซึ่ง Python API อ่านไม่ได้ · ช่องว่างใน M1 ที่สังเกตได้ไม่ใช่ตารางเวลาทำการทางการ |
 | AC-04 ความหมายของเวลา | **UNKNOWN ตามเงื่อนไขของ contract (แยกสองสมมติฐานไม่ได้) · ค่าที่วัดได้: offset 0** | 12 ครั้งใน 4 รอบ ต่างจากนาฬิกาเครื่อง −3.8 ถึง +0.87 วินาที แต่ server นี้เป็น GMT+0 จึงแยก "UTC ตามเอกสาร" กับ "เวลา server" ไม่ได้ (review r1) |
 | AC-05 ช่วง DST | **PASS (M1 รอบ 4)** | offset ต่อ UTC ไม่เปลี่ยนทั้งที่ US DST และ EU DST เวลาพักตลาดเลื่อนตามนิวยอร์ก · ข้อจำกัดเรื่อง GMT+0 ยังเหมือน AC-04 |
 | AC-06 ความลึกของข้อมูล | **PASS (รอบ 4)** | M1 แท่งแรก 2014-01-14 แต่ปี 2014–2016 มีราว 1 แท่งต่อวัน และเป็น M1 เต็มตั้งแต่ 2017 · tick แรก 2026-01-01 23:05 · นับช่องว่างครบทุกขนาด และไม่มี call ที่ล้ม (แก้ F1–F3 แล้ว) |
@@ -54,7 +54,11 @@ Branch `spike/SPIKE-001-mt5-time` · สคริปต์ `spikes/SPIKE-001/pro
 | spread ตอนวัด | 240 points, floating | swap mode / long / short | 1 / −503.8 / 0 |
 | สกุลเงิน base / profit / margin | XAU / USD / XAU | path | `Standard\Forex\XAUUSDm` |
 
-ส่วน trade sessions: Python API ของ MetaTrader5 ไม่มีฟังก์ชันเทียบเท่า `SymbolInfoSessionTrade` จึงอ่านไม่ได้ จาก M5 เห็นพักตลาดรายวัน 1 ชั่วโมงและปิดสุดสัปดาห์ (ดู AC-05)
+**Trade sessions: UNKNOWN** (review r1 F4)
+- Python API ของ MetaTrader5 ไม่มีฟังก์ชันเทียบเท่า `SymbolInfoSessionTrade` ทั้ง 4 รอบจึงบันทึกได้แค่ข้อความนี้
+- ช่วงพักรายวันและปิดสุดสัปดาห์ที่เห็นใน M1 (ดู AC-05) เป็นสิ่งที่สังเกตได้ ไม่ใช่ตารางเวลาทำการทางการ จึงไม่ใช้แทน AC-03
+- วิธีที่เป็นไปได้: เจ้าของเปิดหน้าต่าง Specification ของ `XAUUSDm` ใน MT5 แล้วส่งรูปหรือค่า Sessions มา หรือเขียนสคริปต์ MQL5 อ่าน `SymbolInfoSessionTrade` ซึ่งอยู่นอกขอบเขตของ spike นี้
+- AC-03 จึงเป็น UNKNOWN จนกว่าจะได้ข้อมูล sessions จากแหล่งที่เชื่อถือได้
 
 ## AC-04: เวลาที่ API คืนมาเทียบกับนาฬิกา UTC ของเครื่อง
 
@@ -133,7 +137,7 @@ Branch `spike/SPIKE-001-mt5-time` · สคริปต์ `spikes/SPIKE-001/pro
 
 - **M1 ปี 2014–2016:** มีราว 1 แท่งต่อวัน ไม่ควรนำมาใช้วิจัยแบบ M1 ข้อมูลที่ใช้ได้เริ่มปี 2017 · ควรกำหนดใน data contract ของ SLICE-R1
 - **AC-04 ข้ามวัน:** ถ้าต้องการให้แน่นขึ้น ให้รันซ้ำวันอื่นก่อนหมดสิทธิ์ 2026-10-28 23:59 +07
-- **trade sessions:** Python API อ่านไม่ได้ ถ้าจำเป็นต้องหาวิธีอื่น เช่น export จาก terminal
+- **trade sessions (AC-03 UNKNOWN):** Python API อ่านไม่ได้ · ทางที่ง่ายที่สุดคือเจ้าของส่งรูปหน้าต่าง Specification ของ `XAUUSDm` จาก MT5 มา
 - **ข้อเสนอสำหรับ `timebase`** (รอ D-001): สำหรับ `Exness-MT5Trial14` ให้ถือ raw timestamp เป็น UTC epoch ที่ offset 0 · ให้ตรวจ offset ซ้ำตอนเริ่มทุก session (tick ล่าสุดเทียบนาฬิกาเครื่อง) และหยุดถ้าต่างเกินเกณฑ์ · ห้ามใช้กฎนี้กับโบรกเกอร์อื่นโดยไม่วัดใหม่
 - **ข้อมูลสำหรับ D-001:**
   - U1 (เชื่อมต่อ): ผ่าน
