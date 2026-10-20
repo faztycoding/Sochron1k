@@ -76,24 +76,26 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 - Rollback: revert branch; ปิด runner; position ที่เปิดอยู่ปิดด้วยมือใน terminal (TBD: runbook)
 
 ## 9. Assumptions and open questions
+คอลัมน์ Status: `TBD` คือคำถามที่ยังเปิดอยู่ · `[A]` คือสมมติฐานที่รอเจ้าของยืนยัน · แถวที่เจ้าของตัดสินแล้วจะอ้างถึง ADR
 | ID | Assumption or question | How to verify | Review date | Status |
 |----|------------------------|---------------|-------------|--------|
-| Q-01 | Sochron1k ยังเป็นระบบวิจัย + เทรดอัตโนมัติ XAU/USD บน MT5 Demo เหมือนรอบก่อน | เจ้าของยืนยัน | ก่อน SPIKE-001 | open |
-| Q-02 | โบรกเกอร์, Demo server, สกุลเงินบัญชี, leverage, netting/hedging | เจ้าของ + SPIKE-001 | ก่อน SPIKE-001 | open |
-| Q-03 | ชื่อสัญลักษณ์และ contract spec ของ XAU/USD ที่โบรกเกอร์ใช้ | SPIKE-001 | — | open |
-| Q-04 | ค่า risk policy 0.25% / 0.75% / 2% และผู้มีสิทธิ์ปลด halt | เจ้าของ | ก่อน SLICE-E1 | open |
-| Q-05 | ชั่วโมงเทรดและนโยบายถือข้ามคืน | เจ้าของ | ก่อน H001 | open |
-| Q-06 | สมมติฐานแรก (PA01 จากรอบก่อน หรือไอเดียใหม่) | `/register-hypothesis` | ก่อน SLICE-R1 | open |
-| Q-07 | ความลึกข้อมูลจากโบรกเกอร์พอไหม ถ้าไม่พอจะใช้แหล่งอื่นหรือไม่ (license) | SPIKE-001 | — | open |
-| Q-08 | วัน cutoff ของ holdout และที่เก็บนอกเครื่องวิจัย | เจ้าของ | ก่อน SLICE-R1 | open |
-| Q-09 | Demo runner จะรันที่ไหน (เครื่องนี้ หรือ Windows VPS) | เจ้าของ | ก่อน OPS-1 | open |
-| Q-10 | งบรายเดือน และ kill criteria ของทั้งโปรเจกต์ | เจ้าของ | ก่อน SLICE-R1 | open |
-| Q-11 | ใช้ Codex เป็น test author + reviewer ตาม binding ค่าเริ่มต้น (D-002) | เจ้าของ | ก่อน contract แรก | open |
-| Q-12 | ระยะเวลาเก็บ holdout และ registry ในข้อ 5 (ตอนนี้เป็น [A]) | เจ้าของ | ก่อน SLICE-R1 | open |
-| A-01 | เอกสารฝั่งเจ้าของเป็นภาษาไทย ส่วนโค้ด/commit/คำสั่ง agent เป็นอังกฤษ | เจ้าของยืนยัน | ก่อน contract แรก | assumed |
-| A-02 | Blueprint v1.1 และโค้ดรอบก่อนเป็นเพียงข้อมูลอ้างอิงใน git history ไม่ใช่ข้อกำหนด | เจ้าของยืนยัน (D-003) | ก่อน contract แรก | assumed |
+| Q-01 | Sochron1k ยังเป็นระบบวิจัย + เทรดอัตโนมัติ XAU/USD บน MT5 Demo เหมือนรอบก่อน | เจ้าของยืนยัน | ก่อน SPIKE-001 | TBD (open) |
+| Q-02 | โบรกเกอร์, Demo server, สกุลเงินบัญชี, leverage, netting/hedging | เจ้าของ + SPIKE-001 | ก่อน SPIKE-001 | TBD (open) |
+| Q-03 | ชื่อสัญลักษณ์และ contract spec ของ XAU/USD ที่โบรกเกอร์ใช้ | SPIKE-001 | — | TBD (open) |
+| Q-04 | ค่า risk policy 0.25% / 0.75% / 2% และผู้มีสิทธิ์ปลด halt | เจ้าของ | ก่อน SLICE-E1 | TBD (open) |
+| Q-05 | ชั่วโมงเทรดและนโยบายถือข้ามคืน | เจ้าของ | ก่อน H001 | TBD (open) |
+| Q-06 | สมมติฐานแรก (PA01 จากรอบก่อน หรือไอเดียใหม่) | `/register-hypothesis` | ก่อน SLICE-R1 | TBD (open) |
+| Q-07 | ความลึกข้อมูลจากโบรกเกอร์พอไหม ถ้าไม่พอจะใช้แหล่งอื่นหรือไม่ (license) | SPIKE-001 | — | TBD (open) |
+| Q-08 | วัน cutoff ของ holdout และที่เก็บนอกเครื่องวิจัย | เจ้าของ | ก่อน SLICE-R1 | TBD (open) |
+| Q-09 | Demo runner จะรันที่ไหน (เครื่องนี้ หรือ Windows VPS) | เจ้าของ | ก่อน OPS-1 | TBD (open) |
+| Q-10 | งบรายเดือน และ kill criteria ของทั้งโปรเจกต์ | เจ้าของ | ก่อน SLICE-R1 | TBD (open) |
+| Q-11 | ใช้ Codex เป็น test author + reviewer ตาม binding ค่าเริ่มต้น (D-002) | เจ้าของ | ก่อน contract แรก | TBD (open) |
+| Q-12 | ระยะเวลาเก็บ holdout และ registry ในข้อ 5 (ตอนนี้เป็น [A]) | เจ้าของ | ก่อน SLICE-R1 | TBD (open) |
+| A-01 | เอกสารฝั่งเจ้าของเป็นภาษาไทย ส่วนโค้ด/commit/คำสั่ง agent เป็นอังกฤษ | เจ้าของยืนยัน | ก่อน contract แรก | [A] assumed |
+| A-02 | Blueprint v1.1 และโค้ดรอบก่อนเป็นเพียงข้อมูลอ้างอิงใน git history ไม่ใช่ข้อกำหนด | เจ้าของยืนยัน (D-003) | ก่อน contract แรก | ยืนยันแล้วโดย D-003 (accepted) |
 
 ## 10. Change log
 | Date | Change | Requested by | Impact on time/cost/acceptance |
 |------|--------|--------------|--------------------------------|
 | 2026-10-18 | ร่าง 0.1 จากข้อมูลรอบก่อน + Handbook v5 | เจ้าของ (ขอให้ตั้งโปรเจกต์ใหม่) | ยังไม่มี: รอเจ้าของรับรอง |
+| 2026-10-20 | ติดป้าย [A]/TBD ตาม review AC-08 (F1, F3): retention ในข้อ 5, คอลัมน์ Status ในข้อ 9 และเพิ่ม Q-12 · ไม่เปลี่ยนค่าใดๆ | เจ้าของ (ให้ปิด AC ของ BOOT-001) | ไม่มีผลต่อเวลา/ค่าใช้จ่าย · แก้ AC-08 |
