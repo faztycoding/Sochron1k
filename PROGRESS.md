@@ -102,17 +102,15 @@ Branch `chore/BOOT-001-project-bootstrap` · controls r9 + review r9 อยู�
 - การสลับให้ Codex ไม่ได้ยกเลิกข้อห้ามของเครื่องมือ → เจ้าของเลือกแผนแคบ **CI fixture เท่านั้น** ในรอบนี้; ไม่ใช้เนื้อหาที่ถูกระงับ และยังไม่ทำ guard/PostToolUse
 
 ## Not done yet
-- live push ตาม D-006 (requirement 8): parent session รัน `git push origin HEAD:refs/heads/chore/BOOT-001-project-bootstrap` เป็นคำสั่งเดี่ยว แล้วบันทึกผล head ที่ push และ CI ของ head นั้น · ยังไม่มีการ push หรือ apply ที่ไม่ใช่ inspection แบบ live ใน session review
-- F20 Medium (review r9): Bash ทำอย่างไรเมื่อเปิด extglob และกับ array assignment ยังไม่ได้รัน · เจ้าของเลือกที่วาง (งาน guard-fix ถัดไปถ้าใช้หลักเดียวกับ F11–F19)
+- F20 Medium (review r9): ไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน ยังเปิดอยู่ · พฤติกรรมของ Bash เมื่อเปิด extglob และกับ array assignment ยังไม่ได้รัน
 - F21–F23 Low (review r9): F21 แก้ด้วยเอกสาร (inspection ต้องเป็นคำสั่งเดี่ยว) · F22 path ตัวพิมพ์ต่างกัน · F23 blank line ท้าย `test-controls.mjs` · ไป controls patch ถัดไป
-- เอกสารที่ยังไม่ตาม D-006 (เจ้าของตัดสิน): BOOT-001 AC-04 ยังบอกให้ guard บล็อก push · D-006 ยังเขียน "ยังไม่ implement" · D-004 ส่วน apply/push ถูกแทนเมื่อ D-006 implement แล้ว
+- AC-08: F1–F3 ปิดแล้วใน recheck ของ Codex แต่ข้อย่อย "ไม่มีค่าทางธุรกิจที่ agent เดาเอง" ยัง UNKNOWN เพราะพิสูจน์ที่มาของค่าเดิมไม่ได้
+- P25 ฝั่ง Codex ใน chat ของ VS Code: รันผ่าน `codex exec` แล้ว ยกกฎและบอกบทบาทถูก แต่ approval policy ของ exec เป็น `never` · ค่า `on-request` จาก `.codex/config.toml` ในแชท IDE ยังเป็น UNKNOWN
 - F19 Medium (มีอยู่แล้วก่อน r8): `$(…)` ใน `${…:-…}` ที่มี quote ซ้อนไม่ถูกตรวจ · ไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน ไม่รวมใน r9
 - V-1: ถ้า Git Bash ขึ้นเป็น 5.3 รูปแบบ `${ command; }` ต้องมีกฎแยก (จากเอกสาร ยังไม่ได้รัน)
 - F11–F15 Medium และ F17 Low: งาน guard-fix ถัดไป (เจ้าของตัดสิน 2026-10-20) · F8 ส่วน Monitor/case และ F16 Low: งาน false-positive
-- Permanent regressions 54 ข้อเข้า tracked source แล้ว (`077c3a1`) แต่ยังไม่มีผล Linux บน head ที่มี r5 หรือ r7 · live fresh-session baseline / การแยก failure event ที่ dispatch ยังไม่ยืนยัน
-- เจ้าของ push; ผล Linux CI ที่ยืนยันแล้วยังอ้างถึง `7eae474`
-- P25 ใน chat ใหม่ของ Codex (AC-01 ฝั่ง Codex) และ AC-08 · ฝั่ง Claude PASS แล้ว (2026-10-20 21:47–21:50)
-- CI ล่าสุดที่ยืนยันคือ run 39229522531 PASS (แทน run 39219308064 FAIL สำหรับ fixture เก่า); control-gate และ branch protection ยังต้องยืนยันแยก
+- Permanent regressions 69 ข้ออยู่ใน tracked source (`2f2b6ca`) · CI `control-plane` success บน `2f2b6ca` และ `77a8139` (อ่านแค่ผลของ job ไม่ได้อ่าน log จึงยังไม่ได้ยืนยันจำนวน test บน Linux จากหลักฐานของ Claude) · live fresh-session baseline และการแยก failure event ที่ dispatch ยังไม่ยืนยัน
+- AC-05: control-gate ตรวจได้ตั้งแต่ PR ถัดจาก BOOT-001 (หลัง merge) · branch protection ต้องตั้งหลัง merge
 - รอเจ้าของตัดสิน N1–N4 ใน `docs/handoff/BOOT-001.md`; N5 แก้แล้วที่ `4ee6d09`
 
 ## Decisions and assumptions this session

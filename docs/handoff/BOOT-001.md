@@ -1551,6 +1551,29 @@ Open for the owner:
     post-run check detects them after the fact. Adding the label accepts that residual risk.
 - F20 placement.
 
+## BOOT-001 acceptance summary before the owner's label (Claude), 2026-10-20
+
+The owner made these decisions after Codex's 21:34 report (commit `b55eb94`):
+- AC-04 becomes v1.1;
+- F20 goes to the next guard-fix task;
+- the residual guard risk is accepted (D-007);
+- Claude clears the UNKNOWN criteria first.
+
+Evidence collected since:
+
+| AC | Status | Evidence |
+|----|--------|----------|
+| AC-01 | PASS (both tools) | Claude: fresh headless P25, `ed019bb`, section "Acceptance evidence: AC-01 (Claude), AC-02, AC-03". Codex: `codex exec` P25 quoted the Agent roles rules and its role, `28f7644`. The exec run's approval policy was `never`; the IDE chat's `on-request` from `.codex/config.toml` is UNKNOWN and is not part of the AC-01 text. |
+| AC-02 | PASS | Write `tests/acceptance/`, Edit `AGENTS.md` and Edit `.claude/settings.json` were all denied, and no file changed (`ed019bb`). |
+| AC-03 | PASS | In a temporary worktree under `.claude/worktrees/`, an ordinary write was allowed and the locked writes were denied or blocked. The worktree was removed (`ed019bb`). |
+| AC-04 (v1.1) | FAIL, risk accepted in D-007 | The listed forms are blocked by the 69 tests and the r9 probes, and the D-006 push was verified live. The deferred Medium forms (F11–F15, F19, F20) can still write locked paths past the guard. |
+| AC-05 | Not yet verifiable | `control-gate` judges PRs after BOOT-001 is merged (contract verification table, D-004). |
+| AC-06 / AC-07 | PASS | red-flags exit 0 with the six explained groups, and both secret groups empty, on every staged checkpoint. |
+| AC-08 | UNKNOWN | AC08-F1–F3 were fixed in `692b5eb`, `0a23ee2` and `82eab68`, and Codex's recheck closed all three. Labels and ADR status pass. "No business value guessed by an agent" stays UNKNOWN, because the provenance of the existing values cannot be proven. |
+
+CI: `control-plane` success on `2f2b6ca` (run 39438962998) and `77a8139`. Merging and the
+label are the owner's alone.
+
 ## Acceptance evidence: AC-01 (Claude), AC-02, AC-03
 
 Fresh headless Claude Code session (`claude -p`, entrypoint `claude-vscode`, extension
