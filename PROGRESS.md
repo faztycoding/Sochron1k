@@ -1,5 +1,5 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-20 by Claude Code · review r9 เสร็จ (F18 ปิด, ไม่มี High ค้าง) · D-006 live push ผ่าน (`2f2b6ca`) · CI control-plane success บน head ที่ push · รอเจ้าของตัดสิน label, AC-04 และที่วาง F20
+Updated 2026-10-20 by Claude Code · เจ้าของตัดสินแล้ว: AC-04 v1.1, F20 ไปงาน guard-fix ถัดไป, ยอมรับความเสี่ยงที่เหลือ (D-007) · กำลังรวบรวมหลักฐาน AC-01/02/03/08 ก่อนเจ้าของติด label และ merge
 
 ## Current task
 BOOT-001 v1 · State FIXING · F3, F7, F10 และ F18 ปิดแล้ว (F18 ใน review r9) · F9 ปิดสำหรับรูปแบบที่บันทึกไว้ (review r7) · ไม่มี finding High ค้าง · **F20 Medium ใหม่ (ต้นเหตุเดียวกับ F18 แต่ไม่ใช่ regression):** `#` ที่ติดหลัง `)` ของ `@(…)` หรือ `a=(…)` ถูก guard อ่านเป็น comment → เจ้าของเลือกที่วาง · F19 และ F11–F15 Medium ไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน · Low ที่ค้าง: F8 ส่วน Monitor/case, F16, F17, F21 (inspection ที่พ่วงคำสั่งอื่นถูกบล็อก), F22 (ตัวพิมพ์ของ path ทำให้สิทธิ์ apply ไม่ทำงาน แต่บล็อกอย่างปลอดภัย), F23 (blank line ท้ายไฟล์ test) · AC-04 FAIL ตามข้อความ contract: ข้อ push ต้องแก้ตาม D-006 และ Medium ที่ค้างยังเขียนไฟล์ล็อกผ่านได้
@@ -150,14 +150,24 @@ Codex ชี้ (หลัง review r5 static) ว่า Claude เปลี่
 
 ## Next safe action
 - เสร็จแล้ว (21:24–21:26): parent session push `2f2b6ca` ตาม D-006 ผ่านโดยไม่มีบล็อกหรือหน้าต่างถาม · CI `control-plane` success บน head `2f2b6ca295f5…` (job 118683457366) · รายละเอียดอยู่ใน handoff หัวข้อ "D-006 live push and Linux CI"
-- เจ้าของ: ตัดสินเรื่อง label (ไม่มี High ค้าง และ CI เขียวแล้ว แต่ AC-04 ยังเขียนว่า guard บล็อก push ต้องให้เจ้าของแก้ และ Medium ที่พักไว้ยังเขียนไฟล์ล็อกผ่าน guard ได้ ถ้าติด label แปลว่ายอมรับความเสี่ยงนี้)
+- **เจ้าของตัดสิน (2026-10-20 หลังรายงานของ Codex 21:34):**
+  - AC-04 แก้เป็น v1.1 ตาม D-006 ในข้อความ contract
+  - F20 ไปงาน guard-fix ถัดไป โดยยังเปิดอยู่ และผลต่อ Bash จริงยังพิสูจน์ไม่ครบ
+  - ยอมรับความเสี่ยงที่เหลือของ guard ตาม D-007
+  - ให้ Claude ปิด AC ที่ยัง UNKNOWN ก่อนติด label
+- Claude กำลังรวบรวมหลักฐาน acceptance:
+  - session Claude ใหม่แบบ headless รัน P25 (AC-01 ฝั่ง Claude), ลองเขียนไฟล์ล็อก (AC-02) และทดสอบใน worktree (AC-03)
+  - จากนั้น `codex exec` รัน P25 ฝั่ง Codex (AC-01) และตรวจ AC-08
+  - ผลจะบันทึกใน handoff หัวข้อ "Acceptance evidence"
+  - AC-05 ตรวจได้หลัง merge ตาม contract
+- เจ้าของ: ติด label และ merge เมื่อหลักฐานครบ (merge เป็นของเจ้าของเท่านั้น)
 - คำสั่งตรวจ `git apply --check` / `-R --check` ต้องรันเดี่ยวและอ่าน exit status แยก (F21) · ถ้า path ของโปรเจกต์สะกดตัวพิมพ์ต่างจากบนดิสก์ apply ตาม D-006 จะถูกบล็อก (F22) → หยุดถามตาม N6
-- เจ้าของ: เลือกที่วาง F20 · แก้ AC-04 ของ BOOT-001 และข้อความ D-006/D-004 หลัง live check ผ่าน · ดู Linux CI บน head ที่ push จริง
+- เสร็จแล้ว: ที่วาง F20 (งาน guard-fix ถัดไป), AC-04 v1.1, ข้อความ D-006/D-004 · Linux CI เขียวบน `2f2b6ca` และ `77a8139`
 - F8 ส่วนที่เหลือต้องมี contract/หลักฐาน shell ของ Monitor และการวิเคราะห์ branch ของ case ก่อนแก้; ไม่เดา syntax เพื่อทำให้คำสั่งผ่าน
 - label `owner-approved-control-change`: ไม่มี finding High ค้างหลัง review r9 · ยังต้องรอ CI เขียวบน head ที่ push · เจ้าของเป็นผู้ตัดสินและติดเอง
 - หลัง merge: ตั้ง branch protection ให้ `control-gate / locked-paths` และ `ci / control-plane` เป็น required
 - งานถัดไปหลัง BOOT-001 (ยังไม่มี contract): แก้ false positive ของ guard-bash พร้อม regression tests → (1) เนื้อหาใน heredoc ถูกอ่านเป็นคำสั่ง (2) regex pipe-to-shell จับคำ curl/bash ที่อยู่ใน pattern ของ grep (3) F8 ส่วนที่เหลือ: Monitor ที่มี `$(...)`, `case` pattern (4) F16 backtick ที่มี backslash
 - งาน guard-fix ถัดไป (ยังไม่มี contract): F11–F15 และ F17 จาก review r7 และ F19 จาก review r8 ตามที่เจ้าของตัดสินเมื่อ 2026-10-20
-- Waiting for owner action/decision: ที่วาง F20, แก้ AC-04, N1–N4, D-002..D-005, contract SPIKE-001
+- Waiting for owner action/decision: label และ merge PR #1 หลังหลักฐาน acceptance ครบ, N1–N4, D-002..D-005, contract SPIKE-001
 
 On resume: re-check git state and every pending external operation first.

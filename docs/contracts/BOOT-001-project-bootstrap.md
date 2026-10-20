@@ -3,6 +3,7 @@
 Version v1 · Owner: เจ้าของ repository · Parent: Handbook v5 "เริ่มโปรเจกต์ใหม่ใน 1 หน้า" ขั้น 1–4 · Tier **High** · Branch `chore/BOOT-001-project-bootstrap`
 Status: draft (เขียนระหว่างทำงาน ตามคำขอของเจ้าของ "วาง architecture, ตั้ง project rule ตาม handbook, หา skill/agent") — **รอเจ้าของรับรอง**
 Review r1 (Codex, `docs/reviews/BOOT-001-r1.md`): ยอมรับ F1–F6 ทั้งหมด คำตอบและหลักฐานอยู่ใน `docs/handoff/BOOT-001.md` · apply patch แล้ว (`cca98c7`, ตามคำสั่งเจ้าของ 2026-10-19) · รอ Codex review round 2
+v1.1 (2026-10-20, เจ้าของสั่งในแชท Claude หลัง review r9): แก้ AC-04 ให้ตรงกับ D-006 ตามข้อเสนอของ Codex คือยกเว้นการ push branch งานและการ apply patch ใน `docs/proposals/` ที่เข้าเงื่อนไข D-006 ส่วนการเขียนไฟล์ล็อกด้วยวิธีอื่นยังต้องถูกบล็อก · การแก้ข้อความนี้ไม่ทำให้ Medium ที่ค้าง (F11–F15, F19, F20) กลายเป็น PASS · การยอมรับความเสี่ยงที่เหลืออยู่บันทึกไว้ใน D-007
 
 ## Risk tier (Q1–Q6)
 - Q1 no · Q2 no · Q3 no · Q4 no · Q5 no
@@ -16,14 +17,22 @@ Review r1 (Codex, `docs/reviews/BOOT-001-r1.md`): ยอมรับ F1–F6 ท
 
 ## Scope
 - In scope: Starter Kit ชุด Lite/Standard (ภาคผนวก A), AGENTS.md (B) + Agent roles (O), CLAUDE.md, `.claude/settings.json` + hooks, `.codex/config.toml`, CI control-plane job, red-flag scan, templates (D, E, G, H, I), SPEC ร่าง, architecture ร่าง (P04), ADRs, skills/agents, tool registry, contract ถัดไป (SPIKE-001)
-- Exclusions: โค้ดแอป, การติดตั้ง dependency, การเชื่อม MT5, การ push, branch protection บน GitHub
+- Exclusions: โค้ดแอป, การติดตั้ง dependency, การเชื่อม MT5, การ push (ยกเว้น Claude push branch งานตาม D-006 ตั้งแต่ v1.1), branch protection บน GitHub
 - Allowed files: ทุกไฟล์ใหม่ใน repository นี้ (ไม่มีไฟล์เดิมให้แก้)
 
 ## Acceptance
 - AC-01 Given เปิด repo ใน Claude Code และ Codex, When รัน P25 (`/verify-agent-setup`, `$verify-agent-setup`), Then ทั้งสองยกกฎจาก Agent roles ได้ตรงตัวอักษร และรายงานบทบาทตัวเองถูก
 - AC-02 Given Claude Code ใช้ project settings, When พยายามเขียน locked path (เช่น `tests/acceptance/x`, `AGENTS.md`, `.claude/settings.json`), Then ถูกบล็อกด้วย deny rule หรือ hook
 - AC-03 Given worktree ใต้ `.claude/worktrees/<name>`, When แก้ไฟล์ทั่วไปในนั้น, Then ทำได้ แต่ locked paths ใน worktree ยังถูกบล็อก
-- AC-04 Given คำสั่ง shell ที่ push, reset --hard, clean -f, ข้าม hook, เขียน locked path, อ่าน .env, ลบแบบ recursive นอกโปรเจกต์ หรือ commit บน main, When Claude รัน, Then guard บล็อกและบอกเหตุผล ส่วนคำสั่งพัฒนาปกติผ่าน
+- AC-04 (v1.1) Given คำสั่ง shell ต่อไปนี้ When Claude รัน Then guard บล็อกและบอกเหตุผล:
+  - push ที่ไม่เข้าเงื่อนไข D-006 ได้แก่ force push, push ไป main/master, การลบ branch, multi-ref และรูปอื่นที่ยังไม่ได้พิสูจน์
+  - reset --hard, clean -f และการข้าม hook
+  - การเขียน locked path ด้วยวิธีอื่นนอกจาก `git apply` แบบคำสั่งเดี่ยวของไฟล์ patch ที่อยู่ตรงใต้ `docs/proposals/`
+  - การอ่าน .env
+  - การลบแบบ recursive นอกโปรเจกต์
+  - การ commit บน main
+
+  ส่วนคำสั่งพัฒนาปกติต้องผ่าน รวมถึงการ push branch งานแบบไม่ force เป็นคำสั่งเดี่ยวตาม D-006
 - AC-05 Given PR ที่แก้ locked path หรือแก้ไฟล์ append-only, When CI รันโดยไม่มี label `owner-approved-control-change`, Then check ล้ม และเมื่อมี label ก็ผ่าน
 - AC-06 Given diff ของ branch, When รัน `bash scripts/controls/red-flags.sh main`, Then แสดงทุกกลุ่มที่พบ และไม่ fail งาน
 - AC-07 ไม่มี secret ในไฟล์ใดของ branch (red-flag กลุ่ม Possible secrets และ Secret-like value assigned ต้องว่าง)
