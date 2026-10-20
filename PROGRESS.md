@@ -1,8 +1,16 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-21 +07 by Codex · SPIKE-001 merge แล้วผ่าน PR #3 (`3817f36`) · D-001 ตรวจสถาปัตยกรรม r1 แล้ว ยัง proposed
+Updated 2026-10-21 +07 by Claude Code · D-001 แก้ตาม review r1 แล้ว (F1 `33e5e8d`, F2 `81ed170`, ข้อเท็จจริงและ phase gates `f38838c`) · รอ Codex review r2 แล้วเจ้าของตัดสิน D-001
 
 ## Current task
-**D-001 · State: review r1 recorded; proposed** · branch `chore/D-001-design-review` ใน worktree แยก `Sochron1k-D001-review` จาก `3817f36`
+**D-001 · State: revised after review r1; proposed** · branch `chore/D-001-architecture-revision` (ต่อจาก `ddffeb4` ของ `chore/D-001-design-review`) ใน worktree แยก `Sochron1k-D001-review`
+- เจ้าของตัดสิน F1 (2026-10-21):
+  - เป้าหมายคือ MT5 บน Windows VPS ทำหน้าที่ acquisition/execution host
+  - ระยะนี้ใช้เครื่องนี้ไปก่อน จึงห้ามตัด holdout, ห้าม ingest ข้อมูลวิจัย และห้ามทดลองกลยุทธ์ จนกว่าด่าน ENV-1 จะผ่าน
+- F2: execution scope ผูกกับบัญชี, server, terminal, action, สัญลักษณ์ และวันหมดอายุ ตรวจก่อนทุก action
+- ถัดไป: Codex review r2 ของ branch นี้ → เจ้าของรับหรือปฏิเสธ D-001 · ยังไม่สร้างระบบเทรดหรือติดตั้งแพ็กเกจ
+- PR แยกที่รอ merge: `chore/SPIKE-001-post-merge-review` (review r4 หลัง merge ของ SPIKE-001: F7 ปิด, ไม่มี finding ใหม่)
+
+ประวัติ review r1 (Codex):
 - รายงาน `docs/reviews/D-001-design-r1.md`: F1 High เรื่องแยก holdout ออกจากเครื่องวิจัย/terminal และ F2 Medium เรื่องผูกสิทธิ์ execution กับบัญชีที่อนุญาต ทั้งสองยัง OPEN
 - ยังรองรับ Python monolith เป็นทางเลือก แต่ให้ Claude แก้ข้อกำหนดขอบเขตก่อนเสนอเจ้าของตัดสิน D-001 · เงื่อนไขของ R1/E1/OPS และขั้นตอนส่งต่ออยู่ใน `docs/handoff/D-001.md`
 - ไม่มีการเชื่อม terminal, ติดตั้งแพ็กเกจ, สร้าง application code หรือเปลี่ยน D-007/D-008 · commit เฉพาะเอกสารในเครื่อง ไม่ push
