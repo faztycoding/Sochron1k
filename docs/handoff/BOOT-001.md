@@ -1435,3 +1435,84 @@ git push origin HEAD:refs/heads/chore/BOOT-001-project-bootstrap
 No prompt is expected. Record the actual result, exact pushed head and CI result for that head.
 If runtime blocks or prompts, stop under N6; do not change permission modes or route around it.
 The owner alone applies labels and merges when the remaining gates are satisfied.
+
+## Review r9 of the applied controls (fresh Claude session), 2026-10-20
+
+The owner applied `BOOT-001-r9-controls.patch`, and a fresh headless Claude session reviewed it.
+The parent Claude Code session started it at the owner's request. Report:
+`docs/reviews/BOOT-001-r9.md`.
+
+Session events:
+
+- The first shell command got the post-run report for exactly the five r9 target files. The
+  owner's prompt had confirmed these as the applied r9 files. Under the amended CLAUDE.md rule,
+  Claude verified every expected SHA256 and blob (21:01:57) before continuing.
+- Two responses were stopped by the tool's safety classifier (not a hook): one after reading the
+  guard source, one after a realpath diagnostic. Their content was not reproduced.
+- Two guard-bash blocks occurred. Claude stopped at each, and the owner answered through the
+  parent session. The exact texts and answers are in the review, "Session events and owner answers":
+  - a `mkdir` on `$S/…`, where `$S` is the scratchpad: rerun with the literal path, with a
+    standing answer for that class;
+  - a combined `git apply -R --check`: rerun standalone, with a standing answer for that class,
+    and record F21.
+
+Results:
+
+- The applied files are byte-identical to the proposal. Every hash in "R9 proposal" matches, the
+  posthook is unchanged, and `git apply -R --check` passes when run standalone.
+- `node scripts/controls/test-controls.mjs` → 69/69, 0 skipped (21:07:33–21:08:18).
+- A hook-only probe ran 132 cases plus 11 follow-up cases, all sent as JSON and never executed.
+  The only mismatches are three positive apply controls whose fixture path differed in letter
+  case from the disk (F22). With the on-disk spelling they return 0.
+- **F18 is closed**: its r8 proof of fix is met, and F10 does not return. Git Bash 5.2.32
+  analogue: `echo <(pwd)#; cd ..; pwd` printed `/dev/fd/63#`, then the parent folder.
+- **D-006 behaves as specified:**
+  - The exact live push and a standalone proposal apply return 0 with empty stdout.
+  - Force, deletion, multi-ref, main/master, non-task branches, config widening and all
+    combined or wrapped forms return 2.
+  - Settings have no push/apply rule in deny, ask or allow, and the reset/clean denies remain.
+  - The AGENTS.md and CLAUDE.md hunks match D-006 and the handoff requirements, and change no
+    other section.
+
+New findings (details and proof of fix in the review):
+
+- **F20 Medium, same root cause as F18, not a regression (0 before and after):** `@(…)#` and
+  `a=(…)#` followed by `cd` and a write. With extglob off (as in this shell) the extglob form is
+  a syntax error and nothing runs. Extglob-on and array behavior were not executed. The owner
+  decides placement.
+- **F21 Low (usability, owner-requested):** requirement 4 blocks inspect-only `git apply --check`
+  and `-R --check` when combined with other commands. Earlier checks in this handoff used
+  combined forms, so future checks must run standalone, with the exit status read separately.
+- **F22 Low (fails closed):** the apply exception does not apply when `CLAUDE_PROJECT_DIR` differs
+  from the on-disk path only in letter case. The guard then shows the normal locked-path block.
+- **F23 Low:** `git diff --check` reports `new blank line at EOF` at
+  `scripts/controls/test-controls.mjs:1247` (patch line 371). The owner chose to commit it as is.
+
+Also for the owner:
+- BOOT-001 AC-04 still lists push among the commands the guard must block. It needs an amendment
+  for D-006.
+- DECISIONS D-006 still says "ยังไม่ implement", and D-004's apply/push text is superseded once
+  D-006 is implemented.
+- The guard does not pin the remote URL. D-006 does not ask for it.
+
+Checks before the commit (staged: the five applied files plus the review, this handoff and PROGRESS):
+- `git diff --cached --check` → exit 2, reporting only F23:
+  `scripts/controls/test-controls.mjs:1247: new blank line at EOF.` Nothing is reported for the
+  records (21:22:24). The staged blobs of the five files match the handoff.
+- `bash scripts/controls/red-flags.sh main` → exit 0 (21:22:31–21:22:33). It shows the same six
+  explained groups as r8, both secret groups are empty, and the untracked list is empty. The only
+  new hits are in "Destructive or bypass commands": review lines that name the probed push flags,
+  and the guard's updated header comment.
+- `node scripts/controls/check-locked-paths.mjs main` → FAIL as expected (21:22:45): 42 bootstrap
+  control changes need the owner's label. Not waived.
+- After these results were written in, the records were restaged and both staged checks rerun
+  on the final index. Their results are in the commit message.
+
+Next:
+- **Parent session:** run `git push origin HEAD:refs/heads/chore/BOOT-001-project-bootstrap` as a
+  standalone command. Record the result, the exact pushed head and CI for that head. Stop under
+  N6 on any block or prompt.
+- **Codex or the next controls patch:** F21 (documentation), F22 and F23. F20 goes where the
+  owner places it.
+- **Owner:** amend AC-04, update D-006/D-004 text after the live check, and decide on the label
+  after CI is green.

@@ -1,11 +1,19 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-20 by Codex · proposal r9 สำหรับ F18 + D-006 revised พร้อมหลักฐานแยกสองส่วน · candidate 69/69, skipped 0 · BLOCKED ตอน stage: sandbox ไม่ให้สร้าง .git/index.lock · ยังไม่ scan/commit
+Updated 2026-10-20 by Claude Code (fresh headless session, review r9) · r9 ที่เจ้าของ apply ตรวจแล้ว: hash ตรง, tests 69/69, F18 ปิด, D-006 ทำงานตามข้อกำหนด · พบ F20 Medium และ F21–F23 Low · commit controls + records แล้ว ยังไม่ push
 
 ## Current task
-BOOT-001 v1 · State FIXING · F3, F7 และ F10 ปิดแล้ว · F9 ปิดสำหรับรูปแบบที่บันทึกไว้ (review r7) · **F18 High เปิดอยู่ (regression จาก r8):** `#` ที่ติดหลัง `)` ของ process substitution `<(…)` ถูก guard อ่านเป็น comment แต่ Bash อ่านเป็นส่วนของคำเดิม ทำให้ guard มองไม่เห็น `cd` และการเขียนที่ตามมา → AC-04 FAIL · F19 Medium (มีอยู่แล้วก่อน r8) ไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน · F11–F15 Medium ย้ายไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน · Low ที่ค้าง: F8 ส่วน Monitor/case, F16, F17
-Branch `chore/BOOT-001-project-bootstrap` · controls r8 อยู่ที่ `a7e14e7` · proposal r9 สร้างบน `be2e02a` และยังไม่ apply · เอกสารที่เปลี่ยนเฉพาะ PROGRESS/handoff ยังไม่ stage/commit · ไม่ push · Linux CI ล่าสุดที่ยืนยันยังเป็นของ `7eae474`
+BOOT-001 v1 · State FIXING · F3, F7, F10 และ F18 ปิดแล้ว (F18 ใน review r9) · F9 ปิดสำหรับรูปแบบที่บันทึกไว้ (review r7) · ไม่มี finding High ค้าง · **F20 Medium ใหม่ (ต้นเหตุเดียวกับ F18 แต่ไม่ใช่ regression):** `#` ที่ติดหลัง `)` ของ `@(…)` หรือ `a=(…)` ถูก guard อ่านเป็น comment → เจ้าของเลือกที่วาง · F19 และ F11–F15 Medium ไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน · Low ที่ค้าง: F8 ส่วน Monitor/case, F16, F17, F21 (inspection ที่พ่วงคำสั่งอื่นถูกบล็อก), F22 (ตัวพิมพ์ของ path ทำให้สิทธิ์ apply ไม่ทำงาน แต่บล็อกอย่างปลอดภัย), F23 (blank line ท้ายไฟล์ test) · AC-04 FAIL ตามข้อความ contract: ข้อ push ต้องแก้ตาม D-006 และ Medium ที่ค้างยังเขียนไฟล์ล็อกผ่านได้
+Branch `chore/BOOT-001-project-bootstrap` · controls r9 + review r9 อยู่ใน commit ของ session นี้ (ดู Done) · ยังไม่ push: parent session จะรัน live push ตาม D-006 · Linux CI ล่าสุดที่ยืนยันยังเป็นของ `7eae474`
 
 ## Done (with evidence)
+- 2026-10-20 21:01–21:20 +07: Claude session ใหม่ (headless, parent session เริ่มตามคำขอเจ้าของ) review r9 ที่เจ้าของ apply → `docs/reviews/BOOT-001-r9.md`
+  - posthook รายงานไฟล์ล็อก 5 ไฟล์ตั้งแต่คำสั่งแรก ตรงกับ target ของ r9 พอดี → ตรวจ SHA256 และ blob ครบทั้ง 5 ไฟล์ ตรง handoff (21:01:57) แล้วจึงทำต่อตามกฎใหม่ใน CLAUDE.md · posthook `28c6283c…` และ patch `68351d1f…` ตรง · `git apply -R --check` แบบคำสั่งเดี่ยว PASS (21:16)
+  - `node scripts/controls/test-controls.mjs` → PASS 69/69, fail 0, skipped 0 (21:07:33–21:08:18)
+  - probe ส่ง JSON ให้ hook อย่างเดียว ไม่รัน payload: 132 กรณี + 11 กรณีตามหลัง · ผลไม่ตรงมีแค่ apply ที่ควรผ่าน 3 กรณีใน fixture ซึ่งเกิดจากตัวพิมพ์ของ path (F22) · probe/evidence อยู่ใน `docs/proposals/BOOT-001-r9-review-*` (gitignored)
+  - F18 ปิดตาม proof of fix ของ r8: input ทั้งสอง 0→2 พร้อมเหตุผล locked settings · แบบมีช่องว่าง 0 · `(pwd)# C:\` 2 · F10 ทั้ง 6 input คงผลเดิม · analogue `echo <(pwd)#; cd ..; pwd` พิมพ์ `/dev/fd/63#` แล้ว cd จริง (21:17)
+  - D-006: live push `git push origin HEAD:refs/heads/chore/BOOT-001-project-bootstrap` → hook ตอบ 0 และ stdout ว่าง (ตรวจด้วย JSON อย่างเดียว ไม่ได้ push) · force, deletion, multi-ref, main/master, branch ที่ไม่ใช่งาน, config ที่ขยายผล และรูปแบบพ่วงหรือห่อคำสั่ง → 2 ทุกกรณี · apply patch ตรงใต้ `docs/proposals/` แบบคำสั่งเดี่ยว → 0 · settings ไม่มี push/apply ใน deny/ask/allow และ deny ของ reset/clean ยังอยู่ · ข้อความ AGENTS.md/CLAUDE.md ตรงกับ D-006 และไม่แตะหัวข้ออื่น
+  - stage ไฟล์ 5 ไฟล์ที่เจ้าของ apply + review/handoff/PROGRESS → `git diff --cached --check` exit 2 เฉพาะ F23 (`test-controls.mjs:1247: new blank line at EOF.`) ส่วน records ไม่มีปัญหา (21:22:24) · staged blob ของ 5 ไฟล์ตรง handoff · red-flags exit 0, 6 กลุ่มเดิม, secret ทั้งสองกลุ่มและ untracked ว่าง (21:22:31–33) · locked-paths FAIL 42 ตามคาด ต้องใช้ label ของเจ้าของ (21:22:45) · หลังเขียนผลลงเอกสารแล้ว stage และรันสองการตรวจนี้ซ้ำบน index สุดท้าย ผลอยู่ใน commit message · commit เดียวรวม controls และ records พร้อมอธิบาย F23 ใน message
+  - หยุดถามเจ้าของ 2 ครั้งเมื่อ guard-bash บล็อก (ข้อความเต็มและคำตอบอยู่ใน review): (1) `mkdir` บน `$S/…` ซึ่งเป็น scratchpad → เจ้าของให้ใช้ path ตัวอักษรแทนตัวแปร พร้อมคำตอบถาวรสำหรับประเภทนี้ใน session (2) `git apply -R --check` ที่พ่วง `cd`/`echo` → เจ้าของให้รันคำสั่งเดี่ยว พร้อมคำตอบถาวรสำหรับประเภทนี้ และให้บันทึก F21 · มีสองคำตอบถูก safety classifier หยุด (ไม่ใช่ hook) → ไม่สร้างเนื้อหานั้นซ้ำ และตรวจต่อด้วยชุด probe ที่แคบลง
 - 2026-10-20 20:40–20:42 +07: Codex เป็น implementer และ regression author ตาม binding ที่เจ้าของระบุ ใช้ fix-findings เป็น plain procedure → `docs/proposals/BOOT-001-r9-controls.patch` (local, gitignored)
   - SHA256 `68351d1f623d019b9aa44ed7f005efe519f79d20ad51a42dd3e945269177700c`; expected applied SHA256/Git blobs ของ 5 ไฟล์อยู่ใน handoff หัวข้อ r9 ด้านท้าย
   - F18: input ทั้งสอง 0→2 พร้อมเหตุผล locked settings; spaced comment 0→0; subshell/comment 2→2; F10 ทั้ง 7 กลุ่มยังผ่าน
@@ -87,7 +95,10 @@ Branch `chore/BOOT-001-project-bootstrap` · controls r8 อยู่ที่ `
 - การสลับให้ Codex ไม่ได้ยกเลิกข้อห้ามของเครื่องมือ → เจ้าของเลือกแผนแคบ **CI fixture เท่านั้น** ในรอบนี้; ไม่ใช้เนื้อหาที่ถูกระงับ และยังไม่ทำ guard/PostToolUse
 
 ## Not done yet
-- F18 High (regression จาก r8): proposal r9 พร้อม permanent regressions แล้ว → เจ้าของ apply → Claude session ใหม่ตรวจ · AC-04 ยัง FAIL บน controls จริงจนกว่าจะตรวจปิด
+- live push ตาม D-006 (requirement 8): parent session รัน `git push origin HEAD:refs/heads/chore/BOOT-001-project-bootstrap` เป็นคำสั่งเดี่ยว แล้วบันทึกผล head ที่ push และ CI ของ head นั้น · ยังไม่มีการ push หรือ apply ที่ไม่ใช่ inspection แบบ live ใน session review
+- F20 Medium (review r9): Bash ทำอย่างไรเมื่อเปิด extglob และกับ array assignment ยังไม่ได้รัน · เจ้าของเลือกที่วาง (งาน guard-fix ถัดไปถ้าใช้หลักเดียวกับ F11–F19)
+- F21–F23 Low (review r9): F21 แก้ด้วยเอกสาร (inspection ต้องเป็นคำสั่งเดี่ยว) · F22 path ตัวพิมพ์ต่างกัน · F23 blank line ท้าย `test-controls.mjs` · ไป controls patch ถัดไป
+- เอกสารที่ยังไม่ตาม D-006 (เจ้าของตัดสิน): BOOT-001 AC-04 ยังบอกให้ guard บล็อก push · D-006 ยังเขียน "ยังไม่ implement" · D-004 ส่วน apply/push ถูกแทนเมื่อ D-006 implement แล้ว
 - F19 Medium (มีอยู่แล้วก่อน r8): `$(…)` ใน `${…:-…}` ที่มี quote ซ้อนไม่ถูกตรวจ · ไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน ไม่รวมใน r9
 - V-1: ถ้า Git Bash ขึ้นเป็น 5.3 รูปแบบ `${ command; }` ต้องมีกฎแยก (จากเอกสาร ยังไม่ได้รัน)
 - F11–F15 Medium และ F17 Low: งาน guard-fix ถัดไป (เจ้าของตัดสิน 2026-10-20) · F8 ส่วน Monitor/case และ F16 Low: งาน false-positive
@@ -126,6 +137,7 @@ Codex ชี้ (หลัง review r5 static) ว่า Claude เปลี่
 - none · run 39229522531 completed/success; ไม่มี rerun, label, merge หรือ push โดย Codex หรือ Claude
 
 ## Authority and budget left
+- รอบ r9 review (Claude, 2026-10-20, เจ้าของสั่งผ่าน parent session แบบ headless): ตรวจ r9 ที่เจ้าของ apply, รัน tests 69 ข้อ, ส่ง input ให้ hook อย่างเดียว, analogue ใน scratch ด้วย cd/pwd/echo เท่านั้น, เขียน review r9, อัปเดต handoff/PROGRESS แล้ว stage → scan → commit รวมไฟล์ล็อก 5 ไฟล์ที่เจ้าของ apply · ห้ามแก้ controls, ห้าม push (parent session push เอง), F11–F17 และ F19 ยังพักไว้ · คำตอบถาวรเฉพาะ session นี้สองประเภท (path ตัวแปรที่ชี้ไป scratchpad และ apply/push ที่ต้องเป็นคำสั่งเดี่ยว) ไม่ใช้กับ session อื่น · ทำครบแล้ว
 - รอบ r9 (Codex, headless ตามคำขอเจ้าของผ่าน Claude): implementer และ regression author เฉพาะ proposal F18 + D-006 revised บน `be2e02a`; เขียน patch/evidence ใน docs/proposals, อัปเดต PROGRESS/handoff, stage → scan ด้วย Git Bash absolute path → commit docs only · ห้าม apply patch, แก้ controls จริง หรือ push; ไม่ปิด finding เอง
 - รอบ r8 review (Claude, 2026-10-20, เจ้าของสั่งผ่าน parent session แบบ headless): ตรวจ r8 ที่เจ้าของ apply, รัน tests 61 ข้อ, ส่ง input ให้ hook อย่างเดียว, analogue ใน scratch ด้วย cd/pwd เท่านั้น, เขียน review r8, อัปเดต handoff/PROGRESS แล้ว stage → scan → commit รวมไฟล์ล็อก 2 ไฟล์ที่เจ้าของ apply · ห้ามแก้ controls, ห้าม push, ห้ามเปิด F11–F17 ใหม่เว้นแต่ r8 ทำให้แย่ลง · ทำครบแล้ว
 - รอบ r8 (Codex, 2026-10-20): เจ้าของแจ้งว่า review r7 เสร็จและส่งต่อให้ Codex แก้ F10 ตาม review/handoff → ทำ proposal เฉพาะ F10 กับ regression, อัปเดตเอกสารและ commit docs only; ใช้ fix-findings เป็น plain procedure · ไม่ apply/แก้ controls จริง, ไม่ push, ไม่ปิด finding เอง
@@ -137,14 +149,14 @@ Codex ชี้ (หลัง review r5 static) ว่า Claude เปลี่
 - Approved: เจ้าของขอให้ตั้งโปรเจกต์ (2026-10-18), ส่ง review r1 มาให้แก้, สั่ง commit แยกส่วน สั่งให้ apply patch r1 (2026-10-19, ครั้งเดียวสำหรับ patch นี้), ให้ส่งงานไปมาระหว่าง Claude กับ Codex ได้ และให้ checkpoint ตามกติกาทุกครั้งที่จบงานหนึ่งขั้น · ไม่มีอนุมัติให้ agent merge หรือเชื่อมโบรกเกอร์ · push ถูกบล็อกด้วย deny rule จึงเป็นของเจ้าของ
 
 ## Next safe action
-- รอบ r9 docs delivery BLOCKED ที่ filesystem boundary: ให้เจ้าของหรือ session ที่มีสิทธิ์เขียน `.git` stage เฉพาะ PROGRESS/handoff → `& 'C:/Program Files/Git/bin/bash.exe' scripts/controls/red-flags.sh main` → ตรวจผลและ commit docs only; ห้ามนับ cached-diff check บน index ว่างว่าตรวจเอกสารแล้ว · proposal/hashes/tests พร้อมใน handoff
-- **เจ้าของตัดสินหลัง review r8 (2026-10-20):** D-006 ไม่มีหน้าต่างอนุมัติ ("เอากฎ ask ออก") · F18 รวมอยู่ใน r9 · F19 ไปงาน guard-fix ถัดไป → Claude สั่ง Codex ผ่าน `codex exec` ให้ทำ `docs/proposals/BOOT-001-r9-controls.patch` ตาม handoff หัวข้อ "D-006 revised: no prompt; F18 in r9" → เจ้าของ apply r9 เป็นครั้งสุดท้ายตามกฎเดิม → Claude เปิด session ใหม่แบบ headless ตรวจและ commit → Claude push branch งานเองและบันทึกผล CI ของ head ที่ push
-- จนกว่า r9 จะใช้งานได้ push ยังเป็นของเจ้าของ · ดู Linux CI บน head ที่ push จริง
+- **parent session:** รัน `git push origin HEAD:refs/heads/chore/BOOT-001-project-bootstrap` เป็นคำสั่งเดี่ยว (ไม่มี `cd`, `;`, pipe หรือ echo พ่วง) → บันทึกผลจริง, head ที่ push และ CI ของ head นั้น · ถ้าถูกบล็อกหรือมีหน้าต่างถาม ให้หยุดตาม N6 ห้ามเปลี่ยน permission mode หรือเลี่ยง
+- คำสั่งตรวจ `git apply --check` / `-R --check` ต้องรันเดี่ยวและอ่าน exit status แยก (F21) · ถ้า path ของโปรเจกต์สะกดตัวพิมพ์ต่างจากบนดิสก์ apply ตาม D-006 จะถูกบล็อก (F22) → หยุดถามตาม N6
+- เจ้าของ: เลือกที่วาง F20 · แก้ AC-04 ของ BOOT-001 และข้อความ D-006/D-004 หลัง live check ผ่าน · ดู Linux CI บน head ที่ push จริง
 - F8 ส่วนที่เหลือต้องมี contract/หลักฐาน shell ของ Monitor และการวิเคราะห์ branch ของ case ก่อนแก้; ไม่เดา syntax เพื่อทำให้คำสั่งผ่าน
-- ยังไม่ติด label `owner-approved-control-change`: F18 High ยังเปิด · ติดได้เมื่อไม่มี finding High ค้างและ CI เขียว
+- label `owner-approved-control-change`: ไม่มี finding High ค้างหลัง review r9 · ยังต้องรอ CI เขียวบน head ที่ push · เจ้าของเป็นผู้ตัดสินและติดเอง
 - หลัง merge: ตั้ง branch protection ให้ `control-gate / locked-paths` และ `ci / control-plane` เป็น required
 - งานถัดไปหลัง BOOT-001 (ยังไม่มี contract): แก้ false positive ของ guard-bash พร้อม regression tests → (1) เนื้อหาใน heredoc ถูกอ่านเป็นคำสั่ง (2) regex pipe-to-shell จับคำ curl/bash ที่อยู่ใน pattern ของ grep (3) F8 ส่วนที่เหลือ: Monitor ที่มี `$(...)`, `case` pattern (4) F16 backtick ที่มี backslash
 - งาน guard-fix ถัดไป (ยังไม่มี contract): F11–F15 และ F17 จาก review r7 และ F19 จาก review r8 ตามที่เจ้าของตัดสินเมื่อ 2026-10-20
-- Waiting for owner action/decision: apply r9 เมื่อพร้อม, N1–N4, D-002..D-005, contract SPIKE-001
+- Waiting for owner action/decision: ที่วาง F20, แก้ AC-04, N1–N4, D-002..D-005, contract SPIKE-001
 
 On resume: re-check git state and every pending external operation first.

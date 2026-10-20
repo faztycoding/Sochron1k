@@ -28,8 +28,6 @@
       "Read(!.env.example)",
       "Read(~/.ssh/**)",
       "Read(~/.codex/auth.json)",
-      "Bash(git push)",
-      "Bash(git push *)",
       "Bash(git reset --hard)",
       "Bash(git reset --hard *)",
       "Bash(git clean *)"

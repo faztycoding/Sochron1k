@@ -677,7 +677,7 @@ test('F9: POSIX escapes cannot hide directory changes, commands or locked destin
   ]) {
     const r = runHook('guard-bash.mjs', shellInput(cmd));
     assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
-    assert.match(r.stderr, /redirecting output|git push is reserved/, cmd);
+    assert.match(r.stderr, /redirecting output|git push/, cmd);
   }
 });
 
@@ -1061,3 +1061,187 @@ test('F6: red-flags reports real-looking secrets and does not flag its own patte
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ---- F18 / D-006: hook JSON only; no push or patch payload is executed -----------------------
+test('F18: process substitution keeps its closing parenthesis in the same word', () => {
+  for (const op of ['<', '>']) {
+    for (const cmd of [
+      `echo ${op}(pwd)#; cd .claude; echo {} > settings.json`,
+      `echo "$(echo ${op}(pwd)#; cd .claude; echo {} > settings.json)"`,
+      `echo ${op}(echo ${op}(pwd)#; cd .claude; echo {} > settings.json)`,
+      `echo ${op}\\\n(pwd)#; cd .claude; echo {} > settings.json`,
+    ]) {
+      const r = runHook('guard-bash.mjs', shellInput(cmd));
+      assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
+      assert.match(r.stderr, /redirecting output into settings\.json \(Claude Code settings/);
+    }
+  }
+});
+
+test('F18: spaced comments and real subshell boundaries retain their meaning', () => {
+  for (const cmd of [
+    'echo <(pwd) #; cd .claude; echo {} > settings.json',
+    'echo >(pwd) #; cd .claude; echo {} > settings.json',
+    'echo <(cd .claude)#; echo {} > settings.json',
+    'echo <(pwd)#; echo ok > out.txt',
+    'echo "<(pwd)#"; echo ok > out.txt',
+    'echo "$(echo <(pwd) # comment\n)"',
+  ]) assert.equal(runHook('guard-bash.mjs', shellInput(cmd)).code, 0, cmd);
+  const r = runHook('guard-bash.mjs', shellInput('(pwd)# C:\\\ncd .claude; echo {} > settings.json'));
+  assert.equal(r.code, 2, r.stderr);
+  assert.match(r.stderr, /redirecting output into settings\.json \(Claude Code settings/);
+});
+
+function withD006Fixture(body) {
+  const branch = 'chore/BOOT-001-proposal';
+  const dir = tempRepo(branch);
+  const patch = 'docs/proposals/control.patch';
+  const contents = 'diff --git a/AGENTS.md b/AGENTS.md\n--- a/AGENTS.md\n+++ b/AGENTS.md\n@@ -1 +1 @@\n-x\n+y\n';
+  try {
+    writeIn(dir, patch, contents);
+    writeIn(dir, 'docs/proposals/second patch.patch', contents);
+    writeIn(dir, 'docs/proposals/nested/control.patch', contents);
+    writeIn(dir, 'docs/outside.patch', contents);
+    writeIn(dir, 'docs/proposals/ordinary.patch', contents.replaceAll('AGENTS.md', 'notes.txt'));
+    // A named remote with an inert reserved-domain URL; the hook never contacts it.
+    gitIn(dir, 'remote', 'add', 'origin', 'https://example.invalid/fixture.git');
+    const probe = (cmd, expected, tool = 'Bash', cwd = dir) => {
+      const r = runHook('guard-bash.mjs', shellInput(cmd, { cwd, tool }), { projectDir: dir });
+      assert.equal(r.code, expected, `${tool}: ${cmd}: ${r.stderr}`);
+      if (expected === 0) assert.equal(r.stdout, '', 'hook must not emit allow/ask decisions');
+      return r;
+    };
+    body({ dir, branch, patch, probe });
+  } finally {
+    assert.equal(path.dirname(dir), path.resolve(os.tmpdir()));
+    assert.match(path.basename(dir), /^sochron-controls-/);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('D-006: explicit non-force push sends only the current task branch', () => {
+  withD006Fixture(({ branch, probe }) => {
+    for (const source of ['HEAD', branch, `refs/heads/${branch}`]) {
+      for (const flag of ['', '-u ', '--set-upstream ']) {
+        probe(`git push ${flag}origin ${source}:refs/heads/${branch}`, 0);
+      }
+    }
+    probe(`git push origin ${branch}`, 0);
+    probe(`git push origin HEAD:refs/heads/${branch}`, 0, 'PowerShell');
+  });
+});
+
+test('D-006: unsafe push flags, destinations and unknown forms stay blocked', () => {
+  withD006Fixture(({ dir, branch, probe }) => {
+    const ref = `HEAD:refs/heads/${branch}`;
+    for (const flag of ['-f', '--force', '--force-with-lease', '--force-with-lease=refs/heads/x:',
+      '--force-if-includes', '--mirror', '--delete', '-d', '--all', '--tags', '--follow-tags',
+      '-uf', '--for', '--no-verify', '--receive-pack=anything', '--repo=origin',
+      '--recurse-submodules=on-demand', '--push-option=anything', '--unknown']) {
+      probe(`git push ${flag} origin ${ref}`, 2);
+      probe(`git push origin ${ref} ${flag}`, 2);
+    }
+    for (const dest of ['main', 'master', 'refs/heads/main', 'refs/heads/master', 'HEAD',
+      'refs/tags/v1', 'refs/heads/chore/OTHER-001-x', 'refs/heads/Main']) {
+      probe(`git push origin HEAD:${dest}`, 2);
+    }
+    for (const cmd of ['git push', 'git push origin', 'git push origin HEAD',
+      `git push origin +${ref}`, 'git push origin :main', 'git push origin :',
+      `git push origin ${ref} ${ref}`, `git push origin other:refs/heads/${branch}`,
+      `git push unknown ${ref}`, `git -C . push origin ${ref}`,
+      `git -c push.default=matching push origin ${ref}`,
+      `git push https://example.invalid/fixture.git ${ref}`]) probe(cmd, 2);
+    for (const name of ['main', 'master', 'ordinary']) {
+      gitIn(dir, 'switch', '-q', '-c', name);
+      probe(`git push origin HEAD:refs/heads/${branch}`, 2);
+      probe('git push', 2);
+    }
+    gitIn(dir, 'checkout', '-q', '--detach');
+    probe(`git push origin ${ref}`, 2);
+    probe(`git push origin ${ref}`, 2, 'Monitor');
+  });
+});
+
+test('D-006: push config cannot silently widen or remap the destination', () => {
+  withD006Fixture(({ dir, branch, probe }) => {
+    const explicit = `git push origin HEAD:refs/heads/${branch}`;
+    for (const [key, value] of [
+      ['remote.origin.mirror', 'true'], ['push.followTags', 'true'],
+      ['push.recurseSubmodules', 'on-demand'], ['push.gpgSign', 'true'],
+      ['push.useForceIfIncludes', 'true'], ['submodule.recurse', 'true'],
+      ['push.pushOption', 'anything'],
+    ]) {
+      gitIn(dir, 'config', key, value);
+      probe(explicit, 2);
+      gitIn(dir, 'config', '--unset', key);
+    }
+    gitIn(dir, 'config', 'remote.origin.push', `+refs/heads/${branch}:refs/heads/main`);
+    probe(`git push origin ${branch}`, 2);
+    probe(explicit, 0); // A fully explicit destination overrides remote.push.
+    gitIn(dir, 'config', 'push.default', 'matching');
+    probe('git push', 2);
+    probe(explicit, 0);
+  });
+});
+
+test('D-006: every proposal must resolve to a direct regular file', () => {
+  withD006Fixture(({ dir, patch, probe }) => {
+    for (const cmd of [`git apply ${patch}`, `git apply -- ${patch}`,
+      `git apply ${patch} "docs/proposals/second patch.patch"`,
+      `git apply "${path.join(dir, patch).replace(/\\/g, '/')}"`,
+      `git apply docs/proposals/nested/../control.patch`]) probe(cmd, 0);
+    probe(`git apply ${patch}`, 0, 'PowerShell');
+    for (const cmd of ['git apply docs/outside.patch',
+      'git apply docs/proposals/nested/control.patch', 'git apply docs/proposals/missing.patch',
+      'git apply docs/proposals', 'git apply docs/proposals/nested',
+      `git apply ${patch} docs/outside.patch`, `git apply ${patch} docs/proposals/missing.patch`,
+      `git apply ${patch} -`, `git apply --directory=.claude ${patch}`,
+      `git apply --unsafe-paths ${patch}`, `git apply -p0 ${patch}`,
+      `git apply --3way ${patch}`, `git apply --index ${patch}`,
+      `git apply --check --apply ${patch}`, `git am ${patch}`, `patch -p1 -i ${patch}`,
+      `patch -p1 < ${patch}`]) probe(cmd, 2);
+    probe(`git apply ${patch}`, 2, 'Monitor');
+    // A directory junction works without Windows symlink privilege. Its target is outside
+    // docs/proposals even though its spelling appears inside it.
+    writeIn(dir, 'outside/control.patch', fs.readFileSync(path.join(dir, patch), 'utf8'));
+    fs.symlinkSync(path.join(dir, 'outside'), path.join(dir, 'docs/proposals/link'), 'junction');
+    probe('git apply docs/proposals/link/control.patch', 2);
+    const moved = path.join(dir, 'docs/proposals-real');
+    fs.renameSync(path.join(dir, 'docs/proposals'), moved);
+    fs.symlinkSync(moved, path.join(dir, 'docs/proposals'), 'junction');
+    probe(`git apply ${patch}`, 2); // Even the proposals directory may not redirect the boundary.
+  });
+});
+
+test('D-006: apply and push must each occupy the entire invocation', () => {
+  withD006Fixture(({ branch, patch, probe }) => {
+    for (const action of [`git apply ${patch}`, `git push origin HEAD:refs/heads/${branch}`,
+      'git apply docs/proposals/ordinary.patch', `git apply --check ${patch}`]) {
+      for (const cmd of [
+        `${action}; echo done`, `echo ready; ${action}`, `${action} && echo done`,
+        `${action} || echo failed`, `${action} | cat`, `${action} &`, `${action}\necho done`,
+        `${action} > out.txt`, `${action} < input.patch`, `(${action})`, `{ ${action}; }`,
+        `bash -c "${action}"`, `cmd /c "${action}"`, `powershell -Command "${action}"`,
+        `echo "$(${action})"`, `echo \`${action}\``, `echo <(${action})`,
+        `env ${action}`, `command ${action}`, `FOO=x ${action}`, `${action} # comment`,
+      ]) probe(cmd, 2);
+    }
+    probe(`git apply --check ${patch}`, 0);
+    probe('git reset --hard', 2);
+    probe('git clean -fdx', 2);
+  });
+});
+
+test('D-006: settings remove push denial without adding ask or allow', () => {
+  const settings = JSON.parse(fs.readFileSync(path.join(repo, '.claude/settings.json'), 'utf8'));
+  for (const kind of ['deny', 'ask', 'allow']) {
+    for (const rule of settings.permissions[kind] ?? []) {
+      assert.doesNotMatch(rule, /^(?:Bash|PowerShell|Monitor)\(.*git (?:push|apply)/, `${kind}: ${rule}`);
+      assert.ok(!['Bash', 'Bash(*)', 'Bash(git *)'].includes(rule), `${kind} must not cover all commands`);
+    }
+  }
+  for (const rule of ['Bash(git reset --hard)', 'Bash(git reset --hard *)', 'Bash(git clean *)']) {
+    assert.ok(settings.permissions.deny.includes(rule), rule);
+  }
+});
+

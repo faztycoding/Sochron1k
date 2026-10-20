@@ -36,9 +36,14 @@ Only commands that ran successfully in this repository. Python commands are adde
 If a command fails for environment reasons, report BLOCKED with the output. Never change config to make it pass.
 
 ## Agent roles (tool binding: change it here, not in prompts)
-- Owner and approver: the repository owner. Agents never approve, merge, push, deploy, accept
-  risk, or operate a trading account.
+- Owner and approver: the repository owner. Agents never approve, merge, deploy, accept
+  risk, or operate a trading account. Labels and every external write except the D-006 task-branch
+  push below remain owner-only.
 - Claude Code: planner and implementer. Works on branch <type>/<TASK-ID>-<slug>. Its procedures are in .claude/skills/.
+  D-006 permits standalone `git apply` of regular patch files directly under `docs/proposals/`
+  and non-force `git push` of the current task branch without asking or an approval prompt.
+  Use a named remote and an explicit destination (`HEAD:refs/heads/<current-task-branch>`).
+  Apply, verify handoff hashes, obtain fresh-session review, then commit; see CLAUDE.md.
 - Codex: test author and reviewer. New chat per task; review chats are read-only and see the
   contract and the diff only. Its procedures are in .agents/skills/.
 - CI (GitHub Actions) is the verifier. "PASS" from an agent does not move a task's state.
@@ -74,8 +79,9 @@ Ask first, with options, impact and a dry run where possible:
 - adding, removing or upgrading dependencies; build, CI or lockfile changes
 - connecting to any broker terminal or account (even Demo, even read-only) unless the task contract authorizes it
 - deleting files outside the task scope
-- any external write: push, publish, messages, orders
-- changing auth, permissions, security settings, acceptance or golden tests, or a locked path
+- any external write: publish, messages, orders, or push other than the D-006 Claude task-branch exception
+- changing auth, permissions, security settings, acceptance or golden tests, or a locked path,
+  except Claude applying the D-006 proposal patch above. This grants no direct-edit exception.
 
 Never:
 - use a live (real-money) account
@@ -139,7 +145,10 @@ Handbook ch.34; the product values (risk limits, symbol, hours) live in SPEC.md.
 ## Git
 - One branch per task: <feat|fix|chore|spike|research>/<TASK-ID>-<slug>. Never work directly on main.
 - Commit message: "<type>(<scope>): <intent>" with "Refs: <TASK-ID>" in the body.
-- Do not push or merge. The owner pushes and merges after CI passes; the PR body follows .github/pull_request_template.md.
+- Never merge. Under D-006, Claude may push the current task branch without asking, without
+  force, as a standalone command. Force, deletion, multi-ref and main/master pushes stay blocked;
+  unproved forms stay blocked. Other agents do not push. Claude records the pushed head and CI
+  result; the owner alone labels and merges after CI passes. The PR body follows .github/pull_request_template.md.
 
 ## Completion report (always this format)
 1. Outcome for the user

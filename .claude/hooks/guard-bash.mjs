@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // PreToolUse hook for Bash|PowerShell|Monitor. Blocks shell commands that would break the
 // project's controls (Handbook v5 ch.13, ch.14, Appendix O):
-//   git push · reset --hard · clean · hook bypass (--no-verify, commit -n, core.hooksPath)
+//   unsafe or unproved git push · reset --hard · clean · hook bypass (--no-verify, commit -n, core.hooksPath)
 //   commits, merges or rebases on main, including after a branch switch earlier in the command
 //   discarding all local changes · force-deleting branches · dropping stashes
 //   writes to locked or append-only paths (scripts/controls/rules.mjs) at their REAL destination:
@@ -16,7 +16,8 @@
 // node x.mjs opening files themselves). Deny rules and CI (control-gate) are the other layers,
 // and AGENTS.md forbids routing around a block.
 import { execFileSync } from 'node:child_process';
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync, realpathSync } from 'node:fs';
+import path from 'node:path';
 import os from 'node:os';
 import { containsProtected, matchAppendOnly, matchLocked, resolvePath, toRepoRelative } from '../../scripts/controls/rules.mjs';
 
@@ -104,9 +105,10 @@ function splitSegments(s, syntax) {
       continue;
     }
     const next = nextLogical(s, i + 1, syntax);
-    if (syntax === 'posix' && quote !== "'" && quote !== '`' && c === '$' && s[next] === '(') {
+    if (syntax === 'posix' && ((quote !== "'" && quote !== '`' && c === '$')
+      || (!quote && braceDepth === 0 && (c === '<' || c === '>'))) && s[next] === '(') {
       const end = substitutionEnd(s, next + 1, syntax);
-      cur += '$(' + s.slice(next + 1, end + 1);
+      cur += c + '(' + s.slice(next + 1, end + 1);
       i = end;
       wordStart = false;
       continue;
@@ -173,7 +175,8 @@ function substitutionEnd(s, start, syntax, level = 0) {
     }
     if (quote === "'") { if (c === quote) quote = null; continue; }
     const next = nextLogical(s, i + 1, syntax);
-    if (c === '$' && s[next] === '(') { i = substitutionEnd(s, next + 1, syntax, level + 1); wordStart = false; continue; }
+    if ((c === '$' || (syntax === 'posix' && !quote && braceDepth === 0 && (c === '<' || c === '>')))
+      && s[next] === '(') { i = substitutionEnd(s, next + 1, syntax, level + 1); wordStart = false; continue; }
     if (syntax === 'posix' && c === '$' && s[next] === '{') {
       braceDepth++;
       parameterQuotes.push(quote);
@@ -206,7 +209,8 @@ function substitutions(s, syntax) {
     if (single) continue;
     if (c === '"') { double = !double; continue; }
     const next = nextLogical(s, i + 1, syntax);
-    if ((double || syntax === 'posix') && c === '$' && s[next] === '(') {
+    if (((double || syntax === 'posix') && c === '$'
+      || (syntax === 'posix' && !double && (c === '<' || c === '>'))) && s[next] === '(') {
       const j = substitutionEnd(s, next + 1, syntax);
       out.push(s.slice(next + 1, j));
       i = j;
@@ -237,9 +241,10 @@ function tokenize(seg, syntax) {
       continue;
     }
     const next = nextLogical(seg, i + 1, syntax);
-    if (syntax === 'posix' && quote !== "'" && c === '$' && seg[next] === '(') {
+    if (syntax === 'posix' && ((quote !== "'" && c === '$') || (!quote && (c === '<' || c === '>')))
+      && seg[next] === '(') {
       const end = substitutionEnd(seg, next + 1, syntax);
-      cur += '$(' + seg.slice(next + 1, end + 1);
+      cur += c + '(' + seg.slice(next + 1, end + 1);
       started = true;
       i = end;
       continue;
@@ -416,6 +421,73 @@ function checkPatchFile(file, dir, label) {
   }
 }
 
+// D-006 is deliberately a small, literal grammar, not a general shell permission.
+// An exception is available only for one top-level action without wrappers or expansions.
+function standaloneGit(sub, words, k, i, dir) {
+  if (!['Bash', 'PowerShell'].includes(tool) || k !== 0 || i !== 1
+    || !new RegExp(`^git(?:\\.exe)?[ \\t]+${sub}(?:[ \\t]|$)`).test(command)
+    || /[\r\n;&|<>(){}$`\\*?!#%~\[\]]/.test(command)
+    || !/^(?:[^'"\s]+|'[^']*'|"[^"]*")(?:[ \t]+(?:[^'"\s]+|'[^']*'|"[^"]*"))*[ \t]*$/.test(command)) return false;
+  // No -C, alternate Git directory, assignment, nested shell or grouped action can use this path.
+  return repositoryRoot(dir) !== null && repositoryRoot(dir) === repositoryRoot(projectDir);
+}
+
+function pushConfig(key, dir) {
+  try {
+    return execFileSync('git', ['config', '--get-all', key], {
+      cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim().split('\n');
+  } catch (error) {
+    if (error.status === 1) return []; // Missing is different from unreadable configuration.
+    block('git push configuration cannot be inspected');
+  }
+}
+
+function checkTaskPush(words, k, i, args, dir) {
+  const refuse = () => block('git push requires one explicit non-force push of the current task branch',
+    'Use git push origin HEAD:refs/heads/<current-task-branch> as a separate command.');
+  if (!standaloneGit('push', words, k, i, dir)) refuse();
+  const branch = currentBranch(dir);
+  if (!branch || !/^(feat|fix|chore|spike|research)\/[A-Z][A-Z0-9]*-\d+-[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(branch)) refuse();
+  const operands = [...args];
+  if (operands[0] === '-u' || operands[0] === '--set-upstream') operands.shift();
+  if (operands.length !== 2) refuse();
+  const [remote, ref] = operands;
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(remote)) refuse();
+  if (!(gitOut(['remote'], dir)?.split('\n') ?? []).includes(remote)) refuse();
+  const full = `refs/heads/${branch}`;
+  // A source-only ref can inherit a destination from remote.<name>.push.
+  const shorthand = ref === branch && pushConfig(`remote.${remote}.push`, dir).length === 0;
+  if (!shorthand && !['HEAD', branch, full].some(src => ref === `${src}:${full}`)) refuse();
+  for (const key of [`remote.${remote}.mirror`, 'push.followTags', 'push.useForceIfIncludes',
+    'submodule.recurse']) {
+    if (pushConfig(key, dir).some(value => !/^(false|no|off|0)$/i.test(value))) refuse();
+  }
+  if (pushConfig('push.recurseSubmodules', dir).some(value => !/^(no|check)$/i.test(value))) refuse();
+  if (pushConfig('push.gpgSign', dir).some(value => !/^(false|no|off|0)$/i.test(value))) refuse();
+  if (pushConfig('push.pushOption', dir).length > 0) refuse();
+}
+
+function proposalApply(words, k, i, args, dir, stdinFiles) {
+  if (!standaloneGit('apply', words, k, i, dir) || stdinFiles.length > 0) return false;
+  const files = args[0] === '--' ? args.slice(1) : args;
+  if (files.length === 0 || files.some(file => file.startsWith('-'))) return false;
+  try {
+    const root = realpathSync(projectDir);
+    const proposalDir = path.join(root, 'docs', 'proposals');
+    // Do not let a symlink or junction move the permitted directory itself.
+    if (realpathSync(proposalDir) !== proposalDir) return false;
+    return files.every(file => {
+      const loc = locate(file, dir);
+      if (!loc.abs) return false;
+      const actual = realpathSync(loc.abs);
+      return path.dirname(actual) === proposalDir && statSync(actual).isFile();
+    });
+  } catch {
+    return false; // Missing, unreadable, directory or unresolved patch: no locked-path exception.
+  }
+}
+
 const GIT_PATH_WRITERS = new Set(['checkout', 'restore', 'rm', 'mv', 'stash', 'clean', 'update-index', 'read-tree',
   'filter-branch', 'filter-repo']);
 
@@ -433,7 +505,7 @@ function analyzeGit(words, k, stdinFiles) {
   const args = words.slice(i + 1);
   const shortFlags = args.filter((a) => /^-[a-zA-Z]+$/.test(a)).join('');
 
-  if (sub === 'push') block('git push is reserved for the owner (Handbook App.O deny list)', 'Commit locally and tell the owner the branch is ready.');
+  if (sub === 'push') { checkTaskPush(words, k, i, args, dir); return; }
   if (args.includes('--no-verify')) block('--no-verify bypasses hooks and checks');
   if (sub === 'commit' && shortFlags.includes('n')) block('git commit -n bypasses hooks and checks');
   if (sub === 'reset' && args.includes('--hard')) block('git reset --hard can destroy work that is not this task\'s', 'Ask the owner.');
@@ -463,12 +535,16 @@ function analyzeGit(words, k, stdinFiles) {
       block(`git ${sub} on ${branch}`, 'Create a task branch first: git switch -c <type>/<TASK-ID>-<slug>.');
     }
   }
+  if (sub === 'apply' && !standaloneGit('apply', words, k, i, dir)) {
+    block('git apply must be one standalone literal command', 'Run each action separately.');
+  }
   if (sub === 'apply' || sub === 'am') {
     const inspectOnly = ['--check', '--stat', '--numstat', '--summary'].some((f) => args.includes(f)) && !args.includes('--apply');
     if (!inspectOnly) {
       const files = [...args.filter((a) => !a.startsWith('-')), ...stdinFiles];
       if (files.length === 0) block(`git ${sub} reads a patch from standard input, which cannot be inspected`, 'Save the patch to a file first.');
-      for (const f of files) checkPatchFile(f, dir, `git ${sub}`);
+      const proposal = sub === 'apply' && proposalApply(words, k, i, args, dir, stdinFiles);
+      if (!proposal) for (const f of files) checkPatchFile(f, dir, `git ${sub}`);
     }
   }
   if (GIT_PATH_WRITERS.has(sub) && !unstageOnly) {
