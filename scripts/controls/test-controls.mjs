@@ -474,6 +474,151 @@ test('F3: a branch switch earlier in the same command is honored', () => {
   }
 });
 
+// ---- F7: escaped POSIX parentheses must not change directory scope --------------------------
+// Hook input only: none of these command strings is executed by a shell.
+test('F7: escaped parentheses do not scope parent directory changes', () => {
+  for (const cmd of [
+    String.raw`echo \( ; cd .claude ; echo \) ; echo {} > settings.json`,
+    String.raw`echo \\\( ; cd .claude ; echo \\\) ; echo {} > settings.json`,
+    String.raw`bash -c 'echo \( ; cd .claude ; echo \) ; echo {} > settings.json'`,
+  ]) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
+    assert.match(r.stderr, /redirecting output into settings\.json \(Claude Code settings/, cmd);
+  }
+});
+
+test('F7: escaped parentheses remain ordinary arguments in allowed commands', () => {
+  for (const cmd of [
+    String.raw`find . \( -name a -o -name b \) -print`,
+    String.raw`echo \( ; cd src ; echo \) ; echo ok > out.txt`,
+    String.raw`printf '%s' \(`,
+    String.raw`printf '%s' \)`,
+    String.raw`(echo \); cd .claude); echo {} > settings.json`,
+  ]) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 0, `${cmd}: ${r.stderr}`);
+  }
+});
+
+test('F7: real groups retain their scope with paired backslashes and quoted parentheses', () => {
+  for (const cmd of [
+    String.raw`cd .claude; (cd ..; echo \\); echo {} > settings.json`,
+    String.raw`echo '('; cd .claude; echo ')'; echo {} > settings.json`,
+    String.raw`echo "\("; cd .claude; echo "\)"; echo {} > settings.json`,
+  ]) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
+    assert.match(r.stderr, /redirecting output into settings\.json \(Claude Code settings/, cmd);
+  }
+  for (const cmd of [
+    String.raw`(cd .claude; echo \\); echo {} > settings.json`,
+    String.raw`(echo '\)'; cd .claude); echo {} > settings.json`,
+    String.raw`(echo "\)"; cd .claude); echo {} > settings.json`,
+  ]) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 0, `${cmd}: ${r.stderr}`);
+  }
+});
+
+// F9 inputs are hook data only. Quoted/escaped operators must retain their lexical meaning.
+test('F9: POSIX escapes cannot hide directory changes, commands or locked destinations', () => {
+  for (const cmd of [
+    String.raw`echo \"; cd .claude; echo {} > settings.json`,
+    String.raw`cd .claude; echo \; cd ..; echo {} > settings.json`,
+    String.raw`cd .claude; echo \| cd ..; echo {} > settings.json`,
+    String.raw`g\it push`, String.raw`echo {} > AG\ENTS.md`,
+    String.raw`cd .cla\ude; echo {} > settings.json`,
+    String.raw`bash -c 'echo {} > AG\ENTS.md'`,
+    String.raw`bash -c "echo \\\"; cd .claude; echo {} > settings.json"`,
+  ]) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
+    assert.match(r.stderr, /redirecting output|git push is reserved/, cmd);
+  }
+});
+
+test('F9: literal operators and quoted escapes remain ordinary arguments', () => {
+  for (const cmd of [
+    String.raw`printf '%s' \> AGENTS.md`, String.raw`printf '%s' '>' AGENTS.md`,
+    String.raw`printf '%s' ">" AGENTS.md`, String.raw`printf '%s' \< AGENTS.md`,
+    String.raw`printf '%s' '\'; echo ok > out.txt`,
+    String.raw`printf '%s' "\$(echo {} > AGENTS.md)"`,
+    String.raw`bash -c 'printf "%s" \> AGENTS.md'`,
+    String.raw`bash -c "printf '%s' \> AGENTS.md"`,
+    String.raw`echo \"; cd src; echo ok > out.txt`,
+    String.raw`printf '%s' "a\;b"`,
+  ]) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 0, `${cmd}: ${r.stderr}`);
+  }
+});
+
+test('F9: backslash-newline joins tokens without changing command boundaries', () => {
+  for (const cmd of ['g\\\nit push', 'echo {} > AG\\\nENTS.md',
+    'cd .clau\\\nde; echo {} > settings.json', 'echo "continued\\\ntext" > AGENTS.md',
+    'echo "$\\\n(printf \'"\')"; cd .claude; echo {} > settings.json',
+    'echo ok &\\\n& cd .claude; echo {} > settings.json',
+    'echo "$\\\n\\\n(echo ok)"; cd .claude; echo {} > settings.json']) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
+  }
+  assert.equal(runHook('guard-bash.mjs', shellInput('echo ok > out\\\n.txt')).code, 0);
+  assert.equal(runHook('guard-bash.mjs', shellInput('echo "$\\\n(printf ok)"')).code, 0);
+  assert.equal(runHook('guard-bash.mjs', shellInput('echo ok &\\\n& echo done')).code, 0);
+});
+
+test('F9: quoted substitutions balance escaped and quoted parentheses', () => {
+  for (const cmd of [
+    String.raw`echo "$(echo \); echo {} > AGENTS.md)"`,
+    String.raw`echo "$(printf '%s' ')'; echo {} > AGENTS.md)"`,
+    String.raw`echo "$(echo "$(echo {})"; echo {} > AGENTS.md)"`,
+    String.raw`echo "$(printf '"')"; cd .claude; echo {} > settings.json`,
+  ]) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
+    assert.match(r.stderr, /redirecting output/, cmd);
+  }
+  for (const cmd of [String.raw`echo "$(printf '%s' ')')"`,
+    String.raw`echo "$(echo \); echo ok)"`,
+    String.raw`echo "$(echo "$(echo ok)")"`,
+    String.raw`echo "$(printf "%s" ";")"`]) {
+    const r = runHook('guard-bash.mjs', shellInput(cmd));
+    assert.equal(r.code, 0, `${cmd}: ${r.stderr}`);
+  }
+});
+
+test('F9: cmd double-slash command flags inspect the child source', () => {
+  for (const flag of ['//c', '//C', '//k', '//K', '/c', '/k']) {
+    const denied = runHook('guard-bash.mjs', shellInput(`cmd.exe ${flag} "echo {} > AGENTS.md"`));
+    assert.equal(denied.code, 2, `${flag}: ${denied.stderr}`);
+    assert.match(denied.stderr, /redirecting output/, flag);
+    const allowed = runHook('guard-bash.mjs', shellInput(`cmd ${flag} "echo ok > out.txt"`));
+    assert.equal(allowed.code, 0, `${flag}: ${allowed.stderr}`);
+  }
+});
+
+test('F8: an unresolved switch is allowed but makes later branch-sensitive actions unknown', () => {
+  const dir = tempRepo('feat/BOOT-001-unknown-switch');
+  try {
+    gitIn(dir, 'branch', 'main');
+    const at = command => runHook('guard-bash.mjs', shellInput(command, { cwd: dir }), { projectDir: dir });
+    assert.equal(at('cd "$X" && git switch -c feat/x').code, 0);
+    for (const cmd of ['(cd "$X"; git switch main); git commit -m x',
+      'git switch main; (cd "$X"; git switch -c feat/x); git commit -m x',
+      'bash -c \'cd "$X"; git switch main\'; git merge feat/x',
+      '(cd "$X"; git switch main); git switch "$B"; git commit -m x',
+      '(cd "$X"; git switch main); git switch -C "$B"; git commit -m x',
+      '(cd "$X"; git switch main); git switch -c feat/new; git commit -m x',
+      '(cd "$X"; git switch main); git switch -c feat/BOOT-001-unknown-switch; git commit -m x']) {
+      const r = at(cmd);
+      assert.equal(r.code, 2, `${cmd}: ${r.stderr}`);
+      assert.match(r.stderr, /branch became unknown/, cmd);
+    }
+    assert.equal(at('git switch -c feat/new; git commit -m x').code, 0);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 // ---- F3 round 2: directory scope and attached output operands -------------------------------
 // These strings are hook input only: none is executed as a shell command.
 test('F3: child directory changes do not change the parent write destination', () => {

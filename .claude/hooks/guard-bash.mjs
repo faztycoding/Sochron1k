@@ -70,6 +70,16 @@ if (/-encodedcommand\b/i.test(flat)) block('encoded PowerShell commands are not 
 // ---- Tokenizing ----------------------------------------------------------------------------
 // Keep parentheses as scope boundaries. Braces group commands in the caller's directory.
 // Quotes, POSIX backticks, ${var} and @{hashtable} keep their existing contents together.
+function posixEscape(s, i, quote, syntax) {
+  return syntax === 'posix' && s[i] === '\\' && i + 1 < s.length && quote !== "'"
+    && (quote !== '"' || '$`"\\\n'.includes(s[i + 1]));
+}
+
+function nextLogical(s, i, syntax) {
+  while (syntax === 'posix' && s[i] === '\\' && s[i + 1] === '\n') i += 2;
+  return i;
+}
+
 function splitSegments(s, syntax) {
   const segs = [];
   let cur = '';
@@ -77,6 +87,19 @@ function splitSegments(s, syntax) {
   let braceDepth = 0;
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
+    if (posixEscape(s, i, quote, syntax)) {
+      // Keep quoting for token decoding; a line continuation contributes no character.
+      if (s[i + 1] !== '\n') cur += c + s[i + 1];
+      i++;
+      continue;
+    }
+    const next = nextLogical(s, i + 1, syntax);
+    if (syntax === 'posix' && quote !== "'" && quote !== '`' && c === '$' && s[next] === '(') {
+      const end = substitutionEnd(s, next + 1, syntax);
+      cur += '$(' + s.slice(next + 1, end + 1);
+      i = end;
+      continue;
+    }
     if (quote) {
       cur += c;
       if (c === quote) quote = null;
@@ -85,18 +108,36 @@ function splitSegments(s, syntax) {
     if (c === '"' || c === "'" || (c === '`' && syntax === 'posix')) { quote = c; cur += c; continue; }
     if (c === '{' && (s[i - 1] === '$' || s[i - 1] === '@')) { braceDepth++; cur += c; continue; }
     if (c === '}' && braceDepth > 0) { braceDepth--; cur += c; continue; }
-    const pairOp = (c === '&' || c === '|') && s[i + 1] === c;
+    const pairOp = (c === '&' || c === '|') && s[next] === c;
     if (c === ';' || c === '\n' || c === '|' || pairOp || c === '(' || c === ')' || c === '{' || c === '}') {
       segs.push(cur);
       cur = '';
       if (c === '(' || c === ')') segs.push(c);
-      if (pairOp) i++;
+      if (pairOp) i = next;
       continue;
     }
     cur += c;
   }
   segs.push(cur);
-  return segs.map((x) => x.trim()).filter(Boolean);
+  return segs.filter((x) => x.trim() !== '');
+}
+
+function substitutionEnd(s, start, syntax, level = 0) {
+  if (level > 4) block('command substitution nests too deeply to inspect');
+  let quote = null;
+  let depth = 1;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i];
+    if (posixEscape(s, i, quote, syntax)) { i++; continue; }
+    if (quote === "'") { if (c === quote) quote = null; continue; }
+    const next = nextLogical(s, i + 1, syntax);
+    if (c === '$' && s[next] === '(') { i = substitutionEnd(s, next + 1, syntax, level + 1); continue; }
+    if (quote) { if (c === quote) quote = null; continue; }
+    if (c === '"' || c === "'") { quote = c; continue; }
+    if (c === '(') depth++;
+    else if (c === ')' && --depth === 0) return i;
+  }
+  block('unterminated command substitution');
 }
 
 // Command substitutions that splitSegments cannot see: $(...) inside double quotes, and `...`.
@@ -107,21 +148,21 @@ function substitutions(s, syntax) {
   let double = false;
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
+    if (posixEscape(s, i, single ? "'" : double ? '"' : null, syntax)) { i++; continue; }
     if (c === "'" && !double) { single = !single; continue; }
     if (single) continue;
     if (c === '"') { double = !double; continue; }
-    if (double && c === '$' && s[i + 1] === '(') {
-      let depth = 1;
-      let j = i + 2;
-      for (; j < s.length && depth > 0; j++) {
-        if (s[j] === '(') depth++;
-        else if (s[j] === ')') depth--;
-      }
-      out.push(s.slice(i + 2, j - 1));
-      i = j - 1;
+    const next = nextLogical(s, i + 1, syntax);
+    if ((double || syntax === 'posix') && c === '$' && s[next] === '(') {
+      const j = substitutionEnd(s, next + 1, syntax);
+      out.push(s.slice(next + 1, j));
+      i = j;
     } else if (c === '`' && syntax !== 'powershell') {
       const j = s.indexOf('`', i + 1);
       if (j < 0) break;
+      if (syntax === 'posix' && s.slice(i + 1, j).includes('\\')) {
+        block('escaped legacy backtick substitution cannot be inspected reliably', 'Use $(...) with an explicit shell.');
+      }
       out.push(s.slice(i + 1, j));
       i = j;
     }
@@ -129,14 +170,27 @@ function substitutions(s, syntax) {
   return out;
 }
 
-function tokenize(seg) {
+function tokenize(seg, syntax) {
   const out = [];
   let cur = '';
   let quote = null;
   let started = false;
-  const flush = () => { if (started) out.push(cur); cur = ''; started = false; };
+  const flush = () => { if (started) out.push({ value: cur, operator: false }); cur = ''; started = false; };
   for (let i = 0; i < seg.length; i++) {
     const c = seg[i];
+    if (posixEscape(seg, i, quote, syntax)) {
+      if (seg[i + 1] !== '\n') { cur += seg[i + 1]; started = true; }
+      i++;
+      continue;
+    }
+    const next = nextLogical(seg, i + 1, syntax);
+    if (syntax === 'posix' && quote !== "'" && c === '$' && seg[next] === '(') {
+      const end = substitutionEnd(seg, next + 1, syntax);
+      cur += '$(' + seg.slice(next + 1, end + 1);
+      started = true;
+      i = end;
+      continue;
+    }
     if (quote) {
       if (c === quote) quote = null; else cur += c;
       continue;
@@ -148,7 +202,7 @@ function tokenize(seg) {
       if (c === '>' && /^[0-9&]$/.test(cur)) { op = cur + op; cur = ''; started = false; } else flush();
       while (seg[i + 1] === c) { op += c; i++; }
       if (c === '>' && seg[i + 1] === '&' && /[0-9-]/.test(seg[i + 2] ?? '')) { op += `&${seg[i + 2]}`; i += 2; }
-      out.push(op);
+      out.push({ value: op, operator: true });
       continue;
     }
     cur += c;
@@ -163,10 +217,11 @@ function splitRedirects(tokens) {
   const outputs = [];
   const inputs = [];
   for (let i = 0; i < tokens.length; i++) {
-    const t = tokens[i];
+    const { value: t, operator } = tokens[i];
+    if (!operator) { words.push(t); continue; }
     if (/^[0-9&]?>>?&[0-9-]$/.test(t)) continue; // 2>&1
-    if (/^[0-9&]?>>?$/.test(t)) { if (tokens[i + 1] !== undefined) outputs.push(tokens[++i]); continue; }
-    if (t === '<') { if (tokens[i + 1] !== undefined) inputs.push(tokens[++i]); continue; }
+    if (/^[0-9&]?>>?$/.test(t)) { if (tokens[i + 1] !== undefined) outputs.push(tokens[++i].value); continue; }
+    if (t === '<') { if (tokens[i + 1] !== undefined) inputs.push(tokens[++i].value); continue; }
     if (/^<<<?$/.test(t)) { i++; continue; } // heredoc delimiter or here-string
     words.push(t);
   }
@@ -177,6 +232,7 @@ function splitRedirects(tokens) {
 let cwd = input.cwd || projectDir; // effective directory; null once it cannot be known
 const dirStack = [];
 const branchStates = new Map(); // effective branches by worktree root; null means unknown
+let unknownBranchSwitch = false;
 
 function locate(rawToken, dir = cwd) {
   let t = String(rawToken).replace(/\\/g, '/');
@@ -252,7 +308,8 @@ function repositoryRoot(dir) {
 }
 function currentBranch(dir) {
   const root = repositoryRoot(dir);
-  if (!root) return null;
+  // A later textual switch may fail at runtime; uncertainty lasts for this whole call.
+  if (!root || unknownBranchSwitch) return null;
   if (!branchStates.has(root)) branchStates.set(root, gitOut(['rev-parse', '--abbrev-ref', 'HEAD'], dir));
   return branchStates.get(root);
 }
@@ -342,8 +399,8 @@ function analyzeGit(words, k, stdinFiles) {
     const next = branchAfterSwitch(sub, args, dir);
     if (next !== undefined) {
       const root = repositoryRoot(dir);
-      if (!root) block(`cannot determine the repository for git ${sub}`, 'Run it from a known repository directory.');
-      branchStates.set(root, next);
+      if (!root) { unknownBranchSwitch = true; branchStates.clear(); }
+      else branchStates.set(root, next);
     }
   }
   if (['commit', 'merge', 'cherry-pick', 'rebase', 'am', 'revert'].includes(sub)) {
@@ -475,7 +532,7 @@ function extractionTargets(name, args) {
 
 // ---- Main analysis -------------------------------------------------------------------------
 function analyzeSegment(seg, depth, syntax) {
-  const { words, outputs, inputs } = splitRedirects(tokenize(seg));
+  const { words, outputs, inputs } = splitRedirects(tokenize(seg, syntax));
   for (const target of outputs) {
     const rule = protectedRule(target);
     if (rule) block(`redirecting output into ${target} (${rule.why})`, 'Ask the owner.');
@@ -561,7 +618,8 @@ function analyzeSegment(seg, depth, syntax) {
 
   // Nested shell strings are analyzed as commands; inline interpreter code is checked for locked paths.
   if (SHELLS.has(name) || name === 'eval') {
-    const j = name === 'eval' ? -1 : args.findIndex((a) => SHELL_FLAG.test(a));
+    const j = name === 'eval' ? -1 : args.findIndex((a) => SHELL_FLAG.test(a)
+      || (name === 'cmd' && /^\/\/[ck]$/i.test(a)));
     const nested = name === 'eval' ? args.join(' ') : (j >= 0 ? args.slice(j + 1).join(' ') : null);
     if (nested !== null && nested !== '') {
       if (name === 'eval') analyzeCommand(nested, depth + 1, syntax);
