@@ -1056,3 +1056,62 @@ the scoped result and limits in `docs/reviews/BOOT-001-r8.md`, update handoff/PR
 stage, scan and commit if checks pass. Do not edit controls or push. The owner confirms the
 application when handing off, and pushes separately after review. CI evidence must identify
 the exact pushed head; do not add the approval label while F10 is open.
+
+## Owner decision D-006: approval by permission prompt (request to Codex), 2026-10-20
+
+Shortly after 19:41 +07 the owner asked Claude to apply r8. Claude tried it once, and guard-bash blocked it
+as designed:
+
+```text
+Blocked by .claude/hooks/guard-bash.mjs: git apply would change .claude/hooks/guard-bash.mjs (Claude Code settings, hooks, agents or skills). Locked paths are owner-only; ask the owner to apply this patch.
+```
+
+The owner then decided (D-006 in DECISIONS.md) that Claude may run two commands itself, with
+the owner approving through Claude Code's permission prompt instead of pasting them:
+`git apply` of a patch in `docs/proposals/`, and a non-force `git push` of the task branch.
+r8 is not affected and is still applied by the owner under the current rule.
+
+Request to Codex: write `docs/proposals/BOOT-001-r9-controls.patch` on the head that contains
+the reviewed r8. Requirements:
+
+1. `.claude/settings.json`:
+   - Remove `Bash(git push)` and `Bash(git push *)` from `deny`.
+   - Add `ask` rules for `git push` and for `git apply docs/proposals/*`.
+   - Keep the deny rules for `git reset --hard` and `git clean`.
+   - No `allow` rule may cover these commands.
+2. `guard-bash.mjs`, push:
+   - Allow `git push` only when no force is involved: no `-f`, `--force`, `--force-with-lease`,
+     `--force-if-includes`, `--mirror`, `--delete` or `-d`, `--all`, or a refspec starting
+     with `+`.
+   - The destination must not be `main` or `master`, explicitly or through the current branch.
+   - Every other form stays blocked.
+3. `guard-bash.mjs`, apply:
+   - Allow `git apply` of a locked-path patch only when every patch file resolves to a regular
+     file directly under `docs/proposals/`.
+   - Patches from anywhere else keep the current block, and so do `git am` and `patch`.
+4. Either command must be the only command in its invocation: no `;`, `&&`, pipes,
+   substitutions or nested shells. The prompt then shows exactly one action. Combined forms stay
+   blocked.
+5. The post-run check stays unchanged.
+   - Amend the CLAUDE.md rule: when the post-run check reports exactly the files of a patch that
+     the owner approved in the immediately preceding prompted `git apply`, Claude verifies the
+     handoff's applied hashes and continues.
+   - Any other report still means stop and ask (N6).
+6. Text:
+   - AGENTS.md "Agent roles", "Authority" and "Git" must describe the prompt-approved
+     apply/push.
+   - CLAUDE.md "Claude Code only" gets the same description.
+   - "Agents never ... merge" is unchanged.
+7. Tests in `scripts/controls/test-controls.mjs`:
+   - Update the existing push and locked-patch block assertions.
+   - Add allowed and blocked cases for every bullet above.
+   - Add a settings assertion that the two commands are `ask`, not `allow` or `deny`.
+   - Show fail-before and pass-after, and keep the original tests otherwise unchanged.
+8. Live check before relying on it:
+   - In the owner's own Claude Code session and permission mode, show that both commands
+     produce a permission prompt and run only after Allow.
+   - D-004 notes that bypassPermissions skips `ask` rules, and auto mode is unproven.
+   - If either prompt does not appear, the change must not go into use.
+
+The owner applies r9 (the last paste under the old rule), a fresh Claude session reviews it,
+and then the live check above runs.

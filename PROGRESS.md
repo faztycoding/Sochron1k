@@ -1,11 +1,12 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-20 by Codex · proposal r8 สำหรับ F10 พร้อมให้เจ้าของ apply · candidate 61/61, skipped 0 · controls จริงยังเป็น r7; F10 ยังรอ independent review
+Updated 2026-10-20 by Claude Code · เจ้าของตัดสิน D-006 (apply/push ผ่านหน้าต่าง Allow) รอ Codex ทำ r9 · r8 สำหรับ F10 ยังรอเจ้าของ apply
 
 ## Current task
 BOOT-001 v1 · State FIXING · F3 และ F7 ปิดแล้ว · F9 ปิดสำหรับรูปแบบที่บันทึกไว้ (review r7) · **F10 High เปิดอยู่:** comment ที่ลงท้ายด้วย backslash กลืนบรรทัดถัดไป ทำให้ guard มองไม่เห็น `cd` → AC-04 FAIL · F11–F15 Medium (มีอยู่แล้วตั้งแต่ก่อน r7) ย้ายไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน · Low ที่ค้าง: F8 ส่วน Monitor/case, F16, F17
 Branch `chore/BOOT-001-project-bootstrap` · controls r7 อยู่ที่ `077c3a1`, review r7 ที่ `b662232` ซึ่งเป็น base ของ proposal r8 · checkpoint รอบนี้แก้เฉพาะ handoff/PROGRESS; ไม่ apply หรือ push · Linux CI ล่าสุดที่ยืนยันยังเป็นของ `7eae474`
 
 ## Done (with evidence)
+- 2026-10-20 หลัง 19:41 +07: เจ้าของสั่งให้ Claude apply r8 → Claude ลองหนึ่งครั้ง guard-bash บล็อกตามออกแบบ (ข้อความเต็มอยู่ใน handoff) · เจ้าของตัดสิน D-006 ให้ apply/push ผ่านหน้าต่าง Allow แทน → บันทึก D-006 ใน DECISIONS.md และข้อกำหนดถึง Codex ใน handoff · r8 ยังไม่ apply
 - 2026-10-20 19:21 +07: Codex เตรียม `docs/proposals/BOOT-001-r8-controls.patch` SHA256 `20cde61370c60ace51f55b35a2222ace850dfa93c72854bba1babaad92ecf1b6` สำหรับ F10 ตาม review r7 · patch เพิ่มบน r7 ที่ commit แล้ว; ไม่ apply r6/r7 ซ้ำ · แตะ guard/test เท่านั้น
 - กฎ comment แยก newline จริงออกจาก line continuation และจำว่า `#` เริ่มคำหรือเป็นข้อความ · รักษา quote ของ parameter/substitution เพื่อไม่ให้การแก้ F10 ซ่อนคำสั่งที่ตามมา · เพิ่ม 7 กลุ่ม regression; source เดิมทั้ง 54 tests คงเดิมทุก byte · before 56 ผ่าน/5 ล้ม → candidate 61/61, skipped 0 (19:20:52–19:21:27) · F10 ทั้งสอง input เปลี่ยน 0→2 ด้วยเหตุผล locked settings
 - `git apply --check` PASS (19:21:40) · hash controls จริงทั้ง 4 ไฟล์ไม่เปลี่ยน · fixture แยก TMP/TEMP/TMPDIR และ Git config; payload ส่ง JSON ให้ hook เท่านั้น · draft แรกมีปัญหา quoted parameter ที่ผู้ช่วยตรวจพบ แก้พร้อม permanent regression แล้ว; draft1 เก็บเป็นหลักฐานเท่านั้น ห้าม apply
@@ -114,8 +115,9 @@ Codex ชี้ (หลัง review r5 static) ว่า Claude เปลี่
 - Approved: เจ้าของขอให้ตั้งโปรเจกต์ (2026-10-18), ส่ง review r1 มาให้แก้, สั่ง commit แยกส่วน สั่งให้ apply patch r1 (2026-10-19, ครั้งเดียวสำหรับ patch นี้), ให้ส่งงานไปมาระหว่าง Claude กับ Codex ได้ และให้ checkpoint ตามกติกาทุกครั้งที่จบงานหนึ่งขั้น · ไม่มีอนุมัติให้ agent merge หรือเชื่อมโบรกเกอร์ · push ถูกบล็อกด้วย deny rule จึงเป็นของเจ้าของ
 
 ## Next safe action
-- เจ้าของ: push เมื่อพร้อม เพื่อดู Linux CI บน head ใหม่ (54 tests)
-- เจ้าของ: apply `docs/proposals/BOOT-001-r8-controls.patch` อย่างเดียว → Claude session ใหม่ตรวจ F10 และผลกระทบขอบเขต comment/parameter, ตรวจ applied hashes, รัน 61 tests และเขียน `docs/reviews/BOOT-001-r8.md` → stage/scan/commit เมื่อผ่าน → เจ้าของ push แยกและดู CI บน head ใหม่
+- เจ้าของ: apply `docs/proposals/BOOT-001-r8-controls.patch` เอง (ยังใช้กฎเดิม; Claude ลองแล้ว guard บล็อกตามออกแบบ) → Claude เปิด session ใหม่แบบ headless ตรวจ F10 และขอบเขต comment/parameter, ตรวจ applied hashes, รัน 61 tests, เขียน `docs/reviews/BOOT-001-r8.md` → stage/scan/commit เมื่อผ่าน
+- **D-006 (เจ้าของตัดสิน 2026-10-20):** Claude รัน `git apply` ของ patch ใน `docs/proposals/` และ `git push` (branch งาน, ไม่ force) เอง โดยเจ้าของกด Allow แทนการวางคำสั่ง · Codex ทำ `BOOT-001-r9-controls.patch` บน head ที่มี r8 ตามข้อกำหนดใน handoff หัวข้อ "Owner decision D-006" → เจ้าของ apply เป็นครั้งสุดท้าย → Claude session ใหม่ตรวจ → พิสูจน์ใน session จริงว่าหน้าต่าง Allow เด้งก่อนเปิดใช้
+- เจ้าของ: push ได้ตลอดด้วยการวางคำสั่ง จนกว่า D-006 จะใช้งานได้ · ดู Linux CI บน head ที่ push จริง
 - F8 ส่วนที่เหลือต้องมี contract/หลักฐาน shell ของ Monitor และการวิเคราะห์ branch ของ case ก่อนแก้; ไม่เดา syntax เพื่อทำให้คำสั่งผ่าน
 - ยังไม่ติด label `owner-approved-control-change`: F10 High ยังเปิด · ติดได้เมื่อไม่มี finding High ค้างและ CI เขียว
 - หลัง merge: ตั้ง branch protection ให้ `control-gate / locked-paths` และ `ci / control-plane` เป็น required

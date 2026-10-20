@@ -42,3 +42,23 @@ Decision: สร้าง skills จาก Prompt Library ของ handbook เ
 Why: ขั้นตอนตรงกับ handbook ทุกตัว ไม่มี supply-chain risk และไม่มีคำสั่งขัดกัน (เช่น skill ภายนอกที่ให้ implementer เขียน test เอง)
 Consequences: ยังไม่ได้ทำ eval อัตโนมัติของ skills (SKIPPED) วัดผลจากการใช้งานจริงและ rules-review รายสัปดาห์แทน
 Review when: D-001 ได้รับการยอมรับ (พิจารณา candidate ด้าน Python เช่น pyright-lsp, astral) · skill ไม่ถูกเรียกเมื่อควรถูกเรียก หรือถูกเรียกผิดงาน
+
+## D-006 เจ้าของอนุมัติด้วยปุ่ม Allow: Claude รัน `git apply` ของ patch ใน `docs/proposals/` และ `git push` เอง — 2026-10-20 — accepted (เจ้าของเลือกในแชท Claude) · ยังไม่ implement
+Context: ตาม D-004 และ AGENTS.md เจ้าของต้อง copy คำสั่งไปวางเองทุกครั้งที่ apply patch ไฟล์ล็อกหรือ push · 2026-10-20 guard บล็อก `git apply` ของ r8 ที่เจ้าของสั่งให้ Claude รัน เจ้าของไม่ต้องการรันเองอีก ("ตั้ง project rule ให้มึงรัน terminal ให้กู")
+Decision: ย้ายการอนุมัติจาก "เจ้าของพิมพ์คำสั่งเอง" ไปเป็น "หน้าต่างขออนุญาตของ Claude Code ที่เจ้าของกด Allow" สำหรับสองคำสั่งเท่านั้น:
+- `git apply` ของไฟล์ patch ใน `docs/proposals/`
+- `git push` ไป branch งาน แบบไม่ force
+
+ที่ยังบล็อกเหมือนเดิม:
+- force push (`-f`, `--force`, `--force-with-lease`, refspec ที่ขึ้นต้นด้วย `+`)
+- push ไป main
+- reset --hard และ clean
+- การเขียนไฟล์ล็อกด้วยวิธีอื่น
+- การอ่าน credential
+
+ส่วน review โดย session ใหม่, CI control-gate และ label ของเจ้าของ ยังเป็น gate ก่อน merge เหมือนเดิม
+Implementation: ต้องแก้ไฟล์ล็อก ได้แก่ `.claude/settings.json` (ย้ายไปอยู่ใน ask), `guard-bash.mjs`, `test-controls.mjs`, CLAUDE.md และ AGENTS.md · Codex ทำเป็น patch, เจ้าของ apply เป็นครั้งสุดท้ายตามกฎเดิม, แล้ว Claude session ใหม่ตรวจ · รายละเอียดอยู่ใน `docs/handoff/BOOT-001.md` หัวข้อ "Owner decision D-006"
+Before use: ต้องพิสูจน์ใน session จริงของเจ้าของว่าหน้าต่าง Allow เด้งขึ้นสำหรับทั้งสองคำสั่ง ในโหมด permission ที่เจ้าของใช้อยู่ เพราะ D-004 บันทึกไว้ว่า bypassPermissions ทำให้ ask rules ไม่ถาม และ auto mode ยังไม่ได้พิสูจน์ · ถ้าหน้าต่างไม่เด้ง ห้ามเปิดใช้
+Risk: ปุ่ม Allow เป็นด่านเดียวก่อนไฟล์ล็อกเปลี่ยน หรือก่อน push ออกนอกเครื่อง · ถ้ากดโดยไม่อ่านคำสั่ง จะเหลือแค่ review, CI และ label ที่กั้นก่อน merge · patch ใน `docs/proposals/` ถูกเขียนโดย agent
+Supersedes (เมื่อ implement และพิสูจน์แล้ว): ส่วนของ D-004 ที่ให้ "เจ้าของเป็นคน `git apply` เอง" และ "agent ห้าม push"
+Review when: มีการ apply หรือ push ที่เจ้าของไม่ได้ตั้งใจ · Claude Code เปลี่ยนพฤติกรรมของ ask rule หรือโหมด permission
