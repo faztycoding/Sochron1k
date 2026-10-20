@@ -2,6 +2,12 @@
 Updated 2026-10-20 23:58 +07 by Claude (session ใหม่แบบ headless) · **PR #1 merged** โดยเจ้าของ 23:07:40 (`7b6a841`, มี label) · เจ้าของ apply r11 แล้ว → review r11 (`docs/reviews/BOOT-001-r11.md`) ตรวจแล้ว · commit ไฟล์ล็อก 2 ไฟล์ที่เจ้าของ apply พร้อมเอกสารบน `chore/BOOT-001-ac05-control-gate` · ยังไม่ push (parent session push เอง)
 
 ## Current task
+**SPIKE-001 v1.1 · State: รอเจ้าของอนุมัติ** · branch `spike/SPIKE-001-mt5-time` จาก main `0916776`
+- ผล dependency admission (Codex, 02:39–02:45): `MetaTrader5==5.0.6231` + `numpy==2.5.4` เป็น SPIKE FIRST · `tzdata==2026.5`, `pytest==9.1.1` และ transitive 5 ตัว ADMIT เฉพาะ spike
+- บัญชีที่เจ้าของระบุ: Exness `Exness-MT5Trial14` Demo ลงท้าย 8107, Read Only, hedging, สัญลักษณ์ `XAUUSDm` · ใช้ได้ถึง 2026-10-28 23:59 +07
+- ยังไม่เชื่อมต่อด้วยโปรแกรม จนกว่าเจ้าของจะอนุมัติทั้ง contract และผล dependency admission
+
+**BOOT-001: merged** (PR #1 `7b6a841`, 2026-10-20 23:07) · AC-05 ผ่านบน PR #2 (`0916776`) · main ถูกป้องกันด้วย required checks `control-plane` และ `locked-paths` · ที่ยังเปิดอยู่ดู D-007, D-008 และ review r11 · ประวัติด้านล่าง
 BOOT-001 v1 · State FIXING · F3, F7, F10 และ F18 ปิดแล้ว (F18 ใน review r9) · F9 ปิดสำหรับรูปแบบที่บันทึกไว้ (review r7) · ไม่มี finding High ค้าง · **F20 Medium ใหม่ (ต้นเหตุเดียวกับ F18 แต่ไม่ใช่ regression):** `#` ที่ติดหลัง `)` ของ `@(…)` หรือ `a=(…)` ถูก guard อ่านเป็น comment → เจ้าของเลือกที่วาง · F19 และ F11–F15 Medium ไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน · Low ที่ค้าง: F8 ส่วน Monitor/case (มีเหตุการณ์จริงเพิ่มใน r11), F16, F17, F21 (inspection ที่พ่วงคำสั่งอื่นถูกบล็อก), F24 (ADS `file.patch:stream` ได้ข้อยกเว้น apply), F25 (hardlink ใน `docs/proposals/` ได้ข้อยกเว้น) · F22 ปิดบน Windows (Linux รอ CI) และ F23 ปิดแล้วใน review r11 · AC-04 FAIL ตามข้อความ contract: ข้อ push ต้องแก้ตาม D-006 และ Medium ที่ค้างยังเขียนไฟล์ล็อกผ่านได้
 Branch `chore/BOOT-001-project-bootstrap` merge แล้วผ่าน PR #1 (`7b6a841`, 23:07:40) · งานต่อหลัง merge อยู่บน branch `chore/BOOT-001-ac05-control-gate` จาก `7b6a841` ตามแผนใน handoff หัวข้อ "After merge: AC-05 proof PR" · CI ล่าสุดก่อน merge: `control-plane` success บน `5fa6667`
 
