@@ -44,6 +44,7 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 - J2 ลงทะเบียนสมมติฐาน → backtest พร้อมต้นทุน → registry → รายงานเทียบ random-entry → เจ้าของตัดสิน → SLICE-R1
 - J3 ส่งคำสั่ง Demo ผ่าน risk gate → MT5 ยืนยัน SL → ปิด → reconcile → SLICE-E1
 - J4 หยุด, กู้คืน, reconcile แล้วทำต่อหลัง restart → SLICE-E1 / OPS-1
+- J5 ทบทวน journal ("paper journey", เจ้าของตัดสิน 2026-10-21): ทุกไม้บันทึกเหตุผลเข้าก่อนส่งคำสั่ง และหลังปิดถูกจำแนกว่าทำไมได้หรือเสีย (trade attribution: market move, spread, slippage, swap, reason code) → เจ้าของกับ agent ทบทวนสรุปเป็นรอบ → ข้อเสนอแก้กฎกลายเป็นสมมติฐานรุ่นถัดไป (H00n+1) ที่ต้องลงทะเบียนและทดสอบใหม่ · กลยุทธ์ที่รันอยู่ไม่เปลี่ยนตัวเอง → SLICE-R1 (รายงาน) / SLICE-E1 (journal)
 
 ## 5. Data
 | Data | Class | Source of truth | Retention | Who can access |
@@ -85,7 +86,7 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 | Q-03 | ชื่อสัญลักษณ์และ contract spec ของ XAU/USD ที่โบรกเกอร์ใช้ | SPIKE-001 | — | บางส่วนตอบแล้ว: ชื่อ `XAUUSDm` (เจ้าของ 2026-10-21) · contract spec ยัง TBD (SPIKE-001 AC-03) |
 | Q-04 | ค่า risk policy 0.25% / 0.75% / 2% และผู้มีสิทธิ์ปลด halt | เจ้าของ | ก่อน SLICE-E1 | TBD (open) |
 | Q-05 | ชั่วโมงเทรดและนโยบายถือข้ามคืน | เจ้าของ | ก่อน H001 | TBD (open) |
-| Q-06 | สมมติฐานแรก (PA01 จากรอบก่อน หรือไอเดียใหม่) | `/register-hypothesis` | ก่อน SLICE-R1 | TBD (open) |
+| Q-06 | สมมติฐานแรก (PA01 จากรอบก่อน หรือไอเดียใหม่) | `/register-hypothesis` | ก่อน SLICE-R1 | ตอบแล้ว (เจ้าของ 2026-10-21): ไอเดียใหม่แนว quantitative = H001 volatility-normalized momentum + Donchian breakout บน M15 (`docs/hypotheses/H001-m15-momentum-breakout.md`) · ตัวกรองข่าวแรงเป็น H002 แยก · z-score mean reversion และ macro score เป็น H ถัดไป |
 | Q-07 | ความลึกข้อมูลจากโบรกเกอร์พอไหม ถ้าไม่พอจะใช้แหล่งอื่นหรือไม่ (license) | SPIKE-001 | — | TBD (open) |
 | Q-08 | วัน cutoff ของ holdout และที่เก็บนอกเครื่องวิจัย | เจ้าของ | ก่อน SLICE-R1 | ที่เก็บตอบแล้ว (เจ้าของ 2026-10-21): Windows VPS ที่เป็น acquisition host · วัน cutoff ยัง TBD |
 | Q-09 | Demo runner จะรันที่ไหน (เครื่องนี้ หรือ Windows VPS) | เจ้าของ | ก่อน OPS-1 | ตอบแล้ว (เจ้าของ 2026-10-21): Windows VPS ในอนาคต ส่วนระยะนี้ใช้เครื่องนี้ไปก่อน (`docs/architecture.md` ข้อ 6.1) |
@@ -102,3 +103,4 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 | 2026-10-20 | ติดป้าย [A]/TBD ตาม review AC-08 (F1, F3): retention ในข้อ 5, คอลัมน์ Status ในข้อ 9 และเพิ่ม Q-12 · ไม่เปลี่ยนค่าใดๆ | เจ้าของ (ให้ปิด AC ของ BOOT-001) | ไม่มีผลต่อเวลา/ค่าใช้จ่าย · แก้ AC-08 |
 | 2026-10-21 | Q-02 และ Q-03 ตอบบางส่วนจากข้อมูลบัญชี Demo ที่เจ้าของแจ้ง (Exness, server, hedging, `XAUUSDm`) | เจ้าของ (เตรียม SPIKE-001) | ไม่มีผลต่อเวลา/ค่าใช้จ่าย |
 | 2026-10-21 | ข้อ 5 และ 8 ปรับตามการแยกเครื่องของ D-001 (Windows VPS เป็นเป้าหมาย, ระยะนี้ใช้เครื่องเดียวแบบจำกัด, ด่าน ENV-1 ก่อนวิจัย) ตาม review D-001 r2 F3 | เจ้าของ (เลือก VPS) | มีค่า VPS (Q-10) · งานวิจัยเริ่มได้หลัง ENV-1 |
+| 2026-10-21 | Q-06 ตอบแล้ว (H001 momentum + breakout M15, ข่าวเป็น H002) · เพิ่ม journey J5 trade attribution แบบ journal-driven · research memo ใน `docs/research/H001-background.md` | เจ้าของ (ให้ทิศทางกลยุทธ์) | ไม่มีผลต่อเวลา/ค่าใช้จ่าย · H002 ต้องมีแหล่งข้อมูลปฏิทินที่ผ่าน admission |

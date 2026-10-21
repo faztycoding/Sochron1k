@@ -1,5 +1,5 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-21 08:3x +07 by Claude Code · **CORE-001 timebase implemented, tests 19/19 เขียว** บน `feat/CORE-001-timebase` · D-012 accepted, environment สร้างแล้ว · รอ Codex cross-agent review แล้วเปิด PR (ต้องติด label) · H001 + memo อยู่บน `research/H-001-momentum-breakout` รอ PR · D-001 accepted, AGENTS.md ตาม D-001 merge แล้ว (PR #6)
+Updated 2026-10-21 09:0x +07 by Claude Code · **CORE-001 timebase: review r2 answered (F1–F5 แก้ครบ), tests 24/24 เขียว** บน `feat/CORE-001-timebase` · รอ Codex re-review r3 แล้วเปิด PR (ต้องติด label) · H001 merge เข้า main แล้ว (PR #7) และ merge main เข้า branch นี้แล้ว · D-001 accepted, AGENTS.md ตาม D-001 merge แล้ว (PR #6)
 
 ## Current task
 **CORE-001 · State: review r2 answered (F1–F3 closed by reviewer, F4–F5 fixed, 24/24 tests green); next: merge origin/main into the branch (owner approved), Codex re-review r3, then PR** · branch `feat/CORE-001-timebase` จาก main `90278b4` · contract `docs/contracts/CORE-001-timebase.md` · หลักฐาน `docs/evidence/CORE-001.md`
@@ -11,8 +11,15 @@ Updated 2026-10-21 08:3x +07 by Claude Code · **CORE-001 timebase implemented, 
 - prefix `CORE-` สำหรับ contract ของส่วน pure เพราะชื่อ branch ต้องผ่าน guard (F26)
 
 ## Previous task
+**H001 · State: registered (UNPROVEN), merge เข้า main แล้ว (PR #7)** · branch `research/H-001-momentum-breakout` จาก main `90278b4` (เปลี่ยนชื่อจาก `research/H001-…` เพราะ guard ไม่รับ, ดู F26) · ไฟล์ `docs/hypotheses/H001-m15-momentum-breakout.md` immutable หลัง commit `0c392a9`
+- เจ้าของตัดสิน (2026-10-21 ราว 07:20): timeframe M15 · ตัวกรองข่าวแรงเป็น H002 แยก (ต้องมีแหล่งปฏิทินที่ผ่าน admission; Python API ของ MT5 ไม่มี calendar) · การเรียนรู้แบบ journal-driven: กลยุทธ์ที่รันอยู่ freeze, ทุกไม้มี trade attribution, ข้อเสนอแก้กฎ = H รุ่นใหม่ · ทำ research memo และตรวจ skill 3 ตัว
+- เจ้าของอนุมัติตัวเลขทั้งหมดของ H001 ตามร่าง (ราว 07:40) รวม holdout cutoff 2025-01-01 ซึ่งเป็นคำตอบ Q-08 สำหรับ H001 (ผู้ถือ = เจ้าของ บน acquisition host)
+- **ห้ามรัน backtest ของ H001** จนกว่า ENV-1 ผ่านและมี contract SLICE-R1 ที่อนุมัติ
+- `docs/research/H001-background.md`: หลักฐาน vs ความเห็นแยกชัด · ไม่มีหลักฐานสาธารณะว่า momentum/Donchian ทำกำไรบนทอง M15 หลังต้นทุน · แหล่งปฏิทินสำหรับ H002 ต้องผ่าน admission · ชุด reason code สำหรับ journal เสนอไว้แล้ว
+- skill admission: r1 (`docs/reviews/TOOLING-admission-r1.md`) BLOCKED เพราะ curl ใน sandbox ของ Codex ติด TLS · r2 (`docs/reviews/TOOLING-admission-r2.md`, อ่านครบ 104 ไฟล์จาก sparse clone ที่ SHA `a313174`): `property-based-testing` และ `dimensional-analysis` เสนอ **SPIKE FIRST** (ทดลองแบบจำกัดก่อน), `supply-chain-risk-auditor` เสนอ **REJECT ที่ pin นี้** (อ่าน token ผ่าน `gh auth token` แม้ `--offline` และอาจเรียก `pip-audit` ใน PATH) · **เจ้าของตัดสิน (ราว 08:00):** อนุมัติ SPIKE FIRST เฉพาะ `property-based-testing` (ทดลองเมื่อเริ่ม contract แรกของ timebase/costs/risk โดย Codex ในบทบาท test author; Hypothesis ต้องผ่าน admission แยก) · อีกสองตัวยังไม่ตัดสิน คงเป็น candidate · ยังไม่ติดตั้งอะไร · บันทึกใน `docs/tooling/registry.md`
+- H ถัดไปที่ยังไม่ลงทะเบียน: H002 news no-trade window · H003 z-score mean reversion · macro score ภายหลัง
+- **F26 (guard-bash, Low, พบ 2026-10-21 07:5x):** `checkTaskPush` ยอมรับเฉพาะ branch `<type>/<ID>-<slug>` ที่ ID ตรง `[A-Z][A-Z0-9]*-\d+` จึงปฏิเสธ `research/H001-…` (รหัสสมมติฐานไม่มีขีด) และจะปฏิเสธ `SLICE-R1`, `SLICE-E1` ตามแผนด้วย · ทางแก้ชั่วคราว: ตั้งชื่อ branch ให้ ID มีขีดก่อนตัวเลข เช่น `H-001`, หรือใช้รหัส contract แบบ `ENV-1`, `OPS-1` · ทางแก้ถาวร: patch guard ในงาน guard-fix ถัดไป (ไฟล์ล็อก ต้อง apply/review/label)
 
-## Current task
 **D-001 · State: accepted (เจ้าของ 2026-10-21 ราว 06:55)** · ขอบเขตการอนุมัติอยู่ใน DECISIONS.md D-001 (ไม่รวม dependency, การวิจัยก่อน ENV-1 และการส่งคำสั่ง) · branch `chore/D-001-architecture-revision` (ต่อจาก `ddffeb4`) · ย้ายกลับมาทำที่โฟลเดอร์หลักแล้ว ลบ worktree แยกที่สะอาดไปแล้ว
 - เจ้าของตัดสิน F1 (2026-10-21):
   - เป้าหมายคือ MT5 บน Windows VPS ทำหน้าที่ acquisition/execution host
