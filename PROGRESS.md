@@ -1,5 +1,13 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-21 07:0x +07 by Claude Code · **D-001 accepted** (ราว 06:55, PR #5) · AGENTS.md แก้ตาม D-001 บน `chore/D-001-agents-phase`: apply ตาม D-006 แล้ว (หลักฐานสดว่า F22 แก้แล้ว), Codex review ไม่มี finding · รอเจ้าของติด label และ merge · ถัดไป: contract ENV-1 หรือส่วน pure
+Updated 2026-10-21 08:2x +07 by Claude Code · **CORE-001 timebase approved** (acceptance 7 ข้อ) บน `feat/CORE-001-timebase` · Codex กำลังทำ dependency admission ระดับโปรเจกต์ (tzdata, pytest) และเขียน tests ที่ล็อกเป็น patch · H001 + memo อยู่บน `research/H-001-momentum-breakout` รอ PR · D-001 accepted, AGENTS.md ตาม D-001 merge แล้ว (PR #6)
+
+## Current task
+**CORE-001 · State: approved; waiting for admission (D-012) and Codex tests** · branch `feat/CORE-001-timebase` จาก main `90278b4` · contract `docs/contracts/CORE-001-timebase.md`
+- ขอบเขต: `sochron.timebase` (TimeRule ที่มีหลักฐาน, raw ↔ UTC, หน้าต่าง New York 03:00–15:59 ข้าม DST, วันไทย, bar_open, classify_offset) · pure, ไม่อ่านนาฬิกา, ไม่ import MetaTrader5
+- ลำดับ: Codex admission (tzdata==2026.5 runtime, pytest==9.1.1 dev) → เจ้าของอนุมัติ D-012 → Claude สร้าง `pyproject.toml`/`uv.lock` → Codex tests เป็น `docs/proposals/CORE-001-tests.patch` → Claude apply ตาม D-006 + session ใหม่ตรวจ + commit (red) → implement จนเขียว → review → PR (ต้องติด label เพราะแตะ tests ที่ล็อก)
+- prefix `CORE-` สำหรับ contract ของส่วน pure เพราะชื่อ branch ต้องผ่าน guard (F26)
+
+## Previous task
 
 ## Current task
 **D-001 · State: accepted (เจ้าของ 2026-10-21 ราว 06:55)** · ขอบเขตการอนุมัติอยู่ใน DECISIONS.md D-001 (ไม่รวม dependency, การวิจัยก่อน ENV-1 และการส่งคำสั่ง) · branch `chore/D-001-architecture-revision` (ต่อจาก `ddffeb4`) · ย้ายกลับมาทำที่โฟลเดอร์หลักแล้ว ลบ worktree แยกที่สะอาดไปแล้ว

@@ -1,7 +1,7 @@
 # TASK CORE-001 — timebase: โมดูลเวลาเดียวของระบบ (raw MT5 ↔ UTC, sessions แบบ New York, DST, วันไทย)
 
 Version v1 · Owner เจ้าของ repository · Parent SPEC J2/J3 (ทุกเส้นทางต้องแปลงเวลาผ่านโมดูลเดียว) · `docs/architecture.md` ข้อ 8 แถว `timebase` และข้อ 13a แถว "R1 time/data" · Tier **Standard** · Branch `feat/CORE-001-timebase`
-Status: draft — รอเจ้าของอนุมัติ acceptance
+Status: approved by owner 2026-10-21 (acceptance 7 ข้อและแผน อนุมัติในแชท Claude ราว 08:2x) · ยังรอ: การอนุมัติ dependency ระดับโปรเจกต์และ `pyproject.toml`/`uv.lock` ฉบับแรกหลังผล admission (D-012)
 Hypothesis (research tasks): ไม่ใช่งานวิจัย แต่ให้บริการ H001 (`docs/hypotheses/H001-m15-momentum-breakout.md`, commit `0c392a9`) ซึ่งกำหนดหน้าต่างเข้าไม้ 03:00–15:59 New York และแท่ง M15 ที่สร้างจาก M1
 
 ## Risk tier (Q1–Q6, one line each; unsure = yes)
@@ -130,8 +130,9 @@ sochron.timebase
 ลบ `src/sochron/timebase`, tests ของ CORE-001, `pyproject.toml`, `uv.lock`, `.venv/` แล้วทิ้ง branch ได้ทั้งก้อน ไม่มีผลข้างเคียงนอกเครื่อง · checkpoint ใน PROGRESS.md หลังทุกขั้นที่ผ่าน check
 
 ## DoR status / missing items / next action
-- ขาด: การอนุมัติ acceptance จากเจ้าของ · dependency admission ระดับโปรเจกต์ (D-012) · tests จาก Codex
-- next action: เจ้าของอนุมัติ → Claude สั่ง Codex ทำ admission และ tests
+- ครบ: การอนุมัติ acceptance จากเจ้าของ (2026-10-21)
+- ขาด: dependency admission ระดับโปรเจกต์ (D-012) · tests จาก Codex (patch) · สภาพแวดล้อม uv
+- next action: Codex ทำ admission และ tests → เจ้าของอนุมัติ D-012 → Claude สร้าง environment, apply patch ของ tests ตาม D-006 แล้วลงมือ
 
 ## Done scope
 implementation (ทดสอบผ่านบนเครื่อง, review ปิด, merge แล้ว) · ยังไม่รวม Python CI job
