@@ -72,14 +72,20 @@ def _sides(sides: int) -> int:
     return sides
 
 
+def _on_grid(lots: Decimal, step: Decimal) -> bool:
+    """Whether lots is an integer multiple of step, decided with exact integer arithmetic."""
+    lots_num, lots_den = lots.as_integer_ratio()
+    step_num, step_den = step.as_integer_ratio()
+    return (lots_num * step_den) % (step_num * lots_den) == 0
+
+
 def check_volume(lots: Decimal, model: CostModel) -> Decimal:
     """The same lots when they are finite, in [volume_min, volume_max] and on the volume_step grid."""
     lots = _lots(lots)
-    with localcontext(CONTEXT):
-        if not model.volume_min <= lots <= model.volume_max:
-            raise BadVolume(f"lots {lots} outside [{model.volume_min}, {model.volume_max}]")
-        if lots % model.volume_step != 0:
-            raise BadVolume(f"lots {lots} is not a multiple of {model.volume_step}")
+    if not model.volume_min <= lots <= model.volume_max:
+        raise BadVolume(f"lots {lots} outside [{model.volume_min}, {model.volume_max}]")
+    if not _on_grid(lots, model.volume_step):
+        raise BadVolume(f"lots {lots} is not a multiple of {model.volume_step}")
     return lots
 
 

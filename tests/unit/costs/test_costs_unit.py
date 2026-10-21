@@ -119,3 +119,13 @@ def test_h001_provenance_notes_name_the_unknown_history():
         assert "UNKNOWN" in record.note
     assert H001_COSTS.provenance["spread_fallback_points"].status == "measured"
     assert all(record.as_of == date(2026, 10, 21) for record in H001_COSTS.provenance.values())
+
+
+def test_check_volume_grid_check_never_overflows_the_context():
+    # Review r1 F1: `lots % step` at precision 28 raised InvalidOperation when the integer quotient
+    # needed more than 28 digits; the grid check must stay exact for any finite step.
+    fine = replace(H001_COSTS, volume_step=Decimal("1e-30"), provenance={**H001_COSTS.provenance, "volume_step": SYNTHETIC})
+    assert check_volume(Decimal("1"), fine) == Decimal("1")
+    assert check_volume(Decimal("0.01"), fine) == Decimal("0.01")
+    with pytest.raises(BadVolume):
+        check_volume(Decimal("1.0000000000000000000000000000005"), fine)
