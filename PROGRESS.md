@@ -1,8 +1,9 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-21 08:2x +07 by Claude Code · **CORE-001 timebase approved** (acceptance 7 ข้อ) บน `feat/CORE-001-timebase` · Codex กำลังทำ dependency admission ระดับโปรเจกต์ (tzdata, pytest) และเขียน tests ที่ล็อกเป็น patch · H001 + memo อยู่บน `research/H-001-momentum-breakout` รอ PR · D-001 accepted, AGENTS.md ตาม D-001 merge แล้ว (PR #6)
+Updated 2026-10-21 08:3x +07 by Claude Code · **CORE-001 timebase implemented, tests 19/19 เขียว** บน `feat/CORE-001-timebase` · D-012 accepted, environment สร้างแล้ว · รอ Codex cross-agent review แล้วเปิด PR (ต้องติด label) · H001 + memo อยู่บน `research/H-001-momentum-breakout` รอ PR · D-001 accepted, AGENTS.md ตาม D-001 merge แล้ว (PR #6)
 
 ## Current task
-**CORE-001 · State: approved; waiting for admission (D-012) and Codex tests** · branch `feat/CORE-001-timebase` จาก main `90278b4` · contract `docs/contracts/CORE-001-timebase.md`
+**CORE-001 · State: implemented (19/19 tests green); waiting for Codex review** · branch `feat/CORE-001-timebase` จาก main `90278b4` · contract `docs/contracts/CORE-001-timebase.md` · หลักฐาน `docs/evidence/CORE-001.md`
+- 08:16–08:29: D-012 accepted (`e39b0b0`) · tests ของ Codex apply ตาม D-006 แล้ว session ใหม่ตรวจและ commit red (`85d78bf`, review tests-r1: Low 4 ข้อ จัดการแล้ว) · environment `pyproject.toml`/`uv.lock` (`3da18d1`) · implement `sochron.timebase` → `uv run pytest tests -q` = 19 passed, 0 skipped (08:29:35) ในรันแรก
 - ขอบเขต: `sochron.timebase` (TimeRule ที่มีหลักฐาน, raw ↔ UTC, หน้าต่าง New York 03:00–15:59 ข้าม DST, วันไทย, bar_open, classify_offset) · pure, ไม่อ่านนาฬิกา, ไม่ import MetaTrader5
 - ลำดับ: Codex admission (tzdata==2026.5 runtime, pytest==9.1.1 dev) → เจ้าของอนุมัติ D-012 → Claude สร้าง `pyproject.toml`/`uv.lock` → Codex tests เป็น `docs/proposals/CORE-001-tests.patch` → Claude apply ตาม D-006 + session ใหม่ตรวจ + commit (red) → implement จนเขียว → review → PR (ต้องติด label เพราะแตะ tests ที่ล็อก)
 - prefix `CORE-` สำหรับ contract ของส่วน pure เพราะชื่อ branch ต้องผ่าน guard (F26)

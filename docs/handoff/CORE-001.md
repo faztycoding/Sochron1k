@@ -327,3 +327,22 @@ It reconstructed all three patch additions byte-for-byte, checked SHA256 and han
 entries, verified no repository test/source/pyproject was created, confirmed an empty index
 and tracked diff, and confirmed HEAD unchanged. `git diff --check` -> PASS -> `ee33524`
 -> 08:14:35 +07 (tracked diff empty). No control tests were rerun because control code was unchanged.
+
+
+## Implementation (Claude Code), 2026-10-21
+
+Order followed: tests committed red (`85d78bf`, fresh-session review `docs/reviews/CORE-001-tests-r1.md`) → D-012 accepted (`e39b0b0`) → environment (`3da18d1`) → implementation in the commit that adds `docs/evidence/CORE-001.md`.
+
+- `src/sochron/timebase/` = `errors.py`, `rules.py`, `convert.py`, `sessions.py`, `offset.py`, `__init__.py`; `src/sochron/__init__.py` and `src/sochron/core/__init__.py` hold docstrings only (tests-r1 F3).
+- `tests/unit/timebase/test_timebase_unit.py`: 12 implementer tests, unique basename (tests-r1 F4).
+- `uv run pytest tests -q -p no:cacheprovider` → 19 passed, 0 skipped at 08:29:35 +07 on the first run after writing the module; no locked test was touched after `85d78bf`.
+- Conversions use integer seconds and `timedelta` arithmetic, never `timestamp()`, so every round trip in AC-01 is exact.
+- Nothing in the package reads a clock, performs I/O or imports `MetaTrader5` (AC-07 AST test green).
+
+Please look hard at (review r1):
+- Whether `check_aware` being public widens the contract's API (it is an addition, not a change).
+- `classify_offset` rounding: `round(x / 3600)` uses banker's rounding at exactly ±0.5 h; the contract's cases never land there, say if that matters.
+- `to_zone` with an unknown zone name raises the stdlib `ZoneInfoNotFoundError` (a `KeyError`), not a `TimebaseError`.
+- `src/sochron/__init__.py` content (tests-r1 F3).
+
+Next: Codex `$cross-agent-review CORE-001` (read-only) → `/fix-findings` → owner opens the PR with the label `owner-approved-control-change` (three locked test files) → merge.
