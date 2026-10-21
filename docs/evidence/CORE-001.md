@@ -14,7 +14,7 @@ Contract: `docs/contracts/CORE-001-timebase.md` (เจ้าของอนุ�
 | AC-06 จำแนก offset โดยไม่แก้กฎ | **PASS** | `test_ac06_classify_offsets_without_mutating_time_rules`: 10 ชุดตัวอย่าง (ok / shifted ±2 h / unknown) และ `RULES`, `TimeRule`, `EntryWindow`, `OffsetClass` แก้ค่าไม่ได้ (`FrozenInstanceError`) |
 | AC-07 ขอบเขต import, ไม่มีนาฬิกา/I/O, red-flags | **PASS** | `test_ac07_timebase_and_core_import_boundaries_and_no_clock_or_io` (AST) ผ่าน · red-flag scan: กลุ่ม secret และ order/account mutation ว่าง (ดูตาราง checks) |
 
-ทั้ง 7 ข้อผ่านพร้อมกันในรันเดียว: **19 passed, 0 skipped** (acceptance 6, architecture 1, unit 12)
+ทั้ง 7 ข้อผ่านพร้อมกันในรันเดียว: **19 passed, 0 skipped** (acceptance 6, architecture 1, unit 12) ที่ `5546da0` · หลังแก้ตาม Codex review r1 (F1–F3): **22 passed, 0 skipped** (unit 15) ที่ `0b8475d` 08:44:41
 
 ## สิ่งที่ส่งมอบ
 
@@ -26,7 +26,7 @@ Contract: `docs/contracts/CORE-001-timebase.md` (เจ้าของอนุ�
 | `src/sochron/timebase/offset.py` | `OffsetClass`, `classify_offset` (รายงานอย่างเดียว ไม่มีเส้นทางแก้กฎ) |
 | `src/sochron/timebase/errors.py` | `TimebaseError(ValueError)` และ 5 ชนิดย่อยตาม contract |
 | `src/sochron/__init__.py`, `src/sochron/core/__init__.py` | docstring เท่านั้น (ตาม review tests-r1 F3) |
-| `tests/unit/timebase/test_timebase_unit.py` | unit tests ของผู้ทำ 12 ข้อ (ขอบช่วง raw, float/bool ถูกปฏิเสธ, to_raw จาก zone อื่น, bar_open idempotent ทุก timeframe, กฎ offset ไม่ใช่ 0, ตัวอย่าง offset จริงจาก SPIKE-001) |
+| `tests/unit/timebase/test_timebase_unit.py` | unit tests ของผู้ทำ 15 ข้อ (ขอบช่วง raw, float/bool ถูกปฏิเสธ, to_raw จาก zone อื่น, bar_open idempotent ทุก timeframe, กฎ offset ไม่ใช่ 0, ตัวอย่าง offset จริงจาก SPIKE-001, และ regression ของ review r1: ชั่วโมงร่วมที่ tolerance กว้าง, NaN/inf → unknown, วินาทีในขอบ window) |
 | `pyproject.toml`, `uv.lock` | environment ตาม D-012 (commit `3da18d1`) |
 
 การตัดสินใจระหว่างทำ:
@@ -42,15 +42,27 @@ Contract: `docs/contracts/CORE-001-timebase.md` (เจ้าของอนุ�
 | `uv run pytest tests -q -p no:cacheprovider` ก่อนมีโค้ด | FAIL ตามคาด: 7 failed (module missing) | `85d78bf` tests red + `3da18d1` env | 08:26:32 |
 | `uv run python -c "import zoneinfo, tzdata; …"` | PASS: `America/New_York`, tzdata 2026e | `3da18d1` | 08:26:32 |
 | `uv run pytest tests -q -p no:cacheprovider` หลังมีโค้ด | **PASS 19 passed, 0 skipped, 0.07 s** | commit ที่เพิ่มไฟล์นี้ | 08:29:35 |
-| `git diff --cached --check` | PASS | เดียวกัน | ดู handoff |
-| `bash scripts/controls/red-flags.sh origin/main` | ดูผลใน handoff (กลุ่ม secret และ order/account mutation ต้องว่าง) | เดียวกัน | ดู handoff |
-| `node scripts/controls/check-locked-paths.mjs origin/main` | FAIL ตามคาด: tests ที่ล็อก 3 ไฟล์ของ Codex ต้องมี label ตอน PR | เดียวกัน | ดู handoff |
+| `git diff --cached --check` | PASS | `5546da0` | 08:31:22 |
+| `bash scripts/controls/red-flags.sh origin/main` | PASS exit 0 · 1 กลุ่ม (type-ignore 4 จุดใน unit test เชิงลบ ตั้งใจและอธิบายใน review r1) · กลุ่ม secret และ order/account mutation ว่าง | `5546da0` | 08:31:22 |
+| `node scripts/controls/check-locked-paths.mjs origin/main` | FAIL ตามคาด: tests ที่ล็อก 3 ไฟล์ของ Codex ต้องมี label ตอน PR | `5546da0` | 08:31:22 |
+| Codex review r1: `uv run --offline pytest tests -q -p no:cacheprovider` ในเครื่อง Codex | PASS 19 passed, 0 skipped · hash tests ที่ล็อกตรง handoff และ `85d78bf` | `5546da0` | 08:32:24 |
+| regression ของ review r1 ก่อนแก้ `uv run --offline pytest tests/unit/timebase/test_timebase_unit.py -q -p no:cacheprovider -k <F>` | FAIL ตามคาดทั้ง 3 ข้อ (F1 unknown แทน shifted · F2 `ValueError` · F3 นาทีแรกหลุด) | ก่อน `5538617` / `b8c993d` / `0b8475d` | 08:41:18 / 08:43:19 / 08:44:16 |
+| `uv run --offline pytest tests -q -p no:cacheprovider` หลังแก้ F1–F3 | **PASS 22 passed, 0 skipped, 0.05 s** | `0b8475d` | 08:44:41 |
+| `bash scripts/controls/red-flags.sh origin/main` | PASS exit 0 · 1 กลุ่มเดิม (type-ignore) · กลุ่ม secret และ order/account mutation ว่าง | `0b8475d` | 08:45:34 |
+| `node scripts/controls/check-locked-paths.mjs origin/main` | FAIL ตามคาด: 3 ไฟล์เดิม ต้องมี label ตอน PR | `0b8475d` | 08:45:34 |
+| `git diff --check origin/main..HEAD` · `git diff 85d78bf HEAD -- tests/acceptance tests/golden tests/architecture` | PASS · ว่าง (tests ที่ล็อกไม่ถูกแตะหลัง `85d78bf`) | `0b8475d` | 08:45:34 |
 
 ## ยังไม่ได้ทดสอบ / ข้อจำกัด
 - Linux: ยังไม่มี Python job ใน CI (control change แยก) ผลทั้งหมดมาจาก Windows
 - เวลาทำการของ `XAUUSDm` ไม่อยู่ในโมดูลนี้ (AC-03 ของ SPIKE-001 ยัง UNKNOWN ด้าน timezone)
-- `to_zone` กับชื่อ zone ที่ไม่มีอยู่ปล่อย `ZoneInfoNotFoundError` ของ stdlib (contract ไม่ได้กำหนด error เฉพาะ)
-- ยังไม่ผ่าน Codex cross-agent review ของ implementation (ขั้นถัดไป)
+- `to_zone` กับชื่อ zone ที่ไม่มีอยู่ปล่อย `ZoneInfoNotFoundError` ของ stdlib · `tolerance_seconds` ที่ไม่ finite หรือติดลบยังไม่มีพฤติกรรมกำหนดใน contract (ดู note ใน handoff)
+- Codex review r1 ผ่านแล้ว (F1–F3 แก้ครบ) · รอ re-review r2 ก่อนเปิด PR
+
+## Finding ของ review r1 (implementation, `docs/reviews/CORE-001-r1.md`)
+- F1 Medium (รับ, `5538617`): `classify_offset` ปัดชั่วโมงทีละค่าแยกกัน ทำให้ `[1800, 5400]` ที่ tolerance 1800 ได้ unknown แทน shifted 1 ชั่วโมง → เปลี่ยนเป็นหา "ชั่วโมงเต็มที่เข้ากับทุกค่า": เข้าพอดี 1 ชั่วโมง → shifted, ไม่มีหรือมีหลายชั่วโมง (กำกวม) → unknown · tolerance ปริยาย 120 วินาทีให้ผลเดิมทุกแถว golden
+- F2 Low คำถาม (ตอบและแก้, `b8c993d`): NaN/inf เคยทำให้ raise `ValueError`/`OverflowError` → ตอนนี้คืน unknown พร้อมจำนวนตัวอย่างเดิม ตามกฎ "อื่นๆ → unknown" ของ contract · ถ้าเจ้าของต้องการ error เฉพาะ เป็นเรื่องของ contract ถัดไป
+- F3 Low (รับ, `0b8475d`): `in_entry_window` ตัดวินาทีเฉพาะฝั่งเวลาที่ถาม ไม่ตัดฝั่งขอบหน้าต่าง → ตัดทั้งสองฝั่งเป็นนาที หน้าต่าง NY ไม่กระทบ
+- ทุกข้อมี regression test ที่ fail ก่อนแก้และ pass หลังแก้ (เวลาในตาราง checks) · finding ปิดโดยผู้ตรวจใน r2 ไม่ใช่โดยผู้ทำ
 
 ## Finding ของ review tests-r1 (Low ทั้ง 4 ข้อ)
 - F1 ค่า round trip เป็นค่าคงที่ 23 ค่าแทนการสุ่ม: รับทราบ ดีกว่าสุ่มเพราะครอบขอบช่วงทั้งสองด้าน

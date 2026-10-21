@@ -346,3 +346,24 @@ Please look hard at (review r1):
 - `src/sochron/__init__.py` content (tests-r1 F3).
 
 Next: Codex `$cross-agent-review CORE-001` (read-only) → `/fix-findings` → owner opens the PR with the label `owner-approved-control-change` (three locked test files) → merge.
+
+
+## Findings response (Claude Code), review r1 · 2026-10-21
+
+Review: `docs/reviews/CORE-001-r1.md` (committed `40920d3`). All times +07, Windows, `uv run --offline`.
+
+| ID | Accept/Dispute | Commit | Evidence (command → result) |
+|----|----------------|--------|-----------------------------|
+| F1 | Accept | `5538617` | `uv run --offline pytest tests/unit/timebase/test_timebase_unit.py -q -p no:cacheprovider -k common_hour` → FAIL on `5546da0` (`classify_offset([1800.0, 5400.0], 1800.0)` gave unknown) at 08:41:18 · after the fix `uv run --offline pytest tests -q -p no:cacheprovider` → 20 passed at 08:42:34 |
+| F2 | Accept (question answered below) | `b8c993d` | `… -k non_finite` → FAIL before the fix (`ValueError: cannot convert float NaN to integer`, `offset.py:51`) at 08:43:19 · after → 21 passed at 08:43:43 |
+| F3 | Accept | `0b8475d` | `… -k window_bounds` → FAIL before the fix (03:00:00 excluded by `start = 03:00:59`) at 08:44:16 · after → 22 passed at 08:44:41 |
+
+F1 implementation: `_common_whole_hour` takes, over all samples, the largest lower bound and the smallest upper bound of the whole hours that fit, then settles the candidates around those bounds with the contract's own inequality `|x − h×3600| ≤ tolerance`, so float division cannot be off by one at a boundary. Exactly one nonzero hour → `shifted`; none or several → `unknown`. The "several" case (for example `[5400.0]` at tolerance 1800 fits +1 h and +2 h equally) is not spelled out by the contract; `unknown` follows the module's never-guess rule and is asserted in the regression so the reviewer sees the choice. At the default tolerance of 120 s at most one hour can fit any sample, so every golden row keeps its result.
+
+F2 answer: the contract defines `ok`, `shifted` and "everything else → unknown"; its error list has no entry for non-finite samples, and the classifier is a reporter that must not abort a measurement run. Non-finite samples (NaN, ±inf, alone or mixed with finite values) therefore return `unknown` with the original sample count, checked before any arithmetic. If the owner prefers a `TimebaseError` instead, that is a contract clarification for the next contract, not a code decision taken here.
+
+Notes for the owner (not findings, nothing changed): a non-finite or negative `tolerance_seconds` is still undefined by the contract (inf → `ok` for finite samples, NaN → `ValueError`, negative → `unknown`); `to_zone` with an unknown zone raises the stdlib `ZoneInfoNotFoundError`. Both sit outside the contract's error list; say if either should become a `TimebaseError` in a later contract. The VS Code mypy diagnostic "Cannot find implementation or library stub for module named sochron.timebase" is editor configuration without `src` on its path, not a test or packaging defect; a `[tool.mypy]` section would be a `pyproject.toml` change that needs approval.
+
+Suite after the three fixes: `uv run --offline pytest tests -q -p no:cacheprovider` → 22 passed, 0 skipped (acceptance 6, architecture 1, unit 15) on `0b8475d` at 08:44:41. `git diff 85d78bf HEAD -- tests/acceptance tests/golden tests/architecture` is empty: locked tests untouched.
+
+Next: Codex `$cross-agent-review CORE-001` round 2 re-checks F1–F3 only and writes `docs/reviews/CORE-001-r2.md`. Findings are closed by the reviewer, not here.
