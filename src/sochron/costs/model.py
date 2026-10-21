@@ -7,11 +7,12 @@ values are today's specification and say nothing about 2018-2024, which stays UN
 own Decimal context (precision 28, ROUND_HALF_EVEN), never the caller's.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import date
 from decimal import ROUND_HALF_EVEN, Context, Decimal, localcontext
 from types import MappingProxyType
-from typing import Literal, Mapping
+from typing import Literal
 
 from .errors import BadProvenance, BadStress, CostsError
 
@@ -112,6 +113,8 @@ class CostModel:
             raise CostsError("triple_swap_weekday must be 0 (Monday) to 6 (Sunday)")
         if self.stress_factor <= 0:
             raise BadStress(f"stress_factor must be positive, got {self.stress_factor}")
+        if not isinstance(self.provenance, Mapping):
+            raise TypeError(f"provenance must be a Mapping, not {type(self.provenance).__name__}")
         keys = set(self.provenance)
         expected = set(PROVENANCE_FIELDS)
         if keys != expected:

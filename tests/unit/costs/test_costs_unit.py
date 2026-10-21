@@ -141,3 +141,11 @@ def test_cost_breakdown_rejects_wrong_types_and_totals():
         CostBreakdown(Decimal("1"), Decimal("2"), Decimal("3"), Decimal("4"), Decimal("999"), Decimal("1"))
     good = CostBreakdown(Decimal("1"), Decimal("2"), Decimal("3"), Decimal("4"), Decimal("10"), Decimal("1"))
     assert good.total == Decimal("10")
+
+
+def test_provenance_must_be_a_mapping():
+    # Review r1 F3: a list of the eleven keys reached .items() and raised AttributeError.
+    with pytest.raises(TypeError):
+        replace(H001_COSTS, provenance=list(PROVENANCE_FIELDS))  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        replace(H001_COSTS, provenance="point")  # type: ignore[arg-type]
