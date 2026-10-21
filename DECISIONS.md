@@ -3,12 +3,31 @@
 Decision log แบบย่อ (Handbook ภาคผนวก G) · สถานะที่ใช้: proposed · accepted · superseded · rejected
 เปลี่ยนสถานะเป็น accepted ได้เฉพาะเมื่อเจ้าของตัดสิน agent เขียนได้แค่ proposed
 
-## D-001 สถาปัตยกรรมเริ่มต้น: Python modular monolith + `MetaTrader5` บน Windows, วิจัยก่อน — 2026-10-18 — proposed
+## D-001 สถาปัตยกรรมเริ่มต้น: Python modular monolith + `MetaTrader5` บน Windows, วิจัยก่อน — 2026-10-18 — accepted (เจ้าของอนุมัติในแชท Claude 2026-10-21 ราว 06:55 หลัง SPIKE-001 และ review D-001 r1–r3)
+Acceptance scope:
+- รับสถาปัตยกรรม, ขอบเขตของเครื่อง (ข้อ 6.1), execution scope (ข้อ 7.1) และ phase gates (ข้อ 13a) ตาม `docs/architecture.md` ที่ commit `6495d94`
+- ไม่ได้อนุมัติ: ติดตั้ง dependency ของโปรเจกต์ (ต้องผ่าน dependency admission ทีละตัว), เริ่มวิจัยก่อน ENV-1 และส่งคำสั่งใดๆ ก่อนมี contract E1 ที่อนุญาต
+- งานแต่ละชิ้นยังต้องมี contract ที่อนุมัติ
 Context: เริ่มใหม่ทั้งหมด เครื่องพัฒนาเป็น Windows ซึ่งใช้แพ็กเกจ `MetaTrader5` ได้โดยตรง (wheel cp310–cp314) ผลลัพธ์ของโปรเจกต์คือหลักฐานว่ามี edge (บท 34) รอบก่อนยังไม่เคยใช้ข้อมูลจริง
-Decision: แอป Python 3.12 ตัวเดียว (uv) แบ่ง module ตาม `docs/architecture.md`; `broker/mt5` เป็นจุดเดียวที่ import MetaTrader5; strategy เป็น pure function ที่ใช้ร่วมกันระหว่าง backtest และ Demo; journal เป็น SQLite; dataset เป็น Parquet snapshot; ยังไม่มี web/DB server/Docker; ลำดับงาน BOOT-001 → SPIKE-001 → SLICE-R1 → SLICE-E1 → OPS-1
+Decision: แอป Python 3.12 ตัวเดียว (uv) แบ่ง module ตาม `docs/architecture.md`; `broker/mt5` เป็นจุดเดียวที่ import MetaTrader5; strategy เป็น pure function ที่ใช้ร่วมกันระหว่าง backtest และ Demo; journal เป็น SQLite; dataset เป็น Parquet snapshot; ยังไม่มี web/DB server/Docker; ลำดับงาน BOOT-001 → SPIKE-001 → ENV-1 (Windows VPS + synthetic sentinel, ต้องผ่านก่อนวิจัย) → SLICE-R1 → SLICE-E1 → OPS-1
 Why: strategy ชุดเดียวทำได้ตรงที่สุด ทดสอบได้มากที่สุด ชิ้นส่วนน้อยที่สุดสำหรับเจ้าของคนเดียว และ AI ทำงานกับ Python ได้แม่น
 Rejected: (B) MQL5 EA + bridge: สองภาษา, protocol ซับซ้อน, เสี่ยงมี strategy สองชุด; เหตุผลเดิมคือพัฒนาบน macOS ซึ่งไม่มีแล้ว · (C) MQL5 ล้วน: เครื่องมือวิจัยอ่อน, optimizer ชวน overfit, ทดสอบอัตโนมัติยาก
 Consequences: runner ต้องอยู่บน Windows ที่มี terminal; CI (Linux) ทดสอบส่วน MT5 จริงไม่ได้ จึงต้องมี evidence จากเครื่อง Windows; Python ต้อง ≤ 3.14 จนกว่า MetaTrader5 จะออก wheel ใหม่
+Environment boundary (review D-001 r1 F1, เจ้าของเลือก 2026-10-21):
+- เป้าหมายคือ Windows VPS เป็น acquisition/execution host ถือ terminal, history cache, `data.acquire`, raw captures, journal, holdout และ Demo runner
+- เครื่องเจ้าของเป็น research host ที่รับเฉพาะ snapshot ก่อน cutoff (`docs/architecture.md` ข้อ 6.1)
+- ระยะนี้ใช้เครื่องเดียวไปก่อน จึงห้ามตัด holdout, ห้าม ingest ข้อมูลวิจัย และห้ามทดลองกลยุทธ์ จนกว่าด่าน ENV-1 (VPS + synthetic sentinel) จะผ่าน
+- ค่าใช้จ่าย VPS อยู่ใน Q-10
+- การใช้โฟลเดอร์, VM หรือผู้ใช้คนละคนบนเครื่องเดียวแทนการแยกเครื่อง ต้องเป็นการตัดสินเปลี่ยนกฎของเจ้าของแยกต่างหาก
+
+Execution scope (review D-001 r1 F2):
+- ทุก action ภายนอกต้องอยู่ใน scope ที่แก้ไม่ได้ระหว่างรัน ได้แก่ terminal identity, server, บัญชีที่อนุญาต, Demo, action และสัญลักษณ์ที่อนุญาต และวันหมดอายุ
+- ตรวจตอนเริ่ม, ตอน reconnect และก่อนทุก action ถ้าไม่ตรงหรือไม่รู้ให้หยุด
+- journal, risk และการ reconcile ผูกกับ scope
+- ผู้ส่งคำสั่งต่อ scope มีหนึ่งตัว และใช้ terminal เฉพาะงาน
+- การเช็กกับการส่งไม่ใช่ atomic จึงยังมีความเสี่ยงที่ระบุไว้ใน `docs/architecture.md` ข้อ 7.1
+- E1 ต้องพิสูจน์ด้วย negative cases ที่มีการส่งคำสั่งเป็นศูนย์
+- สิทธิ์อ่านอย่างเดียวของ SPIKE-001 ไม่ใช่สิทธิ์ของ E1
 Review when: ต้องย้ายไป host ที่ไม่ใช่ Windows · `MetaTrader5` หยุดดูแลหรือเปลี่ยนแบบไม่เข้ากัน · ต้องการ logic ฝั่ง terminal ที่ทำงานต่อได้แม้ Python ล่ม · latency ที่ต้องการต่ำกว่าที่ polling ทำได้
 Before accepting (ลำดับที่เดินได้จริง แก้ตาม review F5):
 1. เจ้าของอนุมัติ contract SPIKE-001 และผล `$dependency-admission` ของ `MetaTrader5` สำหรับใช้ใน spike เท่านั้น

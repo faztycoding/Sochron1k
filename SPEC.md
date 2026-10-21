@@ -49,7 +49,7 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 | Data | Class | Source of truth | Retention | Who can access |
 |------|-------|-----------------|-----------|----------------|
 | ราคา/ticks/bars จากโบรกเกอร์ | contract-limited (ตามเงื่อนไขโบรกเกอร์) | MT5 terminal → snapshot ที่บันทึก manifest | TBD | เครื่องเจ้าของ |
-| Holdout | internal, ปิดผนึก | ที่เก็บแยกนอกเครื่องวิจัย — TBD: ที่ไหน ใครถือ | ตลอดอายุการทดลอง [A] (รอเจ้าของยืนยัน, Q-12) | เจ้าของ (เปิดเฉพาะวันประเมิน) |
+| Holdout | internal, ปิดผนึก | Windows VPS ที่เป็น acquisition host นอกเครื่องวิจัย (เจ้าของ 2026-10-21, `docs/architecture.md` ข้อ 6.1) · ระหว่างยังไม่มี VPS ห้ามตัด holdout · วัน cutoff TBD (Q-08) | ตลอดอายุการทดลอง [A] (รอเจ้าของยืนยัน, Q-12) | เจ้าของ (เปิดเฉพาะวันประเมิน) |
 | Registry การทดลอง | internal | `research/registry/*.jsonl` (append-only) | ตลอดอายุโปรเจกต์ [A] (รอเจ้าของยืนยัน, Q-12) | repo |
 | คำสั่ง/deals/positions | confidential operational | MT5 (ความจริง) + journal ในเครื่อง | TBD | เครื่องเจ้าของ |
 | Login/รหัสผ่าน MT5 | restricted | ใน terminal หรือ .env บนเครื่อง runner เท่านั้น | – | เจ้าของ |
@@ -65,13 +65,14 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 - Cost: งบรายเดือน (VPS/ข้อมูล/API) TBD บาท
 
 ## 7. Architecture summary
-- ดู `docs/architecture.md` (D-001: Python modular monolith + `MetaTrader5` บน Windows, วิจัยก่อน — **proposed**)
+- ดู `docs/architecture.md` (D-001: Python modular monolith + `MetaTrader5` บน Windows, วิจัยก่อน — **accepted** 2026-10-21 พร้อมด่าน ENV-1 ก่อนวิจัย)
 - External services: MT5 terminal + เซิร์ฟเวอร์ Demo ของโบรกเกอร์ (TBD: โบรกเกอร์ไหน), GitHub (repo + CI)
 - Key decisions: ดู `DECISIONS.md`
 
 ## 8. Environments and release
-- Local (Windows ของเจ้าของ): พัฒนา + วิจัยด้วย snapshot; เชื่อม terminal แบบอ่านอย่างเดียวตั้งแต่ SPIKE-001
-- Demo runner: TBD (เครื่องเจ้าของ หรือ Windows VPS) — ส่งคำสั่งได้เฉพาะเมื่อ contract อนุญาต
+- Research host (Windows ของเจ้าของ): พัฒนา และวิจัยด้วย snapshot ก่อน cutoff เท่านั้น · หลังด่าน ENV-1 จะไม่มี terminal, terminal cache หรือการดึงข้อมูลจากโบรกเกอร์บนเครื่องนี้ (`docs/architecture.md` ข้อ 6.1)
+- ระยะนี้ (เจ้าของ 2026-10-21): terminal ยังอยู่บนเครื่องนี้ ใช้ได้เฉพาะงานอ่านอย่างเดียวที่ contract อนุญาต (เช่น SPIKE-001) **ห้ามตัด holdout, ห้าม ingest ข้อมูลวิจัย และห้ามทดลองกลยุทธ์** จนกว่า ENV-1 จะผ่าน
+- Acquisition/execution host และ Demo runner: Windows VPS (เจ้าของวางแผน 2026-10-21) ถือ terminal, raw captures, journal และ holdout · ส่งคำสั่งได้เฉพาะเมื่อ contract อนุญาตและอยู่ใน execution scope (`docs/architecture.md` ข้อ 7.1) · ค่าใช้จ่ายอยู่ใน Q-10
 - Production (เงินจริง): ไม่มีในขอบเขตนี้
 - Rollback: revert branch; ปิด runner; position ที่เปิดอยู่ปิดด้วยมือใน terminal (TBD: runbook)
 
@@ -86,8 +87,8 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 | Q-05 | ชั่วโมงเทรดและนโยบายถือข้ามคืน | เจ้าของ | ก่อน H001 | TBD (open) |
 | Q-06 | สมมติฐานแรก (PA01 จากรอบก่อน หรือไอเดียใหม่) | `/register-hypothesis` | ก่อน SLICE-R1 | TBD (open) |
 | Q-07 | ความลึกข้อมูลจากโบรกเกอร์พอไหม ถ้าไม่พอจะใช้แหล่งอื่นหรือไม่ (license) | SPIKE-001 | — | TBD (open) |
-| Q-08 | วัน cutoff ของ holdout และที่เก็บนอกเครื่องวิจัย | เจ้าของ | ก่อน SLICE-R1 | TBD (open) |
-| Q-09 | Demo runner จะรันที่ไหน (เครื่องนี้ หรือ Windows VPS) | เจ้าของ | ก่อน OPS-1 | TBD (open) |
+| Q-08 | วัน cutoff ของ holdout และที่เก็บนอกเครื่องวิจัย | เจ้าของ | ก่อน SLICE-R1 | ที่เก็บตอบแล้ว (เจ้าของ 2026-10-21): Windows VPS ที่เป็น acquisition host · วัน cutoff ยัง TBD |
+| Q-09 | Demo runner จะรันที่ไหน (เครื่องนี้ หรือ Windows VPS) | เจ้าของ | ก่อน OPS-1 | ตอบแล้ว (เจ้าของ 2026-10-21): Windows VPS ในอนาคต ส่วนระยะนี้ใช้เครื่องนี้ไปก่อน (`docs/architecture.md` ข้อ 6.1) |
 | Q-10 | งบรายเดือน และ kill criteria ของทั้งโปรเจกต์ | เจ้าของ | ก่อน SLICE-R1 | TBD (open) |
 | Q-11 | ใช้ Codex เป็น test author + reviewer ตาม binding ค่าเริ่มต้น (D-002) | เจ้าของ | ก่อน contract แรก | TBD (open) |
 | Q-12 | ระยะเวลาเก็บ holdout และ registry ในข้อ 5 (ตอนนี้เป็น [A]) | เจ้าของ | ก่อน SLICE-R1 | TBD (open) |
@@ -100,3 +101,4 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 | 2026-10-18 | ร่าง 0.1 จากข้อมูลรอบก่อน + Handbook v5 | เจ้าของ (ขอให้ตั้งโปรเจกต์ใหม่) | ยังไม่มี: รอเจ้าของรับรอง |
 | 2026-10-20 | ติดป้าย [A]/TBD ตาม review AC-08 (F1, F3): retention ในข้อ 5, คอลัมน์ Status ในข้อ 9 และเพิ่ม Q-12 · ไม่เปลี่ยนค่าใดๆ | เจ้าของ (ให้ปิด AC ของ BOOT-001) | ไม่มีผลต่อเวลา/ค่าใช้จ่าย · แก้ AC-08 |
 | 2026-10-21 | Q-02 และ Q-03 ตอบบางส่วนจากข้อมูลบัญชี Demo ที่เจ้าของแจ้ง (Exness, server, hedging, `XAUUSDm`) | เจ้าของ (เตรียม SPIKE-001) | ไม่มีผลต่อเวลา/ค่าใช้จ่าย |
+| 2026-10-21 | ข้อ 5 และ 8 ปรับตามการแยกเครื่องของ D-001 (Windows VPS เป็นเป้าหมาย, ระยะนี้ใช้เครื่องเดียวแบบจำกัด, ด่าน ENV-1 ก่อนวิจัย) ตาม review D-001 r2 F3 | เจ้าของ (เลือก VPS) | มีค่า VPS (Q-10) · งานวิจัยเริ่มได้หลัง ENV-1 |

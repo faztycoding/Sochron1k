@@ -1,19 +1,38 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-21 03:35 +07 by Claude Code · SPIKE-001 เสร็จ ผ่าน review ของ Codex 3 รอบ รอ PR · (บันทึกเดิม: PR #1 merged โดยเจ้าของ 23:07:40 (`7b6a841`, มี label) · เจ้าของ apply r11 แล้ว → review r11 (`docs/reviews/BOOT-001-r11.md`) ตรวจแล้ว · commit ไฟล์ล็อก 2 ไฟล์ที่เจ้าของ apply พร้อมเอกสารบน `chore/BOOT-001-ac05-control-gate` · ต่อมา push และ merge แล้วผ่าน PR #2)
+Updated 2026-10-21 +07 by Claude Code · **D-001 accepted** โดยเจ้าของ (ราว 06:55) หลัง review r1–r3 · ถัดไป: แก้ข้อความ Phase ใน AGENTS.md (ไฟล์ล็อก ต้องใช้ patch) และเขียน contract ENV-1 หรือส่วน pure
 
 ## Current task
-**SPIKE-001 v1.1 · State: implemented + reviewed (Codex r3) · รอ PR และเจ้าของ merge** · branch `spike/SPIKE-001-mt5-time` จาก main `0916776`
+**D-001 · State: accepted (เจ้าของ 2026-10-21 ราว 06:55)** · ขอบเขตการอนุมัติอยู่ใน DECISIONS.md D-001 (ไม่รวม dependency, การวิจัยก่อน ENV-1 และการส่งคำสั่ง) · branch `chore/D-001-architecture-revision` (ต่อจาก `ddffeb4`) · ย้ายกลับมาทำที่โฟลเดอร์หลักแล้ว ลบ worktree แยกที่สะอาดไปแล้ว
+- เจ้าของตัดสิน F1 (2026-10-21):
+  - เป้าหมายคือ MT5 บน Windows VPS ทำหน้าที่ acquisition/execution host
+  - ระยะนี้ใช้เครื่องนี้ไปก่อน จึงห้ามตัด holdout, ห้าม ingest ข้อมูลวิจัย และห้ามทดลองกลยุทธ์ จนกว่าด่าน ENV-1 จะผ่าน
+- F2: execution scope ผูกกับบัญชี, server, terminal, action, สัญลักษณ์ และวันหมดอายุ ตรวจก่อนทุก action
+- review r2 (06:49): F1/F2 ปิด, เปิด F3 Low → แก้แล้ว `7e11c0f` · review r3 (06:52): F3 ปิด ไม่มี finding เหลือ
+- ถัดไป:
+  1. patch แก้ AGENTS.md ที่ยังเขียนว่า "D-001 is proposed … do not scaffold" ให้ตรงสถานะใหม่ (ไฟล์ล็อก ต้อง apply ตาม D-006, review และติด label)
+  2. contract ENV-1 (Windows VPS + synthetic sentinel) ก่อนวิจัย ซึ่งต้องให้เจ้าของเช่า VPS
+  3. ระหว่างรอ VPS: contract ของส่วน pure ที่ไม่ใช้ข้อมูลตลาด (timebase, costs, risk)
+  - ยังไม่ติดตั้งแพ็กเกจของโปรเจกต์
+- PR แยกที่รอ merge: `chore/SPIKE-001-post-merge-review` (review r4 หลัง merge ของ SPIKE-001: F7 ปิด, ไม่มี finding ใหม่)
+
+ประวัติ review r1 (Codex):
+- รายงาน `docs/reviews/D-001-design-r1.md`: F1 High เรื่องแยก holdout ออกจากเครื่องวิจัย/terminal และ F2 Medium เรื่องผูกสิทธิ์ execution กับบัญชีที่อนุญาต ทั้งสองยัง OPEN
+- ยังรองรับ Python monolith เป็นทางเลือก แต่ให้ Claude แก้ข้อกำหนดขอบเขตก่อนเสนอเจ้าของตัดสิน D-001 · เงื่อนไขของ R1/E1/OPS และขั้นตอนส่งต่ออยู่ใน `docs/handoff/D-001.md`
+- ไม่มีการเชื่อม terminal, ติดตั้งแพ็กเกจ, สร้าง application code หรือเปลี่ยน D-007/D-008 · commit เฉพาะเอกสารในเครื่อง ไม่ push
+
+**SPIKE-001 v1.1 · State: merged** · เจ้าของ merge [PR #3](https://github.com/faztycoding/Sochron1k/pull/3) เวลา 2026-10-21 03:38:34 +07 เป็น `3817f367a6fe2f37cc82e5a75a85bb874ea0822a`
+- [CI หลัง merge](https://github.com/faztycoding/Sochron1k/actions/runs/39493719822) success บน SHA นี้ อัปเดต 03:39:15 +07 ตรวจ API 03:41:26 +07 · เป็น control-plane ไม่ใช่ pytest ของ SPIKE
 - เจ้าของอนุมัติ contract และ dependencies ราว 02:49 (D-009, D-010, D-011) · บัญชี Exness `Exness-MT5Trial14` Demo ลงท้าย 8107, Read Only · ใช้ได้ถึง 2026-10-28 23:59 +07
 - probe อ่านอย่างเดียว รัน 4 รอบ (02:53–03:17) ทุกรอบ exit 0 และผ่านการตรวจบัญชี · tests 21/21 · Codex review r1, r2, r3: F1–F6 ปิด และ F7 (Low, ถ้อยคำ) แก้แล้วใน `1336d9b`
 - ผล AC (`docs/evidence/SPIKE-001.md`):
-  - PASS: AC-01, 02, 05, 06, 07 และ AC-03 (ณ วันที่บันทึก จาก Specification ที่เจ้าของส่งมา 03:31; Codex ยังไม่ได้ review ส่วนนี้)
+  - PASS ตามหลักฐาน SPIKE: AC-01, 02, 05, 06, 07 และ AC-03 ณ วันที่บันทึก · Codex ตรวจ delta หลัง r3 ก่อน merge: ตาราง Sessions ตรงภาพที่ได้รับและคงข้อจำกัดไว้ ไม่ใช่การตรวจ spec ทั้งชุดซ้ำ
   - UNKNOWN: AC-04 เพราะ server เป็น GMT+0 จึงแยก UTC กับเวลา server ไม่ได้ · offset ที่วัดได้ = 0
 - ข้อค้นพบหลักสำหรับ D-001:
   - เชื่อมต่อได้
   - timestamp ตรงกับ UTC epoch ที่ offset 0 สำหรับ server นี้
   - M1 มีตั้งแต่ 2014 (ช่วงที่ใช้วิจัยได้ยัง UNKNOWN)
   - tick มีตั้งแต่ 2026-01-01
-- ถัดไป: เจ้าของเปิดและ merge PR ของ SPIKE-001 → Codex `$adversarial-design-review` ของ D-001 พร้อมหลักฐานนี้ → เจ้าของตัดสิน D-001
+- ถัดไป: แก้ข้อเสนอ D-001 ตาม review r1 → ตรวจ delta → เจ้าของตัดสิน D-001 · การ merge SPIKE ไม่ใช่การอนุมัติ R1/E1
 
 **BOOT-001: merged** (PR #1 `7b6a841`, 2026-10-20 23:07) · AC-05 ผ่านบน PR #2 (`0916776`) · main ถูกป้องกันด้วย required checks `control-plane` และ `locked-paths` · ที่ยังเปิดอยู่ดู D-007, D-008 และ review r11 · ประวัติด้านล่าง
 BOOT-001 v1 · State FIXING · F3, F7, F10 และ F18 ปิดแล้ว (F18 ใน review r9) · F9 ปิดสำหรับรูปแบบที่บันทึกไว้ (review r7) · ไม่มี finding High ค้าง · **F20 Medium ใหม่ (ต้นเหตุเดียวกับ F18 แต่ไม่ใช่ regression):** `#` ที่ติดหลัง `)` ของ `@(…)` หรือ `a=(…)` ถูก guard อ่านเป็น comment → เจ้าของเลือกที่วาง · F19 และ F11–F15 Medium ไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน · Low ที่ค้าง: F8 ส่วน Monitor/case (มีเหตุการณ์จริงเพิ่มใน r11), F16, F17, F21 (inspection ที่พ่วงคำสั่งอื่นถูกบล็อก), F24 (ADS `file.patch:stream` ได้ข้อยกเว้น apply), F25 (hardlink ใน `docs/proposals/` ได้ข้อยกเว้น) · F22 ปิดบน Windows (Linux รอ CI) และ F23 ปิดแล้วใน review r11 · AC-04 FAIL ตามข้อความ contract: ข้อ push ต้องแก้ตาม D-006 และ Medium ที่ค้างยังเขียนไฟล์ล็อกผ่านได้
