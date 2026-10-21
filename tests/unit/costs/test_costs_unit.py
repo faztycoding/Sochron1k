@@ -129,3 +129,15 @@ def test_check_volume_grid_check_never_overflows_the_context():
     assert check_volume(Decimal("0.01"), fine) == Decimal("0.01")
     with pytest.raises(BadVolume):
         check_volume(Decimal("1.0000000000000000000000000000005"), fine)
+
+
+def test_cost_breakdown_rejects_wrong_types_and_totals():
+    # Review r1 F2: the public frozen dataclass accepted ints and an inconsistent total.
+    from sochron.costs import CostBreakdown
+
+    with pytest.raises(TypeError):
+        CostBreakdown(1, 2, 3, 4, 10, 1)  # type: ignore[arg-type]
+    with pytest.raises(CostsError):
+        CostBreakdown(Decimal("1"), Decimal("2"), Decimal("3"), Decimal("4"), Decimal("999"), Decimal("1"))
+    good = CostBreakdown(Decimal("1"), Decimal("2"), Decimal("3"), Decimal("4"), Decimal("10"), Decimal("1"))
+    assert good.total == Decimal("10")

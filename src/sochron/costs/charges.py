@@ -29,6 +29,16 @@ class CostBreakdown:
     total: Decimal
     stress_factor: Decimal
 
+    def __post_init__(self) -> None:
+        for name in ("spread", "commission", "slippage", "swap", "total", "stress_factor"):
+            value = getattr(self, name)
+            if not isinstance(value, Decimal):
+                raise TypeError(f"{name} must be a Decimal, not {type(value).__name__}")
+        with localcontext(CONTEXT):
+            expected = self.spread + self.commission + self.slippage + self.swap
+        if self.total != expected:
+            raise CostsError(f"total {self.total} is not the ordered sum of the components {expected}")
+
 
 def _is_int(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
