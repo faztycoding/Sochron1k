@@ -118,3 +118,15 @@ def test_classify_offset_finds_the_common_hour_at_a_wide_tolerance():
     assert classify_offset([1800.0, 9000.0], 1800.0) == OffsetClass("unknown", None, 2)
     # 5400 alone fits +1 h and +2 h equally well: ambiguous evidence stays unknown, never a guess.
     assert classify_offset([5400.0], 1800.0) == OffsetClass("unknown", None, 1)
+
+
+def test_classify_offset_reports_non_finite_samples_as_unknown():
+    # Review r1 F2: NaN and infinities cannot establish an offset; the contract's catch-all is
+    # unknown, with the sample count kept, and no exception leaks out of the classifier.
+    nan, inf = float("nan"), float("inf")
+    assert classify_offset([nan]) == OffsetClass("unknown", None, 1)
+    assert classify_offset([inf]) == OffsetClass("unknown", None, 1)
+    assert classify_offset([-inf]) == OffsetClass("unknown", None, 1)
+    assert classify_offset([7200.0, nan, 7200.0]) == OffsetClass("unknown", None, 3)
+    assert classify_offset([0.5, inf]) == OffsetClass("unknown", None, 2)
+    assert RULE.offset_seconds == 0

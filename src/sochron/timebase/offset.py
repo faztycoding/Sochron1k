@@ -31,6 +31,8 @@ def classify_offset(
     samples = len(values)
     if samples == 0:
         return OffsetClass("unknown", None, 0)
+    if not all(math.isfinite(x) for x in values):
+        return OffsetClass("unknown", None, samples)  # NaN or infinity establishes nothing
     if all(abs(x) <= tolerance_seconds for x in values):
         return OffsetClass("ok", None, samples)
     hours = _common_whole_hour(values, tolerance_seconds)
