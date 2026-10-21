@@ -107,3 +107,14 @@ def test_classify_offset_examples_from_spike_001():
     assert classify_offset([0.735, 0.865, -3.8]).kind == "ok"
     assert classify_offset([3599.0, 3601.0]) == OffsetClass("shifted", 1, 2)
     assert classify_offset([3599.0, -3601.0]).kind == "unknown"
+
+
+def test_classify_offset_finds_the_common_hour_at_a_wide_tolerance():
+    # Review r1 F1: 1800 and 5400 are each exactly 1800 s from +1 h, so the contract's common
+    # hour is 1; rounding each sample on its own gave 0 h and 2 h and answered unknown.
+    assert classify_offset([1800.0, 5400.0], 1800.0) == OffsetClass("shifted", 1, 2)
+    assert classify_offset([-1800.0, -5400.0], 1800.0) == OffsetClass("shifted", -1, 2)
+    # 1800 fits 0 h or +1 h and 9000 fits +2 h or +3 h: no hour fits both.
+    assert classify_offset([1800.0, 9000.0], 1800.0) == OffsetClass("unknown", None, 2)
+    # 5400 alone fits +1 h and +2 h equally well: ambiguous evidence stays unknown, never a guess.
+    assert classify_offset([5400.0], 1800.0) == OffsetClass("unknown", None, 1)
