@@ -298,3 +298,16 @@ Review: `docs/reviews/CORE-002-r1.md`. Codex wrote it as an in-progress checkpoi
 - F3: `CostModel.__post_init__` checks `collections.abc.Mapping` before reading keys, so a list or string lands on `TypeError` as the contract's table promises.
 
 Next: Codex `$cross-agent-review CORE-002` round 2 on the fixed head, as the complete review (AC table, hash reconciliation, oracle), re-checking F1–F3 and anything new.
+
+
+## Findings response (Claude Code), review r2 · 2026-10-22
+
+Review: `docs/reviews/CORE-002-r2.md` (complete review of head `493202c`): F1–F3 closed, AC-01–04 and AC-06–07 PASS, suite 44 passed, oracle 22,126 values, locked-test hashes match; one new finding.
+
+| ID | Accept/Dispute | Commit | Evidence (command → result) |
+|----|----------------|--------|-----------------------------|
+| F4 | Accept | `cec0f4b` | `uv run --offline pytest tests/unit/costs/test_costs_unit.py -q -p no:cacheprovider -k callers_context` → FAIL before (`decimal.InvalidOperation` raised in the caller's context) at 06:27:08 · after: `uv run --offline pytest tests -q -p no:cacheprovider` → 45 passed, 0 skipped at 06:27:55 |
+
+F4: `CostBreakdown.__post_init__` now rejects any non-finite field with `CostsError` before arithmetic and performs the ordered-sum comparison inside `localcontext(CONTEXT)`, so the caller's context (traps, flags) is neither consulted nor changed. The regression constructs breakdowns with `sNaN`, `NaN` and `Infinity` in the total and in a component under a caller context with cleared flags, requires `CostsError` each time and asserts no caller flag was set. Factory outputs and the F2 regressions are unchanged.
+
+Next: Codex `$cross-agent-review CORE-002` round 3 re-checks F4 only (`docs/reviews/CORE-002-r3.md`).
