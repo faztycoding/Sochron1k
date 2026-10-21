@@ -367,3 +367,25 @@ Notes for the owner (not findings, nothing changed): a non-finite or negative `t
 Suite after the three fixes: `uv run --offline pytest tests -q -p no:cacheprovider` → 22 passed, 0 skipped (acceptance 6, architecture 1, unit 15) on `0b8475d` at 08:44:41. `git diff 85d78bf HEAD -- tests/acceptance tests/golden tests/architecture` is empty: locked tests untouched.
 
 Next: Codex `$cross-agent-review CORE-001` round 2 re-checks F1–F3 only and writes `docs/reviews/CORE-001-r2.md`. Findings are closed by the reviewer, not here.
+
+
+## Findings response (Claude Code), review r2 · 2026-10-21
+
+Review: `docs/reviews/CORE-001-r2.md` (committed `614e4bb`). The reviewer closed F1–F3 there. All times +07, Windows, `uv run --offline`.
+
+| ID | Accept/Dispute | Commit | Evidence (command → result) |
+|----|----------------|--------|-----------------------------|
+| F4 | Accept | `0e80263` | `uv run --offline pytest tests/unit/timebase/test_timebase_unit.py -q -p no:cacheprovider -k "extreme_finite or integer_hour_identity"` → FAIL before the fix (`OverflowError: cannot convert float infinity to integer`, test line 151) at 08:56:12 · after the fix `uv run --offline pytest tests -q -p no:cacheprovider` → 24 passed at 08:57:20 |
+| F5 | Accept | `0e80263` | same run → FAIL before the fix (`unknown` where `shifted` with hours 2**53 was due) at 08:56:12 · after → 24 passed at 08:57:20 |
+
+One commit for two IDs, stated on purpose: both findings are one defect, binary-float arithmetic in `_common_whole_hour`, and the minimal fix for either is the exact-arithmetic rewrite that fixes both. Splitting it would have meant committing a knowingly wrong float comparison in between.
+
+Fix: the bounds `(x ∓ tolerance) / 3600` are formed with `fractions.Fraction`, exact for every finite float; the hours fitting all samples are the integers between the largest lower bound and the smallest upper bound. Exactly one nonzero hour → `shifted`; none or several → `unknown`. The float probe loop and its one-step widening from the F1 commit are gone. `HOUR_SECONDS` is now the integer `3600` and is used only inside `offset.py`. All golden rows and the F1/F2 regressions are unchanged and green.
+
+Still undefined by the contract (unchanged, noted for the owner): a NaN tolerance now raises `ValueError` from `Fraction`; an infinite tolerance returns `ok` for any finite samples; a negative tolerance returns `unknown`.
+
+Suite: 24 passed, 0 skipped (acceptance 6, architecture 1, unit 17) on `0e80263` at 08:57:20. `git diff 85d78bf HEAD -- tests/acceptance tests/golden tests/architecture` is empty.
+
+Branch update: the owner approved merging `origin/main` (PR #7, H001) into this task branch to resolve the PROGRESS.md conflict before the PR; the merge commit follows this one and changes no code.
+
+Next: Codex `$cross-agent-review CORE-001` round 3 re-checks F4 and F5 only and writes `docs/reviews/CORE-001-r3.md`.

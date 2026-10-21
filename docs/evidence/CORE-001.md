@@ -14,7 +14,7 @@ Contract: `docs/contracts/CORE-001-timebase.md` (เจ้าของอนุ�
 | AC-06 จำแนก offset โดยไม่แก้กฎ | **PASS** | `test_ac06_classify_offsets_without_mutating_time_rules`: 10 ชุดตัวอย่าง (ok / shifted ±2 h / unknown) และ `RULES`, `TimeRule`, `EntryWindow`, `OffsetClass` แก้ค่าไม่ได้ (`FrozenInstanceError`) |
 | AC-07 ขอบเขต import, ไม่มีนาฬิกา/I/O, red-flags | **PASS** | `test_ac07_timebase_and_core_import_boundaries_and_no_clock_or_io` (AST) ผ่าน · red-flag scan: กลุ่ม secret และ order/account mutation ว่าง (ดูตาราง checks) |
 
-ทั้ง 7 ข้อผ่านพร้อมกันในรันเดียว: **19 passed, 0 skipped** (acceptance 6, architecture 1, unit 12) ที่ `5546da0` · หลังแก้ตาม Codex review r1 (F1–F3): **22 passed, 0 skipped** (unit 15) ที่ `0b8475d` 08:44:41
+ทั้ง 7 ข้อผ่านพร้อมกันในรันเดียว: **19 passed, 0 skipped** (acceptance 6, architecture 1, unit 12) ที่ `5546da0` · หลังแก้ตาม Codex review r1 (F1–F3): **22 passed, 0 skipped** (unit 15) ที่ `0b8475d` 08:44:41 · หลังแก้ตาม r2 (F4–F5): **24 passed, 0 skipped** (unit 17) ที่ `0e80263` 08:57:20
 
 ## สิ่งที่ส่งมอบ
 
@@ -26,7 +26,7 @@ Contract: `docs/contracts/CORE-001-timebase.md` (เจ้าของอนุ�
 | `src/sochron/timebase/offset.py` | `OffsetClass`, `classify_offset` (รายงานอย่างเดียว ไม่มีเส้นทางแก้กฎ) |
 | `src/sochron/timebase/errors.py` | `TimebaseError(ValueError)` และ 5 ชนิดย่อยตาม contract |
 | `src/sochron/__init__.py`, `src/sochron/core/__init__.py` | docstring เท่านั้น (ตาม review tests-r1 F3) |
-| `tests/unit/timebase/test_timebase_unit.py` | unit tests ของผู้ทำ 15 ข้อ (ขอบช่วง raw, float/bool ถูกปฏิเสธ, to_raw จาก zone อื่น, bar_open idempotent ทุก timeframe, กฎ offset ไม่ใช่ 0, ตัวอย่าง offset จริงจาก SPIKE-001, และ regression ของ review r1: ชั่วโมงร่วมที่ tolerance กว้าง, NaN/inf → unknown, วินาทีในขอบ window) |
+| `tests/unit/timebase/test_timebase_unit.py` | unit tests ของผู้ทำ 17 ข้อ (ขอบช่วง raw, float/bool ถูกปฏิเสธ, to_raw จาก zone อื่น, bar_open idempotent ทุก timeframe, กฎ offset ไม่ใช่ 0, ตัวอย่าง offset จริงจาก SPIKE-001, regression ของ review r1: ชั่วโมงร่วมที่ tolerance กว้าง, NaN/inf → unknown, วินาทีในขอบ window, และของ r2: ค่า finite ขนาดสุดขีดไม่ raise, ชั่วโมงเกิน 2^53 ยังนับถูก) |
 | `pyproject.toml`, `uv.lock` | environment ตาม D-012 (commit `3da18d1`) |
 
 การตัดสินใจระหว่างทำ:
@@ -51,18 +51,27 @@ Contract: `docs/contracts/CORE-001-timebase.md` (เจ้าของอนุ�
 | `bash scripts/controls/red-flags.sh origin/main` | PASS exit 0 · 1 กลุ่มเดิม (type-ignore) · กลุ่ม secret และ order/account mutation ว่าง | `0b8475d` | 08:45:34 |
 | `node scripts/controls/check-locked-paths.mjs origin/main` | FAIL ตามคาด: 3 ไฟล์เดิม ต้องมี label ตอน PR | `0b8475d` | 08:45:34 |
 | `git diff --check origin/main..HEAD` · `git diff 85d78bf HEAD -- tests/acceptance tests/golden tests/architecture` | PASS · ว่าง (tests ที่ล็อกไม่ถูกแตะหลัง `85d78bf`) | `0b8475d` | 08:45:34 |
+| Codex re-review r2: suite ในเครื่อง Codex | PASS 22 passed, 0 skipped · F1–F3 ปิด · พบ F4/F5 Low ใหม่ | `c751610` | 08:49:21 |
+| regression F4/F5 ก่อนแก้ `uv run --offline pytest tests/unit/timebase/test_timebase_unit.py -q -p no:cacheprovider -k "extreme_finite or integer_hour_identity"` | FAIL ตามคาด (F4 `OverflowError` · F5 unknown แทน shifted) | ก่อน `0e80263` | 08:56:12 |
+| `uv run --offline pytest tests -q -p no:cacheprovider` หลังแก้ F4/F5 | **PASS 24 passed, 0 skipped, 0.06 s** | `0e80263` | 08:57:20 |
+| `bash scripts/controls/red-flags.sh origin/main` · locked diff หลัง `85d78bf` | PASS exit 0 · 1 กลุ่มเดิม (type-ignore) · ว่าง | `0e80263` | 08:57:21 |
 
 ## ยังไม่ได้ทดสอบ / ข้อจำกัด
 - Linux: ยังไม่มี Python job ใน CI (control change แยก) ผลทั้งหมดมาจาก Windows
 - เวลาทำการของ `XAUUSDm` ไม่อยู่ในโมดูลนี้ (AC-03 ของ SPIKE-001 ยัง UNKNOWN ด้าน timezone)
 - `to_zone` กับชื่อ zone ที่ไม่มีอยู่ปล่อย `ZoneInfoNotFoundError` ของ stdlib · `tolerance_seconds` ที่ไม่ finite หรือติดลบยังไม่มีพฤติกรรมกำหนดใน contract (ดู note ใน handoff)
-- Codex review r1 ผ่านแล้ว (F1–F3 แก้ครบ) · รอ re-review r2 ก่อนเปิด PR
+- Codex review r1: F1–F3 แก้ครบ และ r2 ปิดให้แล้ว · r2 พบ F4–F5 แก้แล้ว (`0e80263`) · รอ re-review r3 ก่อนเปิด PR
 
 ## Finding ของ review r1 (implementation, `docs/reviews/CORE-001-r1.md`)
 - F1 Medium (รับ, `5538617`): `classify_offset` ปัดชั่วโมงทีละค่าแยกกัน ทำให้ `[1800, 5400]` ที่ tolerance 1800 ได้ unknown แทน shifted 1 ชั่วโมง → เปลี่ยนเป็นหา "ชั่วโมงเต็มที่เข้ากับทุกค่า": เข้าพอดี 1 ชั่วโมง → shifted, ไม่มีหรือมีหลายชั่วโมง (กำกวม) → unknown · tolerance ปริยาย 120 วินาทีให้ผลเดิมทุกแถว golden
 - F2 Low คำถาม (ตอบและแก้, `b8c993d`): NaN/inf เคยทำให้ raise `ValueError`/`OverflowError` → ตอนนี้คืน unknown พร้อมจำนวนตัวอย่างเดิม ตามกฎ "อื่นๆ → unknown" ของ contract · ถ้าเจ้าของต้องการ error เฉพาะ เป็นเรื่องของ contract ถัดไป
 - F3 Low (รับ, `0b8475d`): `in_entry_window` ตัดวินาทีเฉพาะฝั่งเวลาที่ถาม ไม่ตัดฝั่งขอบหน้าต่าง → ตัดทั้งสองฝั่งเป็นนาที หน้าต่าง NY ไม่กระทบ
-- ทุกข้อมี regression test ที่ fail ก่อนแก้และ pass หลังแก้ (เวลาในตาราง checks) · finding ปิดโดยผู้ตรวจใน r2 ไม่ใช่โดยผู้ทำ
+- ทุกข้อมี regression test ที่ fail ก่อนแก้และ pass หลังแก้ (เวลาในตาราง checks) · ผู้ตรวจปิด F1–F3 ใน r2 (`docs/reviews/CORE-001-r2.md`)
+
+## Finding ของ review r2 (helper ที่เขียนตอนแก้ F1)
+- F4 Low (รับ, `0e80263`): ค่า finite ขนาดใกล้ขีดจำกัดของ float (เช่น 1.7e308 กับ tolerance 1e307) ทำให้ `x ± tolerance` ล้นเป็น inf แล้ว raise `OverflowError` แทนที่จะจำแนก → ตอนนี้คืน unknown (หลายชั่วโมงเข้าได้ = กำกวม) ตามนโยบายเดิม
+- F5 Low (รับ, `0e80263`): ชั่วโมงที่เกิน 2^53 เมื่อคูณ 3600.0 แบบ float จะปัดจนชั่วโมงข้างเคียง "เข้าพอดี" ด้วย ทำให้ shift ที่ถูกต้องกลายเป็น unknown → เปลี่ยนการคำนวณขอบทั้งหมดเป็น `fractions.Fraction` (exact) helper สั้นลงและไม่มีเลข float เหลืออยู่
+- รากเดียวกันจึงแก้ใน commit เดียว (ระบุไว้ใน handoff) · ทั้งสองเป็นค่าขนาดสุดขีดที่ไม่เกิดกับการวัดจริง (SPIKE-001 วัดได้ภายใน ±4 วินาที) แต่ contract ไม่จำกัดขนาด input จึงแก้ให้ถูกทั้งโดเมน · regression fail ก่อน/pass หลัง (ตาราง checks) · ปิดโดยผู้ตรวจใน r3
 
 ## Finding ของ review tests-r1 (Low ทั้ง 4 ข้อ)
 - F1 ค่า round trip เป็นค่าคงที่ 23 ค่าแทนการสุ่ม: รับทราบ ดีกว่าสุ่มเพราะครอบขอบช่วงทั้งสองด้าน
