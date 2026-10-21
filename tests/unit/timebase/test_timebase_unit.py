@@ -142,3 +142,20 @@ def test_classify_offset_reports_non_finite_samples_as_unknown():
     assert classify_offset([7200.0, nan, 7200.0]) == OffsetClass("unknown", None, 3)
     assert classify_offset([0.5, inf]) == OffsetClass("unknown", None, 2)
     assert RULE.offset_seconds == 0
+
+
+def test_classify_offset_survives_extreme_finite_magnitudes():
+    # Review r2 F4: forming the bounds in float overflowed to infinity and raised. The inputs
+    # are finite; a tolerance this wide fits many hours, so the evidence is ambiguous: unknown.
+    for sign in (1, -1):
+        assert classify_offset([sign * 1.7e308], 1e307) == OffsetClass("unknown", None, 1)
+        assert classify_offset([sign * 1e308], 9e307) == OffsetClass("unknown", None, 1)
+    assert classify_offset([1.7e308, 0.0], 1e307) == OffsetClass("unknown", None, 2)
+
+
+def test_classify_offset_keeps_integer_hour_identity_beyond_float_precision():
+    # Review r2 F5: at h = 2**53 the neighbouring hour times 3600.0 rounds to the same float,
+    # so a float comparison saw two fitting hours. Exact arithmetic sees the one that fits.
+    for sign in (1, -1):
+        hours = sign * 2**53
+        assert classify_offset([float(hours * 3600)]) == OffsetClass("shifted", hours, 1)

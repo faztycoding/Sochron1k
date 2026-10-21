@@ -9,9 +9,10 @@ only reports what a set of samples looks like; it never changes a TimeRule, and 
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
+from fractions import Fraction
 from typing import Literal
 
-HOUR_SECONDS = 3600.0
+HOUR_SECONDS = 3600
 
 
 @dataclass(frozen=True)
@@ -45,18 +46,15 @@ def _common_whole_hour(values: list[float], tolerance: float) -> int | None:
     """The one nonzero whole hour h with |x - h * 3600| <= tolerance for every sample.
 
     None when no hour fits every sample, and also when more than one does: that evidence is
-    ambiguous, not a shift. The hours fitting one sample are consecutive integers, so the
-    hours fitting all samples lie between the largest lower bound and the smallest upper
-    bound. Float division can be off by one exactly at a boundary, so the candidates around
-    those bounds are settled with the contract's own inequality.
+    ambiguous, not a shift. The hours fitting one sample are the integers between
+    (x - tolerance) / 3600 and (x + tolerance) / 3600, so the hours fitting all samples lie
+    between the largest lower bound and the smallest upper bound. The bounds are formed in
+    exact rational arithmetic: a binary float could overflow there, or round neighbouring
+    hours together, once a finite sample or tolerance is large enough.
     """
-    lowest = max(math.ceil((x - tolerance) / HOUR_SECONDS) for x in values)
-    highest = min(math.floor((x + tolerance) / HOUR_SECONDS) for x in values)
-    if highest - lowest > 2:
-        return None  # at least two hours fit every sample, even allowing for float rounding
-    fitting = [
-        h
-        for h in range(lowest - 1, highest + 2)
-        if h != 0 and all(abs(x - h * HOUR_SECONDS) <= tolerance for x in values)
-    ]
-    return fitting[0] if len(fitting) == 1 else None
+    width = Fraction(tolerance)
+    lowest = max(math.ceil((Fraction(x) - width) / HOUR_SECONDS) for x in values)
+    highest = min(math.floor((Fraction(x) + width) / HOUR_SECONDS) for x in values)
+    if lowest == highest and lowest != 0:
+        return lowest
+    return None
