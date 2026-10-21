@@ -1,7 +1,7 @@
 # TASK CORE-002 — costs: cost model เดียวของระบบ (spread, commission, slippage, swap, stress ×2) พร้อมที่มาของทุกค่า
 
-Version v1.1 (v1 ร่าง 20:2x → v1.1 20:4x แก้ความกำกวมตาม `docs/reviews/CORE-002-contract-r1.md` F1–F7 ก่อนมี tests) · Owner เจ้าของ repository · Parent SPEC J2/J3 (backtest หลังต้นทุน, trade attribution ใน journal) · `docs/architecture.md` ข้อ 8 แถว `costs` และข้อ 13a แถว "R1 data selection" (freeze cost provenance) · Tier **Standard** · Branch `feat/CORE-002-costs`
-Status: **approved by delegation 2026-10-21 20:2x** — เจ้าของมอบอำนาจในแชท Claude 2026-10-21 (goal 19:1x "ทำให้เสร็จเฉพาะใน phase ขั้นตอนนี้ แล้วก็มึงตัดสินเลยกูอนุญาติ" และ 19:3x "จัดการเริ่มเลยเอาเต็มระบบส่วนนี้") Claude จึงอนุมัติ acceptance 7 ข้อแทนภายใต้สิทธิ์นั้น · เงื่อนไข: ทุกค่ามาจาก H001 (เจ้าของอนุมัติตัวเลขแล้ว) และ SPIKE-001 ไม่มีค่าธุรกิจใหม่ · Codex ตรวจ contract แบบ adversarial ก่อนเขียน tests (`docs/reviews/CORE-002-contract-r1.md`) · **เจ้าของ veto หรือแก้ acceptance ได้ทุกเมื่อก่อน merge** ถ้าแก้หลังมี tests แล้วเป็น contract รุ่นใหม่ตามกติกาเดิม · v1.1 แก้ความกำกวม F1–F7 ของ contract review r1 ก่อนมี tests (ตัวเลข acceptance เดิมทุกค่า) · รอ Codex re-review r2 ของ F1–F7 ก่อนเขียน tests
+Version v1.2 (v1 ร่าง 20:2x → v1.1 20:4x แก้ความกำกวมตาม `docs/reviews/CORE-002-contract-r1.md` F1–F7 → v1.2 20:5x แก้ F1 ส่วนที่เหลือตาม `CORE-002-contract-r2.md`: ไม่สัญญา "ไม่สูญเสียหลักเลข" อีก ใช้กฎปัดหลังแต่ละ operation ที่ precision 28 และจำกัด property เชิงเส้น/สองเท่าไว้ที่ fixtures ของ AC-01–04) · Owner เจ้าของ repository · Parent SPEC J2/J3 (backtest หลังต้นทุน, trade attribution ใน journal) · `docs/architecture.md` ข้อ 8 แถว `costs` และข้อ 13a แถว "R1 data selection" (freeze cost provenance) · Tier **Standard** · Branch `feat/CORE-002-costs`
+Status: **approved by delegation 2026-10-21 20:2x** — เจ้าของมอบอำนาจในแชท Claude 2026-10-21 (goal 19:1x "ทำให้เสร็จเฉพาะใน phase ขั้นตอนนี้ แล้วก็มึงตัดสินเลยกูอนุญาติ" และ 19:3x "จัดการเริ่มเลยเอาเต็มระบบส่วนนี้") Claude จึงอนุมัติ acceptance 7 ข้อแทนภายใต้สิทธิ์นั้น · เงื่อนไข: ทุกค่ามาจาก H001 (เจ้าของอนุมัติตัวเลขแล้ว) และ SPIKE-001 ไม่มีค่าธุรกิจใหม่ · Codex ตรวจ contract แบบ adversarial ก่อนเขียน tests (`docs/reviews/CORE-002-contract-r1.md`) · **เจ้าของ veto หรือแก้ acceptance ได้ทุกเมื่อก่อน merge** ถ้าแก้หลังมี tests แล้วเป็น contract รุ่นใหม่ตามกติกาเดิม · v1.1 แก้ความกำกวม F1–F7 ของ contract review r1 ก่อนมี tests (ตัวเลข acceptance เดิมทุกค่า) · re-review r2 ปิด F2–F7, F1 ยังเปิดส่วน "ไม่สูญเสียหลักเลข" → แก้ใน v1.2 · รอ Codex re-review r3 (F1 เท่านั้น) ก่อนเขียน tests
 Hypothesis (research tasks): ไม่ใช่งานวิจัย แต่ให้บริการ H001 (`docs/hypotheses/H001-m15-momentum-breakout.md`, commit `0c392a9`) ข้อ 6 Costs และข้อ 8 (stress ×2) · ไม่มีการรันข้อมูลตลาด
 
 ## Risk tier (Q1–Q6, one line each; unsure = yes)
@@ -84,7 +84,7 @@ sochron.costs
 ```
 
 ### Decimal context (ตอบ contract review r1 F1)
-- ทุกฟังก์ชันคำนวณใน `decimal.localcontext()` ที่โมดูลตั้งเอง: precision 28, rounding `ROUND_HALF_EVEN` · ไม่ขึ้นกับและไม่แก้ context ของผู้เรียก · การคูณและบวกของ input ที่รับ (ทศนิยมไม่เกิน 6 หลัก, จำนวนเต็มไม่เกิน 10^9) ไม่สูญเสียหลักเลขที่ precision นี้ · การหารใน `r_multiple` ปัดที่ precision 28: `r_multiple(Decimal("1"), Decimal("3")) == Decimal("0.3333333333333333333333333333")` · ไม่ quantize เป็นสตางค์ (หน้าที่ของผู้แสดงผล)
+- ทุกฟังก์ชันคำนวณใน `decimal.localcontext()` ที่โมดูลตั้งเอง: precision 28, rounding `ROUND_HALF_EVEN` · ไม่ขึ้นกับและไม่แก้ context ของผู้เรียก · การคูณและบวกอาจปัดที่ precision 28; ประเมินสมการตามวงเล็บและลำดับซ้ายไปขวาที่เขียนไว้ใน API block โดยปัดหลังแต่ละ operation; ชนิดและโดเมน input เป็นไปตามตารางด้านล่าง โดยไม่มีข้อจำกัดจำนวนหลักเพิ่มเติม · การหารใน `r_multiple` ปัดที่ precision 28: `r_multiple(Decimal("1"), Decimal("3")) == Decimal("0.3333333333333333333333333333")` · ไม่ quantize เป็นสตางค์ (หน้าที่ของผู้แสดงผล)
 - golden tests เทียบชนิด `Decimal` และค่าเชิงตัวเลขด้วย `==` ของ Decimal ไม่เทียบ exponent หรือรูปแบบ string (`Decimal("0.20000") == Decimal("0.20")` เป็นจริง)
 
 ### ชนิด โดเมน และ error (ตอบ F2)
@@ -171,7 +171,7 @@ sochron.costs
    3. Claude implement `sochron.costs` ทีละฟังก์ชันพร้อม unit tests → check: `uv run --offline pytest tests -q -p no:cacheprovider` เขียว commit ทีละขั้น
    4. Claude เขียน `docs/evidence/CORE-002.md` (รวม demo 3 ขั้น) + handoff → Codex `$cross-agent-review` → Claude `/fix-findings` → re-review จนไม่มี finding ค้าง
    5. เจ้าของเปิด PR (มี tests ที่ล็อก → ต้องติด label `owner-approved-control-change`) → `ci / control-plane` และ `control-gate / locked-paths` เขียว → merge
-4. Risks and negative cases to test: ตามหัวข้อ Negative cases ทั้งหมด · property: `points_to_money` เป็นเชิงเส้นใน lots และ points; `stress(m, 2)` ให้ทุก charge เป็น 2 เท่าพอดี; `round_trip_cost.total == spread + commission + slippage + swap` เสมอ (ถ้าใช้ `hypothesis` ต้องผ่าน admission ก่อน)
+4. Risks and negative cases to test: ตามหัวข้อ Negative cases ทั้งหมด · property: สำหรับ fixtures ของ AC-01–AC-04 ให้ `points_to_money` เป็นเชิงเส้นใน lots และ points และ `stress(m, 2)` ให้ทุก charge เป็นสองเท่าพอดี; สำหรับ input อื่นให้ตรวจค่าตามสมการที่ประกาศใน Decimal context ของโมดูล โดยไม่อ้างความเป็นเชิงเส้นหรือการเพิ่มสองเท่าแบบ exact; `round_trip_cost.total` เท่ากับผลบวก `spread + commission + slippage + swap` ตามลำดับนี้ใน context เดียวกันเสมอ (ถ้าใช้ `hypothesis` ต้องผ่าน admission ก่อน)
 5. Decisions needed from the owner: ตัดสินแทนแล้วภายใต้การมอบอำนาจ 2026-10-21 (เจ้าของ veto ได้ก่อน merge): (ก) acceptance 7 ข้ออนุมัติ (ข) ค่า [A] ของ H001 (commission 0, slippage 50 points, พุธคิด 3 เท่า) เข้า model ด้วยสถานะ `assumed` ตามตาราง — ติดป้าย ไม่ใช่ยืนยันค่า (ค) ถ้า Codex ขอ `hypothesis`: ทำ admission แล้ว Claude ตัดสินตามผล admission ภายใต้สิทธิ์เดียวกัน เว้นแต่ admission พบความเสี่ยงด้าน supply chain → ส่งเจ้าของ
 
 ## Authorization (filled by the owner)
@@ -187,9 +187,9 @@ sochron.costs
 
 ## DoR status / missing items / next action
 - ครบ: นิยามต้นทุนใน H001 (committed), spec สัญลักษณ์จาก SPIKE-001, สภาพแวดล้อม uv (D-012), สิทธิ์ branch/push ตาม D-006, การอนุมัติ acceptance โดยมอบอำนาจ (ดู Status)
-- ครบเพิ่ม: Codex contract review r1 (`docs/reviews/CORE-002-contract-r1.md`: F1–F7) → แก้ใน v1.1 ครบทุกข้อ
-- ขาด: Codex contract re-review r2 (F1–F7 เท่านั้น) · tests จาก Codex (patch)
-- next action: Codex re-review r2 → Codex `$write-acceptance-tests CORE-002` → Claude apply ตาม D-006 + session ใหม่ตรวจ + commit red แล้วลงมือ
+- ครบเพิ่ม: Codex contract review r1 (`docs/reviews/CORE-002-contract-r1.md`: F1–F7) → แก้ใน v1.1 · re-review r2 (`CORE-002-contract-r2.md`) ปิด F2–F7; F1 ส่วนที่เหลือแก้ใน v1.2
+- ขาด: Codex contract re-review r3 (F1 เท่านั้น) · tests จาก Codex (patch)
+- next action: Codex re-review r3 → Codex `$write-acceptance-tests CORE-002` → Claude apply ตาม D-006 + session ใหม่ตรวจ + commit red แล้วลงมือ
 
 ## Done scope
 implementation (ทดสอบผ่านบนเครื่อง, review ปิด, merge แล้ว) · ยังไม่รวม Python CI job และการนับคืน swap จากเวลา
