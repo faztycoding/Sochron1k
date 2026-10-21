@@ -1,7 +1,15 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-21 07:0x +07 by Claude Code · **D-001 accepted** (ราว 06:55, PR #5) · AGENTS.md แก้ตาม D-001 บน `chore/D-001-agents-phase`: apply ตาม D-006 แล้ว (หลักฐานสดว่า F22 แก้แล้ว), Codex review ไม่มี finding · รอเจ้าของติด label และ merge · ถัดไป: contract ENV-1 หรือส่วน pure
+Updated 2026-10-21 07:4x +07 by Claude Code · **H001 ลงทะเบียนแล้ว** (momentum + breakout M15, UNPROVEN) หลังเจ้าของตัดสิน 4 เรื่องและอนุมัติตัวเลขทั้งหมด · research memo + SPEC Q-06/J5 · skill admission r1 BLOCKED (TLS ใน sandbox) กำลังรัน r2 จาก clone ในเครื่อง · AGENTS.md ตาม D-001 merge แล้ว (PR #6) · ถัดไป: ENV-1 contract และ contract ของส่วน pure
 
 ## Current task
+**H001 · State: registered (UNPROVEN)** · branch `research/H001-momentum-breakout` จาก main `90278b4` · ไฟล์ `docs/hypotheses/H001-m15-momentum-breakout.md` immutable หลัง commit
+- เจ้าของตัดสิน (2026-10-21 ราว 07:20): timeframe M15 · ตัวกรองข่าวแรงเป็น H002 แยก (ต้องมีแหล่งปฏิทินที่ผ่าน admission; Python API ของ MT5 ไม่มี calendar) · การเรียนรู้แบบ journal-driven: กลยุทธ์ที่รันอยู่ freeze, ทุกไม้มี trade attribution, ข้อเสนอแก้กฎ = H รุ่นใหม่ · ทำ research memo และตรวจ skill 3 ตัว
+- เจ้าของอนุมัติตัวเลขทั้งหมดของ H001 ตามร่าง (ราว 07:40) รวม holdout cutoff 2025-01-01 ซึ่งเป็นคำตอบ Q-08 สำหรับ H001 (ผู้ถือ = เจ้าของ บน acquisition host)
+- **ห้ามรัน backtest ของ H001** จนกว่า ENV-1 ผ่านและมี contract SLICE-R1 ที่อนุมัติ
+- `docs/research/H001-background.md`: หลักฐาน vs ความเห็นแยกชัด · ไม่มีหลักฐานสาธารณะว่า momentum/Donchian ทำกำไรบนทอง M15 หลังต้นทุน · แหล่งปฏิทินสำหรับ H002 ต้องผ่าน admission · ชุด reason code สำหรับ journal เสนอไว้แล้ว
+- skill admission (`docs/reviews/TOOLING-admission-r1.md`): BLOCKED เพราะ curl ใน sandbox ของ Codex ติด TLS → 3 ตัวเป็น SPIKE FIRST ชั่วคราว · r2 รันจาก sparse clone ในเครื่องที่ SHA `a313174`
+- H ถัดไปที่ยังไม่ลงทะเบียน: H002 news no-trade window · H003 z-score mean reversion · macro score ภายหลัง
+
 **D-001 · State: accepted (เจ้าของ 2026-10-21 ราว 06:55)** · ขอบเขตการอนุมัติอยู่ใน DECISIONS.md D-001 (ไม่รวม dependency, การวิจัยก่อน ENV-1 และการส่งคำสั่ง) · branch `chore/D-001-architecture-revision` (ต่อจาก `ddffeb4`) · ย้ายกลับมาทำที่โฟลเดอร์หลักแล้ว ลบ worktree แยกที่สะอาดไปแล้ว
 - เจ้าของตัดสิน F1 (2026-10-21):
   - เป้าหมายคือ MT5 บน Windows VPS ทำหน้าที่ acquisition/execution host
