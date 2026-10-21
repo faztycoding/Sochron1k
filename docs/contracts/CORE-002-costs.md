@@ -1,7 +1,7 @@
 # TASK CORE-002 — costs: cost model เดียวของระบบ (spread, commission, slippage, swap, stress ×2) พร้อมที่มาของทุกค่า
 
 Version v1 · Owner เจ้าของ repository · Parent SPEC J2/J3 (backtest หลังต้นทุน, trade attribution ใน journal) · `docs/architecture.md` ข้อ 8 แถว `costs` และข้อ 13a แถว "R1 data selection" (freeze cost provenance) · Tier **Standard** · Branch `feat/CORE-002-costs`
-Status: draft (รอเจ้าของอนุมัติ acceptance 7 ข้อ)
+Status: **approved by delegation 2026-10-21 20:2x** — เจ้าของมอบอำนาจในแชท Claude 2026-10-21 (goal 19:1x "ทำให้เสร็จเฉพาะใน phase ขั้นตอนนี้ แล้วก็มึงตัดสินเลยกูอนุญาติ" และ 19:3x "จัดการเริ่มเลยเอาเต็มระบบส่วนนี้") Claude จึงอนุมัติ acceptance 7 ข้อแทนภายใต้สิทธิ์นั้น · เงื่อนไข: ทุกค่ามาจาก H001 (เจ้าของอนุมัติตัวเลขแล้ว) และ SPIKE-001 ไม่มีค่าธุรกิจใหม่ · Codex ตรวจ contract แบบ adversarial ก่อนเขียน tests (`docs/reviews/CORE-002-contract-r1.md`) · **เจ้าของ veto หรือแก้ acceptance ได้ทุกเมื่อก่อน merge** ถ้าแก้หลังมี tests แล้วเป็น contract รุ่นใหม่ (v1.1) ตามกติกาเดิม
 Hypothesis (research tasks): ไม่ใช่งานวิจัย แต่ให้บริการ H001 (`docs/hypotheses/H001-m15-momentum-breakout.md`, commit `0c392a9`) ข้อ 6 Costs และข้อ 8 (stress ×2) · ไม่มีการรันข้อมูลตลาด
 
 ## Risk tier (Q1–Q6, one line each; unsure = yes)
@@ -134,11 +134,11 @@ sochron.costs
    4. Claude เขียน `docs/evidence/CORE-002.md` (รวม demo 3 ขั้น) + handoff → Codex `$cross-agent-review` → Claude `/fix-findings` → re-review จนไม่มี finding ค้าง
    5. เจ้าของเปิด PR (มี tests ที่ล็อก → ต้องติด label `owner-approved-control-change`) → `ci / control-plane` และ `control-gate / locked-paths` เขียว → merge
 4. Risks and negative cases to test: ตามหัวข้อ Negative cases ทั้งหมด · property: `points_to_money` เป็นเชิงเส้นใน lots และ points; `stress(m, 2)` ให้ทุก charge เป็น 2 เท่าพอดี; `round_trip_cost.total == spread + commission + slippage + swap` เสมอ (ถ้าใช้ `hypothesis` ต้องผ่าน admission ก่อน)
-5. Decisions needed from the owner: (ก) อนุมัติ acceptance 7 ข้อ (ข) ยืนยันว่าค่า [A] ของ H001 (commission 0, slippage 50 points, พุธคิด 3 เท่า) เข้า model ด้วยสถานะ `assumed` ตามตาราง — ไม่ใช่การยืนยันค่า แค่ยืนยันการติดป้าย (ค) ถ้า Codex ขอ `hypothesis` ให้ตัดสินตอน admission
+5. Decisions needed from the owner: ตัดสินแทนแล้วภายใต้การมอบอำนาจ 2026-10-21 (เจ้าของ veto ได้ก่อน merge): (ก) acceptance 7 ข้ออนุมัติ (ข) ค่า [A] ของ H001 (commission 0, slippage 50 points, พุธคิด 3 เท่า) เข้า model ด้วยสถานะ `assumed` ตามตาราง — ติดป้าย ไม่ใช่ยืนยันค่า (ค) ถ้า Codex ขอ `hypothesis`: ทำ admission แล้ว Claude ตัดสินตามผล admission ภายใต้สิทธิ์เดียวกัน เว้นแต่ admission พบความเสี่ยงด้าน supply chain → ส่งเจ้าของ
 
 ## Authorization (filled by the owner)
-- Claude Code / เขียน `src/sochron/costs/**`, `tests/unit/costs/**`, evidence, handoff, PROGRESS / repo นี้ / จนกว่า CORE-002 จะ done — รอเจ้าของกรอก (ร่าง: อนุมัติพร้อม acceptance)
-- Codex / เขียน tests ที่ล็อกเป็น patch ใน `docs/proposals/` / `tests/acceptance/CORE-002`, `tests/golden/CORE-002`, `tests/architecture` / งานนี้ — รอเจ้าของกรอก (ร่าง: อนุมัติพร้อม acceptance)
+- Claude Code / เขียน `src/sochron/costs/**`, `tests/unit/costs/**`, evidence, handoff, PROGRESS / repo นี้ / จนกว่า CORE-002 จะ done — อนุมัติโดยมอบอำนาจ (เจ้าของ 2026-10-21 19:1x/19:3x ดู Status) · เจ้าของ veto ได้ก่อน merge
+- Codex / เขียน tests ที่ล็อกเป็น patch ใน `docs/proposals/` / `tests/acceptance/CORE-002`, `tests/golden/CORE-002`, `tests/architecture` / งานนี้ — อนุมัติโดยมอบอำนาจเดียวกัน (ขั้นตอน test author ปกติเหมือน CORE-001)
 - ไม่มีการเชื่อม terminal หรือบัญชีใดๆ ในงานนี้ · ไม่มี dependency ใหม่เว้นแต่ผ่าน admission
 
 ## Budget
@@ -148,9 +148,9 @@ sochron.costs
 ลบ `src/sochron/costs`, tests ของ CORE-002 แล้วทิ้ง branch ได้ทั้งก้อน ไม่มีผลข้างเคียงนอกเครื่อง · checkpoint ใน PROGRESS.md หลังทุกขั้นที่ผ่าน check
 
 ## DoR status / missing items / next action
-- ครบ: นิยามต้นทุนใน H001 (committed), spec สัญลักษณ์จาก SPIKE-001, สภาพแวดล้อม uv (D-012), สิทธิ์ branch/push ตาม D-006
-- ขาด: การอนุมัติ acceptance จากเจ้าของ · tests จาก Codex (patch)
-- next action: เจ้าของอนุมัติ acceptance → commit contract (approved) → Codex `$write-acceptance-tests CORE-002`
+- ครบ: นิยามต้นทุนใน H001 (committed), spec สัญลักษณ์จาก SPIKE-001, สภาพแวดล้อม uv (D-012), สิทธิ์ branch/push ตาม D-006, การอนุมัติ acceptance โดยมอบอำนาจ (ดู Status)
+- ขาด: Codex contract review r1 · tests จาก Codex (patch)
+- next action: Codex `$cross-agent-review` ของ contract นี้ (read-only) → แก้ finding ถ้ามี → Codex `$write-acceptance-tests CORE-002` → Claude apply ตาม D-006 แล้วลงมือ
 
 ## Done scope
 implementation (ทดสอบผ่านบนเครื่อง, review ปิด, merge แล้ว) · ยังไม่รวม Python CI job และการนับคืน swap จากเวลา
