@@ -128,3 +128,16 @@ Review when: เริ่มใช้นอก spike
 Decision: ADMIT `pytest==9.1.1` พร้อม `colorama==0.4.6`, `iniconfig==2.3.1`, `packaging==26.3`, `pluggy==1.7.0` และ `Pygments==2.21.0` เฉพาะ tests ของ SPIKE-001 · ไม่ใช้ extras · ไม่เพิ่ม dependency หรือ lockfile ให้โปรเจกต์
 Why: เวอร์ชัน 9.1.1 พ้นช่วงที่ได้รับผลจาก GHSA-6w46-j5rx-g56g (แก้แล้วใน 9.0.3)
 Review when: เลือก test runner ของโปรเจกต์ใน D-001
+
+## D-012 dependency ชุดแรกของโปรเจกต์สำหรับ CORE-001 และ `pyproject.toml`/`uv.lock` ฉบับแรก — 2026-10-21 — accepted (เจ้าของอนุมัติในแชท Claude ราว 08:16 หลังผล admission)
+Context: CORE-001 (timebase) เป็นโค้ด Python ชิ้นแรก ต้องมี environment ของโปรเจกต์ · D-010/D-011 อนุมัติแพ็กเกจเฉพาะใน SPIKE-001 จึงใช้แทนไม่ได้ · ผล admission ระดับโปรเจกต์อยู่ใน `docs/reviews/CORE-001-dependency-admission.md` (Codex, ตรวจ PyPI/OSV 2026-10-21 08:02–08:06 +07, ไม่พบ advisory ที่ตรงกับ pin)
+Decision: ADMIT 7 pins เข้า `pyproject.toml` (requires-python `>=3.12,<3.13`, src layout) และ `uv.lock`:
+- runtime: `tzdata==2026.5` (ข้อมูล IANA ให้ `zoneinfo` บน Windows)
+- dev/test: `pytest==9.1.1`, `colorama==0.4.6`, `iniconfig==2.3.1`, `packaging==26.3`, `pluggy==1.7.0`, `Pygments==2.21.0`
+Why: ตรงกับที่ contract CORE-001 กำหนด · ทุกตัวมี universal wheel, license เปิด (Apache-2.0, MIT, BSD) และเป็นชุดเดียวกับที่รันผ่านแล้วใน SPIKE-001
+Conditions:
+- โปรเจกต์เป็น virtual project (`[tool.uv] package = false`) ยังไม่ใช้ build backend จึงไม่มี dependency เวลา build · tests import ผ่าน `pythonpath = ["src"]`
+- `hypothesis` (property tests) ไม่รวมในนี้ ถ้า Codex ขอใช้ตาม skill trial ต้องผ่าน admission และตัดสินแยก
+- เพิ่ม, ลบ หรือเปลี่ยน pin ใดๆ หลังจากนี้ต้องผ่าน admission และบันทึกใน DECISIONS
+- `uv lock` และ `uv sync` ทำครั้งแรกโดย Claude ภายใต้ CORE-001 เท่านั้น
+Review when: Python รุ่นใหม่, advisory ใหม่ของแพ็กเกจเหล่านี้ หรือเพิ่มโมดูลที่ต้องใช้แพ็กเกจอื่น (เช่น numpy, pyarrow ใน R1)
