@@ -261,3 +261,23 @@ changed to repair these verification mistakes.
 Delivery state: test proposal implemented and locally verified in the expected
 red state; unapplied at delivery, unstaged, uncommitted, not merged or deployed.
 CORE-002 implementation acceptance remains FAIL while the module is absent.
+
+
+## Implementation (Claude Code), 2026-10-21
+
+Order followed: contract approved by delegation (`e589edc`) → Codex contract reviews r1–r3 (`5bce19b`, `c8e3793`, `53f1218`) → Codex tests applied via D-006, six hashes verified, fresh-session review `docs/reviews/CORE-002-tests-r1.md` (ready to commit red), committed red at `dced669` → implementation in the commit that adds `docs/evidence/CORE-002.md`.
+
+- `src/sochron/costs/` = `errors.py`, `model.py`, `charges.py`, `__init__.py`; `tests/unit/costs/test_costs_unit.py` (10 implementer tests, unique basename).
+- First run after copying the module in: 40 passed, 1 failed (AC-05: `spread_charge(Decimal("240"), …)` must raise `TypeError`; the draft accepted Decimal spread points through the shared points helper). Fix: `_spread_points` accepts `int | None` only. Second run: `uv run --offline pytest tests -q -p no:cacheprovider` → 41 passed, 0 skipped at 21:30:31 +07. No locked test touched after `dced669`.
+- Every arithmetic step runs inside `decimal.localcontext(CONTEXT)` with `CONTEXT = Context(prec=28, rounding=ROUND_HALF_EVEN)` built fresh (not copied from the caller, so the caller's traps do not apply; tests-r1 F3), in the order the contract's API block writes each equation. The r2 reproduction model (12.345678 everywhere, lots 1.23) evaluates to 28573.59557212382385913406202, the contract's value.
+- Wrong scalar types raise `TypeError` before any arithmetic (bool is not an int; lots must be Decimal; points int or Decimal; spread points int or None; side str); bad values raise the `CostsError` family exactly as the contract's table lists, including non-finite Decimals and model-field domains at construction (`replace()` re-runs the validation).
+- `swap_charge` returns `0 − charge` so a zero swap is never a negative zero; `points_to_money` accepts signed points (swap needs them), spread/slippage/commission reject negatives. No `float` name appears in `src/sochron/costs` (tests-r1 F1).
+- The provenance mapping is copied into a `MappingProxyType` over a new dict at construction; source-dict mutation cannot reach the model.
+
+Please look hard at (review r1):
+- `CostModel.__post_init__` raises `TypeError` for a non-Decimal numeric field and for a non-str `symbol`; `Provenance.__post_init__` raises `TypeError` for non-str source/note or non-date `as_of` and `BadProvenance` for an unknown status. The contract's table asks for this split; say if any case should move.
+- `stress()` accepts an `int` factor (contract: `Decimal | int`) and converts it with `Decimal(factor)`; `bool` is rejected.
+- Validation order with two defects at once (for example a bad `sides` and bad lots) is unspecified by the contract; the implementation checks `sides` first, then lots.
+- Exports `CONTEXT`, `PROVENANCE_FIELDS`, `STATUSES`, `Side`, `Status` are additions beyond the API block, not changes.
+
+Next: Codex `$cross-agent-review CORE-002` (read-only) → `/fix-findings` → re-review until clean → owner opens the PR with the label `owner-approved-control-change` (three locked test files plus the inherited AGENTS.md/CLAUDE.md change if the chore PR is not merged first) → merge.
