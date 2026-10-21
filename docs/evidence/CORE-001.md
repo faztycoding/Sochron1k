@@ -14,7 +14,7 @@ Contract: `docs/contracts/CORE-001-timebase.md` (เจ้าของอนุ�
 | AC-06 จำแนก offset โดยไม่แก้กฎ | **PASS** | `test_ac06_classify_offsets_without_mutating_time_rules`: 10 ชุดตัวอย่าง (ok / shifted ±2 h / unknown) และ `RULES`, `TimeRule`, `EntryWindow`, `OffsetClass` แก้ค่าไม่ได้ (`FrozenInstanceError`) |
 | AC-07 ขอบเขต import, ไม่มีนาฬิกา/I/O, red-flags | **PASS** | `test_ac07_timebase_and_core_import_boundaries_and_no_clock_or_io` (AST) ผ่าน · red-flag scan: กลุ่ม secret และ order/account mutation ว่าง (ดูตาราง checks) |
 
-ทั้ง 7 ข้อผ่านพร้อมกันในรันเดียว: **19 passed, 0 skipped** (acceptance 6, architecture 1, unit 12) ที่ `5546da0` · หลังแก้ตาม Codex review r1 (F1–F3): **22 passed, 0 skipped** (unit 15) ที่ `0b8475d` 08:44:41 · หลังแก้ตาม r2 (F4–F5): **24 passed, 0 skipped** (unit 17) ที่ `0e80263` 08:57:20
+ทั้ง 7 ข้อผ่านพร้อมกันในรันเดียว: **19 passed, 0 skipped** (acceptance 6, architecture 1, unit 12) ที่ `5546da0` · หลังแก้ตาม Codex review r1 (F1–F3): **22 passed, 0 skipped** (unit 15) ที่ `0b8475d` 08:44:41 · หลังแก้ตาม r2 (F4–F5): **24 passed, 0 skipped** (unit 17) ที่ `0e80263` 08:57:20 · Codex r3 (19:15) ยืนยัน 24 passed และปิด F4–F5 ไม่มี finding ค้าง
 
 ## สิ่งที่ส่งมอบ
 
@@ -34,6 +34,25 @@ Contract: `docs/contracts/CORE-001-timebase.md` (เจ้าของอนุ�
 - `check_aware` เป็น public helper ให้โมดูลอื่นใช้ปฏิเสธ naive datetime แบบเดียวกัน
 - `bar_open` หาร floor บน "วินาที UTC" แล้วบวก offset กลับ ตามสูตรใน contract (ทดสอบด้วย offset 61 และ 3600)
 - ไม่มีการอ่านนาฬิกา ไม่มี I/O และไม่มี `MetaTrader5` ในแพ็กเกจ (AST test + ตรวจด้วยตา)
+
+## Demo สำหรับเจ้าของ (รันเองได้ใน 1 นาที, Git Bash ที่ root ของ repo)
+
+1. ชุดทดสอบทั้งหมด: `uv run --offline pytest tests -q -p no:cacheprovider` → ต้องได้ `24 passed` และไม่มี skipped
+2. ใช้งานจริงกับค่า tick ของ SPIKE-001 (`1792525992` / msc `…035`):
+   ```bash
+   PYTHONPATH=src uv run --offline python -c "from sochron.timebase import rule_for, to_utc, to_raw, in_entry_window, bangkok_date, bar_open, classify_offset; r = rule_for('Exness-MT5Trial14'); dt = to_utc(1792525992, r, msc=1792525992035); print('utc', dt); print('raw back', to_raw(dt, r)); print('in NY window', in_entry_window(dt)); print('bangkok date', bangkok_date(dt)); print('M15 open', bar_open(1792525992, 15, r)); print(classify_offset([-0.246, 0.268, 0.306])); print(classify_offset([7080.0, 7200.0, 7320.0]))"
+   ```
+   ผลที่ต้องได้ (รันจริง 2026-10-21 19:19:30 บน `bf0d504`):
+   ```text
+   utc 2026-10-20 19:53:12.035000+00:00
+   raw back 1792525992
+   in NY window True          # 15:53 เวลา New York (EDT) อยู่ในหน้าต่าง 03:00–15:59
+   bangkok date 2026-10-21    # 02:53 เวลาไทยของวันถัดไป
+   M15 open 1792525500        # 19:45:00 UTC
+   OffsetClass(kind='ok', hours=None, samples=3)
+   OffsetClass(kind='shifted', hours=2, samples=3)
+   ```
+3. ปฏิเสธ server ที่ไม่มีกฎ: `PYTHONPATH=src uv run --offline python -c "from sochron.timebase import rule_for; rule_for('Other-Server')"` → บรรทัดสุดท้ายต้องเป็น `UnknownTimeRule: no measured time rule for server 'Other-Server'; measure it first (a SPIKE contract)`
 
 ## Checks (2026-10-21, +07, Windows 11, Python 3.12.15 ผ่าน uv 0.13.0, tzdata 2026e)
 
@@ -55,12 +74,16 @@ Contract: `docs/contracts/CORE-001-timebase.md` (เจ้าของอนุ�
 | regression F4/F5 ก่อนแก้ `uv run --offline pytest tests/unit/timebase/test_timebase_unit.py -q -p no:cacheprovider -k "extreme_finite or integer_hour_identity"` | FAIL ตามคาด (F4 `OverflowError` · F5 unknown แทน shifted) | ก่อน `0e80263` | 08:56:12 |
 | `uv run --offline pytest tests -q -p no:cacheprovider` หลังแก้ F4/F5 | **PASS 24 passed, 0 skipped, 0.06 s** | `0e80263` | 08:57:20 |
 | `bash scripts/controls/red-flags.sh origin/main` · locked diff หลัง `85d78bf` | PASS exit 0 · 1 กลุ่มเดิม (type-ignore) · ว่าง | `0e80263` | 08:57:21 |
+| merge `origin/main` เข้า branch (เจ้าของอนุมัติ) แล้ว `uv run --offline pytest tests -q -p no:cacheprovider` · red-flags · `git diff --check origin/main...HEAD` | PASS 24 passed · 1 กลุ่มเดิม · PASS · conflict เฉพาะ PROGRESS.md แก้แล้ว ไม่มีโค้ดเปลี่ยน | `bf0d504` | 09:01:45 |
+| Codex re-review r3: suite ในเครื่อง Codex + oracle จำนวนเต็ม 16,674 กรณี (`docs/reviews/CORE-001-r3.md`) | PASS 24 passed, 0 skipped · F4/F5 ปิด · ไม่มี finding ใหม่ · AC-01–07 PASS | `bf0d504` | 19:15:06–19:17:02 |
+| Demo สำหรับเจ้าของ ข้อ 2–3 ด้านบน | PASS ผลตรงตามที่บันทึก · `UnknownTimeRule` สำหรับ server ที่ไม่มีกฎ | `bf0d504` | 19:19:30 |
 
 ## ยังไม่ได้ทดสอบ / ข้อจำกัด
 - Linux: ยังไม่มี Python job ใน CI (control change แยก) ผลทั้งหมดมาจาก Windows
 - เวลาทำการของ `XAUUSDm` ไม่อยู่ในโมดูลนี้ (AC-03 ของ SPIKE-001 ยัง UNKNOWN ด้าน timezone)
 - `to_zone` กับชื่อ zone ที่ไม่มีอยู่ปล่อย `ZoneInfoNotFoundError` ของ stdlib · `tolerance_seconds` ที่ไม่ finite หรือติดลบยังไม่มีพฤติกรรมกำหนดใน contract (ดู note ใน handoff)
-- Codex review r1: F1–F3 แก้ครบ และ r2 ปิดให้แล้ว · r2 พบ F4–F5 แก้แล้ว (`0e80263`) · รอ re-review r3 ก่อนเปิด PR
+- Codex review ครบ 3 รอบ: r1 พบ F1–F3 → แก้ → r2 ปิด F1–F3 และพบ F4–F5 → แก้ (`0e80263`) → r3 ปิด F4–F5 ไม่มี finding ค้าง · ที่เหลือเป็นมือเจ้าของ: เปิด PR, ติด label, merge
+- การตัดสินที่ Claude รับมาตามที่เจ้าของอนุญาต (19:1x "ทำ phase นี้ให้จบ ตัดสินเอง"): คงนโยบาย F2 (NaN/inf → unknown) · tolerance ที่ไม่ finite/ติดลบ และชื่อ zone ที่ไม่มี ไม่เพิ่ม error ใหม่ในรุ่นนี้ บันทึกเป็น follow-up ของ contract timebase ถัดไป
 
 ## Finding ของ review r1 (implementation, `docs/reviews/CORE-001-r1.md`)
 - F1 Medium (รับ, `5538617`): `classify_offset` ปัดชั่วโมงทีละค่าแยกกัน ทำให้ `[1800, 5400]` ที่ tolerance 1800 ได้ unknown แทน shifted 1 ชั่วโมง → เปลี่ยนเป็นหา "ชั่วโมงเต็มที่เข้ากับทุกค่า": เข้าพอดี 1 ชั่วโมง → shifted, ไม่มีหรือมีหลายชั่วโมง (กำกวม) → unknown · tolerance ปริยาย 120 วินาทีให้ผลเดิมทุกแถว golden

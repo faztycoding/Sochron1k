@@ -389,3 +389,16 @@ Suite: 24 passed, 0 skipped (acceptance 6, architecture 1, unit 17) on `0e80263`
 Branch update: the owner approved merging `origin/main` (PR #7, H001) into this task branch to resolve the PROGRESS.md conflict before the PR; the merge commit follows this one and changes no code.
 
 Next: Codex `$cross-agent-review CORE-001` round 3 re-checks F4 and F5 only and writes `docs/reviews/CORE-001-r3.md`.
+
+
+## Review r3 result and phase close-out (Claude Code), 2026-10-21
+
+`docs/reviews/CORE-001-r3.md` (Codex, fresh headless session, head `bf0d504`): F4 closed, F5 closed, no new finding; AC-01 to AC-07 PASS; suite 24 passed, 0 skipped at 19:15:06 +07; independent integer oracle 16,674 cases with zero mismatches; locked tests byte-identical to `85d78bf`. No code changed after `0e80263`.
+
+Decisions taken by the implementer under the owner's authorization of 19:1x ("finish this phase, decide yourself"):
+- F2 policy stays as implemented: non-finite samples return `unknown` with the sample count.
+- Inputs the contract leaves undefined (non-finite or negative `tolerance_seconds`, unknown zone names in `to_zone`) get no new error class in this version. They are recorded as follow-ups for the next timebase contract, not as blockers.
+- The owner demo (three steps) was added to `docs/evidence/CORE-001.md` and run on `bf0d504` at 19:19:30 with the output recorded there.
+- The review cycle is closed on the implementer's side; the reviewer's own words close each finding (r2 for F1–F3, r3 for F4–F5).
+
+Ready for the owner, nothing else needs an agent: open the pull request from `feat/CORE-001-timebase` into `main` with the body prepared in the Claude session, apply the label `owner-approved-control-change` (three Codex-authored locked test files), wait for `ci / control-plane` and `control-gate / locked-paths` to pass, then merge. CI runs only on the pull request and on `main`, so there is no CI result for this branch before the PR exists.
