@@ -1,0 +1,27 @@
+[project]
+name = "sochron"
+version = "0.0.1"
+description = "Sochron1k: research and Demo-only automated trading for XAU/USD on MetaTrader 5"
+requires-python = ">=3.12,<3.13"
+# Every pin below entered through dependency admission and owner approval (DECISIONS.md D-012).
+dependencies = [
+    "tzdata==2026.5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "colorama==0.4.6",
+    "iniconfig==2.3.1",
+    "packaging==26.3",
+    "pluggy==1.7.0",
+    "pygments==2.21.0",
+]
+
+[tool.uv]
+# Virtual project: no build backend yet; code under src/ is imported through pythonpath (D-012).
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
