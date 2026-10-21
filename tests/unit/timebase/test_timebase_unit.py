@@ -90,6 +90,18 @@ def test_entry_window_in_another_zone():
     assert in_entry_window(datetime(2026, 10, 21, 10, 1, tzinfo=UTC), window) is False
 
 
+def test_entry_window_ignores_seconds_in_the_window_bounds_too():
+    # Review r1 F3: bounds with seconds or microseconds must not shrink the window; the
+    # comparison is between wall-clock minutes on both sides.
+    window = EntryWindow("UTC", time(3, 0, 59), time(15, 59, 59, 999_999))
+    assert in_entry_window(datetime(2026, 10, 20, 2, 59, 59, tzinfo=UTC), window) is False
+    assert in_entry_window(datetime(2026, 10, 20, 3, 0, 0, tzinfo=UTC), window) is True
+    assert in_entry_window(datetime(2026, 10, 20, 3, 0, 59, tzinfo=UTC), window) is True
+    assert in_entry_window(datetime(2026, 10, 20, 15, 59, 0, tzinfo=UTC), window) is True
+    assert in_entry_window(datetime(2026, 10, 20, 15, 59, 59, tzinfo=UTC), window) is True
+    assert in_entry_window(datetime(2026, 10, 20, 16, 0, 0, tzinfo=UTC), window) is False
+
+
 def test_bangkok_date_and_to_zone_agree():
     instant = datetime(2026, 10, 20, 17, 0, tzinfo=UTC)
     assert to_zone(instant, "Asia/Bangkok").utcoffset() == timedelta(hours=7)

@@ -27,10 +27,16 @@ NY_ENTRY_WINDOW = EntryWindow("America/New_York", time(3, 0), time(15, 59))
 
 
 def in_entry_window(dt: datetime, window: EntryWindow = NY_ENTRY_WINDOW) -> bool:
-    """Whether the instant falls inside the window, at minute precision (seconds are ignored)."""
+    """Whether the instant falls inside the window, at minute precision.
+
+    Seconds and microseconds are ignored on the instant and on both window bounds alike, so a
+    window is a range of wall-clock minutes whatever the caller put in its time objects.
+    """
     local = check_aware(dt).astimezone(ZoneInfo(window.zone))
     minute = time(local.hour, local.minute)
-    return window.start <= minute <= window.end_inclusive
+    start = time(window.start.hour, window.start.minute)
+    end_inclusive = time(window.end_inclusive.hour, window.end_inclusive.minute)
+    return start <= minute <= end_inclusive
 
 
 def bangkok_date(dt: datetime) -> date:
