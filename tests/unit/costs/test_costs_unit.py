@@ -143,6 +143,21 @@ def test_cost_breakdown_rejects_wrong_types_and_totals():
     assert good.total == Decimal("10")
 
 
+def test_cost_breakdown_rejects_non_finite_fields_without_touching_the_callers_context():
+    # Review r2 F4: comparing an sNaN total outside the module context raised InvalidOperation in
+    # the caller's context (or passed, depending on its traps) and set the caller's flags.
+    from sochron.costs import CostBreakdown
+
+    with localcontext() as caller:
+        caller.clear_flags()
+        for bad in (Decimal("sNaN"), Decimal("NaN"), Decimal("Infinity")):
+            with pytest.raises(CostsError):
+                CostBreakdown(Decimal("1"), Decimal("2"), Decimal("3"), Decimal("4"), bad, Decimal("1"))
+            with pytest.raises(CostsError):
+                CostBreakdown(bad, Decimal("2"), Decimal("3"), Decimal("4"), Decimal("10"), Decimal("1"))
+        assert not any(caller.flags.values())
+
+
 def test_provenance_must_be_a_mapping():
     # Review r1 F3: a list of the eleven keys reached .items() and raised AttributeError.
     with pytest.raises(TypeError):

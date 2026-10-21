@@ -34,9 +34,12 @@ class CostBreakdown:
             value = getattr(self, name)
             if not isinstance(value, Decimal):
                 raise TypeError(f"{name} must be a Decimal, not {type(value).__name__}")
+            if not value.is_finite():
+                raise CostsError(f"{name} must be finite, got {value}")
         with localcontext(CONTEXT):
             expected = self.spread + self.commission + self.slippage + self.swap
-        if self.total != expected:
+            consistent = self.total == expected
+        if not consistent:
             raise CostsError(f"total {self.total} is not the ordered sum of the components {expected}")
 
 
