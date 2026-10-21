@@ -11,18 +11,19 @@ conflicts with the handbook, stop and ask.
 - Owner and approver: the repository owner, the only human role. Risk tier: Standard for research
   and Demo work; High for control changes (this bootstrap) and for anything touching real money,
   credentials or controls (SPEC.md section 2).
-- Phase: bootstrap. There is no application code yet. Architecture decision D-001 is proposed,
-  not accepted: do not scaffold packages, add project dependencies or write feature code until
-  D-001 is accepted and an approved task contract covers the work. The exception is an approved
-  SPIKE contract, which gathers the evidence D-001 needs: it may run owner-approved packages in a
-  throwaway uv environment (`uv run --with`) without adding them to the project.
+- Phase: architecture accepted. D-001 was accepted on 2026-10-21 (scope in DECISIONS.md D-001);
+  there is no application code yet. Write code only under an approved task contract, and add a
+  project dependency only through `dependency-admission` and owner approval. Until ENV-1 passes
+  (docs/architecture.md section 6.1), do not cut a holdout, ingest market data for research or
+  run strategy experiments. SPIKE contracts may still run owner-approved packages in a throwaway
+  uv environment (`uv run --with`) without adding them to the project.
 - Sources of truth: SPEC.md (what and why) · docs/architecture.md (boundaries) · DECISIONS.md
   (decisions) · PROGRESS.md (current state) · docs/contracts/ (tasks) · docs/HANDBOOK-CORE.md (process).
 
 ## Stack
-- Proposed in D-001, not adopted yet: Python 3.12 managed by uv on Windows, the official
-  `MetaTrader5` package (Windows-only wheels, cp310 to cp314), pytest, SQLite, Parquet. Every
-  dependency enters through the `dependency-admission` review and owner approval.
+- Adopted in D-001 (accepted 2026-10-21): Python 3.12 managed by uv on Windows, the official
+  `MetaTrader5` package (Windows-only wheels, cp310 to cp314), pytest, SQLite, Parquet. None is a
+  project dependency yet: each enters through the `dependency-admission` review and owner approval.
 - Adopted for the control plane (BOOT-001): Git Bash, Node.js scripts, GitHub Actions.
 - The dev machine has no system Python. Run Python only through `uv run`. Never switch package
   managers, upgrade major versions or regenerate a lockfile without approval.
@@ -95,8 +96,10 @@ Never:
 
 ## Trading and research invariants
 Handbook ch.34; the product values (risk limits, symbol, hours) live in SPEC.md.
-- Demo only. Code that can send an order must check, immediately before sending, that the
-  terminal's account trade mode is Demo, and refuse otherwise. No live path exists until a new
+- Demo only. Code that can send an order must check, immediately before sending, that the action
+  is inside the approved execution scope: terminal identity, server, authorized account, Demo
+  trade mode, allowed action and symbol, and expiry (docs/architecture.md section 7.1). Demo mode
+  alone is not enough; on a mismatch or unknown, refuse and halt. No live path exists until a new
   SPEC version and High-tier controls are approved.
 - MT5 is authoritative for prices, orders, deals, positions and stop losses. A timed-out or
   ambiguous send is UNKNOWN: reconcile against the terminal before any retry. Journal the intent before every external send.
@@ -104,14 +107,16 @@ Handbook ch.34; the product values (risk limits, symbol, hours) live in SPEC.md.
   martingale, average down, or raise risk to recover losses. Our risk gate runs before every
   order; platform checks are not a risk gate. Confirm results from real orders and positions.
 - One strategy implementation, a pure function shared by backtest and live: no I/O, clock or MT5 imports in strategy code.
-- All time conversion goes through one time module. What MT5 timestamps mean is not proven yet:
-  the MetaTrader5 Python docs say tick and bar times are UTC, while MQL5 community reports say
-  broker server time. Store raw timestamps, assume neither, and convert only by the rule that
-  SPIKE-001 measures.
+- All time conversion goes through one time module. What MT5 timestamps mean is not proven:
+  the MetaTrader5 Python docs say UTC, while MQL5 community reports say broker server time.
+  SPIKE-001 measured offset 0 on `Exness-MT5Trial14` but could not tell the two apart (AC-04
+  UNKNOWN). Store raw timestamps and convert only by a versioned rule for the measured server,
+  symbol and build; measure again for any other server.
 - Register a hypothesis in docs/hypotheses/ (skill `register-hypothesis`) and commit it before
   running any backtest on it. Never edit its pass/fail conditions after seeing results; a new idea gets a new H number.
 - Every experiment run is logged automatically to the variant registry, failures included. The
-  holdout set never lives in the research checkout: never read, request or reconstruct it.
+  holdout set never lives on the research host (docs/architecture.md section 6.1): never read,
+  request or reconstruct it.
 - Costs are explicit (spread, commission, slippage, swap) and re-tested at 2x. A profitable
   backtest is not evidence of an edge; compare against many random-entry runs.
 - Golden tests and known-answer fixtures are written by the reviewer role, never by the engine's author.
@@ -138,7 +143,7 @@ Handbook ch.34; the product values (risk limits, symbol, hours) live in SPEC.md.
 - Owner-facing documents are written in Thai with English technical terms: SPEC.md,
   docs/architecture.md, DECISIONS.md, PROGRESS.md, contract goals and acceptance, completion
   reports, explain-backs. Code, identifiers, commit messages, test names, handoff notes and reviews are English.
-- Folder layout and import rules follow the module map in docs/architecture.md once D-001 is accepted.
+- Folder layout and import rules follow the module map in docs/architecture.md (D-001 accepted).
 - Money and volume use Decimal or scaled integers; never compare floats for equality. Store
   UTC plus the raw MT5 timestamp, and display Asia/Bangkok separately.
 

@@ -1,5 +1,5 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-21 +07 by Claude Code · **D-001 accepted** โดยเจ้าของ (ราว 06:55) หลัง review r1–r3 · ถัดไป: แก้ข้อความ Phase ใน AGENTS.md (ไฟล์ล็อก ต้องใช้ patch) และเขียน contract ENV-1 หรือส่วน pure
+Updated 2026-10-21 07:0x +07 by Claude Code · **D-001 accepted** (ราว 06:55, PR #5) · AGENTS.md แก้ตาม D-001 บน `chore/D-001-agents-phase`: apply ตาม D-006 แล้ว (หลักฐานสดว่า F22 แก้แล้ว), Codex review ไม่มี finding · รอเจ้าของติด label และ merge · ถัดไป: contract ENV-1 หรือส่วน pure
 
 ## Current task
 **D-001 · State: accepted (เจ้าของ 2026-10-21 ราว 06:55)** · ขอบเขตการอนุมัติอยู่ใน DECISIONS.md D-001 (ไม่รวม dependency, การวิจัยก่อน ENV-1 และการส่งคำสั่ง) · branch `chore/D-001-architecture-revision` (ต่อจาก `ddffeb4`) · ย้ายกลับมาทำที่โฟลเดอร์หลักแล้ว ลบ worktree แยกที่สะอาดไปแล้ว
@@ -9,7 +9,7 @@ Updated 2026-10-21 +07 by Claude Code · **D-001 accepted** โดยเจ้�
 - F2: execution scope ผูกกับบัญชี, server, terminal, action, สัญลักษณ์ และวันหมดอายุ ตรวจก่อนทุก action
 - review r2 (06:49): F1/F2 ปิด, เปิด F3 Low → แก้แล้ว `7e11c0f` · review r3 (06:52): F3 ปิด ไม่มี finding เหลือ
 - ถัดไป:
-  1. patch แก้ AGENTS.md ที่ยังเขียนว่า "D-001 is proposed … do not scaffold" ให้ตรงสถานะใหม่ (ไฟล์ล็อก ต้อง apply ตาม D-006, review และติด label)
+  1. ~~patch แก้ AGENTS.md~~ ทำแล้ว: `docs/proposals/D-001-agents-phase.patch` apply 07:00 (hash ตรง handoff), review `docs/reviews/D-001-agents-r1.md` ไม่มี finding · รอเจ้าของ: เปิด PR, ติด label `owner-approved-control-change` แล้ว merge หลัง PR #5
   2. contract ENV-1 (Windows VPS + synthetic sentinel) ก่อนวิจัย ซึ่งต้องให้เจ้าของเช่า VPS
   3. ระหว่างรอ VPS: contract ของส่วน pure ที่ไม่ใช้ข้อมูลตลาด (timebase, costs, risk)
   - ยังไม่ติดตั้งแพ็กเกจของโปรเจกต์
