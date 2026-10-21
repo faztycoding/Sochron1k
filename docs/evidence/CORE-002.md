@@ -68,7 +68,7 @@ Contract: `docs/contracts/CORE-002-costs.md` v1.2 (อนุมัติโด�
 - การนับคืน swap และคืนที่คิด 3 เท่าจากเวลาจริง (rollover ของโบรกเกอร์ UNKNOWN) อยู่นอก scope; จำนวนคืนเป็น input
 - PnL จากราคาและการเชื่อม journal อยู่ใน contract ถัดไป · swap ย้อนหลัง 2018–2024 เป็น UNKNOWN โดยนิยาม (note ใน provenance)
 - การคูณหลายชั้นอาจปัดที่ 28 หลัก (contract v1.2) ไม่กระทบค่าใน acceptance ซึ่งเป็นค่าสั้น
-- ยังไม่ผ่าน Codex cross-agent review ของ implementation (ขั้นถัดไป) · เจ้าของยังไม่ได้รัน demo เอง
+- Codex cross-agent review ครบแล้ว: r1 (checkpoint) F1–F3 → แก้ · r2 ฉบับเต็ม ปิด F1–F3 พบ F4 → แก้ · r3 ปิด F4, findings open 0, AC-01–07 PASS (45 passed) · เจ้าของยังไม่ได้รัน demo เอง
 
 ## Finding ของ review tests-r1 (Low question 3 ข้อ)
 - F1 architecture test ห้ามชื่อ `float` ทุกรูปแบบ (เข้มกว่าตัวอักษรของ contract) → implementation ใช้ positive type checks (`isinstance(x, Decimal)`, `isinstance(x, int) and not isinstance(x, bool)`) ไม่มีชื่อ `float` ในโค้ด

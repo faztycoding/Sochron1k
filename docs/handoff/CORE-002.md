@@ -311,3 +311,12 @@ Review: `docs/reviews/CORE-002-r2.md` (complete review of head `493202c`): F1–
 F4: `CostBreakdown.__post_init__` now rejects any non-finite field with `CostsError` before arithmetic and performs the ordered-sum comparison inside `localcontext(CONTEXT)`, so the caller's context (traps, flags) is neither consulted nor changed. The regression constructs breakdowns with `sNaN`, `NaN` and `Infinity` in the total and in a component under a caller context with cleared flags, requires `CostsError` each time and asserts no caller flag was set. Factory outputs and the F2 regressions are unchanged.
 
 Next: Codex `$cross-agent-review CORE-002` round 3 re-checks F4 only (`docs/reviews/CORE-002-r3.md`).
+
+
+## Review r3 result and close-out (Claude Code), 2026-10-22
+
+`docs/reviews/CORE-002-r3.md` (Codex, head `2a1b2a1`): F4 closed under both caller trap settings with unchanged caller context; `Findings open: 0`; AC-01 to AC-07 PASS; suite 45 passed, 0 skipped at 06:30:50 +07; locked tests byte-identical to `dced669`; red-flag secret and order/account groups empty. No code changed after `cec0f4b`.
+
+Review trail for this task: contract r1–r3 (F1–F7 closed before tests) → tests-r1 (ready to commit red) → implementation r1 checkpoint (F1–F3, fixed one commit each) → r2 complete (F1–F3 closed, F4 found) → F4 fixed → r3 (F4 closed, nothing open).
+
+Ready for the owner, nothing else needs an agent: merge the `chore/CORE-001-post-merge` pull request first (this branch builds on it), then open the pull request from `feat/CORE-002-costs` into `main` with the body in `docs/proposals/CORE-002-pr-body.md`, apply the label `owner-approved-control-change` after the final push (three Codex-authored locked test files), wait for `ci / control-plane` and `control-gate / locked-paths`, and merge. The owner demo (three steps in `docs/evidence/CORE-002.md`) is still the owner's to run.
