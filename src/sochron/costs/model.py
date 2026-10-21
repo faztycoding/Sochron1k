@@ -1,7 +1,7 @@
 """The cost model: every constant carries its provenance.
 
 H001_COSTS encodes H001 section 6 and the XAUUSDm specification measured in SPIKE-001 on
-2026-10-21. Values with status "assumed" are the owner's [A] placeholders from H001; the swap
+2026-10-21. Values with status "assumed" are the owner's [A] assumptions from H001; the swap
 values are today's specification and say nothing about 2018-2024, which stays UNKNOWN
 (docs/architecture.md section 13a, R1 data selection gate). All arithmetic runs in the module's
 own Decimal context (precision 28, ROUND_HALF_EVEN), never the caller's.

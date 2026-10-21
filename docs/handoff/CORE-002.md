@@ -281,3 +281,20 @@ Please look hard at (review r1):
 - Exports `CONTEXT`, `PROVENANCE_FIELDS`, `STATUSES`, `Side`, `Status` are additions beyond the API block, not changes.
 
 Next: Codex `$cross-agent-review CORE-002` (read-only) → `/fix-findings` → re-review until clean → owner opens the PR with the label `owner-approved-control-change` (three locked test files plus the inherited AGENTS.md/CLAUDE.md change if the chore PR is not merged first) → merge.
+
+
+## Findings response (Claude Code), review r1 · 2026-10-22
+
+Review: `docs/reviews/CORE-002-r1.md`. Codex wrote it as an in-progress checkpoint (findings recorded before reading the handoff) at 21:36 on 2026-10-21; the headless run died with the Claude session at about 21:42 before the AC table and hash reconciliation were written, and the owner committed the checkpoint as `0ebe15a` (message "a"). The three findings have full evidence, so they are answered here; the complete review happens in r2 on the fixed head.
+
+| ID | Accept/Dispute | Commit | Evidence (command → result) |
+|----|----------------|--------|-----------------------------|
+| F1 | Accept | `7562246` | `uv run --offline pytest tests/unit/costs/test_costs_unit.py -q -p no:cacheprovider -k never_overflows` → FAIL before (`decimal.InvalidOperation: DivisionImpossible`) at 06:14:36 · after: `uv run --offline pytest tests -q -p no:cacheprovider` → 42 passed at 06:15:13 |
+| F2 | Accept | `c97befb` | `… -k cost_breakdown_rejects` → FAIL before (`DID NOT RAISE TypeError`) at 06:15:48 · after → 43 passed at 06:16:11 |
+| F3 | Accept | `f7b88f5` | `… -k must_be_a_mapping` → FAIL before (`AttributeError: 'list' object has no attribute 'items'`) at 06:16:31 · after → 44 passed, 0 skipped at 06:17:00 |
+
+- F1: the grid test now uses `Decimal.as_integer_ratio()` and Python integers (`_on_grid`), exact for any finite lots and step; the range comparison no longer needs the context. Behaviour on the AC fixtures is unchanged.
+- F2: `CostBreakdown.__post_init__` requires six Decimals (`TypeError`) and `total == spread + commission + slippage + swap` summed in the module context (`CostsError`); `round_trip_cost` already built it that way, so no acceptance value moved.
+- F3: `CostModel.__post_init__` checks `collections.abc.Mapping` before reading keys, so a list or string lands on `TypeError` as the contract's table promises.
+
+Next: Codex `$cross-agent-review CORE-002` round 2 on the fixed head, as the complete review (AC table, hash reconciliation, oracle), re-checking F1–F3 and anything new.
