@@ -402,3 +402,135 @@ Decisions taken by the implementer under the owner's authorization of 19:1x ("fi
 - The review cycle is closed on the implementer's side; the reviewer's own words close each finding (r2 for F1–F3, r3 for F4–F5).
 
 Ready for the owner, nothing else needs an agent: open the pull request from `feat/CORE-001-timebase` into `main` with the body prepared in the Claude session, apply the label `owner-approved-control-change` (three Codex-authored locked test files), wait for `ci / control-plane` and `control-gate / locked-paths` to pass, then merge. CI runs only on the pull request and on `main`, so there is no CI result for this branch before the PR exists.
+
+## Post-merge proposal: AGENTS.md and CLAUDE.md phase text (Codex, 2026-10-21)
+
+Scope: the owner requested this proposal-only D-006 update after CORE-001 merged as PR #8.
+Base and unchanged HEAD: `b2eb69c07a553b30f293689edeaed55526c41c5d` on `chore/CORE-001-post-merge`; equal to `origin/main`.
+The explicit instructions authorize only the proposal and this appended handoff in the repository,
+with temporary verification copies outside it; they supersede the usual commit and PROGRESS.md checkpoint steps.
+No locked working-tree file was edited or patched. Everything remains unstaged; no commit or external write was made.
+
+### Proposal and expected applied hashes
+
+- Patch: `docs/proposals/AGENTS-core001-phase.patch`. A regular, non-symlink file directly under the existing gitignored proposals directory.
+- Patch SHA256: `d1979d269bc960d7f48f423a3e9e7c9ef9ab3b4f3f40858075644531b3d573f7`.
+- Targets: only `AGENTS.md` and `CLAUDE.md`; both remain regular files, mode 100644.
+- Encoding: UTF-8 without BOM, LF endings, exactly one trailing newline in each target.
+- Working-tree pre-apply SHA256: `AGENTS.md` = `d5fe0d89952075438a51d6fe72570267c1e7a9ab225c91d701276f8a9acc775f`; `CLAUDE.md` = `b47c048e2a8b6c1013a37ff5490a461d7cf1e69c3646a61bfc9773450c311632`.
+
+| Target | Expected post-apply SHA256 | Expected Git blob |
+|---|---|---|
+| `AGENTS.md` | `80d15603c78d6fcca2ce04cea090a52d89963337306aff04c091118829f1f538` | `b6b321e14e9533e8e38037d38ffeb723838500d8` |
+| `CLAUDE.md` | `ef1edf750c22876cab5a260a31c0e73dbb33bf82b4411a91c69939b76945e1eb` | `2786fa48746ba2fe2ba07faf731ea68b3e1b8dea` |
+
+The hashes above came from files actually patched in `C:/Users/MSI/AppData/Local/Temp/sochron-core001-phase-cbOfvJ/repository-context-applied`.
+Git blobs were calculated with `git hash-object <temporary applied file>` without `-w` and cross-checked against the Git blob-header SHA1 formula.
+The applied bytes equal the authored candidates. Reversing only the six requested text edits in memory reproduces both original files byte for byte.
+
+### Exact changed lines (before/after)
+
+In the changed-line listing below, `-` lines are the exact before text and `+` lines are the exact after text.
+Unchanged context is omitted from this listing; the patch file contains the complete applicable diff. The existing three verified-command lines, all remaining phase restrictions,
+and the rest of the Claude role bullet are preserved.
+
+```diff
+diff --git a/AGENTS.md b/AGENTS.md
+index 0764f4bf017b3ce9862a51ebc7152ba882ddc36f..b6b321e14e9533e8e38037d38ffeb723838500d8 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -11,8 +11,11 @@ conflicts with the handbook, stop and ask.
+-- Phase: architecture accepted. D-001 was accepted on 2026-10-21 (scope in DECISIONS.md D-001);
+-  there is no application code yet. Write code only under an approved task contract, and add a
++- Phase: building the pure modules before ENV-1. D-001 was accepted on 2026-10-21
++  (scope in DECISIONS.md D-001); the first module, `sochron.timebase` (CORE-001), merged on
++  2026-10-21 with the project's first environment (D-012). Application code lives under
++  `src/sochron/`; tests under `tests/`.
++  Write code only under an approved task contract, and add a
+@@ -22,19 +25,25 @@ conflicts with the handbook, stop and ask.
+-  `MetaTrader5` package (Windows-only wheels, cp310 to cp314), pytest, SQLite, Parquet. None is a
+-  project dependency yet: each enters through the `dependency-admission` review and owner approval.
++  `MetaTrader5` package (Windows-only wheels, cp310 to cp314), pytest, SQLite, Parquet.
++  Project dependencies so far (D-012, 2026-10-21): `tzdata==2026.5` (runtime) and
++  `pytest==9.1.1` with its five transitives (dev), pinned in `pyproject.toml` and `uv.lock`.
++  `MetaTrader5`, SQLite and Parquet libraries are not project dependencies yet; each enters
++  through the `dependency-admission` review and owner approval.
+-Only commands that ran successfully in this repository. Python commands are added once they exist and pass.
++Only commands that ran successfully in this repository.
++- Python tests:   uv run --offline pytest tests -q -p no:cacheprovider   (24 passed, 0 skipped on 2026-10-21; run from the repo root in Git Bash)
++- Patch checks:   git apply --check docs/proposals/<file>.patch   and   git apply -R --check docs/proposals/<file>.patch, each as one standalone command (F21)
++The `bash …` commands assume Git Bash; from PowerShell call `C:/Program Files/Git/bin/bash.exe` explicitly (N2).
+diff --git a/CLAUDE.md b/CLAUDE.md
+index dd08b5459ebde11dc304b2b2a0d49b8fc21a39ad..2786fa48746ba2fe2ba07faf731ea68b3e1b8dea 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -8,8 +8,7 @@
+-  the owner. After the initial r9 owner application and fresh-session review, run the live push
+-  in the owner's session and record the result and CI for that exact pushed head; no prompt is expected.
++  the owner.
+```
+
+### Verification evidence
+
+Every command below used base commit `b2eb69c07a553b30f293689edeaed55526c41c5d`; no new commit was created.
+Times are Asia/Bangkok (+07). Both apply checks were separate standalone commands.
+
+| Command / check | Result | Time |
+|---|---|---|
+| `git apply --check docs/proposals/AGENTS-core001-phase.patch` (repository root) | PASS; exit 0, no output; patch not applied to the working tree | 2026-10-21 19:46:41 +07 |
+| `git apply --numstat docs/proposals/AGENTS-core001-phase.patch` | PASS; only AGENTS.md (+14/-5) and CLAUDE.md (+1/-2) | 2026-10-21 19:46 +07 |
+| `git --git-dir=<repository .git> --work-tree=<temporary copies> apply <absolute patch path>` | PASS; exit 0; changes only temporary copies | 2026-10-21 19:48:48 +07 |
+| `git --git-dir=<repository .git> --work-tree=<temporary copies> apply -R --check <absolute patch path>` | PASS; exit 0, no output; temporary copies only | 2026-10-21 19:49:06 +07 |
+| `git hash-object <temporary applied file>` (each target) and Node SHA256 / byte assertions | PASS; hashes above, no unrelated byte changes, LF endings and one trailing newline; repository targets and index unchanged | 2026-10-21 19:49:06 +07 |
+
+Temporary-copy verification needed the repository context: the first two non-repository apply attempts
+returned exit 0, but byte comparisons FAILED at 19:47:27 and 19:48:13 +07 because Git produced CRLF
+in the temporary targets. Copying the existing .gitattributes alone did not affect non-repository apply.
+Both failed comparisons were proven to differ only in CRLF versus LF. The successful fixture retained
+an exact copy of the repository .gitattributes and supplied the existing .git directory for read-only
+attribute context with an explicit temporary work tree; no Git configuration was changed, no temporary
+Git repository was initialized, and no index-writing flag was used. The successful apply command was:
+
+```text
+git --git-dir='C:/Users/MSI/Desktop/???????????/Sochron1k/.git' --work-tree='C:\Users\MSI\AppData\Local\Temp\sochron-core001-phase-cbOfvJ\repository-context-applied' apply 'C:/Users/MSI/Desktop/???????????/Sochron1k/docs/proposals/AGENTS-core001-phase.patch'
+```
+
+The 24-passed, zero-skipped Python result in the proposal is existing evidence, not a new test run:
+`docs/reviews/CORE-001-r3.md:200` records the exact offline command on `bf0d504` at 2026-10-21 19:15:06 +07.
+The dependency wording agrees with `DECISIONS.md` D-012, `pyproject.toml` and `uv.lock`.
+No Python suite, control-test suite, broker connection, or fresh-session post-apply review was run in this proposal-authoring task.
+A supporting read-only source check confirmed those existing records; it is not the required D-006 review.
+
+### Claude handoff / next action
+
+Claude applies `docs/proposals/AGENTS-core001-phase.patch` through D-006 using one standalone command from the repository root:
+
+```text
+git apply docs/proposals/AGENTS-core001-phase.patch
+```
+
+Verify the patch SHA256 before applying, then verify both applied SHA256 values and Git blobs against
+the table above. Claude must obtain a fresh-session review after application and hash verification,
+then commit through the normal D-006 flow. The owner labels the PR. This proposal is locally verified
+as an artifact only; it has not been applied to the repository, committed, merged, or deployed.
+
+### Final scope and scan checks
+
+All checks in this section refer to unchanged HEAD `b2eb69c07a553b30f293689edeaed55526c41c5d` and the unstaged proposal/handoff.
+
+- `& 'C:/Program Files/Git/bin/bash.exe' scripts/controls/red-flags.sh main` -> PASS execution, exit 0; one pre-existing type-suppression group -> `b2eb69c07a553b30f293689edeaed55526c41c5d` -> 2026-10-21 19:50:34 +07. Local main has merge-base 20b7c64, so the scan includes the already-merged CORE-001 implementation: four intentional invalid-input/immutability test annotations and their review mention. It also lists the already-merged pyproject, lockfile and locked tests as control files; this run did not change them.
+- `& 'C:/Program Files/Git/bin/bash.exe' scripts/controls/red-flags.sh origin/main` -> PASS execution, exit 0; zero pattern groups, only this handoff changed -> `b2eb69c07a553b30f293689edeaed55526c41c5d` -> 2026-10-21 19:51:16 +07. The ignored patch is not directly scanned; its exact changed-line listing is included above.
+- `git diff --check` -> initially FAIL at 19:50:34 +07 because the handoff quoted three whitespace-only context lines from the patch. The handoff listing now omits unchanged context; the patch itself was unchanged. Re-run -> PASS, exit 0 -> `b2eb69c07a553b30f293689edeaed55526c41c5d` -> 2026-10-21 19:51:16 +07.
+- `node -` (final byte/scope assertions), `git status --porcelain=v1`, `git diff --cached --name-only`, and `git diff --name-only HEAD` -> PASS; the handoff is the sole tracked modification, index and both locked working-tree files are byte-identical to their starting values, original handoff prefix preserved, proposal regular/ignored, exact hashes unchanged -> `b2eb69c07a553b30f293689edeaed55526c41c5d` -> 2026-10-21 19:52:12 +07.
+
+Proposal-local acceptance (these IDs describe this request, not a re-run of the CORE-001 module acceptance tests):
+
+| ID | Status | Evidence |
+|---|---|---|
+| AC-01 phase text | PASS | Exact before/after listing above; preserved remaining restrictions |
+| AC-02 dependency text | PASS | Exact requested pins and five transitives; source records checked |
+| AC-03 verified commands | PASS | Existing three lines unchanged; requested additions and shell note present |
+| AC-04 Claude cleanup | PASS | Only the completed one-time sentence removed |
+| AC-05 applicability | PASS | Standalone repository check, exit 0 at 19:46:41 +07 |
+| AC-06 hashes and bytes | PASS | Actual temporary apply, SHA256, Git blobs, reverse check, LF and unchanged-byte assertions |
+| AC-07 handoff and write scope | PASS | This appended section; only proposal/handoff written in the repository; no staging |

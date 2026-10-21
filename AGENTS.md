@@ -11,8 +11,11 @@ conflicts with the handbook, stop and ask.
 - Owner and approver: the repository owner, the only human role. Risk tier: Standard for research
   and Demo work; High for control changes (this bootstrap) and for anything touching real money,
   credentials or controls (SPEC.md section 2).
-- Phase: architecture accepted. D-001 was accepted on 2026-10-21 (scope in DECISIONS.md D-001);
-  there is no application code yet. Write code only under an approved task contract, and add a
+- Phase: building the pure modules before ENV-1. D-001 was accepted on 2026-10-21
+  (scope in DECISIONS.md D-001); the first module, `sochron.timebase` (CORE-001), merged on
+  2026-10-21 with the project's first environment (D-012). Application code lives under
+  `src/sochron/`; tests under `tests/`.
+  Write code only under an approved task contract, and add a
   project dependency only through `dependency-admission` and owner approval. Until ENV-1 passes
   (docs/architecture.md section 6.1), do not cut a holdout, ingest market data for research or
   run strategy experiments. SPIKE contracts may still run owner-approved packages in a throwaway
@@ -22,19 +25,25 @@ conflicts with the handbook, stop and ask.
 
 ## Stack
 - Adopted in D-001 (accepted 2026-10-21): Python 3.12 managed by uv on Windows, the official
-  `MetaTrader5` package (Windows-only wheels, cp310 to cp314), pytest, SQLite, Parquet. None is a
-  project dependency yet: each enters through the `dependency-admission` review and owner approval.
+  `MetaTrader5` package (Windows-only wheels, cp310 to cp314), pytest, SQLite, Parquet.
+  Project dependencies so far (D-012, 2026-10-21): `tzdata==2026.5` (runtime) and
+  `pytest==9.1.1` with its five transitives (dev), pinned in `pyproject.toml` and `uv.lock`.
+  `MetaTrader5`, SQLite and Parquet libraries are not project dependencies yet; each enters
+  through the `dependency-admission` review and owner approval.
 - Adopted for the control plane (BOOT-001): Git Bash, Node.js scripts, GitHub Actions.
 - The dev machine has no system Python. Run Python only through `uv run`. Never switch package
   managers, upgrade major versions or regenerate a lockfile without approval.
 - Before calling a library API, check the installed version and follow that version's docs.
 
 ## Verified commands
-Only commands that ran successfully in this repository. Python commands are added once they exist and pass.
+Only commands that ran successfully in this repository.
 - Red flags:     bash scripts/controls/red-flags.sh main
 - Locked paths:  node scripts/controls/check-locked-paths.mjs main
 - Control tests: node scripts/controls/test-controls.mjs
+- Python tests:   uv run --offline pytest tests -q -p no:cacheprovider   (24 passed, 0 skipped on 2026-10-21; run from the repo root in Git Bash)
+- Patch checks:   git apply --check docs/proposals/<file>.patch   and   git apply -R --check docs/proposals/<file>.patch, each as one standalone command (F21)
 If a command fails for environment reasons, report BLOCKED with the output. Never change config to make it pass.
+The `bash …` commands assume Git Bash; from PowerShell call `C:/Program Files/Git/bin/bash.exe` explicitly (N2).
 
 ## Agent roles (tool binding: change it here, not in prompts)
 - Owner and approver: the repository owner. Agents never approve, merge, deploy, accept
