@@ -67,7 +67,7 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 
 ## 7. Architecture summary
 - ดู `docs/architecture.md` (D-001: Python modular monolith + `MetaTrader5` บน Windows, วิจัยก่อน — **accepted** 2026-10-21 พร้อมด่าน ENV-1 ก่อนวิจัย)
-- External services: MT5 terminal + เซิร์ฟเวอร์ Demo ของโบรกเกอร์ (TBD: โบรกเกอร์ไหน), GitHub (repo + CI)
+- External services: MT5 terminal + เซิร์ฟเวอร์ Demo ของโบรกเกอร์ Exness (`Exness-MT5Trial14`; บัญชี Demo read-only ที่ใช้ใน SPIKE-001 หมดอายุการอนุญาต 2026-10-28; บัญชี/VPS สำหรับ R1/E1 ต้องมี authorization ใหม่ใน contract นั้น), GitHub (repo + CI)
 - Key decisions: ดู `DECISIONS.md`
 
 ## 8. Environments and release
@@ -82,13 +82,13 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 | ID | Assumption or question | How to verify | Review date | Status |
 |----|------------------------|---------------|-------------|--------|
 | Q-01 | Sochron1k ยังเป็นระบบวิจัย + เทรดอัตโนมัติ XAU/USD บน MT5 Demo เหมือนรอบก่อน | เจ้าของยืนยัน | ก่อน SPIKE-001 | TBD (open) |
-| Q-02 | โบรกเกอร์, Demo server, สกุลเงินบัญชี, leverage, netting/hedging | เจ้าของ + SPIKE-001 | ก่อน SPIKE-001 | บางส่วนตอบแล้ว (เจ้าของ 2026-10-21): Exness, `Exness-MT5Trial14`, hedging · สกุลเงินและ leverage ยัง TBD (SPIKE-001 AC-01) |
-| Q-03 | ชื่อสัญลักษณ์และ contract spec ของ XAU/USD ที่โบรกเกอร์ใช้ | SPIKE-001 | — | บางส่วนตอบแล้ว: ชื่อ `XAUUSDm` (เจ้าของ 2026-10-21) · contract spec ยัง TBD (SPIKE-001 AC-03) |
+| Q-02 | โบรกเกอร์, Demo server, สกุลเงินบัญชี, leverage, netting/hedging | เจ้าของ + SPIKE-001 | ก่อน SPIKE-001 | ตอบแล้ว: Exness, `Exness-MT5Trial14`, retail hedging (เจ้าของ 2026-10-21) · สกุลเงินบัญชี USD, leverage 1:200, trade_mode Demo (SPIKE-001 AC-01, `docs/evidence/SPIKE-001.md`) · บัญชี/server บน VPS ต้องวัดซ้ำใน ENV-1 |
+| Q-03 | ชื่อสัญลักษณ์และ contract spec ของ XAU/USD ที่โบรกเกอร์ใช้ | SPIKE-001 | — | ตอบแล้ว: `XAUUSDm` · digits 3, point 0.001, contract 100 oz, volume 0.01–200 step 0.01, tick value 0.1 USD, spread ลอยตัว (240 points ตอนวัด), swap long −503.8 / short 0 points, คิด swap 3 เท่าวันพุธ (ภาพ Specification) (SPIKE-001 AC-03, 2026-10-21) · เวลาทำการเทียบ timezone ยัง UNKNOWN |
 | Q-04 | ค่า risk policy 0.25% / 0.75% / 2% และผู้มีสิทธิ์ปลด halt | เจ้าของ | ก่อน SLICE-E1 | TBD (open) |
-| Q-05 | ชั่วโมงเทรดและนโยบายถือข้ามคืน | เจ้าของ | ก่อน H001 | TBD (open) |
+| Q-05 | ชั่วโมงเทรดและนโยบายถือข้ามคืน | เจ้าของ | ก่อน H001 | ตอบแล้วสำหรับ H001 (เจ้าของอนุมัติตัวเลขทั้งหมด 2026-10-21 ราว 07:40): เปิดไม้ใหม่เมื่อเวลาเปิดแท่งอยู่ใน 03:00–15:59 New York, ปิดได้ทุกเวลา, ถือข้ามคืน/สุดสัปดาห์ได้โดยคิด swap (`docs/hypotheses/H001-m15-momentum-breakout.md` ข้อ 2) · นโยบายของ Demo runner ยืนยันอีกครั้งใน contract SLICE-E1 |
 | Q-06 | สมมติฐานแรก (PA01 จากรอบก่อน หรือไอเดียใหม่) | `/register-hypothesis` | ก่อน SLICE-R1 | ตอบแล้ว (เจ้าของ 2026-10-21): ไอเดียใหม่แนว quantitative = H001 volatility-normalized momentum + Donchian breakout บน M15 (`docs/hypotheses/H001-m15-momentum-breakout.md`) · ตัวกรองข่าวแรงเป็น H002 แยก · z-score mean reversion และ macro score เป็น H ถัดไป |
 | Q-07 | ความลึกข้อมูลจากโบรกเกอร์พอไหม ถ้าไม่พอจะใช้แหล่งอื่นหรือไม่ (license) | SPIKE-001 | — | TBD (open) |
-| Q-08 | วัน cutoff ของ holdout และที่เก็บนอกเครื่องวิจัย | เจ้าของ | ก่อน SLICE-R1 | ที่เก็บตอบแล้ว (เจ้าของ 2026-10-21): Windows VPS ที่เป็น acquisition host · วัน cutoff ยัง TBD |
+| Q-08 | วัน cutoff ของ holdout และที่เก็บนอกเครื่องวิจัย | เจ้าของ | ก่อน SLICE-R1 | ตอบแล้ว (เจ้าของ 2026-10-21): ที่เก็บ = Windows VPS ที่เป็น acquisition host (ผู้ถือ = เจ้าของ) · cutoff สำหรับ H001 = 2025-01-01 00:00 UTC (`docs/hypotheses/H001-m15-momentum-breakout.md` ข้อ 5) · ห้ามตัด holdout จนกว่า ENV-1 ผ่าน (ลำดับการตัดบน VPS ต้องระบุใน contract ENV-1) |
 | Q-09 | Demo runner จะรันที่ไหน (เครื่องนี้ หรือ Windows VPS) | เจ้าของ | ก่อน OPS-1 | ตอบแล้ว (เจ้าของ 2026-10-21): Windows VPS ในอนาคต ส่วนระยะนี้ใช้เครื่องนี้ไปก่อน (`docs/architecture.md` ข้อ 6.1) |
 | Q-10 | งบรายเดือน และ kill criteria ของทั้งโปรเจกต์ | เจ้าของ | ก่อน SLICE-R1 | TBD (open) |
 | Q-11 | ใช้ Codex เป็น test author + reviewer ตาม binding ค่าเริ่มต้น (D-002) | เจ้าของ | ก่อน contract แรก | TBD (open) |
@@ -104,3 +104,4 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 | 2026-10-21 | Q-02 และ Q-03 ตอบบางส่วนจากข้อมูลบัญชี Demo ที่เจ้าของแจ้ง (Exness, server, hedging, `XAUUSDm`) | เจ้าของ (เตรียม SPIKE-001) | ไม่มีผลต่อเวลา/ค่าใช้จ่าย |
 | 2026-10-21 | ข้อ 5 และ 8 ปรับตามการแยกเครื่องของ D-001 (Windows VPS เป็นเป้าหมาย, ระยะนี้ใช้เครื่องเดียวแบบจำกัด, ด่าน ENV-1 ก่อนวิจัย) ตาม review D-001 r2 F3 | เจ้าของ (เลือก VPS) | มีค่า VPS (Q-10) · งานวิจัยเริ่มได้หลัง ENV-1 |
 | 2026-10-21 | Q-06 ตอบแล้ว (H001 momentum + breakout M15, ข่าวเป็น H002) · เพิ่ม journey J5 trade attribution แบบ journal-driven · research memo ใน `docs/research/H001-background.md` | เจ้าของ (ให้ทิศทางกลยุทธ์) | ไม่มีผลต่อเวลา/ค่าใช้จ่าย · H002 ต้องมีแหล่งข้อมูลปฏิทินที่ผ่าน admission |
+| 2026-10-21 | บันทึกคำตอบที่มีหลักฐานแล้ว: Q-02, Q-03 ครบจาก SPIKE-001 (USD, 1:200, hedging, spec `XAUUSDm`) · Q-05, Q-08 สำหรับ H001 (หน้าต่าง NY, ถือข้ามคืน, cutoff 2025-01-01) · โบรกเกอร์ในข้อ 7 = Exness · ไม่เปลี่ยนค่าใดๆ | Claude (งานบ้านหลัง CORE-001 merge ตามคำสั่งเจ้าของ "เอาเต็มระบบ") | ไม่มีผลต่อเวลา/ค่าใช้จ่าย |

@@ -1,7 +1,7 @@
 # TASK SPIKE-001 — MT5 connectivity, time semantics and data depth (read-only)
 
 Version v1.1 · Owner: เจ้าของ repository · Parent: docs/architecture.md §12 (U1–U3) · Tier **Standard** · Branch `spike/SPIKE-001-mt5-time`
-Status: **approved** · เจ้าของอนุมัติในแชท Claude เมื่อ 2026-10-21 ราว 02:49 +07 ทั้ง:
+Status: **merged** (PR #3 `3817f36` 2026-10-21 03:38 +07 · post-merge review r4 ใน PR #4 `45c1ea5` · หลักฐาน `docs/evidence/SPIKE-001.md`) · เจ้าของอนุมัติในแชท Claude เมื่อ 2026-10-21 ราว 02:49 +07 ทั้ง:
 1. contract v1.1 นี้
 2. ผล `$dependency-admission` ใน `docs/reviews/SPIKE-001-dependency-admission.md`:
    - `MetaTrader5` กับ `numpy` เป็น SPIKE FIRST

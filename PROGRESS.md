@@ -1,18 +1,21 @@
 # PROGRESS — Sochron1k
-Updated 2026-10-21 09:0x +07 by Claude Code · **CORE-001 timebase: review r2 answered (F1–F5 แก้ครบ), tests 24/24 เขียว** บน `feat/CORE-001-timebase` · รอ Codex re-review r3 แล้วเปิด PR (ต้องติด label) · H001 merge เข้า main แล้ว (PR #7) และ merge main เข้า branch นี้แล้ว · D-001 accepted, AGENTS.md ตาม D-001 merge แล้ว (PR #6)
+Updated 2026-10-21 20:0x +07 by Claude Code · **CORE-001 timebase merged (PR #8 `b2eb69c`, CI success)** · งานบ้านหลัง merge บน `chore/CORE-001-post-merge`: patch AGENTS.md/CLAUDE.md ตาม D-006 (review `CORE-001-agents-r1` ไม่มี finding), ล้าง PROGRESS, อัปเดต SPEC/contracts/architecture · ถัดไป: contract CORE-002 costs (ร่างเสร็จ รอเจ้าของอนุมัติ) · ENV-1 รอเจ้าของเช่า VPS
 
 ## Current task
-**CORE-001 · State: verified locally (Codex r1–r3 ปิด F1–F5 ครบ, 24/24 tests green บน `bf0d504`); รอมือเจ้าของ: เปิด PR → ติด label `owner-approved-control-change` → CI เขียว → merge** · branch `feat/CORE-001-timebase` (merge `origin/main` 20b7c64 เข้ามาแล้ว) · contract `docs/contracts/CORE-001-timebase.md` · หลักฐาน `docs/evidence/CORE-001.md`
-- 19:15–19:2x: Codex re-review r3 (`docs/reviews/CORE-001-r3.md`) ปิด F4/F5 ด้วย oracle จำนวนเต็ม 16,674 กรณี ไม่มี finding ใหม่ AC-01–07 PASS · เพิ่ม demo 3 ขั้นสำหรับเจ้าของใน evidence (รันจริง 19:19:30) · เจ้าของตั้ง goal 19:1x "ทำ phase นี้ให้จบ ตัดสินเอง" → Claude ตัดสิน: คงนโยบาย F2, ไม่เพิ่ม error ใหม่สำหรับ tolerance/zone ที่ contract ไม่ได้กำหนด (follow-up contract ถัดไป) · CI รันเฉพาะ `pull_request` และ push ไป `main` จึงยังไม่มีผล CI จนกว่าจะเปิด PR
-- 09:00–09:02: merge `origin/main` (PR #7 H001) เข้า task branch ตามที่เจ้าของอนุมัติ conflict เฉพาะ PROGRESS.md (CORE-001 คง current task, H001 ไป previous task) ไม่มีโค้ดเปลี่ยน → suite 24 passed · push `bf0d504`
-- 08:49–08:57: Codex re-review r2 (`docs/reviews/CORE-001-r2.md`, commit `614e4bb`) ปิด F1–F3 · พบ F4/F5 Low ใน helper ของ F1 (float overflow ที่ค่าสุดขีด, float ปัดชั่วโมงเกิน 2^53) → แก้ด้วย `fractions.Fraction` ใน commit เดียว `0e80263` พร้อม regression fail ก่อน/pass หลัง · suite 24 passed, 0 skipped (08:57:20) · เจ้าของตัดสิน 08:5x: อนุญาตเช็ค CI แบบ curl ลงไฟล์แล้ว node อ่านแยกคำสั่ง (บันทึกใน memory) และให้ Claude merge origin/main เข้า task branch เพื่อแก้ conflict PROGRESS.md
-- 08:32–08:45: Codex review r1 (`docs/reviews/CORE-001-r1.md`, commit `40920d3`): F1 Medium `classify_offset` พลาดชั่วโมงร่วมเมื่อ tolerance กว้าง · F2 Low (คำถาม) NaN/inf ทำให้ raise · F3 Low วินาทีในขอบ window custom · รับทั้ง 3 ข้อ แก้พร้อม regression ที่ fail ก่อน/pass หลัง ทีละ commit: `5538617` (F1), `b8c993d` (F2), `0b8475d` (F3) · suite 22 passed, 0 skipped (08:44:41) · คำตอบ F2 และ note สำหรับเจ้าของอยู่ใน handoff หัวข้อ "Findings response"
-- 08:16–08:29: D-012 accepted (`e39b0b0`) · tests ของ Codex apply ตาม D-006 แล้ว session ใหม่ตรวจและ commit red (`85d78bf`, review tests-r1: Low 4 ข้อ จัดการแล้ว) · environment `pyproject.toml`/`uv.lock` (`3da18d1`) · implement `sochron.timebase` → `uv run pytest tests -q` = 19 passed, 0 skipped (08:29:35) ในรันแรก
-- ขอบเขต: `sochron.timebase` (TimeRule ที่มีหลักฐาน, raw ↔ UTC, หน้าต่าง New York 03:00–15:59 ข้าม DST, วันไทย, bar_open, classify_offset) · pure, ไม่อ่านนาฬิกา, ไม่ import MetaTrader5
-- ลำดับ: Codex admission (tzdata==2026.5 runtime, pytest==9.1.1 dev) → เจ้าของอนุมัติ D-012 → Claude สร้าง `pyproject.toml`/`uv.lock` → Codex tests เป็น `docs/proposals/CORE-001-tests.patch` → Claude apply ตาม D-006 + session ใหม่ตรวจ + commit (red) → implement จนเขียว → review → PR (ต้องติด label เพราะแตะ tests ที่ล็อก)
-- prefix `CORE-` สำหรับ contract ของส่วน pure เพราะชื่อ branch ต้องผ่าน guard (F26)
+**CORE-002 costs · State: contract drafting (ร่างเสร็จ รอเจ้าของอนุมัติ acceptance 7 ข้อ)** · branch `feat/CORE-002-costs` (ต่อจาก `chore/CORE-001-post-merge` เพื่อไม่ให้ PROGRESS ชน) · contract `docs/contracts/CORE-002-costs.md` · โมดูล pure `sochron.costs`: spread/commission/slippage/swap เป็น `Decimal`, `stress(model, 2)`, provenance ทุกค่า (measured/spec/assumed/unknown), `H001_COSTS` ตาม H001 ข้อ 6 + SPIKE-001 · การนับคืน swap จากเวลาอยู่นอก scope (rollover UNKNOWN) · ไม่มี dependency ใหม่ เว้นแต่ Codex ขอ `hypothesis` (admission แยก)
+- ลำดับ: เจ้าของอนุมัติ acceptance → commit contract approved → Codex `$write-acceptance-tests CORE-002` เป็น patch (ขยาย architecture test ให้ครอบ `costs` + ห้าม float) → Claude apply ตาม D-006 + session ใหม่ตรวจ + commit (red) → implement จนเขียว → Codex review → PR (ต้องติด label เพราะแตะ tests ที่ล็อก)
+
+**งานบ้านหลัง merge CORE-001 · State: in progress บน `chore/CORE-001-post-merge`** (เจ้าของสั่ง 19:3x "จัดการเริ่มเลยเอาเต็มระบบส่วนนี้" และให้ Claude ตัดสินเอง)
+- 19:46–20:0x: Codex เขียน `docs/proposals/AGENTS-core001-phase.patch` (SHA256 `d1979d26…`) → Claude apply แบบคำสั่งเดี่ยวตาม D-006 (19:54) · detector รายงาน AGENTS.md/CLAUDE.md ตรง target ของ patch พอดี → ตรวจ SHA256/blob ทั้ง 5 ค่าตรง handoff → `git apply -R --check` standalone ผ่าน → fresh-session review `docs/reviews/CORE-001-agents-r1.md`: ไม่มี finding, ready to commit · เนื้อหา: phase "building the pure modules before ENV-1", stack ระบุ pins ของ D-012, verified commands เพิ่ม pytest offline + patch checks standalone (F21) + path ของ bash สำหรับ PowerShell (N2), CLAUDE.md ตัดประโยค r9 live push ที่ทำเสร็จแล้ว · reviewer รายงาน block ของ guard 2 ครั้งระหว่างตรวจ: `node -e` ที่อ้าง path ล็อก → ใช้ `sha256sum` ที่ prompt ระบุเป็นทางเลือกไว้ล่วงหน้า (เจ้าของตัดสินได้ว่านับเป็น deviation หรือไม่) และ `git apply -R --check` ที่พ่วงคำสั่ง → rerun standalone ตามข้อยกเว้น 2026-10-20
+- งานบ้านอื่นใน branch นี้ (commit เดียวกัน): PROGRESS.md ล้างส่วนล่างที่ล้าสมัยจาก BOOT-001 · SPEC Q-02/Q-03/Q-05/Q-08 และข้อ 7 ใส่คำตอบที่มีหลักฐานแล้ว · contract CORE-001 (status merged, Authorization, DoR, ขั้นที่ 6 ต้องมีสอง required checks) และ SPIKE-001 (status merged) · architecture บรรทัดที่ยังบอก D-001 proposed · จากนั้น P25 rerun ทั้ง Claude และ Codex (compatibility ข้อ 3 หลัง AGENTS.md เปลี่ยน) → commit → push
+- PR ของ branch นี้ต้องมี label `owner-approved-control-change` (AGENTS.md, CLAUDE.md) · PR body จะอยู่ที่ `docs/proposals/CORE-001-post-merge-pr-body.md` (gitignored) และในแชท
 
 ## Previous task
+**CORE-001 timebase · State: merged** · PR #8 merge `b2eb69c` 2026-10-21 19:32 +07 พร้อม label · `ci` success บน PR head `133a700` และบน main `b2eb69c` (run 39600448651) · `control-gate / locked-paths` fail ก่อน label แล้ว success หลัง label (พฤติกรรม gate ถูกต้อง) · contract `docs/contracts/CORE-001-timebase.md` · หลักฐาน `docs/evidence/CORE-001.md` · reviews tests-r1, r1, r2, r3 ปิด F1–F5 ครบ · suite 24 passed, 0 skipped (Windows เท่านั้น ยังไม่มี Python CI job) · demo 3 ขั้นสำหรับเจ้าของยังไม่ได้รันโดยเจ้าของเอง (ช่องใน PR #8 ว่าง)
+- เส้นทาง: contract อนุมัติ 08:2x → Codex admission → D-012 `e39b0b0` → environment `3da18d1` → Codex tests red `85d78bf` → implement `5546da0` (19/19 รันแรก) → review r1 F1 Medium/F2 Low คำถาม/F3 Low → แก้ทีละ commit `5538617`, `b8c993d`, `0b8475d` (22/22) → r2 ปิด F1–F3 พบ F4/F5 Low (float ที่ค่าสุดขีด) → แก้ด้วย `fractions.Fraction` `0e80263` (24/24) → merge `origin/main` เข้า branch `bf0d504` (เจ้าของอนุมัติ, conflict เฉพาะ PROGRESS.md) → r3 ปิด F4/F5 ด้วย oracle 16,674 กรณี → `133a700` → PR #8
+- การตัดสินของ Claude ตามสิทธิ์ที่เจ้าของให้ (19:1x "ทำ phase นี้ให้จบ ตัดสินเอง"): คงนโยบาย F2 (NaN/inf → unknown) · tolerance ที่ไม่ finite/ติดลบ และชื่อ zone ที่ไม่มี ไม่เพิ่ม error ใหม่ (follow-up contract timebase ถัดไป) · เจ้าของอนุมัติ 08:5x: เช็ค CI แบบ `curl -o` + `node` แยกคำสั่ง และ merge main เข้า task branch
+- ขอบเขตที่ส่งมอบ: `sochron.timebase` (TimeRule ที่มีหลักฐาน, raw ↔ UTC, หน้าต่าง New York 03:00–15:59 ข้าม DST, วันไทย, bar_open, classify_offset) · pure, ไม่อ่านนาฬิกา, ไม่ import MetaTrader5 · prefix `CORE-` สำหรับ contract ของส่วน pure เพราะชื่อ branch ต้องผ่าน guard (F26)
+
 **H001 · State: registered (UNPROVEN), merge เข้า main แล้ว (PR #7)** · branch `research/H-001-momentum-breakout` จาก main `90278b4` (เปลี่ยนชื่อจาก `research/H001-…` เพราะ guard ไม่รับ, ดู F26) · ไฟล์ `docs/hypotheses/H001-m15-momentum-breakout.md` immutable หลัง commit `0c392a9`
 - เจ้าของตัดสิน (2026-10-21 ราว 07:20): timeframe M15 · ตัวกรองข่าวแรงเป็น H002 แยก (ต้องมีแหล่งปฏิทินที่ผ่าน admission; Python API ของ MT5 ไม่มี calendar) · การเรียนรู้แบบ journal-driven: กลยุทธ์ที่รันอยู่ freeze, ทุกไม้มี trade attribution, ข้อเสนอแก้กฎ = H รุ่นใหม่ · ทำ research memo และตรวจ skill 3 ตัว
 - เจ้าของอนุมัติตัวเลขทั้งหมดของ H001 ตามร่าง (ราว 07:40) รวม holdout cutoff 2025-01-01 ซึ่งเป็นคำตอบ Q-08 สำหรับ H001 (ผู้ถือ = เจ้าของ บน acquisition host)
@@ -28,12 +31,7 @@ Updated 2026-10-21 09:0x +07 by Claude Code · **CORE-001 timebase: review r2 an
   - ระยะนี้ใช้เครื่องนี้ไปก่อน จึงห้ามตัด holdout, ห้าม ingest ข้อมูลวิจัย และห้ามทดลองกลยุทธ์ จนกว่าด่าน ENV-1 จะผ่าน
 - F2: execution scope ผูกกับบัญชี, server, terminal, action, สัญลักษณ์ และวันหมดอายุ ตรวจก่อนทุก action
 - review r2 (06:49): F1/F2 ปิด, เปิด F3 Low → แก้แล้ว `7e11c0f` · review r3 (06:52): F3 ปิด ไม่มี finding เหลือ
-- ถัดไป:
-  1. ~~patch แก้ AGENTS.md~~ ทำแล้ว: `docs/proposals/D-001-agents-phase.patch` apply 07:00 (hash ตรง handoff), review `docs/reviews/D-001-agents-r1.md` ไม่มี finding · รอเจ้าของ: เปิด PR, ติด label `owner-approved-control-change` แล้ว merge หลัง PR #5
-  2. contract ENV-1 (Windows VPS + synthetic sentinel) ก่อนวิจัย ซึ่งต้องให้เจ้าของเช่า VPS
-  3. ระหว่างรอ VPS: contract ของส่วน pure ที่ไม่ใช้ข้อมูลตลาด (timebase, costs, risk)
-  - ยังไม่ติดตั้งแพ็กเกจของโปรเจกต์
-- PR แยกที่รอ merge: `chore/SPIKE-001-post-merge-review` (review r4 หลัง merge ของ SPIKE-001: F7 ปิด, ไม่มี finding ใหม่)
+- ทำแล้วทั้งหมด: AGENTS.md ตาม D-001 (`docs/proposals/D-001-agents-phase.patch`, review `D-001-agents-r1` ไม่มี finding) merge เป็น PR #6 พร้อม label · SPIKE-001 post-merge review merge เป็น PR #4 · โมดูล pure ตัวแรก timebase = CORE-001 (PR #8) · ที่เหลือจากแผนนี้: ENV-1 (รอเจ้าของเช่า VPS) และ costs/risk (CORE-002 กำลังร่าง) ดู Current task
 
 ประวัติ review r1 (Codex):
 - รายงาน `docs/reviews/D-001-design-r1.md`: F1 High เรื่องแยก holdout ออกจากเครื่องวิจัย/terminal และ F2 Medium เรื่องผูกสิทธิ์ execution กับบัญชีที่อนุญาต ทั้งสองยัง OPEN
@@ -59,6 +57,12 @@ BOOT-001 v1 · State FIXING · F3, F7, F10 และ F18 ปิดแล้ว (
 Branch `chore/BOOT-001-project-bootstrap` merge แล้วผ่าน PR #1 (`7b6a841`, 23:07:40) · งานต่อหลัง merge อยู่บน branch `chore/BOOT-001-ac05-control-gate` จาก `7b6a841` ตามแผนใน handoff หัวข้อ "After merge: AC-05 proof PR" · CI ล่าสุดก่อน merge: `control-plane` success บน `5fa6667`
 
 ## Done (with evidence)
+- 2026-10-21 19:32 +07: **CORE-001 merged** PR #8 → `b2eb69c` (label `owner-approved-control-change`) · CI `ci` success บน PR head `133a700` (12:31Z) และบน main `b2eb69c` (run 39600448651) · `control-gate / locked-paths` fail ก่อน label แล้ว success หลัง label · หลักฐานใน `docs/evidence/CORE-001.md` และ reviews `CORE-001-tests-r1`, `-r1`, `-r2`, `-r3`
+- 2026-10-21 08:1x–19:2x: CORE-001 implement → Codex review 3 รอบ → F1–F5 แก้ครบ (commit ต่อ finding, regression fail ก่อน/pass หลัง) → suite 24 passed, 0 skipped → merge `origin/main` เข้า branch (เจ้าของอนุมัติ) → push `133a700`
+- 2026-10-21 07:4x–08:00: H001 ลงทะเบียน `0c392a9` (immutable) + research memo + skill admission r1/r2 → PR #7 merge `20b7c64` · เจ้าของตัดสิน SPIKE FIRST เฉพาะ `property-based-testing`
+- 2026-10-21 06:55–07:1x: D-001 accepted (design reviews r1–r3) → PR #5 `56c0a3f` · AGENTS.md ตาม D-001 ผ่าน patch D-006 + fresh review → PR #6 `90278b4` (label)
+- 2026-10-21 02:49–03:4x: SPIKE-001 approved (D-009–D-011) → probe อ่านอย่างเดียว 4 รอบ → reviews r1–r3 → PR #3 `3817f36` · post-merge review r4 → PR #4 `45c1ea5` · AC-04 UNKNOWN โดยตั้งใจ
+- 2026-10-20: BOOT-001 merge PR #1 `7b6a841` (label) · AC-05 proven บน PR #2 `0916776` (label) · branch protection: required checks `ci / control-plane` และ `control-gate / locked-paths` · รายละเอียดด้านล่างเป็นประวัติของ BOOT-001
 - 2026-10-20 23:34–23:58 +07: Claude session ใหม่ (headless, parent session เริ่มตามคำขอเจ้าของ) ตรวจ r11 ที่เจ้าของ apply → `docs/reviews/BOOT-001-r11.md` · รายละเอียดอยู่ใน handoff หัวข้อ "Review r11 of the applied controls"
   - hash: guard `30114a6b…`/blob `8d2715dd…`, tests `8cfa2970…`/blob `e0b81034…` ตรงกับ handoff · patch `c0a10ce8…` ตรง · posthook ไม่เปลี่ยน · standalone `git apply -R --check` exit 0 (23:34:19–23:43)
   - `node scripts/controls/test-controls.mjs` → 105/105, skipped 0 (23:35:51–23:38:17) · `git diff --check` ของสองไฟล์ exit 0
@@ -172,30 +176,34 @@ Branch `chore/BOOT-001-project-bootstrap` merge แล้วผ่าน PR #1 (
 - Codex ขอข้อความที่หยุด Claude แบบตรงตัว → บันทึกแล้วใน handoff หัวข้อ "Stop events on 2026-10-19": เหตุที่ 1 = safety classifier ของเครื่องมือ (ไม่ใช่ hook) · เหตุที่ 2 = guard-bash จับ heredoc ผิด (false positive) แล้ว Claude ใช้ Edit แทนโดยไม่ได้ถามก่อน (ไฟล์ไม่ล็อก แต่ผิดขั้นตอน CLAUDE.md)
 - การสลับให้ Codex ไม่ได้ยกเลิกข้อห้ามของเครื่องมือ → เจ้าของเลือกแผนแคบ **CI fixture เท่านั้น** ในรอบนี้; ไม่ใช้เนื้อหาที่ถูกระงับ และยังไม่ทำ guard/PostToolUse
 
-## Not done yet
-- F20 Medium (review r9): ไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน ยังเปิดอยู่ · พฤติกรรมของ Bash เมื่อเปิด extglob และกับ array assignment ยังไม่ได้รัน
-- F21 Low (review r9): แก้ด้วยเอกสาร (inspection ต้องเป็นคำสั่งเดี่ยว) · F22/F23 ปิดใน review r11 (F22 ฝั่ง Linux รอ CI บน head ที่ push) · r10 ถูกแทนที่แล้ว ห้าม apply
-- F24, F25 Low (review r11): ADS และ hardlink ใน `docs/proposals/` ได้ข้อยกเว้น apply · เจ้าของเลือกที่วาง (งาน guard-fix ถัดไป หรือยอมรับ F25 ว่าเป็นไปตาม D-006)
-- AC-08: F1–F3 ปิดแล้วใน recheck ของ Codex แต่ข้อย่อย "ไม่มีค่าทางธุรกิจที่ agent เดาเอง" ยัง UNKNOWN เพราะพิสูจน์ที่มาของค่าเดิมไม่ได้
-- P25 ฝั่ง Codex ใน chat ของ VS Code: รันผ่าน `codex exec` แล้ว ยกกฎและบอกบทบาทถูก แต่ approval policy ของ exec เป็น `never` · ค่า `on-request` จาก `.codex/config.toml` ในแชท IDE ยังเป็น UNKNOWN
-- F19 Medium (มีอยู่แล้วก่อน r8): `$(…)` ใน `${…:-…}` ที่มี quote ซ้อนไม่ถูกตรวจ · ไปงาน guard-fix ถัดไปตามที่เจ้าของตัดสิน ไม่รวมใน r9
-- V-1: ถ้า Git Bash ขึ้นเป็น 5.3 รูปแบบ `${ command; }` ต้องมีกฎแยก (จากเอกสาร ยังไม่ได้รัน)
-- F11–F15 Medium และ F17 Low: งาน guard-fix ถัดไป (เจ้าของตัดสิน 2026-10-20) · F8 ส่วน Monitor/case และ F16 Low: งาน false-positive
-- Permanent regressions 69 ข้ออยู่ใน tracked source (`2f2b6ca`) · CI `control-plane` success บน `2f2b6ca` และ `77a8139` (อ่านแค่ผลของ job ไม่ได้อ่าน log จึงยังไม่ได้ยืนยันจำนวน test บน Linux จากหลักฐานของ Claude) · live fresh-session baseline และการแยก failure event ที่ dispatch ยังไม่ยืนยัน
-- AC-05: control-gate ตรวจได้ตั้งแต่ PR ถัดจาก BOOT-001 (หลัง merge) · branch protection ต้องตั้งหลัง merge
-- รอเจ้าของตัดสิน N1–N4 ใน `docs/handoff/BOOT-001.md`; N5 แก้แล้วที่ `4ee6d09`
+## Not done yet (backlog ที่ยังเปิด ณ 2026-10-21 19:4x)
+- ENV-1: ยังไม่มี contract · ต้องให้เจ้าของเช่า Windows VPS และตั้งงบ Q-10 ก่อน · ทุกอย่างของ SLICE-R1 รอด่านนี้ (architecture ข้อ 6.1, 10, 13a)
+- โมดูล pure ที่เหลือก่อน ENV-1: `costs` (contract CORE-002 กำลังร่าง) · `risk` (รอค่า Q-04 จากเจ้าของ)
+- Python test job ใน CI: ยังไม่มี (`ci.yml` มีแค่ control-plane) · เป็น control change ต้องมี contract แยก, patch ตาม D-006 และ label · tests ของ CORE-001 จึงยังรันเฉพาะบน Windows
+- Decisions ที่ยัง proposed: D-002 (tool binding), D-004 (control plane; ส่วน push/apply ถูก D-006 แทนแล้วแต่ body ยังไม่แก้), D-005 (skills/agents) · Q-11 ใน SPEC ยังเปิด → เกณฑ์จบ phase 0 ตามตัวอักษร (architecture ข้อ 10 แถว 0) ยังไม่ครบ
+- guard-bash backlog ตาม D-007: F11–F15, F19, F20 Medium · F8 (Monitor/case), F16, F17 Low · F24/F25 (ADS, hardlink) รอเจ้าของเลือกที่วาง · F26 (ID ของ branch ต้องมีขีดก่อนตัวเลข) ยังไม่มี review file · false positive ใหม่ 2026-10-21: `curl … | node -e` ถูกอ่านเป็น download-and-execute (ได้ข้อยกเว้นแบบแยกคำสั่ง) · V-1 (Bash 5.3 `${ cmd; }`) ยังไม่ได้รัน
+- N1 (label ค้างอยู่หลัง push ใหม่): ยังไม่แก้ กติกาชั่วคราว = เจ้าของติด label หลัง push สุดท้ายเท่านั้น · N4 (red-flag self-match) รอเจ้าของ · N2 แก้ด้วยข้อความใน AGENTS.md patch รอบนี้
+- AC-08 (BOOT-001) ข้อย่อย "ไม่มีค่าทางธุรกิจที่ agent เดาเอง": UNKNOWN ตาม D-008 จนกว่าเจ้าของยืนยัน Q-04 (ก่อน contract risk), Q-10 (ก่อน ENV-1), Q-12 (ก่อน R1)
+- P25 ของ Codex ใน IDE chat: UNKNOWN (D-008) · P25 rerun ยังไม่ทำหลัง guard r11 และ AGENTS.md เปลี่ยน (`docs/tooling/compatibility.md` ข้อ 3)
+- Tooling: skill candidates `dimensional-analysis` (Codex เสนอ SPIKE FIRST) และ `supply-chain-risk-auditor` (Codex เสนอ REJECT) รอเจ้าของ · Python tooling (pyright-lsp, astral: ruff/ty) trigger ครบแล้ว รอเจ้าของเลือก · `property-based-testing` SPIKE FIRST ยังไม่ได้ใช้ใน CORE-001 → ลองใน CORE-002 ถ้า Codex ขอ admission `hypothesis`
+- timebase follow-ups (ไม่ใช่ finding): tolerance ที่ไม่ finite/ติดลบ และชื่อ zone ที่ไม่มี ยังไม่มี error เฉพาะ · เวลาทำการ `XAUUSDm` (SPIKE-001 AC-03 ด้าน timezone UNKNOWN) · AC-01 ใช้ค่าคงที่ 23 ค่าแทนการสุ่ม (tests-r1 F1 รับทราบแล้ว)
+- เอกสารที่ยังล้าสมัย: `docs/architecture.md` ส่วนหัวและข้อ 10 แถว 0 ยังเขียนว่า D-001 proposed/ต้อง review รอบใหม่ · `docs/tooling/compatibility.md`, `docs/tooling/registry.md`, header ของ `docs/handoff/BOOT-001.md` · D-004 body ใน DECISIONS.md · `docs/failures/` ยังว่าง (process deviations 2026-10-19 ไม่เคยถูกตรวจย้อนหลัง)
+- Linux: จำนวน test ของ control-plane บน CI ยังไม่เคยอ่านจาก log (ต้องมี token) · Actions policy ของ control-gate ที่เจ้าของตั้งยังไม่ได้ยืนยันเป็นลายลักษณ์ (แต่ gate ทำงานถูกบน PR #2–#8: fail ก่อน label, pass หลัง label)
+- CORE-001 หลัง merge: เจ้าของยังไม่ได้รัน demo 3 ขั้นเอง (ช่อง "Owner ran the demo script personally" ใน PR #8 ยังว่าง; Claude รันแทนเมื่อ 19:19:30) → รันได้ทุกเมื่อจาก `docs/evidence/CORE-001.md` หัวข้อ Demo · PR body ของ PR #8 อยู่ใน scratchpad ของ session ไม่ได้เก็บในไฟล์ (ครั้งถัดไปเก็บที่ `docs/proposals/<branch>-pr-body.md` ตามแบบ BOOT-001)
+- ความเสี่ยงที่ตัววิจารณ์แผน (2026-10-21 19:3x) ชี้ไว้สำหรับ contract ถัดไป (ยังไม่มีเจ้าของงาน):
+  - ENV-1: ด่านเขียนว่า "ย้าย holdout ไปแล้ว" แต่กฎห้ามตัด holdout จนกว่า ENV-1 ผ่าน → contract ENV-1 ต้องระบุลำดับ (VPS พร้อม + ลบ terminal/cache ออกจากเครื่องวิจัย + sentinel ผ่าน → แล้วเจ้าของตัด holdout บน VPS เป็นขั้นแยกที่บันทึกไว้) · "research identity" ยังไม่เคยนิยาม และต้องครอบวิธีที่เจ้าของเข้า VPS (RDP drive/clipboard, SMB, credential ที่เก็บไว้) ไม่ใช่แค่โมดูล `data`
+  - SLICE-R1: `broker.mt5` + `data.acquire` (รันบน VPS เท่านั้น) และ admission ระดับโปรเจกต์ของ `MetaTrader5`, `numpy`, `pyarrow` ต้องมาก่อน R1 (D-009 อนุมัติเฉพาะ spike) พร้อม authorization อ่าน Demo บน VPS ใหม่ · H001 ใช้ swap/spread ของ spec วันที่ 2026-10-21 กับประวัติ 2018–2024 ขัดกับ gate "freeze cost provenance, do not infer historical swaps from today's spec" (review D-001 r1) → cost model ต้องติดป้ายที่มาและวันที่ของทุกค่า และรายงาน swap ย้อนหลังเป็น UNKNOWN พร้อมผลกระทบ (ใส่ใน CORE-002 costs) · `rule_for` ตรวจแค่ server ไม่ตรวจ build/symbol/ช่วงหลักฐาน และช่วงหลักฐาน 2026-10-20..21 ไม่ครอบ 2018–2024 → R1 ต้องปฏิเสธ snapshot ที่ build/symbol ไม่ตรงกฎ และตรวจ offset ย้อนหลังรายปีก่อนใช้ · architecture test ที่ล็อกตรวจแค่ `timebase`/`core` → ทุก contract โมดูลใหม่ให้ Codex ขยาย test ผ่าน patch; ห้าม import `data.acquire`/`broker` จาก research/backtest/strategy ต้องมีก่อน experiment แรก · ยังไม่มีใครตรวจ license ข้อมูลของโบรกเกอร์สำหรับใช้วิจัย (Q-07)
+  - SLICE-E1 ทาง (b) engineering test ก็ยังต้องมี VPS หรือเจ้าของบันทึกข้อยกเว้นใน DECISIONS
+  - SPEC A-01 (ภาษา) และ Q-01 (ขอบเขต) ตอบได้ด้วยการยืนยันบรรทัดเดียวจากเจ้าของ ไม่ต้องสัมภาษณ์
 
-## Decisions and assumptions this session
-- เสนอ D-001, D-002, D-004, D-005; บันทึก D-003 ตามการกระทำของเจ้าของ · D-004 เปลี่ยนเป็น gate ที่ใช้ตัวตรวจจาก base revision (F1)
-- ลำดับใหม่ (F5): อนุมัติ SPIKE-001 → รัน spike ใน uv env ชั่วคราว → Codex adversarial review → ตัดสิน D-001
-- ความหมายของเวลาใน MT5 ยังไม่สรุป (F4): เอกสาร Python API ว่า UTC, ฟอรัมว่าเวลา server → SPIKE-001 AC-04/05 วัด
-- สมมติฐานภาษา (A-01) และงานรอบก่อนเป็นข้อมูลอ้างอิง (A-02) ยังรอยืนยัน
+## Decisions and assumptions this session (2026-10-21)
+- เจ้าของ: อนุมัติ acceptance ของ CORE-001 และ D-012 (dependency ชุดแรก) · อนุญาตเช็ค CI แบบ `curl -s -o <file>` แล้ว `node` อ่านไฟล์แยกคำสั่ง · อนุญาต merge `origin/main` เข้า task branch เพื่อแก้ conflict เอกสาร (ไม่ใช่ merge เข้า main) · ตั้ง goal "ทำ phase นี้ให้จบ ตัดสินเอง" (19:1x) และ "จัดการเริ่มเลยเอาเต็มระบบส่วนนี้" (19:3x) สำหรับงานบ้านหลัง merge และ CORE-002
+- Claude ตัดสินภายใต้สิทธิ์นั้น: นโยบาย F2 (NaN/inf → unknown) คงไว้ · ไม่เพิ่ม error ใหม่สำหรับ tolerance/zone ที่ contract ไม่ได้กำหนด · แก้ F4+F5 ใน commit เดียวเพราะรากเดียวกัน (ระบุใน handoff) · merge main เข้า branch แทน rebase (rebase ต้อง force push ซึ่งถูกบล็อก) · เพิ่ม N2 (path ของ bash สำหรับ PowerShell) เป็นข้อความใน AGENTS.md patch
+- สมมติฐานที่ยังรอยืนยัน: A-01 ภาษา (เจ้าของยังไม่รับรอง SPEC v0.1), A-02 งานรอบก่อนเป็นข้อมูลอ้างอิง · ค่า [A] ใน SPEC (risk policy, stale tick 5 s, retention)
 
 ## Tried and did not work
-- `pandoc` และ `python` ไม่มีในเครื่อง → ใช้สคริปต์ Node แปลง .docx
-- ตัวอย่าง hook ใน Handbook (Python, เทียบ substring) จะบล็อกไฟล์นอกโปรเจกต์และไม่รองรับ worktree → เขียนใหม่ด้วยการเทียบ path แบบ repo-relative
-- `rm -rf "$S"` ใน scratch ถูก guard บล็อก (ตัวแปรที่ยังไม่ขยายถือว่าไม่รู้ปลายทาง) → ใช้โฟลเดอร์ใหม่แทนการลบ
-- เกือบเก็บ patch ไว้ใน path ที่ track: patch มีบรรทัดเก่าของ red-flags.sh ที่มี literal คล้าย secret → ย้ายไป `docs/proposals/` ซึ่ง gitignored
+- จาก BOOT-001: `pandoc`/`python` ไม่มีในเครื่อง → Node script · hook ตัวอย่างใน Handbook ไม่รองรับ worktree → เขียนใหม่แบบ repo-relative · `rm -rf "$S"` ใน scratch ถูก guard บล็อก → ใช้โฟลเดอร์ใหม่ · patch ที่มี literal คล้าย secret ต้องอยู่ใน `docs/proposals/` (gitignored)
+- 2026-10-21: `curl … | node -e` ถูก guard บล็อกเป็น download-and-execute (false positive) → หยุดถาม → เจ้าของให้แยกเป็น `curl -s -o <file>` แล้ว `node` อ่านไฟล์ · `gh` ไม่มีใน PATH ของ Git Bash จึงใช้ GitHub REST API แบบไม่มี token (60 ครั้ง/ชม.) · Codex r3 รอบแรกถูกตัดเพราะ session ปิดก่อนเขียนรายงาน → รันใหม่ (probe เดิมผ่านทั้งหมด) · `git diff --cached --check` fail เพราะไฟล์ review ของ Codex มีบรรทัดว่างท้ายไฟล์ → ลบด้วย Edit ก่อน commit · `rg` ไม่มีใน sandbox ของ Codex (ใช้ Select-String แทน)
 
 ## Process deviations (Claude Code, 2026-10-19) — ขัด CLAUDE.md "When blocked, stop and ask the owner"
 Codex ชี้ (หลัง review r5 static) ว่า Claude เปลี่ยนเครื่องมือหรือเปลี่ยนรูปคำสั่งหลังถูกบล็อก โดยไม่ถามเจ้าของก่อน ทั้ง session มี 5 ครั้ง:
@@ -209,52 +217,23 @@ Codex ชี้ (หลัง review r5 static) ว่า Claude เปลี่
 ตั้งแต่นี้ Claude จะหยุดและถามเจ้าของทุกครั้งที่ถูกบล็อก รวมถึงกรณีที่คิดว่าเป็น false positive
 **N6 ตัดสินแล้ว (เจ้าของ 2026-10-19 ตามคำแนะนำของ Codex):** คงกฎเดิม ไม่เพิ่มข้อยกเว้น เพราะเงื่อนไข "ไฟล์ไม่ล็อก" กว้างเกินไป และข้อความบล็อกไม่ใช่การอนุญาตใหม่ · false positive ให้แก้แยกเป็นงานใหม่พร้อม regression tests · N6 ไม่ขวาง r5
 หมายเหตุจาก Codex: ข้อความ "ไม่แตะไฟล์ล็อก" ของทั้ง 5 เหตุการณ์เป็นรายงานของ Claude เอง ยังไม่มีใครตรวจย้อนหลัง
+ข้อยกเว้นที่เจ้าของให้ภายหลังเป็นรายกรณี (บันทึกใน memory ของ Claude และใน PROGRESS รอบนั้น): Edit แทน `sed -i` (2026-10-20), commit message จากไฟล์ `-F` (2026-10-21), rerun `git apply`/`git push` แบบ standalone (2026-10-20), path ตัวอักษรแทนตัวแปรไป scratchpad (2026-10-20), เช็ค CI แบบ `curl -o` + `node` แยกคำสั่ง (2026-10-21)
 
 ## Pending external operations
-- commit review r11 บน `chore/BOOT-001-ac05-control-gate` ยังไม่ push: parent session push เองเป็นคำสั่งเดี่ยว `git push origin HEAD:refs/heads/chore/BOOT-001-ac05-control-gate` แล้วบันทึก head และ CI · PR ของ AC-05 ยังไม่มี
-- ก่อนหน้า: Claude push `2f2b6ca` ตาม D-006 แล้ว (21:24 +07) และ CI run 39438962998 completed/success · ยังไม่มี label หรือ merge · commit หลักฐาน AC-01/02/03 ของ session headless ยังไม่ push: parent session push เองเป็นคำสั่งเดี่ยว
+- ไม่มี push ที่ค้าง · PR ถัดไปที่ต้องให้เจ้าของเปิด, ติด label และ merge: `chore/CORE-001-post-merge` (มี AGENTS.md/CLAUDE.md ที่ล็อก → ต้องมี label `owner-approved-control-change`) แล้วตามด้วย `feat/CORE-002-costs` (รอบแรกมีแค่ contract)
+- เจ้าของ: เช่า Windows VPS และตั้งงบ Q-10 → แล้ว Claude ร่าง ENV-1
+- Codex: review contract CORE-002 หลังเจ้าของอนุมัติ acceptance
 
 ## Authority and budget left
-- รอบ r11 review (Claude, 2026-10-20, เจ้าของสั่งผ่าน parent session แบบ headless): ตรวจ hash ของ r11 ที่เจ้าของ apply, รัน tests 105 ข้อ, ส่ง input ให้ hook อย่างเดียว, เขียน review r11, อัปเดต handoff/PROGRESS แล้ว stage → scan → commit รวมไฟล์ล็อก 2 ไฟล์ที่เจ้าของ apply · ห้าม push (parent session push เอง) · คำตอบถาวร 3 ข้อใช้เฉพาะ session นี้ และไม่ได้ใช้เลย · บล็อก Monitor ครั้งเดียว: เจ้าของตอบให้ทำต่อโดยไม่รันซ้ำ · ทำครบแล้ว
-- รอบ r11 (Codex, 2026-10-20 ประมาณ 23:20 เจ้าของสั่งผ่าน Claude): implementer และ regression author เฉพาะ F22/F23 รวมเป็น proposal เดียวบน `641fd49`; อนุญาตเขียน proposal/evidence, handoff และ PROGRESS เท่านั้น · ปล่อยทุกไฟล์ unstaged ตาม D-008; ไม่ apply, ไม่แก้ controls จริง, ไม่ push และไม่ปิด findings เอง · เตรียมครบแล้ว
-- รอบหลักฐาน acceptance (Claude, 2026-10-20, headless ตามคำขอเจ้าของผ่าน parent session): รัน P25, probe เขียนไฟล์ล็อกครั้งเดียวต่อรายการ, สร้างและลบ worktree ทดสอบ, บันทึกผลใน compatibility/handoff/PROGRESS แล้ว stage → scan → commit · ห้าม push (parent session push เอง) และห้ามแตะไฟล์ล็อก · คำตอบถาวร 3 ประเภทใช้เฉพาะ session นี้ · ทำครบแล้ว
-- รอบ r9 review (Claude, 2026-10-20, เจ้าของสั่งผ่าน parent session แบบ headless): ตรวจ r9 ที่เจ้าของ apply, รัน tests 69 ข้อ, ส่ง input ให้ hook อย่างเดียว, analogue ใน scratch ด้วย cd/pwd/echo เท่านั้น, เขียน review r9, อัปเดต handoff/PROGRESS แล้ว stage → scan → commit รวมไฟล์ล็อก 5 ไฟล์ที่เจ้าของ apply · ห้ามแก้ controls, ห้าม push (parent session push เอง), F11–F17 และ F19 ยังพักไว้ · คำตอบถาวรเฉพาะ session นี้สองประเภท (path ตัวแปรที่ชี้ไป scratchpad และ apply/push ที่ต้องเป็นคำสั่งเดี่ยว) ไม่ใช้กับ session อื่น · ทำครบแล้ว
-- รอบ r9 (Codex, headless ตามคำขอเจ้าของผ่าน Claude): implementer และ regression author เฉพาะ proposal F18 + D-006 revised บน `be2e02a`; เขียน patch/evidence ใน docs/proposals, อัปเดต PROGRESS/handoff, stage → scan ด้วย Git Bash absolute path → commit docs only · ห้าม apply patch, แก้ controls จริง หรือ push; ไม่ปิด finding เอง
-- รอบ r8 review (Claude, 2026-10-20, เจ้าของสั่งผ่าน parent session แบบ headless): ตรวจ r8 ที่เจ้าของ apply, รัน tests 61 ข้อ, ส่ง input ให้ hook อย่างเดียว, analogue ใน scratch ด้วย cd/pwd เท่านั้น, เขียน review r8, อัปเดต handoff/PROGRESS แล้ว stage → scan → commit รวมไฟล์ล็อก 2 ไฟล์ที่เจ้าของ apply · ห้ามแก้ controls, ห้าม push, ห้ามเปิด F11–F17 ใหม่เว้นแต่ r8 ทำให้แย่ลง · ทำครบแล้ว
-- รอบ r8 (Codex, 2026-10-20): เจ้าของแจ้งว่า review r7 เสร็จและส่งต่อให้ Codex แก้ F10 ตาม review/handoff → ทำ proposal เฉพาะ F10 กับ regression, อัปเดตเอกสารและ commit docs only; ใช้ fix-findings เป็น plain procedure · ไม่ apply/แก้ controls จริง, ไม่ push, ไม่ปิด finding เอง
-- รอบ r7 review (Claude, 2026-10-20, เจ้าของสั่งผ่าน parent session): ตรวจ r7 ที่เจ้าของ apply, รัน tests, ส่ง input ให้ hook อย่างเดียว, เขียน review r7, อัปเดต handoff/PROGRESS แล้ว stage → scan → commit รวมไฟล์ล็อก 2 ไฟล์ที่เจ้าของ apply · ห้ามแก้ controls และห้าม push · ทำครบแล้ว
-- รอบ r7 (Codex): เจ้าของส่งผล pre-apply r6/ข้อเสนอ F9 และขอให้จัดการให้เสร็จ → ทำ proposal รวม F7/F9 และ F8 เฉพาะ unknown branch ที่แก้พร้อม regression ได้; อัปเดต handoff/PROGRESS และ commit เอกสาร · ไม่ apply/แก้ controls จริงหรือ push · ไม่เปลี่ยน N6 หรือยกเว้น runtime block
-- รอบ r6 (Codex): ทำเฉพาะ F7 ตามข้อความส่งต่อ พร้อม permanent regressions และหลักฐาน fail-before/pass-after; ส่ง patch ให้เจ้าของ, อัปเดต handoff/PROGRESS และ commit เอกสารเท่านั้น · ไม่ apply/แก้ controls จริงหรือ push และไม่ขยายไป F8/F9
-- รอบ r5 review (เจ้าของอนุมัติในแชท 2026-10-19): ตรวจ patch r5 ที่เจ้าของ apply, รัน tests, ส่ง input ให้ hook อย่างเดียว, เขียน review r5, อัปเดต handoff/PROGRESS แล้ว stage → scan → commit รวมไฟล์ล็อก 2 ไฟล์ที่เจ้าของ apply · ห้ามแก้ controls และห้าม push · ทำครบแล้ว
-- รอบก่อน (Codex): เตรียม patch เดียวสำหรับ F3 สองกลุ่มที่ยืนยันใน r2 และ permanent regressions ของ guard/posthook; ไม่ apply ไฟล์ล็อกและไม่ push
-- Approved: เจ้าของขอให้ตั้งโปรเจกต์ (2026-10-18), ส่ง review r1 มาให้แก้, สั่ง commit แยกส่วน สั่งให้ apply patch r1 (2026-10-19, ครั้งเดียวสำหรับ patch นี้), ให้ส่งงานไปมาระหว่าง Claude กับ Codex ได้ และให้ checkpoint ตามกติกาทุกครั้งที่จบงานหนึ่งขั้น · ไม่มีอนุมัติให้ agent merge หรือเชื่อมโบรกเกอร์ · push ถูกบล็อกด้วย deny rule จึงเป็นของเจ้าของ
+- งานบ้านหลัง merge (Claude, 2026-10-21 19:3x, เจ้าของสั่ง "จัดการเริ่มเลยเอาเต็มระบบส่วนนี้"): checkpoint, ล้าง PROGRESS, อัปเดต SPEC แถวที่มีคำตอบแล้ว, apply patch AGENTS.md/CLAUDE.md ของ Codex ตาม D-006 + fresh-session review + commit + push · ไม่แก้ไฟล์ล็อกตรงๆ, ไม่ merge, ไม่ติด label
+- CORE-002 costs (Claude): ร่าง contract ตาม `/task-contract` แล้วหยุดรอเจ้าของอนุมัติ acceptance ก่อน implement · Codex: review contract, admission และ tests ตาม binding ปกติ
+- D-006: Claude apply patch ใน `docs/proposals/` และ push task branch เองได้ (คำสั่งเดี่ยว, ไม่ force) · ข้อยกเว้นถาวรที่เจ้าของให้: Edit แทน sed, `-F msgfile`, rerun standalone, CI check แยกคำสั่ง, merge main เข้า task branch กรณี conflict เอกสาร
+- ไม่มีอนุมัติให้ agent merge, ติด label, เชื่อมโบรกเกอร์ หรือรัน backtest ก่อน ENV-1 · งบ CORE-001: Codex headless 5 รัน (admission, tests, r1, r2, r3) ตามงบ 5 พอดี
 
 ## Next safe action
-- **ล่าสุด 2026-10-21 19:2x (CORE-001):** ทุกอย่างที่ agent ทำได้เสร็จแล้วบน `feat/CORE-001-timebase` (head ล่าสุดที่ push) · เจ้าของ: เปิด PR ไป `main` ที่ `https://github.com/faztycoding/Sochron1k/compare/main...feat/CORE-001-timebase?expand=1` ด้วย body ที่ Claude เตรียมไว้ → ติด label `owner-approved-control-change` (tests ที่ล็อก 3 ไฟล์ของ Codex) → รอ `ci / control-plane` และ `control-gate / locked-paths` เขียว → merge · หลัง merge: contract ถัดไปตามแผนข้อ 10 ของ architecture (ENV-1 เมื่อมี VPS หรือ CORE-002 costs/risk ระหว่างรอ) และบันทึก post-merge CI · รายการด้านล่างนี้เป็นของ BOOT-001 (2026-10-20) และส่วนใหญ่ทำแล้ว (PR #1–#7 merge แล้ว, branch protection ตั้งแล้ว) เก็บไว้เป็นประวัติ
-- ล่าสุด 23:58: review r11 และ commit เสร็จแล้ว → ถัดไป parent session push `git push origin HEAD:refs/heads/chore/BOOT-001-ac05-control-gate` เป็นคำสั่งเดี่ยว แล้วบันทึก head ที่ push, ผล CI และจำนวน test บน Linux (คาดว่า 76) · จากนั้นเจ้าของเปิด PR แล้วทำ AC-05: ไม่มี label `locked-paths` ต้อง FAIL และเมื่อมี label ต้อง PASS · N6 ยังมีผลกับทุก block
-- เสร็จแล้ว (21:24–21:26): parent session push `2f2b6ca` ตาม D-006 ผ่านโดยไม่มีบล็อกหรือหน้าต่างถาม · CI `control-plane` success บน head `2f2b6ca295f5…` (job 118683457366) · รายละเอียดอยู่ใน handoff หัวข้อ "D-006 live push and Linux CI"
-- **เจ้าของตัดสิน (2026-10-20 หลังรายงานของ Codex 21:34):**
-  - AC-04 แก้เป็น v1.1 ตาม D-006 ในข้อความ contract
-  - F20 ไปงาน guard-fix ถัดไป โดยยังเปิดอยู่ และผลต่อ Bash จริงยังพิสูจน์ไม่ครบ
-  - ยอมรับความเสี่ยงที่เหลือของ guard ตาม D-007
-  - ให้ Claude ปิด AC ที่ยัง UNKNOWN ก่อนติด label
-- Claude กำลังรวบรวมหลักฐาน acceptance:
-  - เสร็จแล้ว (21:47–21:50): session Claude ใหม่แบบ headless รัน P25 (AC-01 ฝั่ง Claude), ลองเขียนไฟล์ล็อก (AC-02) และทดสอบใน worktree (AC-03) → PASS ทั้งสาม · parent session push commit นี้เป็นคำสั่งเดี่ยวตาม D-006
-  - ถัดไป: `codex exec` รัน P25 ฝั่ง Codex (AC-01) และตรวจ AC-08
-  - ผลจะบันทึกใน handoff หัวข้อ "Acceptance evidence"
-  - AC-05 ตรวจได้หลัง merge ตาม contract
-- เจ้าของ: ติด label และ merge PR #1 ได้เมื่อพร้อม (merge เป็นของเจ้าของเท่านั้น) · D-008 (22:2x) ยอมรับข้อยกเว้นสองเรื่อง ได้แก่ AC-08 ข้อย่อยเรื่องที่มาของค่า และ P25 ของ Codex ใน IDE ส่วน `codex exec` ถือเป็นสภาพแวดล้อมจริง · CI `control-plane` success บน `f0627f7`
-- หลัง merge (ตามคำแนะนำของ Codex 22:23):
-  - พิสูจน์ control-gate บน PR ถัดไป (AC-05)
-  - ตั้ง required checks จากชื่อที่ GitHub รายงานจริง ซึ่งต้องเคยรันสำเร็จภายใน 7 วัน
-- การ merge ไม่ได้อนุมัติ SPIKE-001 ไปด้วย ต้องอนุมัติแยกทั้ง contract, ผล dependency review ของ `MetaTrader5`, `tzdata` และ `pytest` และขอบเขตการเชื่อม Demo
-- คำสั่งตรวจ `git apply --check` / `-R --check` ต้องรันเดี่ยวและอ่าน exit status แยก (F21) · F22 แก้แล้วใน guard ที่ใช้อยู่ (r11): ตัวพิมพ์หรือ slash ของ project path ไม่ทำให้ apply ตาม D-006 ถูกบล็อกอีกบน Windows · path ของ patch ในคำสั่งต้องใช้ `/` หรือ path สัมพัทธ์ เพราะ `\` ยังถูกบล็อก
-- เสร็จแล้ว: ที่วาง F20 (งาน guard-fix ถัดไป), AC-04 v1.1, ข้อความ D-006/D-004 · Linux CI เขียวบน `2f2b6ca` และ `77a8139`
-- F8 ส่วนที่เหลือต้องมี contract/หลักฐาน shell ของ Monitor และการวิเคราะห์ branch ของ case ก่อนแก้; ไม่เดา syntax เพื่อทำให้คำสั่งผ่าน
-- label `owner-approved-control-change`: ไม่มี finding High ค้างหลัง review r9 · ยังต้องรอ CI เขียวบน head ที่ push · เจ้าของเป็นผู้ตัดสินและติดเอง
-- หลัง merge: ตั้ง branch protection ให้ `control-gate / locked-paths` และ `ci / control-plane` เป็น required
-- งานถัดไปหลัง BOOT-001 (ยังไม่มี contract): แก้ false positive ของ guard-bash พร้อม regression tests → (1) เนื้อหาใน heredoc ถูกอ่านเป็นคำสั่ง (2) regex pipe-to-shell จับคำ curl/bash ที่อยู่ใน pattern ของ grep (3) F8 ส่วนที่เหลือ: Monitor ที่มี `$(...)`, `case` pattern (4) F16 backtick ที่มี backslash
-- งาน guard-fix ถัดไป (ยังไม่มี contract): F11–F15 และ F17 จาก review r7 และ F19 จาก review r8 ตามที่เจ้าของตัดสินเมื่อ 2026-10-20
-- Waiting for owner action/decision: label และ merge PR #1, N1–N4, D-002..D-005, contract SPIKE-001 พร้อม dependency review และขอบเขตการเชื่อม Demo
+- **เจ้าของ (เรียงตามความเร่ง):** (1) เช่า Windows VPS และตั้งงบรายเดือน/kill criteria (Q-10) → ปลดบล็อก ENV-1 → SLICE-R1 (2) กดรับ D-002, D-004 (รวม D-006), D-005 และตอบ Q-11 เพื่อปิด phase 0 ตามเกณฑ์ (3) ยืนยัน Q-04 risk policy ก่อน contract risk และ Q-12 retention ก่อน R1 (4) เปิด PR ของ `chore/CORE-001-post-merge` (ติด label) และอนุมัติ acceptance ของ CORE-002 costs
+- **Claude ถัดไป:** ร่าง `docs/contracts/CORE-002-costs.md` บน branch `feat/CORE-002-costs` (ต่อจาก chore branch เพื่อไม่ให้ PROGRESS ชน) → push → รอเจ้าของอนุมัติ → Codex admission (คาดว่าไม่มี dependency ใหม่; ถ้า Codex ขอ `hypothesis` ให้ทำ admission แยกตาม SPIKE FIRST) → Codex tests เป็น patch → implement → review → PR
+- **หลัง VPS พร้อม:** `/task-contract ENV-1` (Standard, มีค่าใช้จ่าย) ตาม architecture ข้อ 6.1: ย้าย terminal/raw/holdout, environment check, synthetic sentinel · ต้องมี authorization เชื่อม terminal ใหม่
+- ประวัติ "Next safe action" ของ BOOT-001 (2026-10-19/20) ถูกตัดออกจากไฟล์นี้แล้ว: ทุกข้อทำแล้วหรือย้ายไป "Not done yet" · รายละเอียดอยู่ใน `docs/handoff/BOOT-001.md` และ git history (ไฟล์นี้ก่อน commit ของ 2026-10-21 19:4x)
 
 On resume: re-check git state and every pending external operation first.
