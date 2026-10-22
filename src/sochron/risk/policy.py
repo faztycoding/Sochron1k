@@ -117,10 +117,13 @@ def exact_product(*factors: Decimal) -> Decimal:
 
 
 def exact_sum(*terms: Decimal) -> Decimal:
+    # Zero terms are skipped (review CORE-003-r1 F2): adding 0E-999999999999999999 changes no value
+    # but would align the other term to a 10**18-digit coefficient.
     with localcontext(_EXACT):
         result = Decimal(0)
         for term in terms:
-            result = result + term
+            if not term.is_zero():
+                result = result + term
         return result
 
 

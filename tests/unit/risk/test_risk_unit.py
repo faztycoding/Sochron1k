@@ -380,6 +380,16 @@ def test_corrupted_model_domain_is_refused_at_use():
             _gate(one_lot, Decimal("9800"), halted, model)
 
 
+def test_zero_budget_with_any_exponent_sizes_like_zero():
+    # Review CORE-003-r1 F2: 1200 + 0E-999999999999999999 tried to build a 10**18-digit
+    # coefficient in the exact context and raised MemoryError.
+    baseline = size_position(Decimal("10000"), Decimal("12"), H001_COSTS, H001_RISK, Decimal("0"))
+    for zero in ("-0", "0E-999999999999999999", "-0E-999999999999999999", "0E+999999999999999999"):
+        decision = size_position(Decimal("10000"), Decimal("12"), H001_COSTS, H001_RISK, Decimal(zero))
+        assert decision == baseline
+        assert _gate(REQUEST, Decimal("10000"), _start(), H001_COSTS, Decimal(zero)).allowed
+
+
 def test_policy_fields_and_halt_state_validation():
     assert set(H001_RISK.provenance) == set(POLICY_FIELDS)
     with pytest.raises(TypeError):
