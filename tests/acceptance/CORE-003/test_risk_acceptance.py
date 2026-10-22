@@ -1,6 +1,6 @@
-"""CORE-003 v1.5 acceptance tests derived from the approved risk contract."""
+"""CORE-003 v1.6 acceptance tests derived from the approved risk contract."""
 
-from collections.abc import Mapping
+from collections.abc import KeysView, Mapping
 from dataclasses import FrozenInstanceError, fields, is_dataclass, replace
 from datetime import date, datetime
 from decimal import (
@@ -734,7 +734,7 @@ def _slot_id(row):
     return ".".join(row[:2])
 
 
-def _timed_rejection(error, function, arguments, record_property):
+def _timed_rejection(error, function, arguments, record_property, capsys):
     """F14: time only the public invocation, transport every worker outcome."""
     environment = f"{platform.platform()}; {sys.implementation.name} {platform.python_version()} via uv"
     record_property("oversized_environment", environment)
@@ -756,12 +756,15 @@ def _timed_rejection(error, function, arguments, record_property):
                 outcome.append((elapsed, None, _context_state() == before))
 
     worker = Thread(target=invoke, daemon=True)
-    faulthandler.dump_traceback_later(20, exit=True)
-    try:
-        worker.start()
-        worker.join(timeout=10)
-    finally:
-        faulthandler.cancel_dump_traceback_later()
+    # tests-r3 F3: pytest captures fd 2, and a watchdog exit discards that capture.
+    # Arm, run and cancel with capture disabled, so a hang ends with a visible traceback.
+    with capsys.disabled():
+        faulthandler.dump_traceback_later(20, exit=True)
+        try:
+            worker.start()
+            worker.join(timeout=10)
+        finally:
+            faulthandler.cancel_dump_traceback_later()
     if worker.is_alive():
         record_property("oversized_elapsed_seconds", "unfinished after join(timeout=10)")
         print(f"oversized rejection: {environment}; unfinished after join(timeout=10)")
@@ -792,7 +795,7 @@ _OVERSIZED_CASES = tuple(
 
 @pytest.mark.parametrize("row,bound", _OVERSIZED_CASES,
                          ids=[_slot_id(row) + "." + bound[0] for row, bound in _OVERSIZED_CASES])
-def test_ac06_oversized_decimal_per_slot(v13, row, bound, record_property):
+def test_ac06_oversized_decimal_per_slot(v13, row, bound, record_property, capsys):
     public, field, error = row
     # All creation/import/setup occurs before the worker's timed public call.
     value = Decimal(bound[1])
@@ -807,13 +810,13 @@ def test_ac06_oversized_decimal_per_slot(v13, row, bound, record_property):
             arguments["request"] = _call(
                 replace, arguments["request"], entry_price=Decimal(entry), stop_loss=Decimal(stop),
             )
-    _timed_rejection(v13[error], function, arguments, record_property)
+    _timed_rejection(v13[error], function, arguments, record_property, capsys)
 
 
-def test_ac06_extreme_equity_rejection_deadline(v13, record_property):
+def test_ac06_extreme_equity_rejection_deadline(v13, record_property, capsys):
     value = Decimal("1E-999999999")
     function, arguments = _changed_call(v13, ("size_position", "equity"), value)
-    _timed_rejection(v13["BadEquity"], function, arguments, record_property)
+    _timed_rejection(v13["BadEquity"], function, arguments, record_property, capsys)
 
 
 @pytest.mark.parametrize("bound", _golden()["BOUND_ACCEPTED"] + (
@@ -1179,12 +1182,13 @@ def test_ac06_revalidates_every_state_field_at_use(v13, public, branch, field, v
     ("state", "experiment_start_equity", "BadEquity"),
     ("state", "policy.risk_per_trade", "BadPolicy"),
 ))
-def test_ac06_oversized_at_use_before_early_denials(v13, branch, target, field, error, record_property):
+def test_ac06_oversized_at_use_before_early_denials(v13, branch, target, field, error, record_property,
+                                                   capsys):
     arguments = _v13_calls(v13)["check_entry"]
     _refusal_branch(v13, arguments, branch)
     value = Decimal("0.1" + "0" * 1000)
     _mutate_field(arguments[target], field, value)
-    _timed_rejection(v13[error], v13["check_entry"], arguments, record_property)
+    _timed_rejection(v13[error], v13["check_entry"], arguments, record_property, capsys)
 
 
 @pytest.mark.parametrize("branch", ("halted", "missing_stop", "wrong_side_stop", "stale"))
@@ -1287,25 +1291,40 @@ def test_ac06_huge_negative_counts_keep_contract_errors(v13, public, path, error
 
 
 class _HookMapping(Mapping):
-    """A valid provenance Mapping whose keys callback attacks use-time validation."""
+    """A valid provenance Mapping whose every read path runs the attack (tests-r3 F1).
+
+    keys(), __iter__, __getitem__ and __len__ each call the action, so the Mapping
+    mixins built on them (items(), values(), get(), __contains__, __eq__) and every
+    copy strategy (dict(m), {**m}, iteration plus lookup) run it as well. ``calls``
+    counts action runs; ``traversals`` counts __iter__ calls, one per full read.
+    """
     def __init__(self, data, action):
         self.data = data
         self.action = action
-        self.key_reads = 0
+        self.calls = 0
+        self.traversals = 0
+
+    def _run(self):
+        self.calls += 1
+        self.action(self)
 
     def __getitem__(self, key):
+        self._run()
         return self.data[key]
 
     def __iter__(self):
+        self.traversals += 1
+        self._run()
         return iter(self.data)
 
     def __len__(self):
+        self._run()
         return len(self.data)
 
     def keys(self):
-        self.key_reads += 1
-        self.action(self.key_reads)
-        return self.data.keys()
+        self._run()
+        # A live view of this Mapping: iterating it goes through __iter__ again.
+        return KeysView(self)
 
 
 @pytest.mark.parametrize("proxy", (False, True))
@@ -1317,17 +1336,20 @@ def test_ac04_ac06_provenance_callback_cannot_bypass_gate(v13, proxy, attack):
         request = _call(replace, request, stop_loss=Decimal("4024.90"))
         arguments["request"] = request
         _gate(_call(v13["check_entry"], **arguments), ("stop_loss_wrong_side",), v13["GateDecision"])
-        action = lambda count: object.__setattr__(request, "side", "buy")
+        action = lambda hook: object.__setattr__(request, "side", "buy")
+        attacked = lambda: request.side == "buy"
     elif attack == "policy":
         request = _call(replace, request, lots=Decimal("41.66"))
         arguments["request"] = request
         _gate(_call(v13["check_entry"], **arguments), ("lots_exceed_sized",), v13["GateDecision"])
         substituted = _call(replace, v13["H001_RISK"])
         object.__setattr__(substituted, "risk_per_trade", Decimal("5"))
-        action = lambda count: object.__setattr__(state, "policy", substituted)
+        action = lambda hook: object.__setattr__(state, "policy", substituted)
+        attacked = lambda: state.policy is substituted
     else:
         _gate(_call(v13["check_entry"], **arguments), (), v13["GateDecision"])
-        action = lambda count: object.__setattr__(request, "lots", Decimal("NaN"))
+        action = lambda hook: object.__setattr__(request, "lots", Decimal("NaN"))
+        attacked = lambda: request.lots.is_nan()
     hook = _HookMapping(dict(state.policy.provenance), action)
     object.__setattr__(state.policy, "provenance", MappingProxyType(hook) if proxy else hook)
     try:
@@ -1339,6 +1361,9 @@ def test_ac04_ac06_provenance_callback_cannot_bypass_gate(v13, proxy, attack):
     else:
         assert decision.allowed is False
         assert decision.reasons
+    # tests-r3 F1: the attack ran, whichever read path the gate used.
+    assert hook.calls >= 1
+    assert attacked()
 
 
 @pytest.mark.parametrize("proxy", (False, True))
@@ -1350,8 +1375,9 @@ def test_ac03_restart_keeps_policy_validated_before_provenance_reread(v13, proxy
     # simply validating the replacement on a later read would still be wrong.
     substituted = _call(replace, v13["H001_RISK"], risk_per_trade=Decimal("0.5"))
 
-    def swap_on_reread(count):
-        if count > 1:
+    def swap_on_reread(hook):
+        # The first full read is clean; any later traversal swaps the state's policy.
+        if hook.traversals > 1:
             object.__setattr__(state, "policy", substituted)
 
     hook = _HookMapping(dict(validated_policy.provenance), swap_on_reread)
@@ -1364,15 +1390,19 @@ def test_ac03_restart_keeps_policy_validated_before_provenance_reread(v13, proxy
     _money(result.experiment_start_equity, "9800")
     assert result.daily_halted is True
     assert result.experiment_halted is False
+    # tests-r3 F1: the call read the hook (v1.6 exact-str keys need a traversal),
+    # so any reread of the provenance would have swapped the policy.
+    assert hook.calls >= 1
+    assert hook.traversals >= 1
 
 
-def test_ac06_large_coefficient_small_adjusted_rejection_deadline(v13, record_property):
+def test_ac06_large_coefficient_small_adjusted_rejection_deadline(v13, record_property, capsys):
     # 30M digits bounds routine memory use. The adjusted exponent is -1, so an
     # exponent-only check cannot reject this input. Construction is not timed.
     value = Decimal("0." + "7" * 30_000_000)
     assert value.adjusted() == -1
     function, arguments = _changed_call(v13, ("size_position", "equity"), value)
-    _timed_rejection(v13["BadEquity"], function, arguments, record_property)
+    _timed_rejection(v13["BadEquity"], function, arguments, record_property, capsys)
 
 
 def test_ac01_ac04_sized_lots_over_coefficient_bound_keeps_gate_exact(v13):
@@ -1397,3 +1427,206 @@ def test_ac01_ac04_sized_lots_over_coefficient_bound_keeps_gate_exact(v13):
         too_large = _call(replace, request, lots=Decimal("200"))
         _gate(_call(v13["check_entry"], too_large, equity, DAY, state, model),
               ("lots_exceed_sized", "lots_not_on_grid"), v13["GateDecision"])
+
+
+# Contract v1.6 (review r2 F4): provenance keys must be exactly str. Construction
+# plus every policy consumer named in the v1.4 row.
+_PROVENANCE_PATHS = (
+    ("RiskPolicy", "provenance"),
+    *((public, "policy.provenance")
+      for public in ("HaltState", "size_position", "start_experiment", "unknowns")),
+    *((public, "state.policy.provenance")
+      for public in ("check_entry", "update_equity", "restart_experiment")),
+)
+
+
+class _EqualityHookKey(str):
+    """A provenance key equal to its text; every equality test runs caller code."""
+    __hash__ = str.__hash__
+
+    def __eq__(self, other):
+        self.effects.append(other)
+        self.action()
+        return str.__eq__(self, other)
+
+
+def _path_owner(arguments, path):
+    """The object that holds the leaf of a dotted path, or None for an argument."""
+    parts = path.split(".")
+    if len(parts) == 1:
+        return None
+    owner = arguments[parts[0]]
+    for part in parts[1:-1]:
+        owner = getattr(owner, part)
+    return owner
+
+
+@pytest.mark.parametrize("container", ("dict", "proxy"))
+@pytest.mark.parametrize("key_kind", ("str_subclass", "int"))
+@pytest.mark.parametrize("public,path", _PROVENANCE_PATHS)
+def test_ac06_provenance_keys_must_be_exact_str(v13, public, path, key_kind, container):
+    good = dict(v13["H001_RISK"].provenance)
+    record = good["risk_per_trade"]
+    if key_kind == "str_subclass":
+        # Review r2 R4: the key equals "risk_per_trade", so the key set looks complete.
+        key = _EqualityHookKey("risk_per_trade")
+        key.effects = []
+        key.action = lambda: None
+        bad = {name: value for name, value in good.items() if name != "risk_per_trade"}
+        bad[key] = record
+        assert key.effects == []  # building the fixture ran no equality test
+    else:
+        # Contract v1.6 makes any non-str key a TypeError.
+        bad = {**good, 1: record}
+    value = MappingProxyType(bad) if container == "proxy" else bad
+    function, arguments = _changed_call(v13, (public, path), value)
+    owner = _path_owner(arguments, path)
+    if key_kind == "str_subclass" and owner is not None:
+        # R4's attack: lift the already validated risk fraction from inside ==.
+        key.action = lambda: object.__setattr__(owner, "risk_per_trade", Decimal("5"))
+    _reject(TypeError, function, **arguments)
+    if key_kind == "str_subclass":
+        assert key.effects == []  # the key was refused before any equality test
+    if owner is not None:
+        assert owner.risk_per_trade == Decimal("0.0025")
+
+
+def _lower_daily_limit_on_reread(policy):
+    """Review r2 R5: from the second full read on, the daily limit drops to .0001."""
+    def action(hook):
+        if hook.traversals > 1:
+            object.__setattr__(policy, "daily_loss_limit", Decimal("0.0001"))
+    return action
+
+
+def _policy_values(policy):
+    return tuple(getattr(policy, name) for name in (
+        "risk_per_trade", "daily_loss_limit", "experiment_loss_limit",
+        "max_open_exposures", "halt_clearers",
+    ))
+
+
+@pytest.mark.parametrize("proxy", (False, True))
+@pytest.mark.parametrize("public", ("start_experiment", "update_equity", "restart_experiment"))
+def test_ac02_ac03_second_provenance_read_cannot_change_bound_policy(v13, public, proxy):
+    start, update, restart = (
+        v13[name] for name in ("start_experiment", "update_equity", "restart_experiment")
+    )
+    policy = _call(replace, v13["H001_RISK"])
+    if public != "start_experiment":
+        state = _call(start, Decimal("10000"), DAY, policy, "owner", "fixture")
+    if public == "restart_experiment":
+        # Experiment halt on day22, then a fresh day23 baseline of10000.
+        state = _call(update, state, Decimal("9800"), DAY)
+        state = _call(update, state, Decimal("10000"), NEXT_DAY)
+        _state(state, policy, NEXT_DAY, "10000", "10000", False, True)
+    hook = _HookMapping(dict(policy.provenance), _lower_daily_limit_on_reread(policy))
+    object.__setattr__(policy, "provenance", MappingProxyType(hook) if proxy else hook)
+    if public == "start_experiment":
+        result = _call(start, Decimal("10000"), DAY, policy, "owner", "fixture")
+        expected = (DAY, "10000", "10000", False, False)
+    elif public == "update_equity":
+        # Loss10 < daily75 under the validated .0075; .0001 would make the threshold1.
+        result = _call(update, state, Decimal("9990"), DAY)
+        expected = (DAY, "10000", "10000", False, False)
+    else:
+        # Same day: daily baseline10000 kept, loss10 < 75; experiment rebases to9990.
+        result = _call(restart, state, Decimal("9990"), NEXT_DAY, "owner", "fixture")
+        expected = (NEXT_DAY, "10000", "9990", False, False)
+    assert hook.calls >= 1  # the attack Mapping was read during the call
+    assert result.policy is policy
+    # Contract v1.6: one read per call and no reread after deciding, so the values
+    # bound to the result are still the validated H001 values.
+    assert _policy_values(result.policy) == _policy_values(v13["H001_RISK"])
+    _state(result, policy, *expected)
+
+
+@pytest.mark.parametrize("proxy", (False, True))
+@pytest.mark.parametrize("public", ("update_equity", "restart_experiment"))
+def test_ac02_ac03_ac04_limit_changed_before_decision_keeps_daily_latch(v13, public, proxy):
+    from sochron.costs import H001_COSTS
+
+    start, update, restart = (
+        v13[name] for name in ("start_experiment", "update_equity", "restart_experiment")
+    )
+    policy = _call(replace, v13["H001_RISK"])
+    model = _call(replace, H001_COSTS)
+    request = _call(v13["EntryRequest"], "long", Decimal("0.02"),
+                    Decimal("4012.90"), Decimal("4000.90"), 0)
+    hook = _HookMapping(dict(policy.provenance), _lower_daily_limit_on_reread(policy))
+    if public == "update_equity":
+        object.__setattr__(policy, "provenance", MappingProxyType(hook) if proxy else hook)
+        # First read: start binds the unchanged policy.
+        state = _call(start, Decimal("10000"), DAY, policy, "owner", "fixture")
+        day, experiment_base = DAY, "10000"
+    else:
+        state = _call(start, Decimal("10000"), DAY, policy, "owner", "fixture")
+        state = _call(update, state, Decimal("9800"), DAY)
+        object.__setattr__(policy, "provenance", MappingProxyType(hook) if proxy else hook)
+        # First read: a fresh day23 baseline; the experiment stays halted.
+        state = _call(update, state, Decimal("10000"), NEXT_DAY)
+        _state(state, policy, NEXT_DAY, "10000", "10000", False, True)
+        day, experiment_base = NEXT_DAY, "9990"
+    assert policy.daily_loss_limit == Decimal("0.0075")
+    # Second read: v1.6 reads provenance before every other field, so this call
+    # decides with the lowered limit: threshold .0001*10000=1 <= loss10.
+    if public == "update_equity":
+        changed = _call(update, state, Decimal("9990"), day)
+    else:
+        changed = _call(restart, state, Decimal("9990"), day, "owner", "fixture")
+    assert policy.daily_loss_limit == Decimal("0.0001")  # the attack ran
+    assert changed.policy is policy
+    # Review r2 R5: never daily_halted False under a bound limit that the loss meets.
+    _state(changed, policy, day, "10000", experiment_base, True, False)
+    # The recovered continuation keeps the latch, so entry stays refused.
+    recovered = _call(update, changed, Decimal("10000"), day)
+    _state(recovered, policy, day, "10000", experiment_base, True, False)
+    _gate(_call(v13["check_entry"], request, Decimal("10000"), day, recovered, model),
+          ("daily_halt",), v13["GateDecision"])
+
+
+# Attack -> ((target, field path, value set from inside the provenance read),
+#            complete refusal for the changed input). Request: long .02 4012.90/4000.90.
+_GATE_INPUT_CHANGES = {
+    # Sized lots stay .02 (R25/per1200), so 41.66 exceeds them.
+    "oversized_lots": (("request", "lots", Decimal("41.66")), ("lots_exceed_sized",)),
+    "open_exposures": (("request", "open_exposures", 1), ("max_exposure",)),
+    "stop_removed": (("request", "stop_loss", None), ("missing_stop_loss",)),
+    "daily_latch": (("state", "daily_halted", True), ("daily_halt",)),
+    "experiment_latch": (("state", "experiment_halted", True), ("experiment_halt",)),
+    # Daily loss10200-10000=200 >= .0075*10200=76.5; experiment baseline stays10000.
+    "daily_baseline": (("state", "day_start_equity", Decimal("10200")), ("daily_halt",)),
+    # R=.0001*10000=1, per1200 -> floor0 < min.01; requested .02 exceeds 0.
+    "policy_rate": (("state", "policy.risk_per_trade", Decimal("0.0001")),
+                    ("below_min_volume", "lots_exceed_sized")),
+    # state.day23 > request day22: the error table requires TimeReversal.
+    "state_day": (("state", "day", NEXT_DAY), None),
+}
+
+
+@pytest.mark.parametrize("proxy", (False, True))
+@pytest.mark.parametrize("attack", tuple(_GATE_INPUT_CHANGES))
+def test_ac04_ac06_input_changed_during_validation_is_never_allowed(v13, attack, proxy):
+    arguments = _v13_calls(v13)["check_entry"]
+    (target, path, value), reasons = _GATE_INPUT_CHANGES[attack]
+    # Honest precondition: the unchanged request is allowed.
+    _gate(_call(v13["check_entry"], **arguments), (), v13["GateDecision"])
+    state = arguments["state"]
+    hook = _HookMapping(dict(state.policy.provenance),
+                        lambda hook: _mutate_field(arguments[target], path, value))
+    object.__setattr__(state.policy, "provenance", MappingProxyType(hook) if proxy else hook)
+    try:
+        outcome = _call(v13["check_entry"], **arguments)
+    except v13["RiskError"] as caught:
+        outcome = caught  # v1.6 also permits refusing the changed input with an error
+    if isinstance(outcome, v13["GateDecision"]):
+        # The request was checked after state/policy: the exact reasons for the
+        # changed input. A state day after the request day must raise instead.
+        assert reasons is not None, "day < state.day must raise TimeReversal"
+        _gate(outcome, reasons, v13["GateDecision"])
+    assert hook.calls >= 1
+    holder = arguments[target]
+    *parents, leaf = path.split(".")
+    for part in parents:
+        holder = getattr(holder, part)
+    assert getattr(holder, leaf) == value  # the change was made inside the read

@@ -987,3 +987,138 @@ leaves two Low residuals of security F9. One commit per finding:
 Full suite after both fixes: `uv run --offline pytest tests -q -p no:cacheprovider` → 725 passed,
 0 skipped. Contract v1.6 (`a6fde90`) writes the behaviour down. For the reviewer's round 3: re-check
 F4 and F5 only, and whether any other caller-code point remains after the first read.
+
+## Tests r4 (Claude test author under the role swap, 2026-10-22)
+
+Role: a fresh Claude Code session acting as the Codex test author under the owner's role swap
+(PROGRESS.md, `34097d9`); not the implementer and not the reviewer. It followed
+`.agents/skills/write-acceptance-tests/SKILL.md` as a plain procedure. Base HEAD
+`34097d9c232a5b8e9dd46efee4a987ceb1307872`, branch `feat/CORE-003-risk`, contract v1.6. Read: the
+contract (with `git diff c2c365c..HEAD`), `docs/reviews/CORE-003-tests-r3.md`, `docs/reviews/CORE-003-r2.md`,
+the two locked CORE-003 test files and this handoff. Implementation source was not read; HEAD behaviour
+was probed black-box only. Locked files were never edited or copied with `cp`: each was read with Read
+and written to the session scratchpad with Write. Written in the repository: this section and the
+ignored proposal patch. Nothing staged, committed or pushed.
+
+**Outcome: proposal complete; all amended tests pass against HEAD.** Amended acceptance file: **708
+passed** (650 kept + 58 new). Full suite with the amended file in place of the locked one: **783
+passed**, 0 skipped.
+
+### D-006 artifact and expected LF bytes
+
+Regular patch: `docs/proposals/CORE-003-tests-r4.patch` (ignored by `.gitignore:10`).
+Patch SHA256: `9d290dc9ab17b75c0098f51a894f4b50dccc155b2ebf65d3e33b30304285dc27`.
+It changes one file: acceptance +260/-27 (`git apply --numstat`). The golden file and
+`tests/architecture/` are unchanged and not in the patch.
+
+| File | Expected post-apply SHA256 (LF) | Expected Git blob |
+|---|---|---|
+| `tests/acceptance/CORE-003/test_risk_acceptance.py` | `fa1bde04706d177bb13a4da14e00751ff67c85816537e8417932e59d280c94df` | `d2ba11db5958d817c5830fc54a3eda5fa3e7ce35` |
+| `tests/golden/CORE-003/risk_cases.py` (unchanged) | `04c5e6443cc75506b581d72860e98421bb5eba1f3b3beec88f987fd7e0dd0d83` | `d4800f296435d10344eb68a468f6ab132e1fbaf2` |
+
+Derivation: `diff -u` with `a/`/`b/` labels between the locked file and the scratch copy. A scratch
+script applied every hunk in memory to the HEAD bytes, checking each context and removed line; the
+result equals the scratch copy byte for byte. `git hash-object --path=tests/acceptance/CORE-003/test_risk_acceptance.py
+<scratch copy>` gives the blob above, which matches a manual `sha1("blob <len>\0" + bytes)`. The amended
+file is ASCII, LF only, with one trailing newline and no trailing spaces. The verbatim scratch copies first matched
+the locked files (`d362fff2…`, `04c5e644…`).
+
+Standalone `git apply --check docs/proposals/CORE-003-tests-r4.patch`: **PASS**, exit 0, no output,
+completed by **19:43:15 +07** (`date` run right after it), at the HEAD above.
+
+### Changes by finding
+
+| Finding / rule | Change | AC |
+|---|---|---|
+| tests-r3 F1 (owner: fix) | `_HookMapping` runs its action from `keys()`, `__iter__`, `__getitem__` and `__len__`; `keys()` returns `KeysView(self)`. So the Mapping mixins (`items()`, `values()`, `get()`, `__contains__`, `__eq__`) and every copy strategy run it. Counters: `calls` (action runs), `traversals` (`__iter__` calls). Each F9 gate row now also asserts `hook.calls >= 1` and that the attack took effect (`request.side == "buy"`, `state.policy is substituted`, `request.lots.is_nan()`). The restart row still swaps only on a read after the first (`traversals > 1`): HEAD refuses a first-read swap with RiskError, which v1.6 permits, so swapping on every read would contradict the kept expectation. It asserts `calls >= 1` and `traversals >= 1`. Every existing F9 assertion is kept. | AC-03, AC-04, AC-06 |
+| tests-r3 F3 (owner: fix) | `_timed_rejection` takes `capsys`, and arm/start/join/cancel run inside `with capsys.disabled():`. Kept: `faulthandler.dump_traceback_later(20, exit=True)` armed before `start`, cancel in `finally`, daemon thread, `join(timeout=10)`, alive check, `perf_counter` around the public call only, strict `< 1.000`. The four timed tests request the `capsys` fixture. | AC-06, AC-07 |
+| tests-r3 F2 | Accepted by the owner; no change. The 30M-digit row stays a deadline sample. | — |
+| v1.6, review r2 F4 | New `test_ac06_provenance_keys_must_be_exact_str` (32 rows). Keys: a `str` subclass equal to `"risk_per_trade"` whose `__eq__` records the call and lifts `risk_per_trade` to 5 (R4), and an extra int key `1`. Containers: dict and `MappingProxyType`. Paths: construction (`RiskPolicy`) and use in `HaltState`, `size_position`, `start_experiment`, `unknowns`, `check_entry`, `update_equity`, `restart_experiment`. Each row expects exact TypeError, no recorded equality call, and `risk_per_trade` still `.0025`. | AC-06 |
+| v1.6, review r2 F5 | New `test_ac02_ac03_second_provenance_read_cannot_change_bound_policy` (6 rows): the hook is planted just before `start_experiment`/`update_equity`/`restart_experiment`, and a second traversal would lower `daily_loss_limit` to `.0001`. The result must hold the same policy object with unchanged H001 values and the honest state (9990: loss 10 < 75; restart keeps day baseline 10000, rebases to 9990). New `test_ac02_ac03_ac04_limit_changed_before_decision_keeps_daily_latch` (4 rows): the lowering lands on the next call's single read, before it decides (v1.6 reads provenance before every other field). Update or restart to 9990 must latch `daily_halted` True (threshold 1 <= loss 10), the recovered update to 10000 keeps the latch, and `check_entry` refuses with `("daily_halt",)`. | AC-02, AC-03, AC-04 |
+| v1.6, gate clause | New `test_ac04_ac06_input_changed_during_validation_is_never_allowed` (16 rows). From inside the provenance read, the hook makes the allowed request refusable: lots 41.66, open_exposures 1, stop_loss None, daily or experiment latch True, `day_start_equity` 10200, `state.policy.risk_per_trade` .0001, or `state.day` 23. It must never be allowed: either a RiskError, or the exact reasons for the changed input (a later `state.day` must raise). Each row asserts the hook ran and the change is in place. | AC-04, AC-06 |
+
+Every new row uses fresh `replace(H001_RISK)`/`replace(H001_COSTS)` copies or `_v13_calls`; the H001
+singletons are never mutated. The docstring now says v1.6. Integrity (scratch AST script): assertions
+88 → 104 with every original assert statement present, `pytest.raises`/`_reject` calls 44 → 45, test
+functions 34 → 38 with none removed, every original decorator present. Grep of the amended file for
+skip, xfail, importorskip, `.only`, `type: ignore`, noqa, TODO, FIXME, placeholder, pragma, deselect,
+tabs, trailing spaces and CR: no hits. A scratch Fraction oracle confirmed the 17 new numeric
+expectations (distance 12, sized .02, thresholds 75/1/76.5/200, 41.66 on grid, rate .0001 sizes 0).
+
+### Verification (2026-10-22 +07, CPython 3.12.15 via uv, pytest 9.1.1, Windows)
+
+| Command / procedure | Result | Time |
+|---|---|---|
+| uv scratch script: black-box probe of HEAD | int key (extra or replacing a name) → TypeError at construction; every public call traverses the provenance once (7 hook calls: `keys`, `__iter__`, 5 lookups), raw and proxy; a first-read `state.policy` swap in restart → RiskError | before 19:37, exact time not captured |
+| `timeout 300 uv run --offline pytest <scratch>/tree/tests/acceptance/CORE-003 -q -p no:cacheprovider` (from the repo root; unchanged copy) | PASS, 650 passed in 2.94s | before 19:37 |
+| same command, amended copy (`fa1bde04…`) | PASS, **708 passed in 2.83s**, exit 0 | 19:44:08–19:44:12 |
+| `timeout 300 uv run --offline pytest tests -q -p no:cacheprovider` (repository as is) | PASS, **725 passed in 3.83s**, exit 0 | 19:42:37–19:42:41 |
+| `timeout 300 uv run --offline pytest tests <scratch>/tree/tests/acceptance/CORE-003 --ignore=tests/acceptance/CORE-003 -p no:cacheprovider` (rootdir repo, configfile pyproject.toml) | PASS, **783 passed in 4.06s**, exit 0 | 19:42:41–19:42:46 |
+| `git apply --check docs/proposals/CORE-003-tests-r4.patch` (standalone) | PASS, exit 0, no output | by 19:43:15 |
+| `git apply --numstat …`; in-memory apply; `sha256sum`; `git hash-object --path=…`; `git check-ignore -v`; `git status --short` | PASS: +260/-27 one file; hashes as tabled; ignored; working tree clean before this section | 19:43:15–19:43:28 |
+
+### Mutation evidence (scratch only)
+
+Risk packages came from `git archive <rev> src` into scratch trees. pytest ran with the working directory
+set to that tree, as in the tests-r3 review: `uv run --offline --no-sync --project <repo> --directory
+<tree> python -B -m pytest <tests> -q -p no:cacheprovider -p <plugin>`. A scratch plugin reported the
+loaded `sochron.risk` path every time. The read-path variants shadow `dict` inside `sochron.risk.policy`
+(the copy named in tests-r3 F1), so non-dict Mappings are copied by iteration or by `items()`.
+
+| Risk code | Tests | Result | Failure causes |
+|---|---|---|---|
+| HEAD `34097d9` (control) | amended | 708 passed | — |
+| HEAD, iteration copy (3,298 shadowed copies) | amended / locked | 708 passed / **2 failed** | locked: `provenance_callback…[nan_lots-*]` (tests-r3 F1 reproduced) |
+| HEAD, `items()` copy (3,298) | amended / locked | 708 passed / **2 failed** | same two locked rows |
+| pre-F9 `b9f0396` | amended | **50 failed**, 658 passed | 8 F9 rows (side/policy → allowed True, nan_lots → plain ValueError, restart → substituted .5 policy returned), 32 key rows, 10 F5 rows |
+| pre-F9, iteration copy (4,460) | amended | **50 failed**, same set | F9 rows stay non-vacuous on another read path |
+| pre-F4 `82844d1` | amended | **42 failed** | 32 key rows (16 int → BadPolicy "extra [1]"; 10 subclass → did not raise; 6 → BadPolicy "got 5" after the key's side effect ran), 10 F5 rows |
+| pre-F5 `073ab70` | amended | **10 failed** | 6 bound-value rows (`daily_loss_limit` .0001 != .0075), 4 latch rows (start's own reread lowered the limit) |
+| HEAD with a snapshot-then-decide gate wrapper | amended / locked | **BLOCKED, not run** | see "Blocks" |
+
+The 16 gate input-change rows failed on no historical code: pre-F9 code decided on the live, changed
+inputs. They guard against a gate that decides on a snapshot taken before the provenance read. The run
+that would have shown this was blocked.
+
+### Watchdog probe (tests-r3 F3)
+
+A scratch probe test loads each file's `_timed_rejection` and hangs the worker in one GIL-holding C call
+(`sum(range(10**14))`), run with `uv run --offline pytest <probe>::<test> -q -p no:cacheprovider`. Amended
+harness: after 20 s, exit 1 with **46 lines** on the terminal, starting `Timeout (0:00:20)!`, with both
+thread stacks through the amended file. The main thread was blocked in `worker.start()` inside the
+`capsys.disabled()` block (19:41:20–19:41:40; recount 19:42:11–19:42:31). Locked harness: after 20 s,
+exit 1 with **0 lines** (19:41:50–19:42:11).
+
+### Blocks
+
+guard-bash blocked the snapshot-then-decide mutation run (about 19:39) with: `Blocked by
+.claude/hooks/guard-bash.mjs: redirecting output into C:/Users/MSI/AppData/Local/Temp/claude/C--Users-MSI-Desktop-------------Sochron1k/00501979-976d-4b0e-9168-e8ef94f159c0/scratchpad/mut/snapshot-$(basename
+$(dirname $(dirname $(dirname $target)))).log (a path that cannot be resolved here (variable or unknown
+directory)). Ask the owner.` It was not retried in any form: no literal path, no rerun without the redirect.
+The headless-reviewer literal-path exception names reviewers, and this session's instructions forbid
+reworded commands. That evidence is BLOCKED.
+
+### Questions and limits
+
+- Q1 (owner): an int key can never be the only defect. It is always an extra key or replaces a name,
+  which the v1.3 table maps to BadPolicy, and the table leaves the order of several defects open. The
+  int rows expect TypeError, per the owner's instruction for this patch and the v1.6 exact-str row.
+  HEAD checks key types first, for both forms. If the owner prefers the multi-defect rule, these
+  16 rows would need to accept BadPolicy as well; this patch does not do that.
+- Q2 (owner): the gate input-change rows accept any RiskError subclass as a refusal, as the existing
+  policy-swap row does. v1.6 says "error ตามตาราง", but the table names no error for a valid input
+  changed during validation.
+- `traversals` counts `__iter__` calls. A reread through fixed-name lookups alone would not trigger
+  the restart swap or the F5 lowering. v1.6 exact-str keys need a traversal on every read, and HEAD
+  makes exactly one per call.
+- Not run: CI, the owner demo, the snapshot-gate mutation (BLOCKED). E1 obligations (L1–L5, F7) cannot
+  be tested through the pure API.
+
+**Next action (implementer, D-006):** recompute the patch SHA256. Then, each as one standalone command:
+`git apply --check docs/proposals/CORE-003-tests-r4.patch`, then `git apply docs/proposals/CORE-003-tests-r4.patch`.
+The detector should list exactly `tests/acceptance/CORE-003/test_risk_acceptance.py`. Verify its SHA256
+and `git hash-object --path=<path> <path>` against the table above, and stop on a mismatch. Run
+`uv run --offline pytest tests -q -p no:cacheprovider` (expected 783 passed, 0 skipped). Obtain a
+fresh-session review of the applied diff and this section; that reviewer is not this test-author
+session. Then commit with `Refs: CORE-003`. The final implementation review r3 stays separate.
+Delivery state: **proposal written and checked; not applied, committed, merged or deployed**.
