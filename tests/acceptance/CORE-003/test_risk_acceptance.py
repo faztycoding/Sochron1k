@@ -1,4 +1,4 @@
-"""CORE-003 v1.3 acceptance tests derived from the approved risk contract."""
+"""CORE-003 v1.5 acceptance tests derived from the approved risk contract."""
 
 from collections.abc import Mapping
 from dataclasses import FrozenInstanceError, fields, is_dataclass, replace
@@ -12,6 +12,7 @@ from importlib import import_module
 from pathlib import Path
 from runpy import run_path
 from types import MappingProxyType
+import faulthandler
 import platform
 import sys
 from threading import Thread
@@ -108,8 +109,9 @@ def _gate(actual, reasons, GateDecision):
 
 
 def _reject(error, function, *args, **kwargs):
-    with pytest.raises(error):
+    with pytest.raises(error) as caught:
         _call(function, *args, **kwargs)
+    assert type(caught.value) is error
 
 
 def test_ac01_exact_sizing_grid_caps_and_display_context(monkeypatch):
@@ -754,8 +756,12 @@ def _timed_rejection(error, function, arguments, record_property):
                 outcome.append((elapsed, None, _context_state() == before))
 
     worker = Thread(target=invoke, daemon=True)
-    worker.start()
-    worker.join(timeout=10)
+    faulthandler.dump_traceback_later(20, exit=True)
+    try:
+        worker.start()
+        worker.join(timeout=10)
+    finally:
+        faulthandler.cancel_dump_traceback_later()
     if worker.is_alive():
         record_property("oversized_elapsed_seconds", "unfinished after join(timeout=10)")
         print(f"oversized rejection: {environment}; unfinished after join(timeout=10)")
@@ -791,6 +797,16 @@ def test_ac06_oversized_decimal_per_slot(v13, row, bound, record_property):
     # All creation/import/setup occurs before the worker's timed public call.
     value = Decimal(bound[1])
     function, arguments = _changed_call(v13, (public, field), value)
+    if field == "model.contract_size" and bound[0] in ("negative_adjusted", "positive_adjusted"):
+        # Compensating distance keeps per-lot risk displayable: without the
+        # model bound these calls return instead of raising a display error.
+        distance, entry, stop = _golden()["MODEL_EXPONENT_COMPENSATION"][bound[0]]
+        if public == "size_position":
+            arguments["stop_distance"] = Decimal(distance)
+        else:
+            arguments["request"] = _call(
+                replace, arguments["request"], entry_price=Decimal(entry), stop_loss=Decimal(stop),
+            )
     _timed_rejection(v13[error], function, arguments, record_property)
 
 
@@ -1148,6 +1164,9 @@ def test_ac06_revalidates_every_state_field_at_use(v13, public, branch, field, v
     if public == "check_entry":
         _refusal_branch(v13, arguments, branch)
     # restart fixtures are genuinely experiment-halted with valid authorization.
+    if public == "restart_experiment" and field == "policy.halt_clearers" and value == ():
+        # Duplicate names violate policy without also removing authorization.
+        value = ("owner", "owner")
     _mutate_field(arguments["state"], field, value)
     _reject(v13[error] if error != "TypeError" else TypeError, v13[public], **arguments)
 
@@ -1179,3 +1198,202 @@ def test_ac06_refusal_never_hides_independent_bad_argument(v13, branch, field, v
     _refusal_branch(v13, arguments, branch)
     arguments[field] = value
     _reject(v13[error] if error != "TypeError" else TypeError, v13["check_entry"], **arguments)
+
+
+@pytest.mark.parametrize("public", ("update_equity", "restart_experiment"))
+def test_ac06_inclusive_coefficient_equity_in_halt_arithmetic(v13, public):
+    arguments = _v13_calls(v13)[public]
+    arguments["equity"] = Decimal("1." + "0" * 999)
+    original = arguments["state"]
+    before = _snapshot(original)
+    with localcontext() as caller:
+        _hostile(caller)
+        result = _call(v13[public], **arguments)
+    if public == "update_equity":
+        # Loss9999 exceeds daily75 and experiment200; both baselines stay10000.
+        _state(result, original.policy, DAY, "10000", "10000", True, True)
+    else:
+        # Same-day restart keeps daily baseline/latch; experiment rebases to1.
+        _state(result, original.policy, DAY, "10000", "1", True, False)
+        assert result.policy is original.policy
+    assert _snapshot(original) == before
+
+
+def test_ac06_inclusive_coefficient_budget_in_gate_arithmetic(v13):
+    arguments = _v13_calls(v13)["check_entry"]
+    arguments["cost_per_lot"] = Decimal("0." + "1" * 1000)
+    # 1200 < per < 1201, so .02*per <24.02 <25 and .03*per >36 >25.
+    with localcontext() as caller:
+        _hostile(caller)
+        _gate(_call(v13["check_entry"], **arguments), (), v13["GateDecision"])
+        arguments["request"] = _call(replace, arguments["request"], lots=Decimal("0.03"))
+        _gate(_call(v13["check_entry"], **arguments), ("lots_exceed_sized",), v13["GateDecision"])
+
+
+_MODEL_DOMAIN_DEFECTS = (
+    *((field, value) for field in ("contract_size", "volume_step", "volume_min")
+      for value in ("0", "-0.01")),
+    ("volume_max", "0.005"),  # H001 volume_min=.01, so max < min.
+)
+
+
+@pytest.mark.parametrize("public,branch", (
+    ("size_position", "ordinary"), ("check_entry", "ordinary"),
+    ("check_entry", "halted"), ("check_entry", "missing_stop"),
+    ("check_entry", "wrong_side_stop"), ("check_entry", "stale"),
+))
+@pytest.mark.parametrize("field,literal", _MODEL_DOMAIN_DEFECTS)
+def test_ac06_revalidates_model_domain_before_deciding(v13, public, branch, field, literal):
+    arguments = _v13_calls(v13)[public]
+    if public == "check_entry":
+        _refusal_branch(v13, arguments, branch)
+    # Fresh copy from _v13_calls: never corrupt the shared H001 model.
+    object.__setattr__(arguments["model"], field, Decimal(literal))
+    _reject(v13["RiskError"], v13[public], **arguments)
+
+
+@pytest.mark.parametrize("literal", ("0E-999999999999999999", "-0E-999999999999999999"))
+def test_ac01_ac04_zero_budget_extreme_exponent_is_arithmetic_zero(v13, literal):
+    calls = _v13_calls(v13)
+    zero = Decimal(literal)
+    with localcontext() as caller:
+        _hostile(caller)
+        sizing = calls["size_position"]
+        expected = _call(v13["size_position"], **sizing)
+        actual = _call(v13["size_position"], **{**sizing, "cost_per_lot": zero})
+        assert actual == expected
+        _money(actual.lots, "0.02")
+        _money(actual.risk_money, "25")
+        _money(actual.risk_per_lot, "1200")
+        _money(actual.actual_risk, "24")
+        assert actual.reason == "ok"
+        _gate(_call(v13["check_entry"], **{**calls["check_entry"], "cost_per_lot": zero}),
+              (), v13["GateDecision"])
+
+
+@pytest.mark.parametrize("public,path,error", (
+    ("EntryRequest", "open_exposures", "RiskError"),
+    ("check_entry", "request.open_exposures", "RiskError"),
+    ("RiskPolicy", "max_open_exposures", "BadPolicy"),
+    *((public, "policy.max_open_exposures", "BadPolicy")
+      for public in ("HaltState", "size_position", "start_experiment", "unknowns")),
+    *((public, "state.policy.max_open_exposures", "BadPolicy")
+      for public in ("check_entry", "update_equity", "restart_experiment")),
+))
+def test_ac06_huge_negative_counts_keep_contract_errors(v13, public, path, error):
+    # Construct in the body so pytest never stringifies the 5,001-digit integer as an ID.
+    function, arguments = _changed_call(v13, (public, path), -(10**5000))
+    _reject(v13[error], function, **arguments)
+
+
+class _HookMapping(Mapping):
+    """A valid provenance Mapping whose keys callback attacks use-time validation."""
+    def __init__(self, data, action):
+        self.data = data
+        self.action = action
+        self.key_reads = 0
+
+    def __getitem__(self, key):
+        return self.data[key]
+
+    def __iter__(self):
+        return iter(self.data)
+
+    def __len__(self):
+        return len(self.data)
+
+    def keys(self):
+        self.key_reads += 1
+        self.action(self.key_reads)
+        return self.data.keys()
+
+
+@pytest.mark.parametrize("proxy", (False, True))
+@pytest.mark.parametrize("attack", ("side", "policy", "nan_lots"))
+def test_ac04_ac06_provenance_callback_cannot_bypass_gate(v13, proxy, attack):
+    arguments = _v13_calls(v13)["check_entry"]
+    state, request = arguments["state"], arguments["request"]
+    if attack == "side":
+        request = _call(replace, request, stop_loss=Decimal("4024.90"))
+        arguments["request"] = request
+        _gate(_call(v13["check_entry"], **arguments), ("stop_loss_wrong_side",), v13["GateDecision"])
+        action = lambda count: object.__setattr__(request, "side", "buy")
+    elif attack == "policy":
+        request = _call(replace, request, lots=Decimal("41.66"))
+        arguments["request"] = request
+        _gate(_call(v13["check_entry"], **arguments), ("lots_exceed_sized",), v13["GateDecision"])
+        substituted = _call(replace, v13["H001_RISK"])
+        object.__setattr__(substituted, "risk_per_trade", Decimal("5"))
+        action = lambda count: object.__setattr__(state, "policy", substituted)
+    else:
+        _gate(_call(v13["check_entry"], **arguments), (), v13["GateDecision"])
+        action = lambda count: object.__setattr__(request, "lots", Decimal("NaN"))
+    hook = _HookMapping(dict(state.policy.provenance), action)
+    object.__setattr__(state.policy, "provenance", MappingProxyType(hook) if proxy else hook)
+    try:
+        decision = _call(v13["check_entry"], **arguments)
+    except v13["RiskError"] as caught:
+        # No plain ValueError/TypeError escape; side and lots have the base error.
+        if attack != "policy":
+            assert type(caught) is v13["RiskError"]
+    else:
+        assert decision.allowed is False
+        assert decision.reasons
+
+
+@pytest.mark.parametrize("proxy", (False, True))
+def test_ac03_restart_keeps_policy_validated_before_provenance_reread(v13, proxy):
+    arguments = _v13_calls(v13)["restart_experiment"]
+    state = arguments["state"]
+    validated_policy = state.policy
+    # A valid but more permissive substitute makes identity checking necessary:
+    # simply validating the replacement on a later read would still be wrong.
+    substituted = _call(replace, v13["H001_RISK"], risk_per_trade=Decimal("0.5"))
+
+    def swap_on_reread(count):
+        if count > 1:
+            object.__setattr__(state, "policy", substituted)
+
+    hook = _HookMapping(dict(validated_policy.provenance), swap_on_reread)
+    object.__setattr__(validated_policy, "provenance", MappingProxyType(hook) if proxy else hook)
+    result = _call(v13["restart_experiment"], **arguments)
+    assert result.policy is validated_policy
+    assert result.policy.risk_per_trade == Decimal("0.0025")
+    assert result.day == DAY
+    _money(result.day_start_equity, "10000")
+    _money(result.experiment_start_equity, "9800")
+    assert result.daily_halted is True
+    assert result.experiment_halted is False
+
+
+def test_ac06_large_coefficient_small_adjusted_rejection_deadline(v13, record_property):
+    # 30M digits bounds routine memory use. The adjusted exponent is -1, so an
+    # exponent-only check cannot reject this input. Construction is not timed.
+    value = Decimal("0." + "7" * 30_000_000)
+    assert value.adjusted() == -1
+    function, arguments = _changed_call(v13, ("size_position", "equity"), value)
+    _timed_rejection(v13["BadEquity"], function, arguments, record_property)
+
+
+def test_ac01_ac04_sized_lots_over_coefficient_bound_keeps_gate_exact(v13):
+    from sochron.costs import H001_COSTS, Provenance
+
+    row = _golden()["EXACT_LOTS_BOUND_CASE"]
+    step, sized, permitted = (Decimal(row[key]) for key in ("step", "sized", "permitted"))
+    assert len(step.as_tuple().digits) == 1000
+    assert len(sized.as_tuple().digits) == 1002
+    assert len(permitted.as_tuple().digits) == 1000
+    assert Fraction(sized) == 199 * Fraction(step)
+    assert Fraction(permitted) == 9 * Fraction(step)
+    model = _fixture(H001_COSTS, Provenance, volume_step=step, volume_min=step)
+    policy = _call(replace, v13["H001_RISK"])
+    equity = Decimal("1E8")
+    state = _call(v13["start_experiment"], equity, DAY, policy, "owner", "exact lots bound")
+    request = _call(v13["EntryRequest"], "long", permitted, Decimal("4007"), Decimal("4000"), 0)
+    with localcontext() as caller:
+        _hostile(caller)
+        _reject(v13["RiskError"], v13["size_position"], equity, Decimal("7"), model, policy)
+        _gate(_call(v13["check_entry"], request, equity, DAY, state, model), (), v13["GateDecision"])
+        too_large = _call(replace, request, lots=Decimal("200"))
+        _gate(_call(v13["check_entry"], too_large, equity, DAY, state, model),
+              ("lots_exceed_sized", "lots_not_on_grid"), v13["GateDecision"])

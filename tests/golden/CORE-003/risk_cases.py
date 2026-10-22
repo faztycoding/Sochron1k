@@ -1,4 +1,4 @@
-"""CORE-003 v1.3 hand-computed literal oracles; no production risk imports.
+"""CORE-003 v1.5 hand-computed literal oracles; no production risk imports.
 
 Sizing rows reset H001_COSTS/H001_RISK for every row. Rate = .0025,
 contract_size = 100, step = .01, min = .01, max = 200 unless stated.
@@ -11,6 +11,9 @@ SIZE_ROWS = (
     # R=25; per=1200; raw=1/48; floor=.02; cap=200; actual=.02*1200=24.
     ("h001", "10000", "12.00", "0", {},
      ("0.02", "25", "1200", "24", "ok")),
+    # 1,000 stored digits, value=.1: R=.00025; raw=1/4800000; floor0<.01.
+    ("inclusive_coefficient_equity", "0.1" + "0" * 999, "12", "0", {},
+     ("0", "0.00025", "1200", "0", "below_min_volume")),
     # R=25; per=1200+10=1210; raw=5/242; floor=.02; cap=200; actual=24.2.
     ("cost_budget", "10000", "12.00", "10", {},
      ("0.02", "25", "1210", "24.2", "ok")),
@@ -182,3 +185,23 @@ BOUND_REJECTED = (
     ("trailing_zero_coefficient", "0.1" + "0" * 1000),
     ("negative_adjusted", "1E-1100001"),
 )
+
+# Oversized contract_size exponent -> (in-bound distance, entry, stop).
+# 1E-1100001 * 1E+1100000 = .1: R25, cap200, actual20 (normal displays).
+# 1E+1100001 * 1E-1100000 = 10: R25, lots2.5, actual25 (normal displays).
+# Thus a missing model exponent bound cannot hide behind Overflow/Underflow.
+MODEL_EXPONENT_COMPENSATION = {
+    "negative_adjusted": ("1E+1100000", "2E+1100000", "1E+1100000"),
+    "positive_adjusted": ("1E-1100000", "2E-1100000", "1E-1100000"),
+}
+
+# step = 1 + 1E-999 (1,000 coefficient digits). R=1E8*.0025=250000;
+# per=7*100=700; floor(R/per/step)=357, floor(200/step)=199.
+# Selected lots=199*step=199+199E-999 has 1,002 digits: sizing raises RiskError.
+# Request9*step has 1,000 digits and risk <6301 <250000: gate allows it.
+# Request200 is off-grid and exceeds199*step: gate must report both reasons.
+EXACT_LOTS_BOUND_CASE = {
+    "step": "1." + "0" * 998 + "1",
+    "sized": "199." + "0" * 996 + "199",
+    "permitted": "9." + "0" * 998 + "9",
+}

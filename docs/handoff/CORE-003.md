@@ -827,3 +827,141 @@ No Critical or High finding. Owner decisions 2026-10-22 10:5x for F10, F12, F13.
 
 Full suite after these fixes: `uv run --offline pytest tests -q -p no:cacheprovider` → 656 passed,
 0 skipped. Locked tests untouched since `81322d9`.
+
+## Tests r3 for contract v1.4 (Codex, 2026-10-22)
+
+This requested heading also covers the owner's contract **v1.5** decisions. Base HEAD:
+`e510726a244eeea9efb7a3d75272fec4138ab557`, branch `feat/CORE-003-risk`.
+The working tree and index were clean at entry. This headless invocation explicitly authorized
+reading the listed reviews/handoff, amending the locked tests as a proposal, and testing against
+the existing implementation. Those instructions supersede the skill's original red-test-only
+and no-handoff restrictions. No implementation source or task source diff was inspected. One
+supporting agent checked fixture design read-only; it did not edit files or provide a release review.
+
+**Outcome: proposal complete; disk-applied-copy verification BLOCKED.** The patch was not applied
+to the repository. A full-suite run using the proposed test bytes applied in memory passed:
+**`723 passed in 3.22s`**, exit 0, no skips or deselections. This is supplemental evidence, not a
+claim that the requested ordinary pytest run on patched files on disk was completed.
+
+### D-006 artifact and expected LF bytes
+
+Regular patch: `docs/proposals/CORE-003-tests-r3.patch` (directly in proposals, ignored by Git).
+Patch SHA256: `bea1632d3be31e57b6d7561bdbe446b69e9453b6e9a89c5c0de0aa0d729cf7fe`.
+It changes only the following two files: acceptance +222/-4; golden +24/-1.
+
+| File | Expected post-apply SHA256 (LF) | Expected Git blob |
+|---|---|---|
+| `tests/acceptance/CORE-003/test_risk_acceptance.py` | `d362fff230678f01c1705bfada9b5cd6eadf05b232248235c2a42ba237684119` | `2e3d154abce9042f7521393e7a27b24875914bb8` |
+| `tests/golden/CORE-003/risk_cases.py` | `04c5e6443cc75506b581d72860e98421bb5eba1f3b3beec88f987fd7e0dd0d83` | `d4800f296435d10344eb68a468f6ab132e1fbaf2` |
+
+These are **expected** hashes derived twice: from the proposed bytes and from independently
+applying the unified hunks in memory to `git show HEAD:<path>` bytes. Every removed/context line
+was checked. `git hash-object --path=<path> --stdin` from the repository matched both blobs,
+using the repository's attributes context (`*.py text eol=lf`). Both candidate files are ASCII,
+contain LF only, and end with exactly one newline. Post-apply hashes of actual patched files on
+disk remain BLOCKED; do not describe the table as a completed disk hash verification.
+
+Standalone `git apply --check docs/proposals/CORE-003-tests-r3.patch`: **PASS**, exit 0, no output,
+2026-10-22 **10:51:01 +07** (time captured immediately after the command), at the HEAD above.
+
+### Changes by finding and acceptance criterion
+
+| Finding / rule | Change and evidence | AC |
+|---|---|---|
+| tests-r2 F1 | Arm `faulthandler.dump_traceback_later(20, exit=True)` before `worker.start()`. Always cancel in `finally` after the join attempt. Preserve the daemon worker, `join(timeout=10)`, alive check, exact exception, context preservation, public-call-only timer and strict `< 1.000` limit. | AC-06, AC-07 |
+| tests-r2 F2 | Only the restart row replaces an empty `halt_clearers` with `("owner", "owner")`: owner stays authorized, so the isolated defect is BadPolicy. Empty-list coverage at the other entry points remains. | AC-03, AC-06 |
+| tests-r2 F3 / v1.4 policy-use row | Keep all existing direct and nested policy revalidation rows. New huge-negative-count rows also exercise every named policy consumer. | AC-06 |
+| tests-r2 F4 | Compensate oversized `contract_size` exponents using in-bound distances/prices. Negative exponent gives exact per-lot risk .1; positive exponent gives 10. Both displays are normal, so a missing model bound cannot pass by raising the display-range RiskError. Keep both signs through sizing and gate in the existing timed matrix. Golden comments derive each fixture. | AC-01, AC-04, AC-06 |
+| tests-r2 F5 | `_reject` now asserts the exact expected exception type. This tightens the base-RiskError domain, result-consistency, stop-side and use-time rows, and consistently applies the same rule to the other explicitly named exceptions. | AC-05, AC-06 |
+| tests-r2 F6 | Add 1,000-digit equity .1 with trailing zeros to the sizing golden rows; add equity 1 with trailing zeros through update/restart; add a 1,000-digit repeating-decimal budget through the gate, with allowed .02 and refused .03 lots. No deadline is imposed on in-bound inputs. | AC-01, AC-02, AC-03, AC-04, AC-06 |
+| implementation r1 F1 / v1.4 model domain | Seven mutations on fresh models: contract_size/volume_step/volume_min zero or negative, and volume_max below min. Exact RiskError through sizing and gate, including halted, missing-stop, wrong-side-stop and stale branches (42 rows). | AC-01, AC-04, AC-06 |
+| implementation r1 F2 | Positive and negative zero with exponent -999999999999999999 produce the ordinary zero-budget sizing tuple and an allowed gate decision under hostile caller context. | AC-01, AC-04, AC-06 |
+| implementation r1 F3 | Construct `-(10**5000)` inside the test body, avoiding pytest ID conversion. Require exact RiskError for request counts and BadPolicy for policy counts, at construction and at use (10 rows). | AC-06 |
+| security pre-r2 F9 | Plant a Mapping after construction. Its keys callback changes side, swaps state.policy to an invalid rate5 policy, or sets lots to NaN. Raw and proxy-wrapped Mappings must never yield allowed=True or a non-RiskError exception. A separate restart callback swaps to a valid but different policy on reread; the returned state must retain the original validated policy by identity and preserve daily halt/baseline (8 rows total). | AC-03, AC-04, AC-06 |
+| security pre-r2 F11 | Prebuild `Decimal("0." + "7" * 30_000_000)`; adjusted exponent is -1. Require exact BadEquity under the unchanged `< 1.000 s` harness, excluding construction/import/setup. | AC-06 |
+| security pre-r2 F12 / v1.5 | Hand-computed step `1 + 1E-999` has 1,000 digits. With equity1E8, distance7 and max200, selected lots=199*step needs 1,002 digits: exact RiskError from sizing. Gate still allows 9*step (1,000 digits) and refuses 200 with both lots_exceed_sized and lots_not_on_grid. | AC-01, AC-04, AC-06 |
+
+### Verification, limits and exact results
+
+All checks refer to base `e510726a244eeea9efb7a3d75272fec4138ab557` plus the proposal hash above.
+Runtime observed through `uv run --offline`: CPython **3.12.15**, pytest **9.1.1**, Windows.
+
+| Command / procedure | Result | Time (2026-10-22 +07) |
+|---|---|---|
+| `git diff fcf77c5..HEAD -- docs/contracts/CORE-003-risk.md` | PASS; read first, including v1.4 and v1.5 owner decisions | Session start; exact timestamp not captured |
+| `git apply --check docs/proposals/CORE-003-tests-r3.patch` (standalone) | PASS; exit 0, no output | 10:51:01 |
+| `uv run --offline python -B -` with full-suite in-memory proposal collector; internally `pytest.main(['tests', '-q', '-p', 'no:cacheprovider', '--tb=short'], plugins=[ProposalOverlay()])` | PASS; exact summary `723 passed in 3.22s`, exit 0; 0 skipped/deselected | 10:51:47-10:51:50 |
+| `& 'C:/Program Files/Git/bin/bash.exe' scripts/controls/red-flags.sh main` | PASS execution, exit 0; 2 inherited pattern groups, explained below | Completed by 10:52:38 |
+| `git apply --numstat docs/proposals/CORE-003-tests-r3.patch` | PASS; only the two requested files, +222/-4 and +24/-1 | Completed by 10:52:38 |
+| `git diff --check` and `git diff --cached --name-only` | PASS; no whitespace errors; index empty | Completed by 10:52:38 |
+| `uv run --offline python -B -`: apply hunks in memory, AST/golden integrity, LF/ASCII checks, SHA256, `git hash-object --path=<path> --stdin` | PASS; all 69 original assertions retained (88 now), every original test function retained, every original golden row retained; hashes match table; no disabled tests or placeholders | 10:53:25 |
+| Ordinary `uv run --offline pytest tests -q -p no:cacheprovider` against physically patched scratch copies | BLOCKED, not run; see filesystem failure below | Not run |
+
+In-memory suite method: copy 31 tracked HEAD files (`src/`, `tests/`, `.gitattributes`,
+`.python-version`, `pyproject.toml`, `uv.lock`) into the scratch `applied` directory; validate every
+patch context/removal against HEAD; keep proposed source strings in memory. A public pytest
+collection hook returns a `pytest.Module` subclass for only the CORE-003 acceptance module,
+compiling those proposed bytes with the scratch path as `__file__`. A scoped `runpy.run_path`
+overlay supplies the proposed golden dictionary for only its exact scratch path. All other tests,
+including architecture, use the unmodified HEAD copies; current HEAD src is imported normally.
+Assertions execute normally (the proposed module has no pytest assertion rewriting). Bytecode and
+pytest cache writing are disabled. No production code, pytest config or dependency was changed.
+
+Filesystem failure: the `apply_patch` tool could not read the scratch target and stopped before
+editing anything:
+
+```text
+apply_patch verification failed: Failed to read file to update
+C:\Users\MSI\AppData\Local\Temp\sochron-core003-r3-n_estqmk\amended\tests\acceptance\CORE-003\test_risk_acceptance.py:
+Access is denied. (os error 5)
+```
+
+No alternate tool was used to edit or apply to that denied target. Proposal construction and
+in-memory verification continued within the authorized scope. The scratch baseline/amended/applied
+files remain unpatched. The requested disk application, post-apply disk hashes and ordinary full-suite
+run on that disk state are therefore BLOCKED, despite the passing supplemental in-memory suite.
+`rg` was also unavailable (`The term 'rg' is not recognized`); read-only PowerShell searches supplied
+the file discovery. Neither environment failure is counted as passing evidence.
+
+| AC | Status | Evidence scope |
+|---|---|---|
+| AC-01 | PASS | In-memory suite: sizing golden rows, zero budget and exact-lots overflow/gate agreement |
+| AC-02 | PASS | In-memory suite: all existing halt rows plus inclusive-coefficient arithmetic |
+| AC-03 | PASS | In-memory suite: restart error isolation, arithmetic edge and validated policy identity |
+| AC-04 | PASS | In-memory suite: existing gate rows plus model-domain, callback and F12 decisions |
+| AC-05 | PASS | In-memory suite: original stop-change assertions retained; exact error tightening passes |
+| AC-06 | PASS | In-memory suite: all old matrices retained and new bound/domain/type rows pass |
+| AC-07 | BLOCKED | Full in-memory suite and unchanged architecture tests pass; required ordinary suite on physically patched copies remains unperformed |
+
+No test failed in the executed suite. No module-level v1.4/v1.5 requirement was ambiguous for these
+rows. F10 and F13 are explicitly E1 obligations: L3 truthful model sourcing from `symbol_info`, and
+L5 terminal equity plus journal binding cannot be verified through these pure APIs. They are not
+reported as covered. The 30M-digit F11 sample limits routine memory use; the old linear check may
+still meet 1 second at this size. This is a deadline acceptance sample, not proof of detecting every
+old F11 regression. The review's 200M-digit reproduction (~1.9 GiB old-path peak) was not repeated.
+The watchdog's real process-exit-on-GIL-stall path and historical implementations were not run.
+
+Red flags: the branch-wide scan includes inherited CORE-001/CORE-002/control changes because local
+main is behind. The two groups are pre-existing negative-test type suppressions (7 costs, 2 risk)
+and documentation quoting them, plus lint-suppression words in documentation. Secret, destructive,
+order/account and placeholder groups are empty. The ignored proposal is outside that scanner's
+Git diff; its proposed test bytes were checked separately for disabled tests, type/lint suppressions,
+placeholders and trailing whitespace, with no hits. The new Mapping is an intentional adversarial
+test fixture only. No new production fake, suppression or swallowed unexpected exception is added.
+
+Repository locked-file SHA256 values remain unchanged:
+- acceptance: `69cd888f057fbcc1365f41d3aaae448dfccb6caf1b94e945029d120fedfab373`
+- golden: `68b34aced4943deda4ada60ed2d33872ba03ccebc8736fa29e38b5b64ec2e7c2`
+- architecture: `259ac6d4a9c9b0dfd165f0936b092ca458bde033b453c4ffde3b44787933b195`
+
+Only this append-only handoff and the regular proposal patch were written in the repository.
+PROGRESS.md was not changed because this invocation explicitly forbids other files; this section
+is the session checkpoint. Everything is unstaged; no commit, push, merge, deployment, terminal,
+broker, market-data or credential action occurred.
+
+**Next action (Claude, D-006):** apply the regular proposal patch as a standalone command, verify
+both applied SHA256 values and Git blobs above under LF attributes, and run the ordinary full
+suite to close the blocked disk evidence. Obtain a fresh-session review of the applied diff and
+this handoff, then commit. This authoring session and its supporting fixture check do not replace
+that review. Delivery state: **implemented as a proposal; verification incomplete; not applied,
+committed, merged or deployed**.
