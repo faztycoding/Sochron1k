@@ -491,6 +491,43 @@ def test_caller_code_in_provenance_cannot_undo_use_time_validation():
     assert restart_experiment(halted, Decimal("9800"), DAY, "owner", "reviewed").policy is policy
 
 
+def test_provenance_keys_must_be_exact_str_before_any_comparison():
+    # Review CORE-003-r2 F4: a str-subclass key's __eq__ ran in the key-set comparison, after the
+    # fractions were checked, and set risk_per_trade to 5; the gate then allowed 41.66 lots.
+    policy = replace(H001_RISK)
+    state = start_experiment(Decimal("10000"), DAY, policy, "owner", "unit test")
+    big = EntryRequest("long", Decimal("41.66"), Decimal("4012.90"), Decimal("4000.90"), 0)
+
+    class Key(str):
+        __hash__ = str.__hash__
+
+        def __eq__(self, other):
+            object.__setattr__(policy, "risk_per_trade", Decimal("5"))
+            return str.__eq__(self, other)
+
+    provenance = dict(policy.provenance)
+    provenance[Key("risk_per_trade")] = provenance.pop("risk_per_trade")
+    object.__setattr__(policy, "provenance", provenance)
+    for call in (
+        lambda: check_entry(big, Decimal("10000"), DAY, state, H001_COSTS),
+        lambda: size_position(Decimal("10000"), Decimal("12"), H001_COSTS, policy),
+        lambda: unknowns(policy),
+    ):
+        with pytest.raises(TypeError):
+            call()
+        assert policy.risk_per_trade == Decimal("0.0025")  # the key's code never ran
+
+    class Quiet(str):
+        __hash__ = str.__hash__
+
+    keyed = dict(H001_RISK.provenance)
+    keyed[Quiet("halt_clearers")] = keyed.pop("halt_clearers")
+    with pytest.raises(TypeError):  # construction refuses it too
+        replace(H001_RISK, provenance=keyed)
+    with pytest.raises(TypeError):
+        replace(H001_RISK, provenance={**H001_RISK.provenance, 7: H001_RISK.provenance["halt_clearers"]})
+
+
 def test_policy_fields_and_halt_state_validation():
     assert set(H001_RISK.provenance) == set(POLICY_FIELDS)
     with pytest.raises(TypeError):

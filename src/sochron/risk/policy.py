@@ -185,6 +185,11 @@ def _check_policy(policy: RiskPolicy) -> dict[str, Provenance]:
     if not isinstance(policy.provenance, Mapping):
         raise TypeError(f"provenance must be a Mapping, not {type(policy.provenance).__name__}")
     snapshot = dict(policy.provenance)
+    # Keys must be exactly str before anything compares them: a str subclass's __eq__ or __hash__ is
+    # caller code that would otherwise run in the key-set check below (review CORE-003-r2 F4).
+    for key in snapshot:
+        if type(key) is not str:
+            raise TypeError(f"provenance keys must be exactly str, not {type(key).__name__}")
     for name in _FRACTION_FIELDS:
         value = finite_bounded(require_decimal(getattr(policy, name), name), name, BadPolicy)
         if not 0 < value < 1:
