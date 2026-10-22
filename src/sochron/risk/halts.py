@@ -53,6 +53,28 @@ def _require_state(state: object) -> HaltState:
     return validate_state(state)
 
 
+def _new_state(
+    policy: RiskPolicy, day: date, day_start: Decimal, experiment_start: Decimal, daily: bool, experiment: bool
+) -> HaltState:
+    """The result of a public operation, built from values that operation has already validated.
+
+    It does not run HaltState's validation again: that would read the policy's provenance a second
+    time, after the decision, and a planted Mapping could change the policy the result is bound to
+    (review CORE-003-r2 F5). A HaltState built directly by a caller is still fully validated.
+    """
+    state = object.__new__(HaltState)
+    for name, value in (
+        ("policy", policy),
+        ("day", day),
+        ("day_start_equity", day_start),
+        ("experiment_start_equity", experiment_start),
+        ("daily_halted", daily),
+        ("experiment_halted", experiment),
+    ):
+        object.__setattr__(state, name, value)
+    return state
+
+
 def _authorize(policy: RiskPolicy, authorized_by: object, reason: object) -> None:
     require_exact(authorized_by, str, "authorized_by")
     require_exact(reason, str, "reason")
@@ -68,7 +90,7 @@ def start_experiment(equity: Decimal, day: date, policy: RiskPolicy, authorized_
     equity = positive_decimal(equity, "equity", BadEquity)
     require_day(day)
     _authorize(policy, authorized_by, reason)
-    return HaltState(policy, day, equity, equity, False, False)
+    return _new_state(policy, day, equity, equity, False, False)
 
 
 def _roll(state: HaltState, policy: RiskPolicy, equity: Decimal, day: date) -> tuple[Decimal, bool, bool]:
@@ -94,7 +116,7 @@ def update_equity(state: HaltState, equity: Decimal, day: date) -> HaltState:
     if day < state.day:
         raise TimeReversal(f"day {day} is before the state's day {state.day}")
     day_start, daily, experiment = _roll(state, policy, equity, day)
-    return HaltState(policy, day, day_start, state.experiment_start_equity, daily, experiment)
+    return _new_state(policy, day, day_start, state.experiment_start_equity, daily, experiment)
 
 
 def restart_experiment(state: HaltState, equity: Decimal, day: date, authorized_by: str, reason: str) -> HaltState:
@@ -113,4 +135,4 @@ def restart_experiment(state: HaltState, equity: Decimal, day: date, authorized_
     if not state.experiment_halted:
         raise BadHaltClear("only a halted experiment can be restarted")
     day_start, daily, _ = _roll(state, policy, equity, day)
-    return HaltState(policy, day, day_start, equity, daily, False)
+    return _new_state(policy, day, day_start, equity, daily, False)

@@ -528,6 +528,32 @@ def test_provenance_keys_must_be_exact_str_before_any_comparison():
         replace(H001_RISK, provenance={**H001_RISK.provenance, 7: H001_RISK.provenance["halt_clearers"]})
 
 
+def test_result_states_are_built_without_reading_the_policy_again():
+    # Review CORE-003-r2 F5: building the returned HaltState validated the policy again; a Mapping
+    # changed daily_loss_limit on that second read, after the latches were decided, so the state
+    # said "not halted" under a limit its own loss exceeded.
+    def limit_changes_on_second_read(policy):
+        _plant(policy, lambda n: n == 2 and object.__setattr__(policy, "daily_loss_limit", Decimal("0.0001")))
+
+    policy = replace(H001_RISK)
+    state = start_experiment(Decimal("10000"), DAY, policy, "owner", "unit test")
+    limit_changes_on_second_read(policy)
+    loss = update_equity(state, Decimal("9990"), DAY)
+    assert (loss.daily_halted, loss.policy.daily_loss_limit) == (False, Decimal("0.0075"))
+
+    policy = replace(H001_RISK)
+    halted = update_equity(start_experiment(Decimal("10000"), DAY, policy, "owner", "unit test"), Decimal("9800"), DAY)
+    rolled = update_equity(halted, Decimal("10000"), NEXT)
+    limit_changes_on_second_read(policy)
+    restarted = restart_experiment(rolled, Decimal("9990"), NEXT, "owner", "reviewed")
+    assert (restarted.daily_halted, restarted.policy.daily_loss_limit) == (False, Decimal("0.0075"))
+
+    policy = replace(H001_RISK)
+    limit_changes_on_second_read(policy)
+    started = start_experiment(Decimal("10000"), DAY, policy, "owner", "unit test")
+    assert started.policy.daily_loss_limit == Decimal("0.0075")
+
+
 def test_policy_fields_and_halt_state_validation():
     assert set(H001_RISK.provenance) == set(POLICY_FIELDS)
     with pytest.raises(TypeError):
