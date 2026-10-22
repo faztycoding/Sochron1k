@@ -320,3 +320,419 @@ Please look hard at (review r1, Tier High: security-reviewer pre-review first, t
 - `restart_experiment` checks authorization before the halted check; with two defects the error order is unspecified by the contract.
 - `RiskPolicy`, `HaltState` and `CostModel` hold a `MappingProxyType`, so they are not hashable; nothing in the contract asks for hashing.
 - Exports `POLICY_FIELDS` beyond the API block (an addition).
+
+## Tests r2 for contract v1.3 (Codex, 2026-10-22)
+
+Owner-authorized unattended test-author amendment on `feat/CORE-003-risk`.
+Base HEAD: `fcf77c5e71db0c7b796148b4368146a9799bc526`. This section supersedes the old v1.2
+expected-red results above for this proposal only. The skill's normal commit,
+PROGRESS update and prohibition on reading handoff notes are overridden by this
+run's explicit owner instructions. No implementation source was inspected.
+
+The regular proposal file is `docs/proposals/CORE-003-tests-r2.patch`.
+Patch SHA256: `9a5d343ce72dd626152c2bf4394fd052297248c95e2d0da91e11de9fd620d28c`.
+It modifies exactly the following two files against current HEAD:
+
+| Repository-relative file | Expected post-apply SHA256 | Expected Git blob |
+|---|---|---|
+| `tests/acceptance/CORE-003/test_risk_acceptance.py` | `69cd888f057fbcc1365f41d3aaae448dfccb6caf1b94e945029d120fedfab373` | `6d6630fbb5fe8cb49608bf39d46b5f82539ecc3d` |
+| `tests/golden/CORE-003/risk_cases.py` | `68b34aced4943deda4ada60ed2d33872ba03ccebc8736fa29e38b5b64ec2e7c2` | `8a344a1b635239734807707e3f47396636df4f1e` |
+
+The patch is unapplied in the repository. The two locked files and
+`tests/architecture/test_imports.py` remain byte-identical to HEAD. Nothing is
+staged; no .git write, commit, push, dependency or configuration change occurred.
+Only the proposal and this handoff section are repository deliverables. The
+proposal remains ignored under the existing docs/proposals rule; this handoff
+is the session checkpoint instead of an out-of-scope PROGRESS edit.
+
+**Claude applies via D-006, verifies hashes, obtains a fresh-session review,
+then commits.** Check the branch/base and patch SHA256, then execute each command
+as a standalone command from the repository root:
+
+```text
+git apply --check docs/proposals/CORE-003-tests-r2.patch
+git apply docs/proposals/CORE-003-tests-r2.patch
+```
+
+After application, compare SHA256 and
+`git hash-object --path=<repository-relative-path> <repository-relative-path>`
+for both files with the table. Stop on a mismatch. Obtain a fresh-session review
+of the contract and test diff before committing red. The read-only authoring QA
+in this run does not replace that delivery review. The implementer separately
+migrates unit-test callers and implements v1.3; that code is outside this patch.
+
+Verification of expected bytes used 31 tracked HEAD files copied to
+`C:/Users/MSI/AppData/Local/Temp/sochron-core003-r2-vj6znskd/applied`.
+No .git directory or replacement implementation was created there. The patch
+was applied only to those copies using the repository's read-only Git context:
+
+```text
+git --git-dir='C:/Users/MSI/Desktop/โปรเจคต่างๆ/Sochron1k/.git' --work-tree='C:/Users/MSI/AppData/Local/Temp/sochron-core003-r2-vj6znskd/applied' apply --whitespace=error 'C:/Users/MSI/Desktop/โปรเจคต่างๆ/Sochron1k/docs/proposals/CORE-003-tests-r2.patch'
+```
+
+Both applied copies equal the drafts, contain English ASCII text, no BOM or CR,
+and exactly one trailing LF. `git check-attr text eol` reports `text: set` and
+`eol: lf` for both paths. Blob IDs used `git hash-object --path=<path> --stdin`
+without `-w`, independently checked against the Git blob-header SHA1.
+
+### Changes and acceptance evidence
+
+| AC | What changed and what it proves | Current HEAD evidence |
+|---|---|---|
+| AC-01 | Retains all sizing/display rows and adds golden cap_equal: equity96000000, distance12, R240000, per1200, uncapped=max_on_grid=200, actual240000, reason ok. Closes tests-r1 F3 cap-label gap. | PASS: original AC-01 test including the new row. |
+| AC-02 | Retains all daily tests. Adds day23 baselines10500/10000 with observations10421.26 and10421.25; baselines9900/10000 with9850 and9800. Adds custom daily .01/experiment .03 boundaries. Closes F1 and contributes F2. | PASS for original AC-02. New combined update/gate tests reach their gate call after the update assertions, then FAIL on the old signature. |
+| AC-03 | Retains all restart assertions; adds genuinely halted/recovered state with daily10500 versus experiment10000, then restart10421.25 on day23: daily True, daily baseline10500, experiment baseline10421.25/False. Closes F1 restart gap. | PASS: original AC-03 and new distinct-baseline restart test. |
+| AC-04 | Migrates all13 positional gate calls plus both generic argument dictionaries to include day. Adds all six round4 temporal rows and the rollover control, full sorted reasons/allowed flags, immutable inputs, stale validation and earlier-day TimeReversal. Adds different gate baselines and non-H001 loss limits (F2), and lots200 at volume_max with only lots_exceed_sized (F3). | FAIL: old HEAD gate lacks day. Positional calls report state must be exactly HaltState, not date; keyword calls report unexpected keyword argument day. |
+| AC-05 | Preserves every stop-change assertion; adds exact-type and bound checks through AC-06 matrices. | PASS: original AC-05; numeric-domain additions remain red. |
+| AC-06 | Covers every Decimal slot and at-use nested fields, 1000/1001 stored digits including trailing zeros, both adjusted limits and domain-compatible beyond-limit rows, huge-exponent zero, timed rejection, hostile scalar/object subclasses, four consumed model fields, provenance Mapping snapshot/copy/value rules, and request/state mutation before denials. Preserves all old assertions and strengthens display failures to exact RiskError so BadEquity/BadStop cannot mask them. | FAIL as intended: oversized inputs return or raise the wrong error, nested policy validation is missing, and gate calls still have the old signature. Accepted-bound constructors and Mapping cases run; some type-negative gate cases pass solely because the old signature raises TypeError, so those passes do not prove the intended v1.3 validation path. |
+| AC-07 | No architecture edits. Existing three architecture tests run unchanged. | PASS for those three checks; FAIL for the AC's all-tests-green criterion. F5 remains a separate follow-up. |
+
+The golden file remains production-independent literal data with hand arithmetic.
+Its v1.3 tables include the temporal, distinct-baseline, custom-limit and bound
+fixtures. The oracle independently checked all14 sizing rows with Fraction,
+the new baseline/limit thresholds and coefficient/exponent representations.
+Every inherited golden table/row remains present; an AST multiset comparison
+confirmed that every original Assert node remains present. There are no skipped,
+expected-failure, focused or weakened tests.
+
+Positive-adjusted violations are omitted only where another valid domain would
+be impossible: policy ratios must be below1, and an oversized positive volume_min
+cannot remain <= an in-bound volume_max. The negative-adjusted volume_max case
+has the inverse min/max problem. Those slots still have both coefficient
+violations and the domain-compatible exponent violation. In-bound extremes are
+accepted through public constructors/start without requiring expensive rational
+calculations or inventing an accepted-input deadline. Original RANGE_ROWS and
+all exact-subnormal/Overflow/Underflow expectations remain intact.
+
+### Checks run
+
+All times below are 2026-10-22 +07:00; commit `fcf77c5e71db0c7b796148b4368146a9799bc526`
+plus the final proposal unless described as a preliminary draft. No new commit.
+
+| Command / procedure | Result | Commit | Time |
+|---|---|---|---|
+| `git status --short`; `git branch --show-current`; `git rev-parse HEAD` | PASS: clean starting tree/index, expected task branch and base | fcf77c5 | initial preflight, exact time not captured |
+| `uv run --offline --no-sync python -B -c` runtime/version probe | PASS: CPython3.12.15, pytest9.1.1, Windows11 build26200 | fcf77c5 | before drafting, exact time not captured |
+| `git apply --check docs/proposals/CORE-003-tests-r2.patch` (standalone) | PASS: exit0, no output; patch NOT applied to repository | fcf77c5 | 09:33:56 |
+| Git apply command above, with cwd=applied snapshot | PASS: exit0; applied files equal drafts | fcf77c5 | before final test run, approximately09:29 |
+| uv stdin independent Fraction/Decimal oracle and AST/format checks | PASS:14 sizing rows, new thresholds/bounds, retained golden rows, AST/ASCII/LF checks | fcf77c5 | approximately09:30 |
+| `uv run --offline --no-sync python -B .../run_tests.py safe -k 'not oversized and not positive_adjusted_bound and not extreme_equity_rejection_deadline'` | FAIL as intended on preliminary draft:145 failed,264 passed,204 deselected,0 skipped; no collection errors | fcf77c5 + preliminary draft | before final matrix expansion |
+| `uv run --offline --no-sync python -B -` outer-watchdog full-suite invocation of `pytest.main(["tests", "-q", "-p", "no:cacheprovider", "--tb=no", "-rN"])` in applied snapshot | FAIL/incomplete:55-second process deadline; owned child terminated. Timeout logger then hit str/bytes TypeError, so no complete per-case record from this attempt is claimed. Incremental recording was added to the scratch runner. | fcf77c5 | approximately09:29-09:30 |
+| `uv run --offline --no-sync python -B .../bounded_run.py remaining -k 'not extreme_equity_rejection_deadline'` -> same pytest.main arguments with the explicit -k selection | FAIL as intended:382 failed,266 passed,1 deselected,0 skipped,38.07s; no collection errors.648 cases completed;236 timed invocations recorded. | fcf77c5 | 09:31:00.530-09:31:38.663 |
+| uv stdin assertion-preservation and timing-harness negative controls | PASS: all inherited Assert ASTs retained; harness rejects return, wrong exception, exact1.000s and unfinished daemon; accepts fast expected exception | fcf77c5 | approximately09:33 |
+| `git check-attr text eol -- <two paths>`; `git hash-object --path=<path> --stdin`; applied-byte SHA256/blob-header cross-check | PASS: LF attributes and both digest pairs above | fcf77c5 | 09:33:56-09:33:57 |
+| `& 'C:/Program Files/Git/bin/bash.exe' scripts/controls/red-flags.sh main` | PASS execution, exit0; two inherited pattern groups, explained below | fcf77c5 | approximately09:30 |
+| `git diff --check`; status/index/HEAD inspection; handoff prefix and scoped-file byte checks | PASS: whitespace clean; only handoff tracked modification plus ignored proposal; index empty; HEAD unchanged; locked/architecture files identical to HEAD | fcf77c5 | 09:37:54 (final format check) |
+
+The full suite was attempted; it did not complete within the outer deadline.
+The completed selected run does not count its one deselected test as passed.
+`test_ac06_extreme_equity_rejection_deadline` remains in the delivered suite,
+using prebuilt Decimal("1E-999999999") and the exact F14 harness. Its isolated
+completed result is UNKNOWN: it was not rerun after the full-run process deadline.
+No timing criterion was relaxed, no test marked skip/xfail, and no retry-until-pass
+was performed. Runtime results above are against current HEAD, not a surrogate.
+The scratch runner suppresses source tracebacks to preserve the test-author role.
+
+There was also an initial drafting assertion expecting14 positional substitutions;
+AST inspection proved13 and verified every migrated call. An apply_patch scratch
+re-open returned Access denied; subsequent authorized temp work used the owning
+sandbox process without changing permissions. These are authoring-tool issues,
+not application acceptance failures or successful test runs.
+
+### F14 environment and every recorded interval
+
+Reference environment observed: `Windows-11-10.0.26200-SP0; cpython 3.12.15 via uv`;
+pytest9.1.1. Imports, Decimal creation, fixture construction and thread startup are
+outside the measured interval. Each public invocation runs in a daemon Thread;
+`join(timeout=10)` is followed by an explicit alive check, without a later wait.
+Every completed interval uses perf_counter immediately around the public call.
+The harness requires the exact slot error and elapsed <1.000s; returning is failure.
+Environment and elapsed are emitted through pytest record_property and stdout.
+
+There were236 timed invocations in the completed run:235 numeric intervals and
+one unfinished call.234 failed and2 passed their assertions. The unfinished
+`size_position.model.volume_step.negative_adjusted` worker triggered the required
+alive check; its pytest case took28.052s wall time, demonstrating that thread
+scheduling/GIL contention can delay the join beyond its nominal timeout. The
+55-second outer process deadline protected the authoring run. A numeric interval
+is not invented for an unfinished call. The two passing model.contract_size
+exponent cases satisfy their observed error/time checks; that alone does not
+prove validation happened before rational conversion internally.
+
+Machine-readable logs and the applied snapshot are retained under
+`C:/Users/MSI/AppData/Local/Temp/sochron-core003-r2-vj6znskd/`:
+`remaining.json`, `remaining.jsonl`, `remaining.events`, `remaining.log`,
+`digests.json`. The complete interval record is reproduced below so the evidence
+does not depend on temp retention. Names beginning `bound:` refer to
+`test_ac06_oversized_decimal_per_slot`; `branch:` refers to
+`test_ac06_oversized_at_use_before_early_denials`.
+
+| Timed case | Public-call interval (seconds) | Assertion result |
+|---|---|---|
+| `bound:size_position.equity.coefficient` | 0.000099700 | FAIL |
+| `bound:size_position.equity.trailing_zero_coefficient` | 0.000068200 | FAIL |
+| `bound:size_position.equity.negative_adjusted` | 0.153376500 | FAIL |
+| `bound:size_position.equity.positive_adjusted` | 0.151482600 | FAIL |
+| `bound:start_experiment.equity.coefficient` | 0.000008500 | FAIL |
+| `bound:start_experiment.equity.trailing_zero_coefficient` | 0.000007400 | FAIL |
+| `bound:start_experiment.equity.negative_adjusted` | 0.000007400 | FAIL |
+| `bound:start_experiment.equity.positive_adjusted` | 0.000007300 | FAIL |
+| `bound:update_equity.equity.coefficient` | 0.000075200 | FAIL |
+| `bound:update_equity.equity.trailing_zero_coefficient` | 0.000064900 | FAIL |
+| `bound:update_equity.equity.negative_adjusted` | 0.296149000 | FAIL |
+| `bound:update_equity.equity.positive_adjusted` | 0.294323600 | FAIL |
+| `bound:restart_experiment.equity.coefficient` | 0.000011900 | FAIL |
+| `bound:restart_experiment.equity.trailing_zero_coefficient` | 0.000012600 | FAIL |
+| `bound:restart_experiment.equity.negative_adjusted` | 0.000011500 | FAIL |
+| `bound:restart_experiment.equity.positive_adjusted` | 0.000008900 | FAIL |
+| `bound:check_entry.equity.coefficient` | 0.000002700 | FAIL |
+| `bound:check_entry.equity.trailing_zero_coefficient` | 0.000002300 | FAIL |
+| `bound:check_entry.equity.negative_adjusted` | 0.000002300 | FAIL |
+| `bound:check_entry.equity.positive_adjusted` | 0.000002000 | FAIL |
+| `bound:HaltState.day_start_equity.coefficient` | 0.000006200 | FAIL |
+| `bound:HaltState.day_start_equity.trailing_zero_coefficient` | 0.000005700 | FAIL |
+| `bound:HaltState.day_start_equity.negative_adjusted` | 0.000005700 | FAIL |
+| `bound:HaltState.day_start_equity.positive_adjusted` | 0.000005500 | FAIL |
+| `bound:HaltState.experiment_start_equity.coefficient` | 0.000003800 | FAIL |
+| `bound:HaltState.experiment_start_equity.trailing_zero_coefficient` | 0.000005800 | FAIL |
+| `bound:HaltState.experiment_start_equity.negative_adjusted` | 0.000015100 | FAIL |
+| `bound:HaltState.experiment_start_equity.positive_adjusted` | 0.000005700 | FAIL |
+| `bound:size_position.stop_distance.coefficient` | 0.000083000 | FAIL |
+| `bound:size_position.stop_distance.trailing_zero_coefficient` | 0.000069400 | FAIL |
+| `bound:size_position.stop_distance.negative_adjusted` | 0.151087800 | FAIL |
+| `bound:size_position.stop_distance.positive_adjusted` | 0.150920900 | FAIL |
+| `bound:EntryRequest.entry_price.coefficient` | 0.000007000 | FAIL |
+| `bound:EntryRequest.entry_price.trailing_zero_coefficient` | 0.000006900 | FAIL |
+| `bound:EntryRequest.entry_price.negative_adjusted` | 0.000005400 | FAIL |
+| `bound:EntryRequest.entry_price.positive_adjusted` | 0.000005200 | FAIL |
+| `bound:EntryRequest.stop_loss.coefficient` | 0.000005600 | FAIL |
+| `bound:EntryRequest.stop_loss.trailing_zero_coefficient` | 0.000005800 | FAIL |
+| `bound:EntryRequest.stop_loss.negative_adjusted` | 0.000005300 | FAIL |
+| `bound:EntryRequest.stop_loss.positive_adjusted` | 0.000005300 | FAIL |
+| `bound:check_stop_change.current_stop.coefficient` | 0.000009200 | FAIL |
+| `bound:check_stop_change.current_stop.trailing_zero_coefficient` | 0.000009900 | FAIL |
+| `bound:check_stop_change.current_stop.negative_adjusted` | 0.000007500 | FAIL |
+| `bound:check_stop_change.current_stop.positive_adjusted` | 0.000008900 | FAIL |
+| `bound:check_stop_change.new_stop.coefficient` | 0.000010000 | FAIL |
+| `bound:check_stop_change.new_stop.trailing_zero_coefficient` | 0.000010600 | FAIL |
+| `bound:check_stop_change.new_stop.negative_adjusted` | 0.000008100 | FAIL |
+| `bound:check_stop_change.new_stop.positive_adjusted` | 0.000007300 | FAIL |
+| `bound:RiskPolicy.risk_per_trade.coefficient` | 0.000014900 | FAIL |
+| `bound:RiskPolicy.risk_per_trade.trailing_zero_coefficient` | 0.000015700 | FAIL |
+| `bound:RiskPolicy.risk_per_trade.negative_adjusted` | 0.000014700 | FAIL |
+| `bound:RiskPolicy.daily_loss_limit.coefficient` | 0.000014600 | FAIL |
+| `bound:RiskPolicy.daily_loss_limit.trailing_zero_coefficient` | 0.000013400 | FAIL |
+| `bound:RiskPolicy.daily_loss_limit.negative_adjusted` | 0.000015300 | FAIL |
+| `bound:RiskPolicy.experiment_loss_limit.coefficient` | 0.000015300 | FAIL |
+| `bound:RiskPolicy.experiment_loss_limit.trailing_zero_coefficient` | 0.000015000 | FAIL |
+| `bound:RiskPolicy.experiment_loss_limit.negative_adjusted` | 0.000014100 | FAIL |
+| `bound:size_position.cost_per_lot.coefficient` | 0.000081200 | FAIL |
+| `bound:size_position.cost_per_lot.trailing_zero_coefficient` | 0.000064900 | FAIL |
+| `bound:size_position.cost_per_lot.negative_adjusted` | 0.153747100 | FAIL |
+| `bound:size_position.cost_per_lot.positive_adjusted` | 0.146173800 | FAIL |
+| `bound:check_entry.cost_per_lot.coefficient` | 0.000002300 | FAIL |
+| `bound:check_entry.cost_per_lot.trailing_zero_coefficient` | 0.000002400 | FAIL |
+| `bound:check_entry.cost_per_lot.negative_adjusted` | 0.000002500 | FAIL |
+| `bound:check_entry.cost_per_lot.positive_adjusted` | 0.000002300 | FAIL |
+| `bound:EntryRequest.lots.coefficient` | 0.000005800 | FAIL |
+| `bound:EntryRequest.lots.trailing_zero_coefficient` | 0.000005300 | FAIL |
+| `bound:EntryRequest.lots.negative_adjusted` | 0.000005300 | FAIL |
+| `bound:EntryRequest.lots.positive_adjusted` | 0.000005400 | FAIL |
+| `bound:SizeDecision.lots.coefficient` | 0.000005800 | FAIL |
+| `bound:SizeDecision.lots.trailing_zero_coefficient` | 0.000005700 | FAIL |
+| `bound:SizeDecision.lots.negative_adjusted` | 0.000006000 | FAIL |
+| `bound:SizeDecision.lots.positive_adjusted` | 0.000005000 | FAIL |
+| `bound:SizeDecision.risk_money.coefficient` | 0.000005000 | FAIL |
+| `bound:SizeDecision.risk_money.trailing_zero_coefficient` | 0.000005900 | FAIL |
+| `bound:SizeDecision.risk_money.negative_adjusted` | 0.000005100 | FAIL |
+| `bound:SizeDecision.risk_money.positive_adjusted` | 0.000005000 | FAIL |
+| `bound:SizeDecision.risk_per_lot.coefficient` | 0.000005200 | FAIL |
+| `bound:SizeDecision.risk_per_lot.trailing_zero_coefficient` | 0.000004900 | FAIL |
+| `bound:SizeDecision.risk_per_lot.negative_adjusted` | 0.000003900 | FAIL |
+| `bound:SizeDecision.risk_per_lot.positive_adjusted` | 0.000004600 | FAIL |
+| `bound:SizeDecision.actual_risk.coefficient` | 0.000004800 | FAIL |
+| `bound:SizeDecision.actual_risk.trailing_zero_coefficient` | 0.000005200 | FAIL |
+| `bound:SizeDecision.actual_risk.negative_adjusted` | 0.000004900 | FAIL |
+| `bound:SizeDecision.actual_risk.positive_adjusted` | 0.000004600 | FAIL |
+| `bound:size_position.model.contract_size.coefficient` | 0.000070700 | FAIL |
+| `bound:size_position.model.contract_size.trailing_zero_coefficient` | 0.000069900 | FAIL |
+| `bound:size_position.model.contract_size.negative_adjusted` | 0.149368000 | PASS |
+| `bound:size_position.model.contract_size.positive_adjusted` | 0.144908500 | PASS |
+| `bound:size_position.model.volume_min.coefficient` | 0.000065600 | FAIL |
+| `bound:size_position.model.volume_min.trailing_zero_coefficient` | 0.000059900 | FAIL |
+| `bound:size_position.model.volume_min.negative_adjusted` | 0.142145500 | FAIL |
+| `bound:size_position.model.volume_step.coefficient` | 0.000075000 | FAIL |
+| `bound:size_position.model.volume_step.trailing_zero_coefficient` | 0.000067600 | FAIL |
+| `bound:size_position.model.volume_step.negative_adjusted` | unfinished after join(timeout=10) | FAIL |
+| `bound:size_position.model.volume_step.positive_adjusted` | 0.394705900 | FAIL |
+| `bound:size_position.model.volume_max.coefficient` | 0.000145200 | FAIL |
+| `bound:size_position.model.volume_max.trailing_zero_coefficient` | 0.000121800 | FAIL |
+| `bound:size_position.model.volume_max.positive_adjusted` | 0.288414100 | FAIL |
+| `bound:check_entry.model.contract_size.coefficient` | 0.000004300 | FAIL |
+| `bound:check_entry.model.contract_size.trailing_zero_coefficient` | 0.000003700 | FAIL |
+| `bound:check_entry.model.contract_size.negative_adjusted` | 0.000004000 | FAIL |
+| `bound:check_entry.model.contract_size.positive_adjusted` | 0.000003900 | FAIL |
+| `bound:check_entry.model.volume_min.coefficient` | 0.000003800 | FAIL |
+| `bound:check_entry.model.volume_min.trailing_zero_coefficient` | 0.000003700 | FAIL |
+| `bound:check_entry.model.volume_min.negative_adjusted` | 0.000004500 | FAIL |
+| `bound:check_entry.model.volume_step.coefficient` | 0.000003600 | FAIL |
+| `bound:check_entry.model.volume_step.trailing_zero_coefficient` | 0.000004300 | FAIL |
+| `bound:check_entry.model.volume_step.negative_adjusted` | 0.000004300 | FAIL |
+| `bound:check_entry.model.volume_step.positive_adjusted` | 0.000003800 | FAIL |
+| `bound:check_entry.model.volume_max.coefficient` | 0.000004100 | FAIL |
+| `bound:check_entry.model.volume_max.trailing_zero_coefficient` | 0.000003900 | FAIL |
+| `bound:check_entry.model.volume_max.positive_adjusted` | 0.000003900 | FAIL |
+| `bound:check_entry.request.lots.coefficient` | 0.000003700 | FAIL |
+| `bound:check_entry.request.lots.trailing_zero_coefficient` | 0.000003700 | FAIL |
+| `bound:check_entry.request.lots.negative_adjusted` | 0.000003900 | FAIL |
+| `bound:check_entry.request.lots.positive_adjusted` | 0.000003900 | FAIL |
+| `bound:check_entry.request.entry_price.coefficient` | 0.000003600 | FAIL |
+| `bound:check_entry.request.entry_price.trailing_zero_coefficient` | 0.000003900 | FAIL |
+| `bound:check_entry.request.entry_price.negative_adjusted` | 0.000004700 | FAIL |
+| `bound:check_entry.request.entry_price.positive_adjusted` | 0.000004300 | FAIL |
+| `bound:check_entry.request.stop_loss.coefficient` | 0.000003900 | FAIL |
+| `bound:check_entry.request.stop_loss.trailing_zero_coefficient` | 0.000004600 | FAIL |
+| `bound:check_entry.request.stop_loss.negative_adjusted` | 0.000003900 | FAIL |
+| `bound:check_entry.request.stop_loss.positive_adjusted` | 0.000003600 | FAIL |
+| `bound:check_entry.state.day_start_equity.coefficient` | 0.000003900 | FAIL |
+| `bound:check_entry.state.day_start_equity.trailing_zero_coefficient` | 0.000003700 | FAIL |
+| `bound:check_entry.state.day_start_equity.negative_adjusted` | 0.000003900 | FAIL |
+| `bound:check_entry.state.day_start_equity.positive_adjusted` | 0.000003700 | FAIL |
+| `bound:check_entry.state.experiment_start_equity.coefficient` | 0.000003800 | FAIL |
+| `bound:check_entry.state.experiment_start_equity.trailing_zero_coefficient` | 0.000003700 | FAIL |
+| `bound:check_entry.state.experiment_start_equity.negative_adjusted` | 0.000003600 | FAIL |
+| `bound:check_entry.state.experiment_start_equity.positive_adjusted` | 0.000003700 | FAIL |
+| `bound:update_equity.state.day_start_equity.coefficient` | 0.000173900 | FAIL |
+| `bound:update_equity.state.day_start_equity.trailing_zero_coefficient` | 0.000130700 | FAIL |
+| `bound:update_equity.state.day_start_equity.negative_adjusted` | 1.267520800 | FAIL |
+| `bound:update_equity.state.day_start_equity.positive_adjusted` | 0.522449800 | FAIL |
+| `bound:update_equity.state.experiment_start_equity.coefficient` | 0.000206800 | FAIL |
+| `bound:update_equity.state.experiment_start_equity.trailing_zero_coefficient` | 0.000156100 | FAIL |
+| `bound:update_equity.state.experiment_start_equity.negative_adjusted` | 1.233271800 | FAIL |
+| `bound:update_equity.state.experiment_start_equity.positive_adjusted` | 0.498941600 | FAIL |
+| `bound:restart_experiment.state.day_start_equity.coefficient` | 0.000017000 | FAIL |
+| `bound:restart_experiment.state.day_start_equity.trailing_zero_coefficient` | 0.000017600 | FAIL |
+| `bound:restart_experiment.state.day_start_equity.negative_adjusted` | 0.000017300 | FAIL |
+| `bound:restart_experiment.state.day_start_equity.positive_adjusted` | 0.000020600 | FAIL |
+| `bound:restart_experiment.state.experiment_start_equity.coefficient` | 0.000019600 | FAIL |
+| `bound:restart_experiment.state.experiment_start_equity.trailing_zero_coefficient` | 0.000015800 | FAIL |
+| `bound:restart_experiment.state.experiment_start_equity.negative_adjusted` | 0.000016000 | FAIL |
+| `bound:restart_experiment.state.experiment_start_equity.positive_adjusted` | 0.000016100 | FAIL |
+| `bound:HaltState.policy.risk_per_trade.coefficient` | 0.000007300 | FAIL |
+| `bound:HaltState.policy.risk_per_trade.trailing_zero_coefficient` | 0.000008300 | FAIL |
+| `bound:HaltState.policy.risk_per_trade.negative_adjusted` | 0.000007800 | FAIL |
+| `bound:HaltState.policy.daily_loss_limit.coefficient` | 0.000009600 | FAIL |
+| `bound:HaltState.policy.daily_loss_limit.trailing_zero_coefficient` | 0.000008200 | FAIL |
+| `bound:HaltState.policy.daily_loss_limit.negative_adjusted` | 0.000008300 | FAIL |
+| `bound:HaltState.policy.experiment_loss_limit.coefficient` | 0.000009000 | FAIL |
+| `bound:HaltState.policy.experiment_loss_limit.trailing_zero_coefficient` | 0.000008400 | FAIL |
+| `bound:HaltState.policy.experiment_loss_limit.negative_adjusted` | 0.000009900 | FAIL |
+| `bound:size_position.policy.risk_per_trade.coefficient` | 0.000136200 | FAIL |
+| `bound:size_position.policy.risk_per_trade.trailing_zero_coefficient` | 0.000113600 | FAIL |
+| `bound:size_position.policy.risk_per_trade.negative_adjusted` | 0.249680600 | FAIL |
+| `bound:size_position.policy.daily_loss_limit.coefficient` | 0.000073500 | FAIL |
+| `bound:size_position.policy.daily_loss_limit.trailing_zero_coefficient` | 0.000070200 | FAIL |
+| `bound:size_position.policy.daily_loss_limit.negative_adjusted` | 0.000076400 | FAIL |
+| `bound:size_position.policy.experiment_loss_limit.coefficient` | 0.000079400 | FAIL |
+| `bound:size_position.policy.experiment_loss_limit.trailing_zero_coefficient` | 0.000071100 | FAIL |
+| `bound:size_position.policy.experiment_loss_limit.negative_adjusted` | 0.000077300 | FAIL |
+| `bound:start_experiment.policy.risk_per_trade.coefficient` | 0.000013600 | FAIL |
+| `bound:start_experiment.policy.risk_per_trade.trailing_zero_coefficient` | 0.000011100 | FAIL |
+| `bound:start_experiment.policy.risk_per_trade.negative_adjusted` | 0.000011400 | FAIL |
+| `bound:start_experiment.policy.daily_loss_limit.coefficient` | 0.000013400 | FAIL |
+| `bound:start_experiment.policy.daily_loss_limit.trailing_zero_coefficient` | 0.000011100 | FAIL |
+| `bound:start_experiment.policy.daily_loss_limit.negative_adjusted` | 0.000012800 | FAIL |
+| `bound:start_experiment.policy.experiment_loss_limit.coefficient` | 0.000012600 | FAIL |
+| `bound:start_experiment.policy.experiment_loss_limit.trailing_zero_coefficient` | 0.000011200 | FAIL |
+| `bound:start_experiment.policy.experiment_loss_limit.negative_adjusted` | 0.000012600 | FAIL |
+| `bound:unknowns.policy.risk_per_trade.coefficient` | 0.000008300 | FAIL |
+| `bound:unknowns.policy.risk_per_trade.trailing_zero_coefficient` | 0.000007900 | FAIL |
+| `bound:unknowns.policy.risk_per_trade.negative_adjusted` | 0.000006500 | FAIL |
+| `bound:unknowns.policy.daily_loss_limit.coefficient` | 0.000006800 | FAIL |
+| `bound:unknowns.policy.daily_loss_limit.trailing_zero_coefficient` | 0.000035700 | FAIL |
+| `bound:unknowns.policy.daily_loss_limit.negative_adjusted` | 0.000006500 | FAIL |
+| `bound:unknowns.policy.experiment_loss_limit.coefficient` | 0.000006500 | FAIL |
+| `bound:unknowns.policy.experiment_loss_limit.trailing_zero_coefficient` | 0.000006500 | FAIL |
+| `bound:unknowns.policy.experiment_loss_limit.negative_adjusted` | 0.000006100 | FAIL |
+| `bound:check_entry.state.policy.risk_per_trade.coefficient` | 0.000004300 | FAIL |
+| `bound:check_entry.state.policy.risk_per_trade.trailing_zero_coefficient` | 0.000004000 | FAIL |
+| `bound:check_entry.state.policy.risk_per_trade.negative_adjusted` | 0.000004400 | FAIL |
+| `bound:check_entry.state.policy.daily_loss_limit.coefficient` | 0.000004100 | FAIL |
+| `bound:check_entry.state.policy.daily_loss_limit.trailing_zero_coefficient` | 0.000004200 | FAIL |
+| `bound:check_entry.state.policy.daily_loss_limit.negative_adjusted` | 0.000004500 | FAIL |
+| `bound:check_entry.state.policy.experiment_loss_limit.coefficient` | 0.000003700 | FAIL |
+| `bound:check_entry.state.policy.experiment_loss_limit.trailing_zero_coefficient` | 0.000004000 | FAIL |
+| `bound:check_entry.state.policy.experiment_loss_limit.negative_adjusted` | 0.000003900 | FAIL |
+| `bound:update_equity.state.policy.risk_per_trade.coefficient` | 0.000038400 | FAIL |
+| `bound:update_equity.state.policy.risk_per_trade.trailing_zero_coefficient` | 0.000041600 | FAIL |
+| `bound:update_equity.state.policy.risk_per_trade.negative_adjusted` | 0.000039600 | FAIL |
+| `bound:update_equity.state.policy.daily_loss_limit.coefficient` | 0.000105400 | FAIL |
+| `bound:update_equity.state.policy.daily_loss_limit.trailing_zero_coefficient` | 0.000089400 | FAIL |
+| `bound:update_equity.state.policy.daily_loss_limit.negative_adjusted` | 0.320434800 | FAIL |
+| `bound:update_equity.state.policy.experiment_loss_limit.coefficient` | 0.000106500 | FAIL |
+| `bound:update_equity.state.policy.experiment_loss_limit.trailing_zero_coefficient` | 0.000099400 | FAIL |
+| `bound:update_equity.state.policy.experiment_loss_limit.negative_adjusted` | 0.408447600 | FAIL |
+| `bound:restart_experiment.state.policy.risk_per_trade.coefficient` | 0.000018800 | FAIL |
+| `bound:restart_experiment.state.policy.risk_per_trade.trailing_zero_coefficient` | 0.000016600 | FAIL |
+| `bound:restart_experiment.state.policy.risk_per_trade.negative_adjusted` | 0.000017100 | FAIL |
+| `bound:restart_experiment.state.policy.daily_loss_limit.coefficient` | 0.000017200 | FAIL |
+| `bound:restart_experiment.state.policy.daily_loss_limit.trailing_zero_coefficient` | 0.000016800 | FAIL |
+| `bound:restart_experiment.state.policy.daily_loss_limit.negative_adjusted` | 0.000016400 | FAIL |
+| `bound:restart_experiment.state.policy.experiment_loss_limit.coefficient` | 0.000016000 | FAIL |
+| `bound:restart_experiment.state.policy.experiment_loss_limit.trailing_zero_coefficient` | 0.000015900 | FAIL |
+| `bound:restart_experiment.state.policy.experiment_loss_limit.negative_adjusted` | 0.000016000 | FAIL |
+| `branch:request-lots-RiskError-halted` | 0.000004100 | FAIL |
+| `branch:request-lots-RiskError-missing_stop` | 0.000004200 | FAIL |
+| `branch:request-lots-RiskError-wrong_side_stop` | 0.000004700 | FAIL |
+| `branch:request-lots-RiskError-stale` | 0.000004600 | FAIL |
+| `branch:request-entry_price-BadStop-halted` | 0.000004800 | FAIL |
+| `branch:request-entry_price-BadStop-missing_stop` | 0.000004900 | FAIL |
+| `branch:request-entry_price-BadStop-wrong_side_stop` | 0.000004800 | FAIL |
+| `branch:request-entry_price-BadStop-stale` | 0.000002400 | FAIL |
+| `branch:request-stop_loss-BadStop-halted` | 0.000002400 | FAIL |
+| `branch:request-stop_loss-BadStop-missing_stop` | 0.000002400 | FAIL |
+| `branch:request-stop_loss-BadStop-wrong_side_stop` | 0.000004600 | FAIL |
+| `branch:request-stop_loss-BadStop-stale` | 0.000005100 | FAIL |
+| `branch:state-day_start_equity-BadEquity-halted` | 0.000004400 | FAIL |
+| `branch:state-day_start_equity-BadEquity-missing_stop` | 0.000004500 | FAIL |
+| `branch:state-day_start_equity-BadEquity-wrong_side_stop` | 0.000004800 | FAIL |
+| `branch:state-day_start_equity-BadEquity-stale` | 0.000004300 | FAIL |
+| `branch:state-experiment_start_equity-BadEquity-halted` | 0.000004500 | FAIL |
+| `branch:state-experiment_start_equity-BadEquity-missing_stop` | 0.000004300 | FAIL |
+| `branch:state-experiment_start_equity-BadEquity-wrong_side_stop` | 0.000004600 | FAIL |
+| `branch:state-experiment_start_equity-BadEquity-stale` | 0.000004400 | FAIL |
+| `branch:state-policy.risk_per_trade-BadPolicy-halted` | 0.000004100 | FAIL |
+| `branch:state-policy.risk_per_trade-BadPolicy-missing_stop` | 0.000004600 | FAIL |
+| `branch:state-policy.risk_per_trade-BadPolicy-wrong_side_stop` | 0.000005400 | FAIL |
+| `branch:state-policy.risk_per_trade-BadPolicy-stale` | 0.000004500 | FAIL |
+
+### Red flags, limits and next action
+
+The main-based red-flag scan reports two inherited groups: intentional negative
+unit-test type-suppression comments and documentation quoting them; lint-suppression
+words in existing documentation. No new suppression was added. Secret and
+order/account-mutation groups are empty; no tests are deleted or renamed.
+Control-name heuristics list inherited locked files and policy/review filenames.
+The scan does not inspect the ignored proposal, so the two applied files were
+also explicitly checked for skip/xfail/suppression markers: none. The worker's
+BaseException handler transports every error to a failing assertion; it does
+not swallow unexpected exceptions.
+
+Not tested or claimed: v1.3 positive runtime acceptance beyond the recorded
+passes; a completed isolated extreme-equity case; implementation mutation or
+security certification; CI, owner demonstration, merge/deployment; broker,
+terminal, account, market data, research or holdout operations. The current old
+signature prevents many gate tests from reaching the behavior they will exercise
+once v1.3 is implemented. No implementation fix was attempted.
+
+Separate follow-ups retained from round5: tests-r1 F5 architecture-checker gap;
+E1 F7 same-account/same-Thai-day start prohibition; L1 authenticated clearer and
+policy digest; L2 journal-only state restoration and constructor/replace/setattr
+restrictions; L3 real tick/model/exposure/send binding; L4 MT5 current-stop binding;
+F6 update_equity before entry and pass the same Thai day. None belongs in this
+pure-module test patch. No same-day-history check was added to start_experiment.
+
+Delivery state: test proposal implemented; patch applicability, bytes, oracles
+and expected-red behavior verified locally with the limitations above. CORE-003
+v1.3 acceptance is FAIL, not verified/merged/deployed. Next action: Claude applies
+via D-006, verifies both hash pairs, obtains fresh-session review, then commits.

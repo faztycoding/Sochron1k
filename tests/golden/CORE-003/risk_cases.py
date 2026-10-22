@@ -1,4 +1,4 @@
-"""CORE-003 v1.2 hand-computed literal oracles; no production risk imports.
+"""CORE-003 v1.3 hand-computed literal oracles; no production risk imports.
 
 Sizing rows reset H001_COSTS/H001_RISK for every row. Rate = .0025,
 contract_size = 100, step = .01, min = .01, max = 200 unless stated.
@@ -20,6 +20,9 @@ SIZE_ROWS = (
     # R=250000; per=10; raw=25000/1; floor=25000; cap=200; actual=2000.
     ("capped", "100000000", "0.10", "0", {},
      ("200", "250000", "10", "2000", "capped_at_volume_max")),
+    # R=240000; per=1200; uncapped=200=max_on_grid: equality is not capping.
+    ("cap_equal", "96000000", "12", "0", {},
+     ("200", "240000", "1200", "240000", "ok")),
     # R=24; per=1200; raw=1/50 exactly; floor=.02; cap=200; actual=24.
     ("exact_step", "9600", "12.00", "0", {},
      ("0.02", "24", "1200", "24", "ok")),
@@ -136,4 +139,46 @@ RANGE_ROWS = (
     ("4.4E-1000024", "1.1E-1000026", False),
     # 4E1000002*.0025=1E1000000: Overflow; raw=1E1000000/1200, floor>cap200.
     ("4E1000002", "1E1000000", False),
+)
+
+# Equity, daily latch, experiment latch, request calendar day, complete result.
+# Both baselines remain10000; at9800 loss200 meets daily75 and experiment200.
+# Sizing at9800 is still.02, so no sizing denial joins these tuples.
+TEMPORAL_ROWS = (
+    ("10000", False, False, 22, ()),
+    ("10000", False, False, 23, ("stale_state",)),
+    ("10000", True, False, 23, ("daily_halt", "stale_state")),
+    ("10000", True, True, 23, ("daily_halt", "experiment_halt", "stale_state")),
+    ("10000", False, False, 21, "TimeReversal"),
+    ("9800", False, False, 23, ("daily_halt", "experiment_halt", "stale_state")),
+)
+
+# First equity of day23, same-day observation, daily flag, experiment flag.
+# Experiment baseline remains10000. Daily budgets are78.75 and74.25.
+DISTINCT_BASELINE_ROWS = (
+    ("10500", "10421.26", False, False),  # daily loss78.74 <78.75
+    ("10500", "10421.25", True, False),   # daily loss78.75 =78.75
+    ("9900", "9850", False, False),       # daily loss50 <74.25; experiment150 <200
+    ("9900", "9800", True, True),         # daily loss100 >74.25; experiment200 =200
+)
+
+# Custom policy daily=.01 and experiment=.03, both baselines10000.
+CUSTOM_LIMIT_ROWS = (
+    ("9925", False, False),  # loss75 <100 and300
+    ("9900", True, False),   # daily equality100
+    ("9800", True, False),   # loss200 <experiment300, unlike H001
+    ("9700", True, True),    # experiment equality300
+)
+
+# Stored digits matter even when the value has a short normalized representation.
+# These literals are domain-valid positive ratios, so all numeric slots can use them.
+BOUND_ACCEPTED = (
+    ("coefficient", "0." + "1" * 1000),
+    ("trailing_zero_coefficient", "0.1" + "0" * 999),
+    ("negative_adjusted", "1E-1100000"),
+)
+BOUND_REJECTED = (
+    ("coefficient", "0." + "1" * 1001),
+    ("trailing_zero_coefficient", "0.1" + "0" * 1000),
+    ("negative_adjusted", "1E-1100001"),
 )
