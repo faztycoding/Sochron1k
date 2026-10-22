@@ -29,7 +29,7 @@ Contract: `docs/contracts/CORE-003-risk.md` v1.9 (v1.4–v1.9 ตามที่
 | `src/sochron/risk/halts.py` | `HaltState` (ผูก policy), `start_experiment`, `update_equity`, `restart_experiment` (เฉพาะตอน halt, ผู้มีสิทธิ์ + เหตุผล, คงหยุดรายวัน) |
 | `src/sochron/risk/gate.py` | `EntryRequest`, `GateDecision`, `check_entry(request, equity, day, state, model, cost_per_lot)` (ตรวจ input ครบก่อน, `stale_state`, sizing ใหม่จากคำขอ, เกณฑ์จาก equity ปัจจุบัน), `check_stop_change` |
 | `src/sochron/risk/errors.py` | `RiskError(ValueError)` และ `BadPolicy`, `BadEquity`, `BadStop`, `BadHaltClear`, `TimeReversal` |
-| `tests/unit/risk/test_risk_unit.py` | unit tests ของผู้ทำ 22 ข้อ (รวม regression ของ security pre-review F1/F2/F4/F5 และ v1.3) |
+| `tests/unit/risk/test_risk_unit.py` | unit tests ของผู้ทำ 30 ข้อ (รวม regression ของ security pre-review F1/F2/F4/F5/F9/F11, v1.3, review r1 F1–F3, review r2 F4/F5 และการอ่าน provenance ครั้งเดียว) |
 
 การตัดสินระหว่างทำ:
 - ค่าแสดงผลไม่แปลงผ่านจำนวนเต็มขนาดใหญ่ (ร่างแรกใช้ ~9.5 วินาทีต่อครั้งที่เลขชี้กำลังสุดขีด → คำนวณแบบ exact ใน context ไม่จำกัด แล้ว `create_decimal` ครั้งเดียว)
@@ -78,6 +78,6 @@ Contract: `docs/contracts/CORE-003-risk.md` v1.9 (v1.4–v1.9 ตามที่
 - tests-r2 F1 (แก้แล้ว): test เวลาใช้ `faulthandler` จึง fail พร้อม traceback แทนการค้าง (tests r3/r4) · การ fire ของ watchdog ทดสอบด้วย probe ที่ค้างแบบจำลองเท่านั้น
 - การยืนยันตัวตนผู้ปลด halt, การบันทึก/กู้ HaltState จาก journal, การห้าม start ซ้ำในวันเดียวกัน และการผูกผล gate กับคำสั่งจริง เป็นงานของ E1 (contract ข้อ "ข้อบังคับที่ส่งต่อให้ contract E1")
 - review tests-r1 F5: architecture checker ไม่จับ `time.localtime()`, `os.urandom()`, `uuid.uuid4()`, `subprocess`, `sys.stdout.write` → โค้ด risk ไม่ใช้สิ่งเหล่านี้ (ตรวจด้วยตา) · เป็นงาน follow-up ของ test author
-- Review: Codex r1 (F1–F3) และ r2 (F4/F5) ปิดโดยผู้ตรวจรอบถัดไป · security r2 F9/F11 ปิด · review r3 (Claude ภายใต้การสลับบทบาทเพราะโควตา Codex หมด) F6/F7 ปิดด้วยการกำหนดขอบเขตของเจ้าของ (contract v1.7, E1 L2) · เจ้าของยังไม่ได้รัน demo
+- Review: Codex r1 (F1–F3) และ r2 (F4/F5) ปิดโดยผู้ตรวจรอบถัดไป · security r2 F9/F11 ปิด · review r3 (Claude ภายใต้การสลับบทบาทเพราะโควตา Codex หมด) F6/F7 ปิดด้วยการกำหนดขอบเขตของเจ้าของ (contract v1.7, E1 L2) · demo 3 ขั้นรันโดย Claude ตามคำสั่งเจ้าของ 2026-10-22 21:35 บน `1282faf` (784 passed, sizing/gate 4 บรรทัดตรง, `BadHaltClear` ตรง) เจ้าของดูผลแล้ว merge PR #11 21:37 → `8f370da`
 - ขอบเขต (v1.7): โมดูลไม่กันโค้ดร้ายที่รันใน process เดียวกันและแก้ภายในของ object หรือ runtime · การป้องกันเป็นของ E1 L2
 - F10 (ยอมรับ): model ที่ค่าสุดขีดแต่อยู่ในเพดานทำให้ sizing/gate ช้าหลายสิบวินาที · E1 ต้องสร้าง model จาก `symbol_info` เท่านั้น
