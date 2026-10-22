@@ -554,6 +554,62 @@ def test_result_states_are_built_without_reading_the_policy_again():
     assert started.policy.daily_loss_limit == Decimal("0.0075")
 
 
+class _CountingMapping:
+    """A valid provenance Mapping that counts traversals and per-key lookups."""
+
+    def __init__(self, good):
+        self.good = dict(good)
+        self.traversals = 0
+        self.lookups = {key: 0 for key in self.good}
+
+    def __getitem__(self, key):
+        self.lookups[key] += 1
+        return self.good[key]
+
+    def __iter__(self):
+        self.traversals += 1
+        return iter(self.good)
+
+    def __len__(self):
+        return len(self.good)
+
+    def keys(self):
+        self.traversals += 1
+        return self.good.keys()
+
+    def reset(self):
+        self.traversals = 0
+        self.lookups = {key: 0 for key in self.good}
+
+
+def test_every_public_call_reads_provenance_exactly_once():
+    # tests-r4 F1 (owner: guard with a unit test): a re-read after the decision, by traversal or by a
+    # second lookup of any key, would let a planted Mapping change the policy behind a returned
+    # result (review r2 F5). Each public call must read provenance once: one traversal, each key once.
+    from collections.abc import Mapping
+
+    Mapping.register(_CountingMapping)
+    policy = replace(H001_RISK)
+    state = start_experiment(Decimal("10000"), DAY, policy, "owner", "unit test")
+    halted = update_equity(state, Decimal("9800"), DAY)
+    counter = _CountingMapping(H001_RISK.provenance)
+    object.__setattr__(policy, "provenance", counter)
+    calls = {
+        "check_entry": lambda: check_entry(REQUEST, Decimal("10000"), DAY, state, H001_COSTS),
+        "size_position": lambda: size_position(Decimal("10000"), Decimal("12"), H001_COSTS, policy),
+        "start_experiment": lambda: start_experiment(Decimal("10000"), DAY, policy, "owner", "unit test"),
+        "update_equity": lambda: update_equity(state, Decimal("9990"), DAY),
+        "restart_experiment": lambda: restart_experiment(halted, Decimal("9800"), DAY, "owner", "reviewed"),
+        "unknowns": lambda: unknowns(policy),
+        "HaltState": lambda: HaltState(policy, DAY, Decimal("10000"), Decimal("10000"), False, False),
+    }
+    for name, call in calls.items():
+        counter.reset()
+        call()
+        assert counter.traversals == 1, name
+        assert set(counter.lookups.values()) == {1}, name
+
+
 def test_policy_fields_and_halt_state_validation():
     assert set(H001_RISK.provenance) == set(POLICY_FIELDS)
     with pytest.raises(TypeError):
