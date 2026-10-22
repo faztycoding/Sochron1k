@@ -303,3 +303,20 @@ expected-red behavior verified locally. CORE-003 functionality remains
 **FAIL (missing implementation)**; not verified, merged or deployed.
 Next action: Claude applies via D-006, verifies hashes, obtains a fresh-session
 review, then commits red.
+
+
+## Implementation (Claude Code), 2026-10-22
+
+Order followed: contract approved by the owner (`4dcfb49`, Tier High) → Codex tests applied via D-006, six hashes verified, reverse check passed, fresh-session review `docs/reviews/CORE-003-tests-r1.md` (ready to commit red), committed red at `831fa60` → implementation in the commit that adds `docs/evidence/CORE-003.md`.
+
+- `src/sochron/risk/` = `errors.py`, `policy.py`, `sizing.py`, `halts.py`, `gate.py`, `__init__.py`; `tests/unit/risk/test_risk_unit.py` (16 implementer tests).
+- `uv run --offline pytest tests -q -p no:cacheprovider` → 68 passed, 0 skipped at 08:29:05 +07 on the first run in the repository. A read-only dry run of the locked tests against the scratch draft (run from a scratch working directory so the loader's `cwd/src` found the draft; the locked files were read in place, never copied) passed earlier. No locked test was touched after `831fa60`.
+- Decisions use `fractions.Fraction` throughout (floor and cap on the grid, minimum, loss thresholds, |entry - stop|), so the caller's Decimal context is never consulted or changed. Display fields are the same quantities computed as exact Decimals in an unbounded context (`MAX_PREC`, `MAX_EMAX`, `MIN_EMIN`, Inexact trapped) and rounded once with `create_decimal` in a copy of `sochron.costs.CONTEXT` with Overflow and Underflow trapped; those two become `RiskError`.
+- Performance note: the first draft converted Fractions to Decimal through `Decimal(int)`, which took about 9.5 s per call for exponents near the context limits; the exact-Decimal route takes milliseconds.
+- tests-r1 F1-F3 (coverage gaps) are answered by implementer unit tests that kill the named mutations: same-day calls with different daily and experiment baselines, gate states with different baselines and non-H001 loss limits, the cap boundary (uncapped == largest grid point is "ok") and a request at exactly `volume_max`. The owner's Codex chat suggested the policy-limit and `volume_step = 0.02` cases; both are unit tests too. tests-r1 F5 (architecture checker misses `time.localtime`, `os.urandom`, `uuid`, `subprocess`, `sys.stdout`) is inherited from CORE-001 and belongs to the test author; the risk sources use none of them.
+
+Please look hard at (review r1, Tier High: security-reviewer pre-review first, then Codex):
+- Any path that lets a caller enter at or beyond a loss threshold, exceed the sized lots, clear a halt without a listed name, widen or remove a stop, or evaluate an experiment with another policy.
+- `restart_experiment` checks authorization before the halted check; with two defects the error order is unspecified by the contract.
+- `RiskPolicy`, `HaltState` and `CostModel` hold a `MappingProxyType`, so they are not hashable; nothing in the contract asks for hashing.
+- Exports `POLICY_FIELDS` beyond the API block (an addition).
