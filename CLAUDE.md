@@ -8,8 +8,7 @@
   current task branch, without asking or an approval prompt. Use a named remote and explicit
   destination: `git push origin HEAD:refs/heads/<current-task-branch>`. Force, deletion, multi-ref,
   main/master and unproved pushes stay blocked. Labels and all other external writes stay with
-  the owner. After the initial r9 owner application and fresh-session review, run the live push
-  in the owner's session and record the result and CI for that exact pushed head; no prompt is expected.
+  the owner.
 - Plan before any multi-file change (plan mode or the `task-contract` skill). Wait for the owner
   when the plan contains a decision that changes the main outcome, or when the task is High.
 - The standard loop runs on project skills: /spec-interview, /architecture-options,

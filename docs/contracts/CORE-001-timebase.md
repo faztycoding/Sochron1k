@@ -1,7 +1,7 @@
 # TASK CORE-001 — timebase: โมดูลเวลาเดียวของระบบ (raw MT5 ↔ UTC, sessions แบบ New York, DST, วันไทย)
 
 Version v1 · Owner เจ้าของ repository · Parent SPEC J2/J3 (ทุกเส้นทางต้องแปลงเวลาผ่านโมดูลเดียว) · `docs/architecture.md` ข้อ 8 แถว `timebase` และข้อ 13a แถว "R1 time/data" · Tier **Standard** · Branch `feat/CORE-001-timebase`
-Status: approved by owner 2026-10-21 (acceptance 7 ข้อและแผน อนุมัติในแชท Claude ราว 08:2x) · ยังรอ: การอนุมัติ dependency ระดับโปรเจกต์และ `pyproject.toml`/`uv.lock` ฉบับแรกหลังผล admission (D-012)
+Status: **merged** · approved by owner 2026-10-21 (acceptance 7 ข้อและแผน อนุมัติในแชท Claude ราว 08:2x) · D-012 accepted (`e39b0b0`) · merge เข้า main เป็น PR #8 (`b2eb69c`, 2026-10-21 19:32 +07, label `owner-approved-control-change`, CI success) · Codex reviews r1–r3 ปิด F1–F5 · หลักฐาน `docs/evidence/CORE-001.md`
 Hypothesis (research tasks): ไม่ใช่งานวิจัย แต่ให้บริการ H001 (`docs/hypotheses/H001-m15-momentum-breakout.md`, commit `0c392a9`) ซึ่งกำหนดหน้าต่างเข้าไม้ 03:00–15:59 New York และแท่ง M15 ที่สร้างจาก M1
 
 ## Risk tier (Q1–Q6, one line each; unsure = yes)
@@ -114,13 +114,13 @@ sochron.timebase
    3. Codex `$write-acceptance-tests CORE-001`: acceptance (AC-01–06), golden tables (DST, Bangkok, bar_open, offset), architecture test → ส่งเป็น `docs/proposals/CORE-001-tests.patch` พร้อม hash → Claude apply ตาม D-006, ตรวจ hash, session ใหม่ตรวจ patch, commit → check: tests ทั้งหมด **FAIL** ก่อนมีโค้ด (red)
    4. Claude implement `sochron.timebase` ทีละฟังก์ชันพร้อม unit tests → check: `uv run pytest tests -q` เขียวทีละ AC commit ทีละขั้น
    5. Claude เขียน `docs/evidence/CORE-001.md` + handoff → Codex `$cross-agent-review` (read-only) → Claude `/fix-findings` → re-review
-   6. เจ้าของเปิด PR (แตะ `tests/acceptance|golden|architecture` ซึ่งล็อก จึงต้องติด label `owner-approved-control-change`) → CI control-plane เขียว → merge
+   6. เจ้าของเปิด PR (แตะ `tests/acceptance|golden|architecture` ซึ่งล็อก จึงต้องติด label `owner-approved-control-change`) → required checks ทั้งสอง `ci / control-plane` และ `control-gate / locked-paths` เขียว → merge (ทำแล้ว: PR #8)
 4. Risks and negative cases to test: ตามหัวข้อ Negative cases ทั้งหมด · เพิ่ม property test round-trip (`to_raw(to_utc(x)) == x`) ถ้า Codex ใช้ skill `property-based-testing` (SPIKE FIRST ที่เจ้าของอนุมัติ) ซึ่งต้องขอ admission ของไลบรารี `hypothesis` แยก
 5. Decisions needed from the owner: (ก) อนุมัติ acceptance 7 ข้อ (ข) อนุมัติ dependency ระดับโปรเจกต์หลัง admission: `tzdata==2026.5` (runtime), `pytest==9.1.1` + transitives (dev) และการสร้าง `pyproject.toml`/`uv.lock` ฉบับแรก (ค) ยอมรับ prefix `CORE-` สำหรับ contract ของส่วน pure (timebase, costs, risk) เพราะชื่อ branch ต้องผ่าน guard (F26) (ง) ถ้า Codex ขอใช้ `hypothesis` สำหรับ property tests ให้ตัดสินตอน admission
 
 ## Authorization (filled by the owner)
-- Claude Code / สร้าง `pyproject.toml` + `uv.lock` และติดตั้ง dependency ที่ผ่าน admission ลง `.venv` ของเครื่องนี้ / repo นี้ / จนกว่า CORE-001 จะ done — รอเจ้าของกรอก
-- Codex / เขียน tests ที่ล็อกเป็น patch ใน `docs/proposals/` / `tests/acceptance/CORE-001`, `tests/golden/CORE-001`, `tests/architecture` / งานนี้ — รอเจ้าของกรอก
+- Claude Code / สร้าง `pyproject.toml` + `uv.lock` และติดตั้ง dependency ที่ผ่าน admission ลง `.venv` ของเครื่องนี้ / repo นี้ / จนกว่า CORE-001 จะ done — เจ้าของอนุมัติผ่าน D-012 (2026-10-21, `e39b0b0`) · ใช้แล้ว (`3da18d1`)
+- Codex / เขียน tests ที่ล็อกเป็น patch ใน `docs/proposals/` / `tests/acceptance/CORE-001`, `tests/golden/CORE-001`, `tests/architecture` / งานนี้ — เจ้าของสั่งในแชท Claude 2026-10-21 ตามขั้นตอน test author ปกติ · ใช้แล้ว (`85d78bf`, review `CORE-001-tests-r1`)
 - ไม่มีการเชื่อม terminal หรือบัญชีใดๆ ในงานนี้
 
 ## Budget
@@ -130,9 +130,9 @@ sochron.timebase
 ลบ `src/sochron/timebase`, tests ของ CORE-001, `pyproject.toml`, `uv.lock`, `.venv/` แล้วทิ้ง branch ได้ทั้งก้อน ไม่มีผลข้างเคียงนอกเครื่อง · checkpoint ใน PROGRESS.md หลังทุกขั้นที่ผ่าน check
 
 ## DoR status / missing items / next action
-- ครบ: การอนุมัติ acceptance จากเจ้าของ (2026-10-21)
-- ขาด: dependency admission ระดับโปรเจกต์ (D-012) · tests จาก Codex (patch) · สภาพแวดล้อม uv
-- next action: Codex ทำ admission และ tests → เจ้าของอนุมัติ D-012 → Claude สร้าง environment, apply patch ของ tests ตาม D-006 แล้วลงมือ
+- ครบ: การอนุมัติ acceptance (2026-10-21) · D-012 (`e39b0b0`) · tests จาก Codex (`85d78bf`) · environment uv (`3da18d1`) · implementation + reviews r1–r3 · merge PR #8
+- ขาด: ไม่มี · งานปิดแล้ว
+- next action: ไม่มีสำหรับ contract นี้ · follow-ups อยู่ใน PROGRESS.md "Not done yet" (tolerance/zone ที่ contract ไม่กำหนด, Python CI job, เจ้าของรัน demo เอง)
 
 ## Done scope
 implementation (ทดสอบผ่านบนเครื่อง, review ปิด, merge แล้ว) · ยังไม่รวม Python CI job

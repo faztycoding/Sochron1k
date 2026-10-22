@@ -1,7 +1,7 @@
 # สถาปัตยกรรมเริ่มต้นของ Sochron1k
 
 สถานะ: **Accepted (D-001)** — เจ้าของอนุมัติ 2026-10-21 ราว 06:55 +07 (ขอบเขตการอนุมัติอยู่ใน DECISIONS.md D-001) · ร่างเมื่อ 18 ต.ค. 2026 โดย Claude Code ตาม Handbook v5 บท 6 และบท 34 (P04)
-ปรับปรุง 2026-10-21 ตาม `docs/reviews/D-001-design-r1.md` (Codex adversarial design review หลัง SPIKE-001): F1 แยกเครื่อง (ข้อ 6.1), F2 execution scope (ข้อ 7.1), ข้อเท็จจริงจาก SPIKE-001 (ข้อ 2, 12) และ phase gates (ข้อ 13a) · ต้องผ่าน review รอบใหม่ก่อนเจ้าของตัดสิน
+ปรับปรุง 2026-10-21 ตาม `docs/reviews/D-001-design-r1.md` (Codex adversarial design review หลัง SPIKE-001): F1 แยกเครื่อง (ข้อ 6.1), F2 execution scope (ข้อ 7.1), ข้อเท็จจริงจาก SPIKE-001 (ข้อ 2, 12) และ phase gates (ข้อ 13a) · ผ่าน review r2–r3 แล้ว และเจ้าของรับ D-001 เมื่อ 2026-10-21 · โมดูลแรกตามแผนข้อ 10 (`timebase`, CORE-001) merge แล้ว 2026-10-21 (PR #8)
 
 ## 1. สรุปข้อเสนอ
 
@@ -242,7 +242,7 @@ data/ journal/ reports/out/   # runtime data, gitignored
 
 | Phase | Contract | ได้อะไร | เกณฑ์จบ | Tier |
 |---|---|---|---|---|
-| 0 | BOOT-001 | กติกา, controls, skills/agents, architecture ร่าง | เจ้าของรับ D-002 ถึง D-005 และ P25 ผ่านทั้งสองเครื่องมือ (D-001 ยัง proposed) | High (Q6) |
+| 0 | BOOT-001 | กติกา, controls, skills/agents, architecture ร่าง | เจ้าของรับ D-002 ถึง D-005 และ P25 ผ่านทั้งสองเครื่องมือ (สถานะ 2026-10-21: merge แล้ว PR #1–#2; D-001 accepted; D-002, D-004, D-005 ยัง proposed; P25 ของ Codex ใน IDE ยัง UNKNOWN ตาม D-008) | High (Q6) |
 | 1 | SPIKE-001 | พิสูจน์ว่าเชื่อม MT5 ได้, รู้ว่า timestamp เป็น UTC หรือเวลา server และพฤติกรรมช่วง DST, รู้ความลึกของข้อมูล (อ่านอย่างเดียว, environment uv ชั่วคราว, ไม่ต้องรอ D-001) | evidence report และไม่มีการส่งคำสั่งใดๆ | Standard |
 | 1b | ตัดสิน D-001 | Codex `$adversarial-design-review` พร้อมหลักฐานจาก SPIKE-001 แล้วเจ้าของรับหรือปฏิเสธ D-001 | ADR เปลี่ยนเป็น accepted หรือ rejected | – |
 | 1c | ENV-1 | Windows VPS เป็น acquisition/execution host, ย้าย terminal/raw/holdout, ลบ terminal และ cache ออกจาก research host, environment check + synthetic sentinel (ข้อ 6.1) | sentinel พิสูจน์ว่า research identity อ่านหรือดึงช่วงที่ตัดออกไม่ได้ | Standard (มีค่าใช้จ่าย, Q-10) |
