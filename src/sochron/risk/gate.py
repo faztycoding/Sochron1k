@@ -14,7 +14,7 @@ from typing import Literal
 from sochron.costs import CostModel
 
 from .errors import BadEquity, BadStop, RiskError
-from .halts import HaltState
+from .halts import HaltState, validate_state
 from .policy import exact, is_int, loss_reached, positive_decimal, require_decimal, require_exact
 from .sizing import cost_budget, require_model, size_exact
 
@@ -59,16 +59,23 @@ class EntryRequest:
     open_exposures: int
 
     def __post_init__(self) -> None:
-        _side(self.side)
-        lots = require_decimal(self.lots, "lots")
-        if not lots.is_finite():
-            raise RiskError(f"lots must be finite, got {lots}")
-        positive_decimal(self.entry_price, "entry_price", BadStop)
-        _optional_stop(self.stop_loss, "stop_loss")
-        if not is_int(self.open_exposures):
-            raise TypeError(f"open_exposures must be an int, not {type(self.open_exposures).__name__}")
-        if self.open_exposures < 0:
-            raise RiskError(f"open_exposures cannot be negative, got {self.open_exposures}")
+        validate_request(self)
+
+
+def validate_request(request: EntryRequest) -> EntryRequest:
+    """Type and domain of every request field; run at construction and again at use (pre-review F4)."""
+    require_exact(request, EntryRequest, "request")
+    _side(request.side)
+    lots = require_decimal(request.lots, "lots")
+    if not lots.is_finite():
+        raise RiskError(f"lots must be finite, got {lots}")
+    positive_decimal(request.entry_price, "entry_price", BadStop)
+    _optional_stop(request.stop_loss, "stop_loss")
+    if not is_int(request.open_exposures):
+        raise TypeError(f"open_exposures must be exactly int, not {type(request.open_exposures).__name__}")
+    if request.open_exposures < 0:
+        raise RiskError(f"open_exposures cannot be negative, got {request.open_exposures}")
+    return request
 
 
 @dataclass(frozen=True)
@@ -110,8 +117,8 @@ def check_entry(
     cost_per_lot: Decimal = Decimal("0"),
 ) -> GateDecision:
     """Every reason this entry may not be sent now; allowed only when there is none."""
-    require_exact(request, EntryRequest, "request")
-    require_exact(state, HaltState, "state")
+    validate_request(request)
+    validate_state(state)
     require_model(model)
     equity = positive_decimal(equity, "equity", BadEquity)
     budget = cost_budget(cost_per_lot)

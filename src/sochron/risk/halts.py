@@ -27,17 +27,23 @@ class HaltState:
     experiment_halted: bool
 
     def __post_init__(self) -> None:
-        require_policy(self.policy)
-        require_day(self.day)
-        positive_decimal(self.day_start_equity, "day_start_equity", BadEquity)
-        positive_decimal(self.experiment_start_equity, "experiment_start_equity", BadEquity)
-        for name in ("daily_halted", "experiment_halted"):
-            require_exact(getattr(self, name), bool, name)
+        validate_state(self)
+
+
+def validate_state(state: HaltState) -> HaltState:
+    """Type and domain of every state field; run at construction and again at use (pre-review F4)."""
+    require_exact(state, HaltState, "state")
+    require_policy(state.policy)
+    require_day(state.day)
+    positive_decimal(state.day_start_equity, "day_start_equity", BadEquity)
+    positive_decimal(state.experiment_start_equity, "experiment_start_equity", BadEquity)
+    for name in ("daily_halted", "experiment_halted"):
+        require_exact(getattr(state, name), bool, name)
+    return state
 
 
 def _require_state(state: object) -> HaltState:
-    require_exact(state, HaltState, "state")
-    return state
+    return validate_state(state)
 
 
 def _authorize(policy: RiskPolicy, authorized_by: object, reason: object) -> None:

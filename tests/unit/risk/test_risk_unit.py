@@ -280,6 +280,33 @@ def test_provenance_is_read_once_from_a_changing_mapping():
     assert unknowns(policy) == unknowns(H001_RISK)
 
 
+def test_gate_and_halts_revalidate_objects_mutated_after_construction():
+    # Security pre-review F4: object.__setattr__ after validation slipped past the gate.
+    from sochron.risk import BadEquity, BadStop
+
+    def mutated(obj, **fields):
+        copy = replace(obj)
+        for name, value in fields.items():
+            object.__setattr__(copy, name, value)
+        return copy
+
+    state = _start()
+    with pytest.raises(RiskError):
+        check_entry(mutated(REQUEST, side="buy"), Decimal("10000"), state, H001_COSTS)
+    with pytest.raises(RiskError):
+        check_entry(mutated(REQUEST, open_exposures=-5), Decimal("10000"), state, H001_COSTS)
+    with pytest.raises(RiskError):
+        check_entry(mutated(REQUEST, lots=Decimal("NaN")), Decimal("10000"), state, H001_COSTS)
+    with pytest.raises(BadStop):
+        check_entry(mutated(REQUEST, entry_price=Decimal("Infinity")), Decimal("10000"), state, H001_COSTS)
+    with pytest.raises(BadEquity):
+        check_entry(REQUEST, Decimal("10000"), mutated(state, day_start_equity=Decimal("NaN")), H001_COSTS)
+    with pytest.raises(BadEquity):
+        update_equity(mutated(state, experiment_start_equity=Decimal("-1")), Decimal("10000"), DAY)
+    with pytest.raises(TypeError):
+        restart_experiment(mutated(state, experiment_halted=1), Decimal("10000"), DAY, "owner", "x")
+
+
 def test_policy_fields_and_halt_state_validation():
     assert set(H001_RISK.provenance) == set(POLICY_FIELDS)
     with pytest.raises(TypeError):
