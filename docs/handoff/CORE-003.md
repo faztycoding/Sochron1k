@@ -811,3 +811,19 @@ Contract v1.4 (`5d939a3`) writes down the owner's tests-r2 choices (F1 faulthand
 harness, F3 policy revalidation at every use), the model domain from r1 F1, and the Codex budget of
 12 runs. For the reviewer's round 2: re-check F1–F3 only, plus whether the code matches the v1.4
 table rows.
+
+## Findings response (Claude Code), security pre-review r2
+
+Review `docs/reviews/CORE-003-security-pre-r2.md` (security-reviewer subagent, committed `cbf9399`).
+No Critical or High finding. Owner decisions 2026-10-22 10:5x for F10, F12, F13.
+
+| ID | Accept/Dispute | Commit | Evidence (command → result) |
+|----|----------------|--------|-----------------------------|
+| F9 Low | Accept | `2798532` | The provenance read is the only caller code validation can run, so it now runs once and first: `_check_policy` snapshots provenance before any other field and `unknowns` uses that snapshot; `validate_state` validates the policy first and pins `state.policy` by identity; `check_entry` validates the state before the request and `size_position` the policy before the model; `restart_experiment` rolls the day with an internal `_roll` instead of re-validating through `update_equity`. `-k caller_code` → before: each of 4 cases failed separately (allowed / plain ValueError / allowed with risk_per_trade 5 / swapped policy returned); after: 1 passed. |
+| F10 Low | Accept as a limitation (owner) | `9ad8095` | Comment corrected (refusal of oversized values is fast; in-bound extreme model grids can take tens of seconds). Contract v1.5 `5605ca8` binds it to E1 L3: the model only from MT5 `symbol_info`. No code change. |
+| F11 Low | Accept | `b9f0396` | `finite_bounded` checks `|adjusted()|` first, then counts digits in C (`plus()` in a precision-1000 context traps `Rounded` when there are more than 1,000 digits, trailing zeros included). `-k huge_coefficient` ("0." + 3×10⁷ digits, < 0.05 s) → before: FAIL 0.172 s (fix stashed); after: 1 passed. Probes: "0." + 2×10⁸ digits → BadEquity in 0.018 s; a 2×10⁸-digit integer → 0.0001 s. |
+| F12 Low (question) | Answered in the contract (owner) | `5605ca8` | v1.5 error-table row: `size_position` raises RiskError when exact lots need more than 1,000 digits; `check_entry` unaffected. Matches current behaviour; no code change. |
+| F13 Low (question) | E1 obligation (owner) | `5605ca8` | v1.5 adds E1 obligation L5: baseline equity from the MT5 account equity field, raw value journaled, halt on mismatch or unknown. No change in `sochron.risk`. |
+
+Full suite after these fixes: `uv run --offline pytest tests -q -p no:cacheprovider` → 656 passed,
+0 skipped. Locked tests untouched since `81322d9`.
