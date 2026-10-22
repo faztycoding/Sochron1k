@@ -61,7 +61,10 @@ def require_decimal(value: object, name: str) -> Decimal:
 
 
 # Size bound (contract v1.3, security pre-review F3): rational conversion builds 10**|exponent| and
-# runs gcds, so oversized values are refused before any conversion and the gate always answers fast.
+# runs gcds, so oversized values are refused before any conversion, and that refusal is fast.
+# In-bound extremes can still be slow: a model grid such as volume_step 1E-1100000 takes tens of
+# seconds (security pre-review r2 F10). The owner accepted this; E1 must build the model from
+# MT5 symbol_info and check it (contract E1 obligation L3).
 MAX_DIGITS = 1000
 MAX_ADJUSTED = 1_100_000
 
