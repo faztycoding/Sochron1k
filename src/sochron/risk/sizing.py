@@ -95,10 +95,8 @@ def size_exact(equity: Fraction, stop_distance: Fraction, model: CostModel, poli
 
 
 def grid_lots(steps: int, step: Decimal) -> Decimal:
-    """steps x step as an exact Decimal, built from digits so no context rounding applies."""
-    sign, digits, exponent = step.as_tuple()
-    coefficient = int("".join(str(d) for d in digits)) * steps
-    return Decimal((sign, tuple(int(c) for c in str(coefficient)), exponent))
+    """steps x step as an exact Decimal; int -> Decimal and the unbounded exact context avoid str(int) limits."""
+    return exact_product(Decimal(steps), step)
 
 
 def size_position(

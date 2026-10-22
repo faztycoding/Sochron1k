@@ -20,6 +20,7 @@ from sochron.risk import (
     restart_experiment,
     size_position,
     start_experiment,
+    unknowns,
     update_equity,
 )
 
@@ -246,6 +247,37 @@ def test_subclasses_of_value_types_are_refused():
     step_model = replace(H001_COSTS, volume_step=_Lots("0.01"))
     with pytest.raises(TypeError):
         size_position(Decimal("10000"), Decimal("12"), step_model, H001_RISK)
+
+
+def test_huge_lots_are_built_without_the_int_to_str_digit_limit():
+    # Security pre-review F2: grid_lots went through str(int) and hit Python's 4300-digit limit.
+    synthetic = Provenance("synthetic", DAY, "assumed")
+    big = replace(H001_COSTS, volume_max=Decimal("1E+5000"), provenance={**H001_COSTS.provenance, "volume_max": synthetic})
+    sized = size_position(Decimal("1E+5010"), Decimal("12"), big, H001_RISK)
+    assert (sized.lots, sized.reason) == (Decimal("1E+5000"), "capped_at_volume_max")
+
+
+def test_provenance_is_read_once_from_a_changing_mapping():
+    # Security pre-review F5: a Mapping that changed between iterations stored unvalidated records.
+    from collections.abc import Mapping
+
+    class Flipping(Mapping):
+        def __init__(self, good):
+            self.good, self.reads = dict(good), 0
+
+        def __getitem__(self, key):
+            self.reads += 1
+            return self.good[key] if self.reads <= len(self.good) else "not a Provenance"
+
+        def __iter__(self):
+            return iter(self.good)
+
+        def __len__(self):
+            return len(self.good)
+
+    policy = replace(H001_RISK, provenance=Flipping(H001_RISK.provenance))
+    assert all(type(record) is Provenance for record in policy.provenance.values())
+    assert unknowns(policy) == unknowns(H001_RISK)
 
 
 def test_policy_fields_and_halt_state_validation():

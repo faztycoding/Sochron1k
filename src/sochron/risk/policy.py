@@ -151,16 +151,18 @@ class RiskPolicy:
             raise BadPolicy("halt_clearers cannot repeat a name")
         if not isinstance(self.provenance, Mapping):
             raise TypeError(f"provenance must be a Mapping, not {type(self.provenance).__name__}")
-        keys = set(self.provenance)
+        # Read the caller's mapping once (security pre-review F5): validate and store that same copy.
+        snapshot = dict(self.provenance)
+        keys = set(snapshot)
         expected = set(POLICY_FIELDS)
         if keys != expected:
             raise BadPolicy(
                 f"provenance must cover exactly the 5 policy fields; missing {sorted(expected - keys)}, extra {sorted(keys - expected)}"
             )
-        for name, record in self.provenance.items():
+        for name, record in snapshot.items():
             if type(record) is not Provenance:
                 raise BadPolicy(f"provenance[{name!r}] must be exactly a Provenance")
-        object.__setattr__(self, "provenance", MappingProxyType(dict(self.provenance)))
+        object.__setattr__(self, "provenance", MappingProxyType(snapshot))
 
 
 def unknowns(policy: RiskPolicy) -> tuple[str, ...]:
