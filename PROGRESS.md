@@ -2,7 +2,7 @@
 Updated 2026-10-22 22:3x +07 by Claude Code (CORE-003 merged PR #11 → `8f370da`; ส่วนล่างของบรรทัดนี้เป็นสรุปเดิมของ 2026-10-21) · **CORE-001 timebase merged (PR #8 `b2eb69c`, CI success)** · งานบ้านหลัง merge บน `chore/CORE-001-post-merge`: patch AGENTS.md/CLAUDE.md ตาม D-006 (review `CORE-001-agents-r1` ไม่มี finding), ล้าง PROGRESS, อัปเดต SPEC/contracts/architecture · ถัดไป: contract CORE-002 costs (ร่างเสร็จ รอเจ้าของอนุมัติ) · ENV-1 รอเจ้าของเช่า VPS
 
 ## Current task
-**PLAN-001 · State: contracts drafted, รอเจ้าของอนุมัติ (2026-10-22 23:3x)** · branch `chore/PLAN-001-next-four-tasks` จาก main `2e3e03d` · เจ้าของสั่ง 23:0x "จัดการส่วนนั้นเลย เดี๋ยว vps จัดการหลังสุด" สำหรับ 4 งานที่ไม่ต้องรอ VPS:
+**PLAN-001 · State: เจ้าของอนุมัติ contracts ทั้ง 4 ฉบับ 2026-10-22 23:4x** (ทางที่แนะนำทุกข้อ: setup-uv ตรึง SHA + uv 0.13.0 + Python 3.12.15 · F26 คงกฎเดิม · **ขยายการสลับบทบาท**: OPS-001, FIX-001, CORE-004 ใช้ Claude session ใหม่เป็นผู้เขียน tests/patch และผู้ตรวจ จน Codex กลับมาหรือเจ้าของสั่งกลับ · FIX-002 รอ Codex เป็นผู้เขียน patch) · เดิม: contracts drafted 23:3x · branch `chore/PLAN-001-next-four-tasks` จาก main `2e3e03d` · เจ้าของสั่ง 23:0x "จัดการส่วนนั้นเลย เดี๋ยว vps จัดการหลังสุด" สำหรับ 4 งานที่ไม่ต้องรอ VPS:
 - `docs/contracts/OPS-001-python-ci.md` (High, Q6): job `python-tests` ใน `ci.yml` · ต้องเลือกวิธีติดตั้ง uv (แนะนำ `astral-sh/setup-uv` ตรึง SHA + 0.13.0) และ Python (แนะนำ 3.12.15)
 - `docs/contracts/FIX-001-architecture-side-effects.md` (High, Q6): ขยายด่าน architecture ตาม tests-r1 F5 (`time.localtime`, `os.urandom`, `uuid`, `subprocess`, `sys.stdout` ฯลฯ)
 - `docs/contracts/CORE-004-costs-hardening.md` (Standard): costs ปฏิเสธ input แบบเดียวกับ risk โดยผลของ input ที่ถูกต้องไม่เปลี่ยน

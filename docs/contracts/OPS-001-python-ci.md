@@ -1,7 +1,7 @@
 # TASK OPS-001 — ให้ CI รัน Python test suite บน Linux ทุก PR
 
 Version v1 (ร่าง 2026-10-22 23:1x) · Owner เจ้าของ repository · Parent PROGRESS "Not done yet": Python test job ใน CI · Handbook ch.21 (pinned actions) · Tier **High** · Branch `chore/OPS-001-python-ci`
-Status: draft (รอเจ้าของอนุมัติ)
+Status: **approved by owner 2026-10-22 23:4x** (acceptance และแผน; ทางเลือก (ก) = `astral-sh/setup-uv` ตรึง full SHA + `version: 0.13.0`, (ข) = uv-managed Python 3.12.15, (ค) = required check ตั้งโดยเจ้าของหลัง merge ถ้าต้องการ · ผู้เขียน patch = Claude session ใหม่ตามการสลับบทบาทระหว่าง Codex หมดโควตา)
 Hypothesis (research tasks): ไม่ใช่งานวิจัย
 
 ## Risk tier (Q1–Q6, one line each; unsure = yes)
@@ -72,7 +72,7 @@ High เพราะ Q6: เจ้าของอนุมัติแผน, pa
    - (ค) ต้องการให้ `python-tests` เป็น required check หรือไม่ (ตั้งใน GitHub settings โดยเจ้าของหลัง merge)
 
 ## Authorization (filled by the owner)
-- (รอเจ้าของ) Claude: contract, admission record, apply patch ตาม D-006, evidence, handoff, PROGRESS, push task branch · ผู้รับบท test author (Codex หรือ Claude session ใหม่ตามการสลับบทบาท): เขียน patch ของ `ci.yml`
+- เจ้าของอนุมัติ 2026-10-22 23:4x · Claude: contract, admission record, apply patch ตาม D-006, evidence, handoff, PROGRESS, push task branch · ผู้รับบท test author (Codex หรือ Claude session ใหม่ตามการสลับบทบาท): เขียน patch ของ `ci.yml`
 
 ## Budget
 1 session · 3 attempts ต่อปัญหาที่ไม่มีหลักฐานใหม่ · headless session ไม่เกิน 4 (patch author, fresh review, implementation review, สำรอง) · ไม่มีค่าใช้จ่ายเงิน (GitHub Actions ฟรีสำหรับ repo นี้ตามปริมาณปัจจุบัน)

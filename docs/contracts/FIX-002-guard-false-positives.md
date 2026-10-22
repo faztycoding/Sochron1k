@@ -1,7 +1,7 @@
 # TASK FIX-002 — guard-bash เลิกบล็อกคำสั่งที่ไม่อันตราย (false positives) โดยไม่เปิดช่องใหม่
 
 Version v1 (ร่าง 2026-10-22 23:3x) · Owner เจ้าของ repository · Parent D-007 ("Review when: เริ่มงานแก้ guard รอบถัดไป") · `docs/handoff/BOOT-001.md` และ `docs/reviews/BOOT-001-r5.md`, `-r7.md`, `-r11.md` ("the false-positive task") · Tier **High** · Branch `fix/FIX-002-guard-false-positives`
-Status: draft (รอเจ้าของอนุมัติ)
+Status: **approved by owner 2026-10-22 23:4x** (acceptance และแผน · (ก) F26 = คงกฎเดิม (ID ต้องมีขีดก่อนตัวเลข) จึงตัด P10 ออกจาก AC-01/AC-05 · (ข) ผู้เขียน patch = **Codex หลัง 2026-10-28 19:41** · (ค) ทำหลัง OPS-001, FIX-001, CORE-004)
 Hypothesis (research tasks): ไม่ใช่งานวิจัย
 
 ## Risk tier (Q1–Q6, one line each; unsure = yes)
@@ -81,7 +81,7 @@ guard-bash: exit 0 = อนุญาต, exit 2 = บล็อก (เหมื�
    - (ค) ลำดับ: ทำงานนี้หลัง OPS-001, FIX-001, CORE-004
 
 ## Authorization (filled by the owner)
-- (รอเจ้าของ) ผู้เขียน patch: ตาม (ข) · Claude: apply ตาม D-006, evidence, handoff, PROGRESS, push task branch, live check
+- เจ้าของอนุมัติ 2026-10-22 23:4x · ผู้เขียน patch (Codex): ตาม (ข) · Claude: apply ตาม D-006, evidence, handoff, PROGRESS, push task branch, live check
 
 ## Budget
 1–2 sessions · headless session ไม่เกิน 6 (author, pre-review, fresh review, adversarial review, สำรอง ×2) · 3 attempts ต่อปัญหาที่ไม่มีหลักฐานใหม่ · หยุดทันทีถ้าพบช่องโหว่ใหม่สองรอบติด (ตามบทเรียน D-007)

@@ -1,7 +1,7 @@
 # TASK FIX-001 — ด่านตรวจ architecture จับนาฬิกา, สุ่ม, process และ console ที่ยังหลุด
 
 Version v1 (ร่าง 2026-10-22 23:1x) · Owner เจ้าของ repository · Parent `docs/reviews/CORE-003-tests-r1.md` F5 (architecture checker gap) · AGENTS.md "One strategy implementation, a pure function … no I/O, clock" · Tier **High** · Branch `fix/FIX-001-architecture-side-effects`
-Status: draft (รอเจ้าของอนุมัติ)
+Status: **approved by owner 2026-10-22 23:4x** (acceptance และแผน · ผู้เขียน patch และผู้ตรวจ = Claude session ใหม่ตามการสลับบทบาทระหว่าง Codex หมดโควตา)
 Hypothesis (research tasks): ไม่ใช่งานวิจัย
 
 ## Risk tier (Q1–Q6, one line each; unsure = yes)
@@ -68,7 +68,7 @@ alias (`import time as t; t.localtime()`), `from os import urandom`, `from sys i
 5. Decisions needed from the owner: ไม่มี นอกจากผู้รับบท test author ระหว่างที่ Codex หมดโควตา
 
 ## Authorization (filled by the owner)
-- (รอเจ้าของ) ผู้รับบท test author: เขียน patch ของ `tests/architecture/test_imports.py` · Claude: apply ตาม D-006, evidence, handoff, PROGRESS, push task branch
+- เจ้าของอนุมัติ 2026-10-22 23:4x · ผู้รับบท test author: เขียน patch ของ `tests/architecture/test_imports.py` · Claude: apply ตาม D-006, evidence, handoff, PROGRESS, push task branch
 
 ## Budget
 1 session · headless session ไม่เกิน 3 (patch author, fresh review, สำรอง) · 3 attempts ต่อปัญหาที่ไม่มีหลักฐานใหม่

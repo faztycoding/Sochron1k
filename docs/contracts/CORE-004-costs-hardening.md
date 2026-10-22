@@ -1,7 +1,7 @@
 # TASK CORE-004 — ทำให้ `sochron.costs` ปฏิเสธ input ผิดแบบเดียวกับ `sochron.risk`
 
 Version v1 (ร่าง 2026-10-22 23:2x) · Owner เจ้าของ repository · Parent `docs/contracts/CORE-002-costs.md` (merged PR #10) · `docs/reviews/CORE-003-security-pre-r1.md` ข้อ "Not checked": costs มี Mapping TOCTOU และรับ subclass แบบเดียวกับที่ risk แก้แล้ว · `docs/contracts/CORE-003-risk.md` v1.9 (ขอบเขตของการป้องกัน) · Tier **Standard** · Branch `fix/CORE-004-costs-hardening`
-Status: draft (รอเจ้าของอนุมัติ)
+Status: **approved by owner 2026-10-22 23:4x** (acceptance และแผน · ผู้เขียน tests ที่ล็อกและผู้ตรวจ = Claude session ใหม่ตามการสลับบทบาทระหว่าง Codex หมดโควตา)
 Hypothesis (research tasks): ไม่ใช่งานวิจัย (ให้บริการ H001 ข้อ 6 Costs)
 
 ## Risk tier (Q1–Q6, one line each; unsure = yes)
@@ -70,7 +70,7 @@ subclass ที่ตอบ `is_finite`/`as_integer_ratio`/`==` หลอก · 
 5. Decisions needed from the owner: ไม่มี (เพดานใช้ค่าเดียวกับ risk; error ของแต่ละช่องตามตาราง) นอกจากผู้รับบท test author/reviewer ระหว่างที่ Codex หมดโควตา
 
 ## Authorization (filled by the owner)
-- (รอเจ้าของ) Claude: `src/sochron/costs/**`, unit tests, evidence, handoff, PROGRESS, apply patch ตาม D-006, push task branch · ผู้รับบท test author: tests ที่ล็อกของ CORE-004 · ผู้รับบท reviewer: review
+- เจ้าของอนุมัติ 2026-10-22 23:4x · Claude: `src/sochron/costs/**`, unit tests, evidence, handoff, PROGRESS, apply patch ตาม D-006, push task branch · ผู้รับบท test author: tests ที่ล็อกของ CORE-004 · ผู้รับบท reviewer: review
 
 ## Budget
 1–2 sessions · headless session ไม่เกิน 6 (tests, fresh review, review ×2, สำรอง ×2) · 3 attempts ต่อปัญหาที่ไม่มีหลักฐานใหม่
