@@ -64,10 +64,18 @@ class _Exact:
 
 
 def require_model(model: object) -> CostModel:
-    """Exactly a CostModel whose fields read by risk are exactly Decimal (costs accepts subclasses)."""
+    """Exactly a CostModel whose fields read by risk are exactly Decimal (costs accepts subclasses).
+
+    The domain is checked again at every use (review CORE-003-r1 F1): a field set to zero or below
+    after construction, or volume_max below volume_min, would let sizing exceed the risk budget.
+    """
     require_exact(model, CostModel, "model")
     for name in ("contract_size", "volume_min", "volume_step", "volume_max"):
         finite_bounded(require_decimal(getattr(model, name), f"model.{name}"), f"model.{name}", RiskError)
+    if model.contract_size <= 0 or model.volume_step <= 0 or model.volume_min <= 0:
+        raise RiskError("model.contract_size, volume_step and volume_min must be positive")
+    if model.volume_max < model.volume_min:
+        raise RiskError("model.volume_max must not be below volume_min")
     return model
 
 

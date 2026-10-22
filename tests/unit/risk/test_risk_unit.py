@@ -351,6 +351,35 @@ def test_oversized_numbers_are_refused_before_rational_conversion():
     assert size_position(Decimal("10000"), Decimal("12"), H001_COSTS, H001_RISK, Decimal("0E-5000000")).lots == Decimal("0.02")
 
 
+def test_corrupted_model_domain_is_refused_at_use():
+    # Review CORE-003-r1 F1: a model field set to zero or below after construction let the
+    # gate allow 1 lot (risk 1,200) against a budget of 25.
+    def corrupted(**fields):
+        model = replace(H001_COSTS)
+        for name, value in fields.items():
+            object.__setattr__(model, name, value)
+        return model
+
+    bad_models = [
+        corrupted(volume_step=Decimal("-0.01")),
+        corrupted(volume_step=Decimal("0")),
+        corrupted(contract_size=Decimal("-100")),
+        corrupted(contract_size=Decimal("0")),
+        corrupted(volume_min=Decimal("-0.01")),
+        corrupted(volume_min=Decimal("0")),
+        corrupted(volume_min=Decimal("0.5"), volume_max=Decimal("0.1")),
+    ]
+    one_lot = EntryRequest("long", Decimal("1"), Decimal("4012.90"), Decimal("4000.90"), 0)
+    halted = update_equity(_start(), Decimal("9800"), DAY)
+    for model in bad_models:
+        with pytest.raises(RiskError):
+            size_position(Decimal("10000"), Decimal("12"), model, H001_RISK)
+        with pytest.raises(RiskError):
+            _gate(one_lot, Decimal("10000"), _start(), model, Decimal("10"))
+        with pytest.raises(RiskError):  # an earlier refusal must not hide the bad model
+            _gate(one_lot, Decimal("9800"), halted, model)
+
+
 def test_policy_fields_and_halt_state_validation():
     assert set(H001_RISK.provenance) == set(POLICY_FIELDS)
     with pytest.raises(TypeError):
