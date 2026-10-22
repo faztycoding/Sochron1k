@@ -169,3 +169,40 @@ def test_ac07_timebase_and_core_import_boundaries_and_no_clock_or_io():
                 continue
             findings.extend(f"{relative}: {violation}" for violation in violations)
     assert not findings, "AC-07: forbidden dependencies or side effects:\n" + "\n".join(findings)
+
+
+def _inspect_costs_source(source, current_package):
+    """Reuse CORE-001 checks; inspect the entire AST for costs-only prohibitions."""
+    findings = _inspect_source(source, "sochron.costs", current_package)
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Name) and node.id == "float":
+            findings.append(f"line {node.lineno}: forbidden float name")
+        if isinstance(node, ast.Constant) and type(node.value) is float:
+            findings.append(f"line {node.lineno}: forbidden float literal")
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if _within(alias.name, "random"):
+                    findings.append(f"line {node.lineno}: forbidden random import")
+        if isinstance(node, ast.ImportFrom) and node.level == 0:
+            if _within(node.module or "", "random"):
+                findings.append(f"line {node.lineno}: forbidden random import")
+    return sorted(set(findings))
+
+
+def test_ac07_costs_import_boundaries_no_clock_io_random_or_float():
+    source_root = Path.cwd() / "src"
+    directory = source_root / "sochron" / "costs"
+    assert directory.is_dir(), f"AC-07: {directory} does not exist; implementation missing"
+    files = sorted(directory.rglob("*.py"))
+    assert files, f"AC-07: {directory} contains no Python source; implementation missing"
+    findings = []
+    for path in files:
+        relative = path.relative_to(source_root)
+        current_package = ".".join(relative.parent.parts)
+        try:
+            violations = _inspect_costs_source(path.read_text(encoding="utf-8-sig"), current_package)
+        except SyntaxError as error:
+            findings.append(f"{relative}:{error.lineno}: invalid Python syntax: {error.msg}")
+            continue
+        findings.extend(f"{relative}: {violation}" for violation in violations)
+    assert not findings, "AC-07: forbidden dependencies or side effects:\n" + "\n".join(findings)
