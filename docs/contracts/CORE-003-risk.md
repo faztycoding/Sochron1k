@@ -1,7 +1,7 @@
 # TASK CORE-003 — risk: sizing, halt state และ risk gate แบบ pure (ค่า risk policy เป็น parameter ที่มีที่มา)
 
 Version v1.2 (v1 ร่าง 2026-10-22 07:0x → v1.1 07:3x แก้ตาม `docs/reviews/CORE-003-contract-r1.md` F1–F10 และคำตัดสินของเจ้าของ 3 ข้อ → v1.2 07:4x แก้ F6, F11, F12 ของ `CORE-003-contract-r2.md` และเปิดเผยทางเลือก (ช)) · Owner เจ้าของ repository · Parent SPEC ข้อ 6 (Risk policy [A]) และ Q-04 · `docs/architecture.md` ข้อ 8 แถว `risk`, ข้อ 9 ("ไม่มีคำสั่งไหนถูกส่งโดยไม่ผ่าน risk gate") และข้อ 13a แถว E1 · AGENTS.md "Trading and research invariants" · Tier **High** · Branch `feat/CORE-003-risk`
-Status: draft (รอเจ้าของอนุมัติแผนและ acceptance 7 ข้อ; Tier High จึงต้องอนุมัติก่อนลงมือ) · เจ้าของเลือก 2026-10-22: ร่างแบบรับค่าเป็น parameter ติดป้าย assumed (ไม่รอ Q-04) · คำตัดสินของเจ้าของ 2026-10-22 07:2x หลัง contract review r1: (1) restart ในวันเดียวกันคง daily halt ไว้ (2) sizing ตั้งต้นไม่รวมต้นทุนให้ตรง H001 แต่รองรับ `cost_per_lot`; E1 เป็นผู้เลือก (3) Tier High
+Status: **approved by owner 2026-10-22 07:4x** (แผน, acceptance 7 ข้อ และทางเลือก (ก)–(ช) ทั้งหมด อนุมัติในแชท Claude หลัง contract reviews r1–r3 ปิดครบ) · เจ้าของเลือก 2026-10-22: ร่างแบบรับค่าเป็น parameter ติดป้าย assumed (ไม่รอ Q-04) · คำตัดสินของเจ้าของ 2026-10-22 07:2x หลัง contract review r1: (1) restart ในวันเดียวกันคง daily halt ไว้ (2) sizing ตั้งต้นไม่รวมต้นทุนให้ตรง H001 แต่รองรับ `cost_per_lot`; E1 เป็นผู้เลือก (3) Tier High
 Hypothesis (research tasks): ไม่ใช่งานวิจัย แต่ให้บริการ H001 (`docs/hypotheses/H001-m15-momentum-breakout.md`, commit `0c392a9`) ข้อ 3 Position size และ "1 สถานะต่อครั้ง" · ไม่มีการรันข้อมูลตลาด
 
 ## Risk tier (Q1–Q6, one line each; unsure = yes)
@@ -201,8 +201,8 @@ sochron.risk
    - ยังต้องอนุมัติพร้อม acceptance (Claude เลือกแนวระมัดระวัง เจ้าของ veto ได้): (ก) restart ได้เฉพาะเมื่อการทดลอง halt อยู่ (ข) `start_experiment` ต้องมีชื่อในรายการผู้มีสิทธิ์และเหตุผลเช่นกัน (ค) baseline ต้นวันไทย = equity แรกที่ผู้เรียกส่งมา และผู้เรียกต้องส่งค่า ณ ขอบวัน (ง) equity ≤ 0 เป็น `BadEquity` และผู้เรียกต้องถือเป็นการหยุด (จ) `halt_clearers = ("owner",)` สถานะ unknown · ค่า 0.25% / 0.75% / 2% / 1 คงเป็น assumed จนกว่าตอบ Q-04 (ฉ) กติกา halt ใช้กับการวิจัย R1 หรือไม่ ให้ contract R1 เป็นผู้ระบุ (ช) experiment halt คงค้างแม้ equity ฟื้นหรือขึ้นวันใหม่ ปลดได้เฉพาะ restart ที่มีผู้มีสิทธิ์พร้อมเหตุผล และ restart ตั้ง experiment_start_equity เป็น equity ณ ตอน restart เพื่อเริ่มงบขาดทุนการทดลองใหม่ (เช่น restart ที่ 9800 → งบ 2% ถัดไป = 196 ไม่ใช่ 200; restart ที่ 10500 → 210) · daily halt ก็คงค้างแม้ equity ฟื้นภายในวันเดียวกัน (contract review r2)
 
 ## Authorization (filled by the owner)
-- Claude Code / เขียน `src/sochron/risk/**`, `tests/unit/risk/**`, evidence, handoff, PROGRESS / repo นี้ / จนกว่า CORE-003 จะ done — รอเจ้าของกรอก
-- Codex / เขียน tests ที่ล็อกเป็น patch ใน `docs/proposals/` / `tests/acceptance/CORE-003`, `tests/golden/CORE-003`, `tests/architecture` / งานนี้ — รอเจ้าของกรอก
+- Claude Code / เขียน `src/sochron/risk/**`, `tests/unit/risk/**`, evidence, handoff, PROGRESS / repo นี้ / จนกว่า CORE-003 จะ done — เจ้าของอนุมัติพร้อม contract 2026-10-22 07:4x
+- Codex / เขียน tests ที่ล็อกเป็น patch ใน `docs/proposals/` / `tests/acceptance/CORE-003`, `tests/golden/CORE-003`, `tests/architecture` / งานนี้ — เจ้าของอนุมัติพร้อม contract 2026-10-22 07:4x (ขั้นตอน test author ปกติ)
 - ไม่มีการเชื่อม terminal หรือบัญชีใดๆ ในงานนี้ · ไม่มี dependency ใหม่
 
 ## Budget
@@ -214,8 +214,9 @@ sochron.risk
 ## DoR status / missing items / next action
 - ครบ: ค่า [A] ใน SPEC ข้อ 6, สูตร sizing และ worked example ใน H001 ข้อ 3, `sochron.costs` (CORE-002) ให้ `Provenance`/`CostModel`/`CONTEXT` · contract review r1 (`docs/reviews/CORE-003-contract-r1.md`, F1–F10) → แก้ใน v1.1 · คำตัดสินของเจ้าของ 3 ข้อ
 - ครบเพิ่ม: contract re-review r2 (`docs/reviews/CORE-003-contract-r2.md`) ปิด F1–F5, F7–F10 · F6 ส่วนที่เหลือ, F11 (High), F12 แก้ใน v1.2 · ทางเลือก (ช) เปิดเผยแล้ว
-- ขาด: Codex contract re-review r3 (F6, F11, F12) · การอนุมัติแผนและ acceptance จากเจ้าของ (High) · tests จาก Codex · CORE-002 merge (branch นี้ต่อจาก `feat/CORE-002-costs`)
-- next action: Codex re-review r3 → เจ้าของอนุมัติ → tests
+- ครบเพิ่ม: contract re-review r3 (`docs/reviews/CORE-003-contract-r3.md`) ปิด F6, F11, F12 → ready for test authoring · เจ้าของอนุมัติแผน, acceptance และ (ก)–(ช) 2026-10-22 07:4x
+- ขาด: tests จาก Codex · CORE-002 merge (branch นี้ต่อจาก `feat/CORE-002-costs`)
+- next action: Codex `$write-acceptance-tests CORE-003` เป็น patch → Claude apply ตาม D-006 + ตรวจ hash + session ใหม่ตรวจ → commit red
 
 ## Done scope
 implementation (ทดสอบผ่านบนเครื่อง, review ปิด, เจ้าของรัน demo, merge แล้ว) · ไม่รวมการผูกตัวตนผู้ปลด halt, การบันทึก/กู้ halt state และการผูกผล gate กับคำสั่งจริง (E1)
