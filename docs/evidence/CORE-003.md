@@ -29,7 +29,7 @@ Contract: `docs/contracts/CORE-003-risk.md` v1.9 (v1.4–v1.9 ตามที่
 | `src/sochron/risk/halts.py` | `HaltState` (ผูก policy), `start_experiment`, `update_equity`, `restart_experiment` (เฉพาะตอน halt, ผู้มีสิทธิ์ + เหตุผล, คงหยุดรายวัน) |
 | `src/sochron/risk/gate.py` | `EntryRequest`, `GateDecision`, `check_entry(request, equity, day, state, model, cost_per_lot)` (ตรวจ input ครบก่อน, `stale_state`, sizing ใหม่จากคำขอ, เกณฑ์จาก equity ปัจจุบัน), `check_stop_change` |
 | `src/sochron/risk/errors.py` | `RiskError(ValueError)` และ `BadPolicy`, `BadEquity`, `BadStop`, `BadHaltClear`, `TimeReversal` |
-| `tests/unit/risk/test_risk_unit.py` | unit tests ของผู้ทำ 22 ข้อ (รวม regression ของ security pre-review F1/F2/F4/F5 และ v1.3) |
+| `tests/unit/risk/test_risk_unit.py` | unit tests ของผู้ทำ 30 ข้อ (รวม regression ของ security pre-review F1/F2/F4/F5/F9/F11, v1.3, review r1 F1–F3, review r2 F4/F5 และการอ่าน provenance ครั้งเดียว) |
 
 การตัดสินระหว่างทำ:
 - ค่าแสดงผลไม่แปลงผ่านจำนวนเต็มขนาดใหญ่ (ร่างแรกใช้ ~9.5 วินาทีต่อครั้งที่เลขชี้กำลังสุดขีด → คำนวณแบบ exact ใน context ไม่จำกัด แล้ว `create_decimal` ครั้งเดียว)
