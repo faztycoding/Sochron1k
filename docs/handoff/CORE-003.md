@@ -792,3 +792,22 @@ Please look hard at (Codex cross-agent review, Tier High):
 - Any path where a refusal reason is collected before every argument and field is validated.
 - Any way to obtain `allowed=True` for a state not rolled to the request day, at or beyond a
   loss threshold, above the sized lots, or with a widened or missing stop.
+
+## Findings response (Claude Code), review r1
+
+Review `docs/reviews/CORE-003-r1.md` (Codex, HEAD `60dfbfd`, committed `8d4e30b`). One commit per
+finding; each regression is an implementer unit test that failed before the fix and passes after.
+
+| ID | Accept/Dispute | Commit | Evidence (command → result) |
+|----|----------------|--------|-----------------------------|
+| F1 Medium | Accept | `1c804a6` | `require_model` re-checks the CostModel construction domain at every use (contract_size, volume_step, volume_min > 0; volume_max >= volume_min) → RiskError. `uv run --offline pytest tests/unit/risk -q -p no:cacheprovider -k corrupted_model` → before: FAIL `DID NOT RAISE RiskError`; after: 1 passed. Covers 7 corrupted models through size_position, the gate, and the gate on a halted state. |
+| F2 Medium | Accept | `0bf8311` | `exact_sum` skips zero terms (adding zero changes no exact sum); zero stays valid with any exponent, no new bound. `-k zero_budget` → before: FAIL `MemoryError` at `policy.py:123`; after: 1 passed (`-0`, `0E-999999999999999999`, `-0E-999999999999999999`, `0E+999999999999999999` equal the plain-zero decision; the gate allows). |
+| F3 Low | Accept | `b959fea` | The two count messages no longer echo the int; no int bound added, conversion limit untouched. `-k huge_negative` → before: FAIL `ValueError: Exceeds the limit (4300 digits)` at `gate.py:87`; after: 1 passed (construction and use-time; ordinary -1 and 0 keep their errors). |
+
+Full suite after the three fixes: `uv run --offline pytest tests -q -p no:cacheprovider` → 654 passed,
+0 skipped (2.68 s). Locked tests untouched since `81322d9`.
+
+Contract v1.4 (`5d939a3`) writes down the owner's tests-r2 choices (F1 faulthandler in the timing
+harness, F3 policy revalidation at every use), the model domain from r1 F1, and the Codex budget of
+12 runs. For the reviewer's round 2: re-check F1–F3 only, plus whether the code matches the v1.4
+table rows.
