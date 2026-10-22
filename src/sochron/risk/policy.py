@@ -170,7 +170,8 @@ def _check_policy(policy: RiskPolicy) -> dict[str, Provenance]:
     if not is_int(policy.max_open_exposures):
         raise TypeError(f"max_open_exposures must be an int, not {type(policy.max_open_exposures).__name__}")
     if policy.max_open_exposures < 1:
-        raise BadPolicy(f"max_open_exposures must be at least 1, got {policy.max_open_exposures}")
+        # The value is not echoed: a huge int exceeds Python's int-to-str limit (review r1 F3).
+        raise BadPolicy("max_open_exposures must be at least 1")
     require_exact(policy.halt_clearers, tuple, "halt_clearers")
     for name in policy.halt_clearers:
         require_exact(name, str, "a halt_clearers name")

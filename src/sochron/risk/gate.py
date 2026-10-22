@@ -84,7 +84,8 @@ def validate_request(request: EntryRequest) -> EntryRequest:
     if not is_int(request.open_exposures):
         raise TypeError(f"open_exposures must be exactly int, not {type(request.open_exposures).__name__}")
     if request.open_exposures < 0:
-        raise RiskError(f"open_exposures cannot be negative, got {request.open_exposures}")
+        # The value is not echoed: a huge int exceeds Python's int-to-str limit (review r1 F3).
+        raise RiskError("open_exposures cannot be negative")
     return request
 
 

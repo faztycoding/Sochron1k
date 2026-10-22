@@ -390,6 +390,32 @@ def test_zero_budget_with_any_exponent_sizes_like_zero():
         assert _gate(REQUEST, Decimal("10000"), _start(), H001_COSTS, Decimal(zero)).allowed
 
 
+def test_huge_negative_counts_raise_the_contract_errors():
+    # Review CORE-003-r1 F3: formatting -(10**5000) into the message hit Python's int-to-str
+    # limit, so a plain ValueError replaced RiskError / BadPolicy.
+    from sochron.risk import BadPolicy
+
+    huge = -(10**5000)
+    with pytest.raises(RiskError) as caught:
+        EntryRequest("long", Decimal("0.02"), Decimal("4012.90"), Decimal("4000.90"), huge)
+    assert isinstance(caught.value, RiskError)
+    with pytest.raises(BadPolicy):
+        replace(H001_RISK, max_open_exposures=huge)
+    request = replace(REQUEST)
+    object.__setattr__(request, "open_exposures", huge)
+    with pytest.raises(RiskError):
+        _gate(request, Decimal("10000"), _start(), H001_COSTS)
+    policy = replace(H001_RISK)
+    state = start_experiment(Decimal("10000"), DAY, policy, "owner", "unit test")
+    object.__setattr__(policy, "max_open_exposures", huge)
+    with pytest.raises(BadPolicy):
+        _gate(REQUEST, Decimal("10000"), state, H001_COSTS)
+    with pytest.raises(RiskError):  # ordinary negatives keep their errors
+        EntryRequest("long", Decimal("0.02"), Decimal("4012.90"), Decimal("4000.90"), -1)
+    with pytest.raises(BadPolicy):
+        replace(H001_RISK, max_open_exposures=0)
+
+
 def test_policy_fields_and_halt_state_validation():
     assert set(H001_RISK.provenance) == set(POLICY_FIELDS)
     with pytest.raises(TypeError):
