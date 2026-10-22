@@ -129,15 +129,17 @@ def check_entry(
     cost_per_lot: Decimal = Decimal("0"),
 ) -> GateDecision:
     """Every reason this entry may not be sent on this Thai day; allowed only when there is none."""
+    # The state (with its policy) is validated first: reading the policy's provenance is the only
+    # caller code validation can run, so everything else is read after it (security pre-review r2 F9).
+    validate_state(state)
+    policy = state.policy  # pinned by validate_state
     validate_request(request)
     equity = positive_decimal(equity, "equity", BadEquity)
     require_day(day)
-    validate_state(state)
     require_model(model)
     budget = cost_budget(cost_per_lot)
     if day < state.day:
         raise TimeReversal(f"day {day} is before the state's day {state.day}")
-    policy = state.policy
     reasons: set[str] = set()
     if day > state.day:
         reasons.add("stale_state")  # the caller did not roll the state with update_equity first

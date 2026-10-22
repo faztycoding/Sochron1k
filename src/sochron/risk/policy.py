@@ -174,7 +174,14 @@ class RiskPolicy:
 
 
 def _check_policy(policy: RiskPolicy) -> dict[str, Provenance]:
-    """Type and domain of every policy field; returns the one copy of provenance it validated."""
+    """Type and domain of every policy field; returns the one copy of provenance it validated.
+
+    Provenance is read first and only once: a Mapping planted after construction is the only caller
+    code validation can run, so every other field is read after it (security pre-review r2 F9).
+    """
+    if not isinstance(policy.provenance, Mapping):
+        raise TypeError(f"provenance must be a Mapping, not {type(policy.provenance).__name__}")
+    snapshot = dict(policy.provenance)
     for name in _FRACTION_FIELDS:
         value = finite_bounded(require_decimal(getattr(policy, name), name), name, BadPolicy)
         if not 0 < value < 1:
@@ -193,9 +200,6 @@ def _check_policy(policy: RiskPolicy) -> dict[str, Provenance]:
         raise BadPolicy("halt_clearers cannot hold an empty or blank name")
     if len(set(policy.halt_clearers)) != len(policy.halt_clearers):
         raise BadPolicy("halt_clearers cannot repeat a name")
-    if not isinstance(policy.provenance, Mapping):
-        raise TypeError(f"provenance must be a Mapping, not {type(policy.provenance).__name__}")
-    snapshot = dict(policy.provenance)
     keys = set(snapshot)
     expected = set(POLICY_FIELDS)
     if keys != expected:
@@ -217,8 +221,9 @@ def validate_policy(policy: object) -> RiskPolicy:
 
 def unknowns(policy: RiskPolicy) -> tuple[str, ...]:
     """Names of the policy fields whose provenance status is assumed or unknown, sorted."""
-    validate_policy(policy)
-    return tuple(sorted(name for name, p in policy.provenance.items() if p.status in ("assumed", "unknown")))
+    require_exact(policy, RiskPolicy, "policy")
+    snapshot = _check_policy(policy)  # the one validated read; provenance is not read again
+    return tuple(sorted(name for name, p in snapshot.items() if p.status in ("assumed", "unknown")))
 
 
 _SPEC6 = "SPEC.md section 6 Risk policy [A]"

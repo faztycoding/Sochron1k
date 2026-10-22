@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from .errors import BadEquity, BadHaltClear, TimeReversal
+from .errors import BadEquity, BadHaltClear, RiskError, TimeReversal
 from .policy import RiskPolicy, loss_reached, positive_decimal, require_day, require_exact
 from .sizing import require_policy
 
@@ -31,14 +31,21 @@ class HaltState:
 
 
 def validate_state(state: HaltState) -> HaltState:
-    """Type and domain of every state field; run at construction and again at use (pre-review F4)."""
+    """Type and domain of every state field; run at construction and again at use (pre-review F4).
+
+    The policy is validated first, because reading its provenance is the only caller code validation
+    can run; every other field is read after it, and the policy object is pinned (pre-review r2 F9).
+    """
     require_exact(state, HaltState, "state")
-    require_policy(state.policy)
+    policy = state.policy
+    require_policy(policy)
     require_day(state.day)
     positive_decimal(state.day_start_equity, "day_start_equity", BadEquity)
     positive_decimal(state.experiment_start_equity, "experiment_start_equity", BadEquity)
     for name in ("daily_halted", "experiment_halted"):
         require_exact(getattr(state, name), bool, name)
+    if state.policy is not policy:
+        raise RiskError("state.policy was replaced while the state was being validated")
     return state
 
 
@@ -64,14 +71,8 @@ def start_experiment(equity: Decimal, day: date, policy: RiskPolicy, authorized_
     return HaltState(policy, day, equity, equity, False, False)
 
 
-def update_equity(state: HaltState, equity: Decimal, day: date) -> HaltState:
-    """Roll the state to this Thai day and equity; latches never clear here except daily on a later day."""
-    state = _require_state(state)
-    equity = positive_decimal(equity, "equity", BadEquity)
-    require_day(day)
-    if day < state.day:
-        raise TimeReversal(f"day {day} is before the state's day {state.day}")
-    policy = state.policy
+def _roll(state: HaltState, policy: RiskPolicy, equity: Decimal, day: date) -> tuple[Decimal, bool, bool]:
+    """Daily baseline and both latches after this equity on this day; inputs are already validated."""
     if day == state.day:
         day_start = state.day_start_equity
         daily = state.daily_halted or loss_reached(day_start, equity, policy.daily_loss_limit)
@@ -81,18 +82,35 @@ def update_equity(state: HaltState, equity: Decimal, day: date) -> HaltState:
     experiment = state.experiment_halted or loss_reached(
         state.experiment_start_equity, equity, policy.experiment_loss_limit
     )
-    return HaltState(policy, day, day_start, state.experiment_start_equity, daily, experiment)
+    return day_start, daily, experiment
 
 
-def restart_experiment(state: HaltState, equity: Decimal, day: date, authorized_by: str, reason: str) -> HaltState:
-    """Clear a halted experiment by an authorized name with a reason; the day's daily halt stays."""
+def update_equity(state: HaltState, equity: Decimal, day: date) -> HaltState:
+    """Roll the state to this Thai day and equity; latches never clear here except daily on a later day."""
     state = _require_state(state)
+    policy = state.policy  # pinned by validate_state; no caller code runs after it
     equity = positive_decimal(equity, "equity", BadEquity)
     require_day(day)
     if day < state.day:
         raise TimeReversal(f"day {day} is before the state's day {state.day}")
-    _authorize(state.policy, authorized_by, reason)
+    day_start, daily, experiment = _roll(state, policy, equity, day)
+    return HaltState(policy, day, day_start, state.experiment_start_equity, daily, experiment)
+
+
+def restart_experiment(state: HaltState, equity: Decimal, day: date, authorized_by: str, reason: str) -> HaltState:
+    """Clear a halted experiment by an authorized name with a reason; the day's daily halt stays.
+
+    It rolls the day with _roll, not update_equity, so the state is validated once and the policy it
+    validated is the one bound to the result (security pre-review r2 F9).
+    """
+    state = _require_state(state)
+    policy = state.policy
+    equity = positive_decimal(equity, "equity", BadEquity)
+    require_day(day)
+    if day < state.day:
+        raise TimeReversal(f"day {day} is before the state's day {state.day}")
+    _authorize(policy, authorized_by, reason)
     if not state.experiment_halted:
         raise BadHaltClear("only a halted experiment can be restarted")
-    rolled = update_equity(state, equity, day)
-    return HaltState(state.policy, rolled.day, rolled.day_start_equity, equity, rolled.daily_halted, False)
+    day_start, daily, _ = _roll(state, policy, equity, day)
+    return HaltState(policy, day, day_start, equity, daily, False)

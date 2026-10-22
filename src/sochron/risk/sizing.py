@@ -123,8 +123,8 @@ def size_position(
     cost_per_lot: Decimal = Decimal("0"),
 ) -> SizeDecision:
     """Lots for one entry by the H001 formula, with every decision taken in exact arithmetic."""
+    require_policy(policy)  # first: its provenance read is the only caller code (pre-review r2 F9)
     require_model(model)
-    require_policy(policy)
     equity = positive_decimal(equity, "equity", BadEquity)
     stop_distance = positive_decimal(stop_distance, "stop_distance", BadStop)
     budget = cost_budget(cost_per_lot)

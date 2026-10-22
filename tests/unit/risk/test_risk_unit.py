@@ -432,6 +432,65 @@ def test_huge_coefficient_is_refused_without_counting_digits_one_by_one():
     assert time.perf_counter() - started < 0.05
 
 
+class _Hook:
+    """A valid provenance Mapping whose keys() runs caller code, planted after construction."""
+
+    def __init__(self, good, action):
+        self.good, self.action, self.calls = dict(good), action, 0
+
+    def __getitem__(self, key):
+        return self.good[key]
+
+    def __iter__(self):
+        return iter(self.good)
+
+    def __len__(self):
+        return len(self.good)
+
+    def keys(self):
+        self.calls += 1
+        self.action(self.calls)
+        return self.good.keys()
+
+
+def _plant(policy, action):
+    from collections.abc import Mapping
+
+    Mapping.register(_Hook)
+    object.__setattr__(policy, "provenance", _Hook(H001_RISK.provenance, action))
+
+
+def test_caller_code_in_provenance_cannot_undo_use_time_validation():
+    # Security pre-review r2 F9: the hook ran after the request was validated, so it could turn a
+    # wrong-side stop into side "buy", lots into NaN, or swap state.policy for an unvalidated one.
+    wrong_side = EntryRequest("long", Decimal("0.02"), Decimal("4012.90"), Decimal("4024.90"), 0)
+    state = start_experiment(Decimal("10000"), DAY, replace(H001_RISK), "owner", "unit test")
+    _plant(state.policy, lambda n: object.__setattr__(wrong_side, "side", "buy"))
+    with pytest.raises(RiskError):
+        check_entry(wrong_side, Decimal("10000"), DAY, state, H001_COSTS)
+
+    request = replace(REQUEST)
+    state = start_experiment(Decimal("10000"), DAY, replace(H001_RISK), "owner", "unit test")
+    _plant(state.policy, lambda n: object.__setattr__(request, "lots", Decimal("NaN")))
+    with pytest.raises(RiskError):
+        check_entry(request, Decimal("10000"), DAY, state, H001_COSTS)
+
+    evil = replace(H001_RISK)
+    object.__setattr__(evil, "risk_per_trade", Decimal("5"))
+    one_lot = EntryRequest("long", Decimal("1"), Decimal("4012.90"), Decimal("4000.90"), 0)
+    state = start_experiment(Decimal("10000"), DAY, replace(H001_RISK), "owner", "unit test")
+    _plant(state.policy, lambda n: object.__setattr__(state, "policy", evil))
+    with pytest.raises(RiskError):  # before the fix: allowed, sized with risk_per_trade 5
+        check_entry(one_lot, Decimal("10000"), DAY, state, H001_COSTS)
+
+    # restart must keep the policy it validated, even if the hook swaps it on a later read
+    policy = replace(H001_RISK)
+    halted = update_equity(start_experiment(Decimal("10000"), DAY, policy, "owner", "unit test"), Decimal("9800"), DAY)
+    other = replace(H001_RISK, risk_per_trade=Decimal("0.5"))
+    _plant(policy, lambda n: n == 2 and object.__setattr__(halted, "policy", other))
+    assert restart_experiment(halted, Decimal("9800"), DAY, "owner", "reviewed").policy is policy
+
+
 def test_policy_fields_and_halt_state_validation():
     assert set(H001_RISK.provenance) == set(POLICY_FIELDS)
     with pytest.raises(TypeError):
