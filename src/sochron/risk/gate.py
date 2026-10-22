@@ -3,19 +3,30 @@
 check_entry re-sizes from the request itself (current equity, |entry - stop|, model, budget and
 the policy bound to the state) and compares both loss thresholds against the current equity as
 well as the stored latches, so neither a stale sizing nor a stale state can let a trade through.
-It returns every reason to refuse; it never changes the state it is given.
+It also takes the request's Thai day and refuses a state that was not rolled to that day
+(contract v1.3). It returns every reason to refuse; it never changes the state it is given.
 """
 
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from fractions import Fraction
 from typing import Literal
 
 from sochron.costs import CostModel
 
-from .errors import BadEquity, BadStop, RiskError
+from .errors import BadEquity, BadStop, RiskError, TimeReversal
 from .halts import HaltState, validate_state
-from .policy import exact, is_int, loss_reached, positive_decimal, require_decimal, require_exact
+from .policy import (
+    exact,
+    finite_bounded,
+    is_int,
+    loss_reached,
+    positive_decimal,
+    require_day,
+    require_decimal,
+    require_exact,
+)
 from .sizing import cost_budget, require_model, size_exact
 
 Side = Literal["long", "short"]
@@ -28,6 +39,7 @@ ENTRY_REASONS = frozenset(
         "lots_not_on_grid",
         "max_exposure",
         "missing_stop_loss",
+        "stale_state",
         "stop_loss_wrong_side",
     }
 )
@@ -66,9 +78,7 @@ def validate_request(request: EntryRequest) -> EntryRequest:
     """Type and domain of every request field; run at construction and again at use (pre-review F4)."""
     require_exact(request, EntryRequest, "request")
     _side(request.side)
-    lots = require_decimal(request.lots, "lots")
-    if not lots.is_finite():
-        raise RiskError(f"lots must be finite, got {lots}")
+    finite_bounded(require_decimal(request.lots, "lots"), "lots", RiskError)
     positive_decimal(request.entry_price, "entry_price", BadStop)
     _optional_stop(request.stop_loss, "stop_loss")
     if not is_int(request.open_exposures):
@@ -112,18 +122,24 @@ def _on_grid(lots: Fraction, model: CostModel) -> bool:
 def check_entry(
     request: EntryRequest,
     equity: Decimal,
+    day: date,
     state: HaltState,
     model: CostModel,
     cost_per_lot: Decimal = Decimal("0"),
 ) -> GateDecision:
-    """Every reason this entry may not be sent now; allowed only when there is none."""
+    """Every reason this entry may not be sent on this Thai day; allowed only when there is none."""
     validate_request(request)
+    equity = positive_decimal(equity, "equity", BadEquity)
+    require_day(day)
     validate_state(state)
     require_model(model)
-    equity = positive_decimal(equity, "equity", BadEquity)
     budget = cost_budget(cost_per_lot)
+    if day < state.day:
+        raise TimeReversal(f"day {day} is before the state's day {state.day}")
     policy = state.policy
     reasons: set[str] = set()
+    if day > state.day:
+        reasons.add("stale_state")  # the caller did not roll the state with update_equity first
     if state.daily_halted or loss_reached(state.day_start_equity, equity, policy.daily_loss_limit):
         reasons.add("daily_halt")
     if state.experiment_halted or loss_reached(state.experiment_start_equity, equity, policy.experiment_loss_limit):

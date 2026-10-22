@@ -736,3 +736,59 @@ Delivery state: test proposal implemented; patch applicability, bytes, oracles
 and expected-red behavior verified locally with the limitations above. CORE-003
 v1.3 acceptance is FAIL, not verified/merged/deployed. Next action: Claude applies
 via D-006, verifies both hash pairs, obtains fresh-session review, then commits.
+
+## Implementation v1.3 (Claude Code), 2026-10-22
+
+Order followed since the first implementation (`ab23325`): security-reviewer pre-review
+(`docs/reviews/CORE-003-security-pre-r1.md`, `737632b`) → fixes F1 `e1a095b` (exact types),
+F2/F5 `d7a312c` (exact huge lots, provenance read once), F4 `0c00d92` (revalidation at use),
+each with a regression that failed before and passed after → owner chose F3 bound, F6 day,
+F7 E1-only → contract v1.3 (`07856b9`, `e414246`) → Codex contract reviews r4, r5 (F13, F14
+closed, `fcf77c5`) → Codex tests r2 patch applied via D-006 (both hash pairs matched, reverse
+check passed), fresh-session review `docs/reviews/CORE-003-tests-r2.md` (ready to commit red),
+committed red at `81322d9` → v1.3 implementation in the commit that adds this section.
+
+- `policy.py`: `finite_bounded` (finite, at most 1,000 coefficient digits, non-zero
+  `|adjusted()| <= 1_100_000`, checked before any rational conversion, the slot's own error,
+  value not echoed); `exact_reduce`; `validate_policy` re-runs every `RiskPolicy` field check
+  (the constructor and every use share `_check_policy`), so a policy changed with
+  `object.__setattr__` after construction is refused wherever it is used.
+- `sizing.py`: `require_policy` = `validate_policy`; every Decimal read is bounded
+  (`cost_per_lot` → BadPolicy, the four model fields and SizeDecision fields → RiskError);
+  `grid_lots` removes trailing zeros exactly when a huge step count would exceed 1,000 digits.
+- `gate.py`: `check_entry(request, equity, day, state, model, cost_per_lot=Decimal("0"))`;
+  every argument and every request/state field (nested policy included) is validated before
+  any reason is collected; `day < state.day` → TimeReversal, `day > state.day` → reason
+  `stale_state`, other reasons evaluated as usual.
+- `halts.py`: unchanged; it gets the bound and the policy revalidation through
+  `positive_decimal` and `require_policy`.
+- `tests/unit/risk/test_risk_unit.py`: 22 tests; the 23 v1.2 `check_entry` call sites go
+  through `_gate`, which passes `state.day`; new tests for `stale_state`/TimeReversal and for
+  oversized numbers.
+- A scratch dry run of the r2 locked tests (read in place from a scratch working directory)
+  first failed 151 rows, all on a policy changed after construction (round 5 item 5 and
+  tests-r2 F3); `validate_policy` closed them.
+
+Checks (2026-10-22 +07, Windows 11, CPython 3.12.15 via uv):
+
+| Command | Result | Time |
+|---|---|---|
+| `uv run --offline pytest tests -q -p no:cacheprovider` (under an outer `timeout 300`) | PASS: 651 passed, 0 skipped, 2.68 s, no deselect | 10:02:46 |
+| `uv run --offline pytest "tests/acceptance/CORE-003/test_risk_acceptance.py::test_ac06_extreme_equity_rejection_deadline" -q -s -p no:cacheprovider` | PASS: BadEquity after 0.000036 s | 10:03 |
+| `-k oversized -s` timing lines | 236 timed rejections, slowest 0.000366 s | 10:03 |
+| `bash scripts/controls/red-flags.sh origin/main` | exit 0; 2 groups: one more intentional `type: ignore[arg-type]` (negative unit test passing a str day) plus prose; lint words in prose | 10:04 |
+| `node scripts/controls/check-locked-paths.mjs origin/main` | FAIL as expected: the 3 Codex-authored locked test files need the PR label | 10:04 |
+| `git diff --check`; `git diff 81322d9 -- tests/acceptance tests/golden tests/architecture` | PASS; empty | 10:04 |
+
+Open for the owner (from tests-r2): F1 Medium, the contract's daemon-thread watchdog cannot
+stop a regression stuck in one GIL-holding call (the suite then hangs instead of failing;
+it never passes falsely); F3 Low, confirm in the contract that a policy changed after
+construction is revalidated at every entry point (the implementation already does).
+Codex follow-ups: tests-r2 F2, F4-F6; tests-r1 F5 architecture-checker gap.
+
+Please look hard at (Codex cross-agent review, Tier High):
+- Any input that reaches `Fraction(...)`, `as_integer_ratio` or a display computation
+  without passing `finite_bounded` first.
+- Any path where a refusal reason is collected before every argument and field is validated.
+- Any way to obtain `allowed=True` for a state not rolled to the request day, at or beyond a
+  loss threshold, above the sized lots, or with a widened or missing stop.

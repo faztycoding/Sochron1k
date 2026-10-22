@@ -15,14 +15,18 @@ from sochron.costs import CostModel
 
 from .errors import BadEquity, BadPolicy, BadStop, RiskError
 from .policy import (
+    MAX_DIGITS,
     RiskPolicy,
+    exact_reduce,
     display,
     exact,
     exact_product,
     exact_sum,
+    finite_bounded,
     positive_decimal,
     require_decimal,
     require_exact,
+    validate_policy,
 )
 
 Reason = Literal["ok", "below_min_volume", "capped_at_volume_max"]
@@ -41,9 +45,7 @@ class SizeDecision:
 
     def __post_init__(self) -> None:
         for name in ("lots", "risk_money", "risk_per_lot", "actual_risk"):
-            value = require_decimal(getattr(self, name), name)
-            if not value.is_finite():
-                raise RiskError(f"{name} must be finite, got {value}")
+            finite_bounded(require_decimal(getattr(self, name), name), name, RiskError)
         require_exact(self.reason, str, "reason")
         if self.reason not in SIZE_REASONS:
             raise RiskError(f"unknown sizing reason {self.reason!r}")
@@ -65,19 +67,18 @@ def require_model(model: object) -> CostModel:
     """Exactly a CostModel whose fields read by risk are exactly Decimal (costs accepts subclasses)."""
     require_exact(model, CostModel, "model")
     for name in ("contract_size", "volume_min", "volume_step", "volume_max"):
-        require_decimal(getattr(model, name), f"model.{name}")
+        finite_bounded(require_decimal(getattr(model, name), f"model.{name}"), f"model.{name}", RiskError)
     return model
 
 
 def require_policy(policy: object) -> RiskPolicy:
-    require_exact(policy, RiskPolicy, "policy")
-    return policy
+    return validate_policy(policy)
 
 
 def cost_budget(value: object) -> Decimal:
-    budget = require_decimal(value, "cost_per_lot")
-    if not budget.is_finite() or budget < 0:
-        raise BadPolicy(f"cost_per_lot must be finite and not negative, got {budget}")
+    budget = finite_bounded(require_decimal(value, "cost_per_lot"), "cost_per_lot", BadPolicy)
+    if budget < 0:
+        raise BadPolicy(f"cost_per_lot cannot be negative, got {budget}")
     return budget
 
 
@@ -95,8 +96,15 @@ def size_exact(equity: Fraction, stop_distance: Fraction, model: CostModel, poli
 
 
 def grid_lots(steps: int, step: Decimal) -> Decimal:
-    """steps x step as an exact Decimal; int -> Decimal and the unbounded exact context avoid str(int) limits."""
-    return exact_product(Decimal(steps), step)
+    """steps x step as an exact Decimal; int -> Decimal and the unbounded exact context avoid str(int) limits.
+
+    A huge step count carries many trailing zeros; they are removed exactly when the coefficient
+    would exceed the size bound, so the value stays representable (1E+5000, not 1000...0).
+    """
+    lots = exact_product(Decimal(steps), step)
+    if len(lots.as_tuple().digits) > MAX_DIGITS:
+        lots = exact_reduce(lots)
+    return lots
 
 
 def size_position(

@@ -33,6 +33,11 @@ def _start(equity="10000"):
     return start_experiment(Decimal(equity), DAY, H001_RISK, "owner", "unit test")
 
 
+def _gate(request, equity, state, model, cost_per_lot=Decimal("0")):
+    """check_entry on the state's own Thai day (v1.3 added the day argument)."""
+    return check_entry(request, equity, state.day, state, model, cost_per_lot)
+
+
 def test_actual_risk_never_exceeds_the_budget_on_a_grid_of_inputs():
     for equity in ("100", "1000", "5000", "10000", "123456.78", "9599.9999999999999999999999999"):
         for stop in ("0.10", "1", "3.33", "12", "20", "55.5"):
@@ -56,7 +61,7 @@ def test_callers_context_is_untouched_by_every_entry_point():
         state = _start()
         state = update_equity(state, Decimal("9925.01"), DAY)
         size_position(Decimal("9599.9999999999999999999999999"), Decimal("12"), H001_COSTS, H001_RISK)
-        check_entry(REQUEST, Decimal("9925.01"), state, H001_COSTS)
+        _gate(REQUEST, Decimal("9925.01"), state, H001_COSTS)
         assert not any(caller.flags.values())
         assert caller.prec == 3
 
@@ -68,7 +73,7 @@ def test_states_are_never_mutated():
     restarted = restart_experiment(halted, Decimal("9800"), DAY, "owner", "reviewed")
     assert halted.experiment_halted is True
     assert restarted.policy is halted.policy is H001_RISK
-    check_entry(REQUEST, Decimal("9800"), state, H001_COSTS)
+    _gate(REQUEST, Decimal("9800"), state, H001_COSTS)
     assert state == _start()
 
 
@@ -82,21 +87,21 @@ def test_restart_rebases_the_experiment_budget_to_the_restart_equity():
 
 def test_gate_uses_current_equity_even_with_a_stale_clear_state():
     stale = _start()
-    assert check_entry(REQUEST, Decimal("9925"), stale, H001_COSTS).reasons == ("daily_halt",)
-    assert check_entry(REQUEST, Decimal("9925.01"), stale, H001_COSTS).allowed is True
+    assert _gate(REQUEST, Decimal("9925"), stale, H001_COSTS).reasons == ("daily_halt",)
+    assert _gate(REQUEST, Decimal("9925.01"), stale, H001_COSTS).allowed is True
 
 
 def test_gate_resizes_from_the_request_stop_and_short_side():
     short = EntryRequest("short", Decimal("0.02"), Decimal("4000.90"), Decimal("4012.90"), 0)
-    assert check_entry(short, Decimal("10000"), _start(), H001_COSTS).allowed is True
+    assert _gate(short, Decimal("10000"), _start(), H001_COSTS).allowed is True
     wider = replace(short, stop_loss=Decimal("4020.90"))
-    assert check_entry(wider, Decimal("10000"), _start(), H001_COSTS).reasons == ("lots_exceed_sized",)
+    assert _gate(wider, Decimal("10000"), _start(), H001_COSTS).reasons == ("lots_exceed_sized",)
 
 
 def test_cost_budget_reduces_lots_in_the_gate_too():
     request = replace(REQUEST, lots=Decimal("0.02"))
     budget = Decimal("100")  # 1300 per lot: 25 / 1300 = 0.0192 -> 0.01
-    assert check_entry(request, Decimal("10000"), _start(), H001_COSTS, budget).reasons == ("lots_exceed_sized",)
+    assert _gate(request, Decimal("10000"), _start(), H001_COSTS, budget).reasons == ("lots_exceed_sized",)
 
 
 def test_overflow_and_inexact_underflow_are_risk_errors_with_short_messages():
@@ -130,13 +135,13 @@ def test_gate_and_halts_follow_the_bound_policy_not_h001_values():
     # Coverage suggested by the owner's Codex tests review (2026-10-22): catch hard-coded H001 limits.
     wide = _custom_policy(daily_loss_limit=Decimal("0.01"), experiment_loss_limit=Decimal("0.05"), risk_per_trade=Decimal("0.005"))
     state = start_experiment(Decimal("10000"), DAY, wide, "owner", "custom limits")
-    assert check_entry(REQUEST, Decimal("9925"), state, H001_COSTS).allowed is True  # 75 < 100
-    assert check_entry(REQUEST, Decimal("9900"), state, H001_COSTS).reasons == ("daily_halt",)  # 100 = 1%
+    assert _gate(REQUEST, Decimal("9925"), state, H001_COSTS).allowed is True  # 75 < 100
+    assert _gate(REQUEST, Decimal("9900"), state, H001_COSTS).reasons == ("daily_halt",)  # 100 = 1%
     assert update_equity(state, Decimal("9500"), DAY).experiment_halted is True  # 500 = 5%
     assert size_position(Decimal("10000"), Decimal("12.00"), H001_COSTS, wide).lots == Decimal("0.04")  # R 50
     two = _custom_policy(max_open_exposures=2)
     two_state = start_experiment(Decimal("10000"), DAY, two, "owner", "two exposures")
-    assert check_entry(replace(REQUEST, open_exposures=1), Decimal("10000"), two_state, H001_COSTS).allowed is True
+    assert _gate(replace(REQUEST, open_exposures=1), Decimal("10000"), two_state, H001_COSTS).allowed is True
 
 
 def test_sizing_and_gate_respect_a_non_default_volume_step():
@@ -151,11 +156,11 @@ def test_sizing_and_gate_respect_a_non_default_volume_step():
     sized = size_position(Decimal("15000"), Decimal("12"), model, H001_RISK)  # R 37.5 / 1200 = 0.03125
     assert (sized.lots, sized.reason) == (Decimal("0.02"), "ok")
     state = start_experiment(Decimal("15000"), DAY, H001_RISK, "owner", "step 0.02")
-    assert check_entry(replace(REQUEST, lots=Decimal("0.03")), Decimal("15000"), state, model).reasons == (
+    assert _gate(replace(REQUEST, lots=Decimal("0.03")), Decimal("15000"), state, model).reasons == (
         "lots_exceed_sized",
         "lots_not_on_grid",
     )
-    assert check_entry(replace(REQUEST, lots=Decimal("0.02")), Decimal("15000"), state, model).allowed is True
+    assert _gate(replace(REQUEST, lots=Decimal("0.02")), Decimal("15000"), state, model).allowed is True
 
 
 def _split_baselines():
@@ -181,13 +186,13 @@ def test_same_day_updates_use_each_baseline_separately():
 def test_gate_thresholds_use_each_baseline_and_the_bound_limits():
     # Review CORE-003-tests-r1 F2: gate states with different baselines and non-H001 loss limits.
     state = _split_baselines()
-    assert check_entry(REQUEST, Decimal("9850"), state, H001_COSTS).allowed is True
-    assert check_entry(REQUEST, Decimal("9825.75"), state, H001_COSTS).reasons == ("daily_halt",)
-    assert check_entry(REQUEST, Decimal("9800"), state, H001_COSTS).reasons == ("daily_halt", "experiment_halt")
+    assert _gate(REQUEST, Decimal("9850"), state, H001_COSTS).allowed is True
+    assert _gate(REQUEST, Decimal("9825.75"), state, H001_COSTS).reasons == ("daily_halt",)
+    assert _gate(REQUEST, Decimal("9800"), state, H001_COSTS).reasons == ("daily_halt", "experiment_halt")
     loose = _custom_policy(daily_loss_limit=Decimal("0.02"), experiment_loss_limit=Decimal("0.03"))
     loose_state = update_equity(start_experiment(Decimal("10000"), DAY, loose, "owner", "x"), Decimal("9900"), NEXT)
-    assert check_entry(REQUEST, Decimal("9800"), loose_state, H001_COSTS).allowed is True  # 100 < 198, 200 < 300
-    assert check_entry(REQUEST, Decimal("9700"), loose_state, H001_COSTS).reasons == ("daily_halt", "experiment_halt")
+    assert _gate(REQUEST, Decimal("9800"), loose_state, H001_COSTS).allowed is True  # 100 < 198, 200 < 300
+    assert _gate(REQUEST, Decimal("9700"), loose_state, H001_COSTS).reasons == ("daily_halt", "experiment_halt")
 
 
 def test_cap_boundary_is_not_a_cap_and_volume_max_is_on_the_grid():
@@ -196,7 +201,7 @@ def test_cap_boundary_is_not_a_cap_and_volume_max_is_on_the_grid():
     assert (sized.lots, sized.reason) == (Decimal("200"), "ok")
     state = start_experiment(Decimal("800000"), DAY, H001_RISK, "owner", "cap boundary")
     at_max = EntryRequest("long", Decimal("200"), Decimal("4012.90"), Decimal("4012.80"), 0)
-    assert check_entry(at_max, Decimal("800000"), state, H001_COSTS).allowed is True
+    assert _gate(at_max, Decimal("800000"), state, H001_COSTS).allowed is True
 
 
 class _Lots(Decimal):
@@ -292,19 +297,58 @@ def test_gate_and_halts_revalidate_objects_mutated_after_construction():
 
     state = _start()
     with pytest.raises(RiskError):
-        check_entry(mutated(REQUEST, side="buy"), Decimal("10000"), state, H001_COSTS)
+        _gate(mutated(REQUEST, side="buy"), Decimal("10000"), state, H001_COSTS)
     with pytest.raises(RiskError):
-        check_entry(mutated(REQUEST, open_exposures=-5), Decimal("10000"), state, H001_COSTS)
+        _gate(mutated(REQUEST, open_exposures=-5), Decimal("10000"), state, H001_COSTS)
     with pytest.raises(RiskError):
-        check_entry(mutated(REQUEST, lots=Decimal("NaN")), Decimal("10000"), state, H001_COSTS)
+        _gate(mutated(REQUEST, lots=Decimal("NaN")), Decimal("10000"), state, H001_COSTS)
     with pytest.raises(BadStop):
-        check_entry(mutated(REQUEST, entry_price=Decimal("Infinity")), Decimal("10000"), state, H001_COSTS)
+        _gate(mutated(REQUEST, entry_price=Decimal("Infinity")), Decimal("10000"), state, H001_COSTS)
     with pytest.raises(BadEquity):
-        check_entry(REQUEST, Decimal("10000"), mutated(state, day_start_equity=Decimal("NaN")), H001_COSTS)
+        _gate(REQUEST, Decimal("10000"), mutated(state, day_start_equity=Decimal("NaN")), H001_COSTS)
     with pytest.raises(BadEquity):
         update_equity(mutated(state, experiment_start_equity=Decimal("-1")), Decimal("10000"), DAY)
     with pytest.raises(TypeError):
         restart_experiment(mutated(state, experiment_halted=1), Decimal("10000"), DAY, "owner", "x")
+
+
+def test_gate_refuses_a_state_not_rolled_to_the_request_day():
+    # Contract v1.3 / security pre-review F6: a missed rollover must not let today's loss through.
+    from sochron.risk import TimeReversal
+
+    state = _start()  # day 22, baseline 10000
+    assert check_entry(REQUEST, Decimal("10000"), NEXT, state, H001_COSTS).reasons == ("stale_state",)
+    halted = update_equity(state, Decimal("9925"), DAY)
+    assert check_entry(REQUEST, Decimal("9925"), NEXT, halted, H001_COSTS).reasons == ("daily_halt", "stale_state")
+    rolled = update_equity(state, Decimal("10100"), NEXT)  # today's baseline 10100: limit 75.75
+    assert check_entry(REQUEST, Decimal("10020"), NEXT, rolled, H001_COSTS).reasons == ("daily_halt",)
+    with pytest.raises(TimeReversal):
+        check_entry(REQUEST, Decimal("10000"), date(2026, 10, 21), state, H001_COSTS)
+    with pytest.raises(TypeError):
+        check_entry(REQUEST, Decimal("10000"), "2026-10-22", state, H001_COSTS)  # type: ignore[arg-type]
+
+
+def test_oversized_numbers_are_refused_before_rational_conversion():
+    # Contract v1.3 / security pre-review F3: huge exponents or coefficients must fail fast.
+    import time
+
+    from sochron.risk import BadEquity, BadPolicy, BadStop
+
+    started = time.perf_counter()
+    with pytest.raises(BadEquity):
+        size_position(Decimal("1E-999999999"), Decimal("12"), H001_COSTS, H001_RISK)
+    with pytest.raises(BadEquity):
+        _gate(REQUEST, Decimal("1E+10000000"), _start(), H001_COSTS)
+    with pytest.raises(BadStop):
+        size_position(Decimal("10000"), Decimal("1" + "0" * 1000), H001_COSTS, H001_RISK)
+    with pytest.raises(RiskError):
+        EntryRequest("long", Decimal("1E-10000000"), Decimal("4012.90"), Decimal("4000.90"), 0)
+    with pytest.raises(BadPolicy):
+        size_position(Decimal("10000"), Decimal("12"), H001_COSTS, H001_RISK, Decimal("7" * 1001))
+    assert time.perf_counter() - started < 1
+    # The edges stay valid: 1,000 digits, |adjusted| of 1,100,000, and a zero with any exponent.
+    assert size_position(Decimal("1" * 1000), Decimal("12"), H001_COSTS, H001_RISK).reason == "capped_at_volume_max"
+    assert size_position(Decimal("10000"), Decimal("12"), H001_COSTS, H001_RISK, Decimal("0E-5000000")).lots == Decimal("0.02")
 
 
 def test_policy_fields_and_halt_state_validation():

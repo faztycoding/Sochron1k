@@ -59,11 +59,26 @@ def require_decimal(value: object, name: str) -> Decimal:
     return value
 
 
+# Size bound (contract v1.3, security pre-review F3): rational conversion builds 10**|exponent| and
+# runs gcds, so oversized values are refused before any conversion and the gate always answers fast.
+MAX_DIGITS = 1000
+MAX_ADJUSTED = 1_100_000
+
+
+def finite_bounded(value: Decimal, name: str, error: type[RiskError]) -> Decimal:
+    """A finite Decimal within the supported size, or the slot's domain error (value not echoed)."""
+    if not value.is_finite():
+        raise error(f"{name} must be finite")
+    if len(value.as_tuple().digits) > MAX_DIGITS or (not value.is_zero() and abs(value.adjusted()) > MAX_ADJUSTED):
+        raise error(f"{name} is outside the supported size: at most {MAX_DIGITS} digits and |adjusted exponent| <= {MAX_ADJUSTED}")
+    return value
+
+
 def positive_decimal(value: object, name: str, error: type[RiskError]) -> Decimal:
-    """A finite Decimal greater than zero, or the given domain error."""
-    number = require_decimal(value, name)
-    if not number.is_finite() or number <= 0:
-        raise error(f"{name} must be finite and positive, got {number}")
+    """A finite, bounded Decimal greater than zero, or the given domain error."""
+    number = finite_bounded(require_decimal(value, name), name, error)
+    if number <= 0:
+        raise error(f"{name} must be positive, got {number}")
     return number
 
 
@@ -109,6 +124,12 @@ def exact_sum(*terms: Decimal) -> Decimal:
         return result
 
 
+def exact_reduce(value: Decimal) -> Decimal:
+    """The same value with trailing zeros of the coefficient removed, exactly."""
+    with localcontext(_EXACT):
+        return value.normalize()
+
+
 def display(value: Decimal) -> Decimal:
     """Round an exact value once into CONTEXT; overflow or inexact underflow is a RiskError."""
     context = CONTEXT.copy()
@@ -132,42 +153,55 @@ class RiskPolicy:
     provenance: Mapping[str, Provenance]
 
     def __post_init__(self) -> None:
-        for name in _FRACTION_FIELDS:
-            value = require_decimal(getattr(self, name), name)
-            if not value.is_finite() or not 0 < value < 1:
-                raise BadPolicy(f"{name} must be a finite fraction strictly between 0 and 1, got {value}")
-        if not is_int(self.max_open_exposures):
-            raise TypeError(f"max_open_exposures must be an int, not {type(self.max_open_exposures).__name__}")
-        if self.max_open_exposures < 1:
-            raise BadPolicy(f"max_open_exposures must be at least 1, got {self.max_open_exposures}")
-        require_exact(self.halt_clearers, tuple, "halt_clearers")
-        for name in self.halt_clearers:
-            require_exact(name, str, "a halt_clearers name")
-        if not self.halt_clearers:
-            raise BadPolicy("halt_clearers must name at least one clearer")
-        if any(not name.strip() for name in self.halt_clearers):
-            raise BadPolicy("halt_clearers cannot hold an empty or blank name")
-        if len(set(self.halt_clearers)) != len(self.halt_clearers):
-            raise BadPolicy("halt_clearers cannot repeat a name")
-        if not isinstance(self.provenance, Mapping):
-            raise TypeError(f"provenance must be a Mapping, not {type(self.provenance).__name__}")
         # Read the caller's mapping once (security pre-review F5): validate and store that same copy.
-        snapshot = dict(self.provenance)
-        keys = set(snapshot)
-        expected = set(POLICY_FIELDS)
-        if keys != expected:
-            raise BadPolicy(
-                f"provenance must cover exactly the 5 policy fields; missing {sorted(expected - keys)}, extra {sorted(keys - expected)}"
-            )
-        for name, record in snapshot.items():
-            if type(record) is not Provenance:
-                raise BadPolicy(f"provenance[{name!r}] must be exactly a Provenance")
+        snapshot = _check_policy(self)
         object.__setattr__(self, "provenance", MappingProxyType(snapshot))
+
+
+def _check_policy(policy: RiskPolicy) -> dict[str, Provenance]:
+    """Type and domain of every policy field; returns the one copy of provenance it validated."""
+    for name in _FRACTION_FIELDS:
+        value = finite_bounded(require_decimal(getattr(policy, name), name), name, BadPolicy)
+        if not 0 < value < 1:
+            raise BadPolicy(f"{name} must be a fraction strictly between 0 and 1, got {value}")
+    if not is_int(policy.max_open_exposures):
+        raise TypeError(f"max_open_exposures must be an int, not {type(policy.max_open_exposures).__name__}")
+    if policy.max_open_exposures < 1:
+        raise BadPolicy(f"max_open_exposures must be at least 1, got {policy.max_open_exposures}")
+    require_exact(policy.halt_clearers, tuple, "halt_clearers")
+    for name in policy.halt_clearers:
+        require_exact(name, str, "a halt_clearers name")
+    if not policy.halt_clearers:
+        raise BadPolicy("halt_clearers must name at least one clearer")
+    if any(not name.strip() for name in policy.halt_clearers):
+        raise BadPolicy("halt_clearers cannot hold an empty or blank name")
+    if len(set(policy.halt_clearers)) != len(policy.halt_clearers):
+        raise BadPolicy("halt_clearers cannot repeat a name")
+    if not isinstance(policy.provenance, Mapping):
+        raise TypeError(f"provenance must be a Mapping, not {type(policy.provenance).__name__}")
+    snapshot = dict(policy.provenance)
+    keys = set(snapshot)
+    expected = set(POLICY_FIELDS)
+    if keys != expected:
+        raise BadPolicy(
+            f"provenance must cover exactly the 5 policy fields; missing {sorted(expected - keys)}, extra {sorted(keys - expected)}"
+        )
+    for name, record in snapshot.items():
+        if type(record) is not Provenance:
+            raise BadPolicy(f"provenance[{name!r}] must be exactly a Provenance")
+    return snapshot
+
+
+def validate_policy(policy: object) -> RiskPolicy:
+    """Exactly a RiskPolicy whose fields still hold; run again at every use (pre-review F4)."""
+    require_exact(policy, RiskPolicy, "policy")
+    _check_policy(policy)
+    return policy
 
 
 def unknowns(policy: RiskPolicy) -> tuple[str, ...]:
     """Names of the policy fields whose provenance status is assumed or unknown, sorted."""
-    require_exact(policy, RiskPolicy, "policy")
+    validate_policy(policy)
     return tuple(sorted(name for name, p in policy.provenance.items() if p.status in ("assumed", "unknown")))
 
 
