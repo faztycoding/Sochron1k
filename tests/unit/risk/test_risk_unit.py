@@ -416,6 +416,22 @@ def test_huge_negative_counts_raise_the_contract_errors():
         replace(H001_RISK, max_open_exposures=0)
 
 
+def test_huge_coefficient_is_refused_without_counting_digits_one_by_one():
+    # Security pre-review r2 F11: len(as_tuple().digits) built a tuple of every digit, so 2x10**8
+    # digits took over 1 s. 3x10**7 digits took about 0.17 s that way; the bound needs ~0.005 s.
+    import time
+
+    from sochron.risk import BadEquity
+
+    # Small exponent (adjusted -1), so only the digit count can refuse it. Built before timing,
+    # as the contract's timing rule says.
+    huge = Decimal("0." + "7" * 30_000_000)
+    started = time.perf_counter()
+    with pytest.raises(BadEquity):
+        size_position(huge, Decimal("12"), H001_COSTS, H001_RISK)
+    assert time.perf_counter() - started < 0.05
+
+
 def test_policy_fields_and_halt_state_validation():
     assert set(H001_RISK.provenance) == set(POLICY_FIELDS)
     with pytest.raises(TypeError):

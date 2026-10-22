@@ -19,6 +19,7 @@ from decimal import (
     Inexact,
     InvalidOperation,
     Overflow,
+    Rounded,
     Underflow,
     localcontext,
 )
@@ -65,12 +66,23 @@ MAX_DIGITS = 1000
 MAX_ADJUSTED = 1_100_000
 
 
+# Counts coefficient digits in C (security pre-review r2 F11): plus() in this context signals Rounded
+# exactly when the coefficient has more than MAX_DIGITS digits (trailing zeros included), without the
+# per-digit tuple that len(as_tuple().digits) builds. Only Rounded is trapped; flags are never read.
+_DIGITS = Context(prec=MAX_DIGITS, rounding=ROUND_HALF_EVEN, Emax=MAX_EMAX, Emin=MIN_EMIN, traps=[Rounded])
+
+
 def finite_bounded(value: Decimal, name: str, error: type[RiskError]) -> Decimal:
     """A finite Decimal within the supported size, or the slot's domain error (value not echoed)."""
     if not value.is_finite():
         raise error(f"{name} must be finite")
-    if len(value.as_tuple().digits) > MAX_DIGITS or (not value.is_zero() and abs(value.adjusted()) > MAX_ADJUSTED):
-        raise error(f"{name} is outside the supported size: at most {MAX_DIGITS} digits and |adjusted exponent| <= {MAX_ADJUSTED}")
+    too_big = f"{name} is outside the supported size: at most {MAX_DIGITS} digits and |adjusted exponent| <= {MAX_ADJUSTED}"
+    if not value.is_zero() and abs(value.adjusted()) > MAX_ADJUSTED:
+        raise error(too_big)
+    try:
+        _DIGITS.plus(value)
+    except Rounded:
+        raise error(too_big) from None
     return value
 
 
