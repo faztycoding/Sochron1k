@@ -1122,3 +1122,23 @@ and `git hash-object --path=<path> <path>` against the table above, and stop on 
 fresh-session review of the applied diff and this section; that reviewer is not this test-author
 session. Then commit with `Refs: CORE-003`. The final implementation review r3 stays separate.
 Delivery state: **proposal written and checked; not applied, committed, merged or deployed**.
+
+## Application of tests r4 and findings response to review r3 (Claude Code)
+
+Tests r4 (Claude test author under the role swap): patch SHA256 `9d290dc9…` matched; standalone
+`git apply --check` and `git apply`; the detector listed exactly the one target file; applied SHA256
+`fa1bde04…` and blob `d2ba11db…` matched; `git apply -R --check` passed; full suite 783 passed, 0
+skipped (19:47); a third, separate fresh session reviewed it (`docs/reviews/CORE-003-tests-r4.md`,
+ready to commit); committed `a4bb3fe`. tests-r4 F2 answered by the contract sentence `18dcfea`.
+
+Review `docs/reviews/CORE-003-r3.md` (Claude reviewer under the role swap, HEAD `18dcfea`, committed
+`6ec0631`) closes r2 F4/F5 and finds F6 (Low) and F7 (Low, question). Owner decisions 20:2x:
+
+| ID | Accept/Dispute | Commit | Evidence (command → result) |
+|----|----------------|--------|-----------------------------|
+| r3 F6 Low | Closed by owner scope decision | `8992037` | Contract v1.7 scope of protection: hostile in-process code that edits object internals (a planted key in an object `__dict__`) is outside what a pure module can stop, like setting a valid but wrong `risk_per_trade` 0.99; E1 L2 now bans `vars(`/`__dict__` writes, ABC `.register(` and runtime monkeypatching outside `sochron.risk`, journal and tests. No code change. |
+| r3 F7 Low (question) | Closed by owner scope decision | `8992037` | Same allocation (process-wide ABC hook). No code change. |
+| tests-r4 F1 Low | Unit test (owner) | `fd50946` | `test_every_public_call_reads_provenance_exactly_once`: 7 public calls each read provenance once (one traversal, each key once). Passes at HEAD; with `halts.py` from `073ab70` (before the F5 fix) it fails `assert 2 == 1`. |
+
+Full suite: `uv run --offline pytest tests -q -p no:cacheprovider` → 784 passed, 0 skipped. Locked
+tests unchanged since `a4bb3fe`.

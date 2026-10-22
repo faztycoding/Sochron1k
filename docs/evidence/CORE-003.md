@@ -14,7 +14,7 @@ Contract: `docs/contracts/CORE-003-risk.md` v1.3 (Tier High; เจ้าขอ�
 | AC-06 ตาราง error, provenance, frozen, ช่วงค่าสุดขีด, เพดานตัวเลข, ชนิดพอดี, ตรวจซ้ำตอนใช้ | **PASS** | `test_ac06_*`: เพดานตัวเลขทุกช่อง (1,000 หลัก, `|adjusted|` 1,100,000) ปฏิเสธ 236 ครั้ง ช้าสุด 0.000366 วินาที · equity `1E-999999999` → `BadEquity` ใน 0.000036 วินาที · subclass ทุกชนิดถูกปฏิเสธ · provenance รับ dict / MappingProxyType / Mapping อื่น อ่านครั้งเดียว · แก้ฟิลด์ของ request/state/policy หลังสร้างแล้วถูกจับตอนใช้ |
 | AC-07 ขอบเขต import, ไม่มี float/random/นาฬิกา/I/O, red-flags | **PASS** | `test_ac07_risk_*` (architecture) · red-flag กลุ่ม secret และ order/account mutation ว่าง |
 
-ชุดทดสอบทั้งหมด **656 passed, 0 skipped** ที่ 10:43:28 หลังแก้ตาม review (CORE-001/002 และ architecture เดิม + acceptance/golden ของ CORE-003 583 ข้อ + unit 27 ข้อ) · รอบแรกของ v1.3 ได้ 651 passed ที่ 10:02:46
+ชุดทดสอบทั้งหมดล่าสุด **784 passed, 0 skipped** ที่ 20:2x (เพิ่ม tests ที่ล็อก r3/r4 และ unit tests ตาม review r2/r3; contract v1.7) · ก่อนหน้า: **656 passed, 0 skipped** ที่ 10:43:28 หลังแก้ตาม review (CORE-001/002 และ architecture เดิม + acceptance/golden ของ CORE-003 583 ข้อ + unit 27 ข้อ) · รอบแรกของ v1.3 ได้ 651 passed ที่ 10:02:46
 
 แก้ตาม review หลังวาง v1.3 (ทีละ commit พร้อม regression ที่ fail ก่อน/pass หลัง):
 - Codex review r1 (`docs/reviews/CORE-003-r1.md`): F1 model ที่ถูกแก้ค่าจนออกนอกโดเมนทำให้ gate อนุญาตเกินงบ → ตรวจโดเมนของ model ทุกครั้งที่ใช้ (`1c804a6`) · F2 ต้นทุน 0 ที่เลขชี้กำลังสุดขีดทำให้ MemoryError → ข้ามพจน์ศูนย์ในผลบวก exact (`0bf8311`) · F3 จำนวนติดลบขนาดยักษ์ได้ error ผิดชนิด → ไม่พิมพ์ค่าในข้อความ (`b959fea`)
@@ -40,7 +40,7 @@ Contract: `docs/contracts/CORE-003-risk.md` v1.3 (Tier High; เจ้าขอ�
 
 ## Demo สำหรับเจ้าของ (Tier High: ต้องรันเองก่อน merge, Git Bash ที่ root ของ repo)
 
-1. ชุดทดสอบทั้งหมด: `uv run --offline pytest tests -q -p no:cacheprovider` → ต้องได้ `656 passed` และไม่มี skipped (ใช้เวลาราว 3 วินาที; ตัวเลขจะเปลี่ยนถ้า Codex เพิ่ม tests ใน patch r3 ซึ่งจะอัปเดตที่นี่)
+1. ชุดทดสอบทั้งหมด: `uv run --offline pytest tests -q -p no:cacheprovider` → ต้องได้ `784 passed` และไม่มี skipped (ใช้เวลาราว 4 วินาที)
 2. sizing ของ H001 และ gate (รวมการปฏิเสธ state ที่ยังไม่เลื่อนวัน):
    ```bash
    PYTHONPATH=src uv run --offline python -c "from decimal import Decimal as D; from datetime import date; from sochron.costs import H001_COSTS; from sochron.risk import H001_RISK, size_position, start_experiment, EntryRequest, check_entry; d = date(2026, 10, 22); print(size_position(D('10000'), D('12.00'), H001_COSTS, H001_RISK)); s = start_experiment(D('10000'), d, H001_RISK, 'owner', 'demo'); r = EntryRequest('long', D('0.02'), D('4012.90'), D('4000.90'), 0); print(check_entry(r, D('10000'), d, s, H001_COSTS)); print(check_entry(r, D('9800'), d, s, H001_COSTS)); print(check_entry(r, D('10000'), date(2026, 10, 23), s, H001_COSTS))"
@@ -75,8 +75,9 @@ Contract: `docs/contracts/CORE-003-risk.md` v1.3 (Tier High; เจ้าขอ�
 
 ## ยังไม่ได้ทดสอบ / ข้อจำกัด
 - Linux/CI: ยังไม่มี Python job ใน CI ผลทั้งหมดมาจาก Windows
-- tests-r2 F1: ถ้าวันหนึ่งเพดานตัวเลขหายไป test เวลาจะทำให้ทั้ง suite ค้างแทนที่จะ fail (ไม่เคยผ่านแบบผิดๆ) · รอเจ้าของเลือกวิธีแก้
+- tests-r2 F1 (แก้แล้ว): test เวลาใช้ `faulthandler` จึง fail พร้อม traceback แทนการค้าง (tests r3/r4) · การ fire ของ watchdog ทดสอบด้วย probe ที่ค้างแบบจำลองเท่านั้น
 - การยืนยันตัวตนผู้ปลด halt, การบันทึก/กู้ HaltState จาก journal, การห้าม start ซ้ำในวันเดียวกัน และการผูกผล gate กับคำสั่งจริง เป็นงานของ E1 (contract ข้อ "ข้อบังคับที่ส่งต่อให้ contract E1")
 - review tests-r1 F5: architecture checker ไม่จับ `time.localtime()`, `os.urandom()`, `uuid.uuid4()`, `subprocess`, `sys.stdout.write` → โค้ด risk ไม่ใช้สิ่งเหล่านี้ (ตรวจด้วยตา) · เป็นงาน follow-up ของ test author
-- Codex review r1 และ security pre-review r2 แก้ครบแล้ว แต่ผู้ตรวจยังไม่ได้ยืนยันการปิด (รอ Codex review r2) · tests ที่ล็อกยังไม่มี faulthandler (tests-r2 F1) และแถวใหม่ของ v1.4/v1.5 (รอ Codex tests r3) · เจ้าของยังไม่ได้รัน demo
+- Review: Codex r1 (F1–F3) และ r2 (F4/F5) ปิดโดยผู้ตรวจรอบถัดไป · security r2 F9/F11 ปิด · review r3 (Claude ภายใต้การสลับบทบาทเพราะโควตา Codex หมด) F6/F7 ปิดด้วยการกำหนดขอบเขตของเจ้าของ (contract v1.7, E1 L2) · เจ้าของยังไม่ได้รัน demo
+- ขอบเขต (v1.7): โมดูลไม่กันโค้ดร้ายที่รันใน process เดียวกันและแก้ภายในของ object หรือ runtime · การป้องกันเป็นของ E1 L2
 - F10 (ยอมรับ): model ที่ค่าสุดขีดแต่อยู่ในเพดานทำให้ sizing/gate ช้าหลายสิบวินาที · E1 ต้องสร้าง model จาก `symbol_info` เท่านั้น
