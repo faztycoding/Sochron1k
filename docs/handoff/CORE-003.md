@@ -965,3 +965,25 @@ suite to close the blocked disk evidence. Obtain a fresh-session review of the a
 this handoff, then commit. This authoring session and its supporting fixture check do not replace
 that review. Delivery state: **implemented as a proposal; verification incomplete; not applied,
 committed, merged or deployed**.
+
+## Application of tests r3 and findings response to review r2 (Claude Code)
+
+Tests r3: patch SHA256 `bea1632d…` matched; standalone `git apply --check` and `git apply`; the
+detector listed exactly the two target files; applied SHA256 and blobs matched the table above
+(`d362fff2…`/`2e3d154a…`, `04c5e644…`/`d4800f29…`); `git apply -R --check` passed; full suite on disk
+723 passed, 0 skipped (10:57); fresh-session review `docs/reviews/CORE-003-tests-r3.md` ready to
+commit; committed `c2c365c`. Owner decisions on its findings (11:2x): F1, F3 → Codex patch r4; F2
+accepted; F4 → contract v1.6; in-place mutation evidence accepted.
+
+Review `docs/reviews/CORE-003-r2.md` (Codex, HEAD `c2c365c`) was written when the previous session
+ended; the owner committed it as `82844d1` (message "ฟ"). It closes r1 F1–F3 and security F11, and
+leaves two Low residuals of security F9. One commit per finding:
+
+| ID | Accept/Dispute | Commit | Evidence (command → result) |
+|----|----------------|--------|-----------------------------|
+| F4 Low | Accept | `073ab70` | `_check_policy` requires every provenance key to be exactly `str` right after the single read, before any other field. `uv run --offline pytest tests/unit/risk -q -p no:cacheprovider -k exact_str_before` → before: FAIL `DID NOT RAISE TypeError` (the R4 key set risk_per_trade to 5 and the gate allowed 41.66 lots); after: 1 passed (gate, sizing, unknowns at use; construction with a str-subclass key and an int key). |
+| F5 Low | Accept | `d7b45b5` | start/update/restart build the result with `_new_state` from values validated in this call, without a second provenance read; direct `HaltState(...)` still validates. `-k without_reading_the_policy` → before: FAIL `(False, Decimal('0.0001')) == (False, Decimal('0.0075'))`; after: 1 passed (update, restart, start). |
+
+Full suite after both fixes: `uv run --offline pytest tests -q -p no:cacheprovider` → 725 passed,
+0 skipped. Contract v1.6 (`a6fde90`) writes the behaviour down. For the reviewer's round 3: re-check
+F4 and F5 only, and whether any other caller-code point remains after the first read.
