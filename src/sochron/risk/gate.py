@@ -15,7 +15,7 @@ from sochron.costs import CostModel
 
 from .errors import BadEquity, BadStop, RiskError
 from .halts import HaltState
-from .policy import exact, is_int, loss_reached, positive_decimal, require_decimal
+from .policy import exact, is_int, loss_reached, positive_decimal, require_decimal, require_exact
 from .sizing import cost_budget, require_model, size_exact
 
 Side = Literal["long", "short"]
@@ -36,8 +36,7 @@ REASONS = ENTRY_REASONS | STOP_REASONS
 
 
 def _side(side: object) -> Side:
-    if not isinstance(side, str):
-        raise TypeError(f"side must be a str, not {type(side).__name__}")
+    require_exact(side, str, "side")
     if side not in ("long", "short"):
         raise RiskError(f"side must be 'long' or 'short', got {side!r}")
     return side
@@ -80,10 +79,10 @@ class GateDecision:
     reasons: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        if not isinstance(self.allowed, bool):
-            raise TypeError(f"allowed must be a bool, not {type(self.allowed).__name__}")
-        if not isinstance(self.reasons, tuple) or not all(isinstance(r, str) for r in self.reasons):
-            raise TypeError("reasons must be a tuple of str")
+        require_exact(self.allowed, bool, "allowed")
+        require_exact(self.reasons, tuple, "reasons")
+        for reason in self.reasons:
+            require_exact(reason, str, "a reason")
         if self.reasons != tuple(sorted(set(self.reasons))):
             raise RiskError("reasons must be sorted and unique")
         if not set(self.reasons) <= REASONS:
@@ -111,10 +110,8 @@ def check_entry(
     cost_per_lot: Decimal = Decimal("0"),
 ) -> GateDecision:
     """Every reason this entry may not be sent now; allowed only when there is none."""
-    if not isinstance(request, EntryRequest):
-        raise TypeError(f"request must be an EntryRequest, not {type(request).__name__}")
-    if not isinstance(state, HaltState):
-        raise TypeError(f"state must be a HaltState, not {type(state).__name__}")
+    require_exact(request, EntryRequest, "request")
+    require_exact(state, HaltState, "state")
     require_model(model)
     equity = positive_decimal(equity, "equity", BadEquity)
     budget = cost_budget(cost_per_lot)

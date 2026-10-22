@@ -198,6 +198,56 @@ def test_cap_boundary_is_not_a_cap_and_volume_max_is_on_the_grid():
     assert check_entry(at_max, Decimal("800000"), state, H001_COSTS).allowed is True
 
 
+class _Lots(Decimal):
+    def as_integer_ratio(self):
+        return (1, 100)
+
+
+class _AnyName(str):
+    def __eq__(self, other):
+        return True
+
+    __hash__ = str.__hash__
+
+
+class _Anyone(tuple):
+    def __contains__(self, item):
+        return True
+
+
+class _NeverSameDay(date):
+    def __eq__(self, other):
+        return False
+
+    __hash__ = date.__hash__
+
+
+class _Count(int):
+    def __ge__(self, other):
+        return False
+
+
+def test_subclasses_of_value_types_are_refused():
+    # Security pre-review F1: subclasses answered validation and decision differently.
+    with pytest.raises(TypeError):
+        EntryRequest("long", _Lots("1.00"), Decimal("4012.90"), Decimal("4000.90"), 0)
+    with pytest.raises(TypeError):
+        start_experiment(Decimal("10000"), DAY, H001_RISK, _AnyName("claude"), "x")
+    with pytest.raises(TypeError):
+        start_experiment(Decimal("10000"), DAY, H001_RISK, "owner", _AnyName("  "))
+    with pytest.raises(TypeError):
+        replace(H001_RISK, halt_clearers=_Anyone(("owner",)))
+    with pytest.raises(TypeError):
+        update_equity(_start(), Decimal("9925"), _NeverSameDay(2026, 10, 22))
+    with pytest.raises(TypeError):
+        EntryRequest("long", Decimal("0.02"), Decimal("4012.90"), Decimal("4000.90"), _Count(7))
+    with pytest.raises(TypeError):
+        size_position(_Lots("10000"), Decimal("12"), H001_COSTS, H001_RISK)
+    step_model = replace(H001_COSTS, volume_step=_Lots("0.01"))
+    with pytest.raises(TypeError):
+        size_position(Decimal("10000"), Decimal("12"), step_model, H001_RISK)
+
+
 def test_policy_fields_and_halt_state_validation():
     assert set(H001_RISK.provenance) == set(POLICY_FIELDS)
     with pytest.raises(TypeError):

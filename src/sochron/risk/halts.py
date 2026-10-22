@@ -11,7 +11,7 @@ from datetime import date
 from decimal import Decimal
 
 from .errors import BadEquity, BadHaltClear, TimeReversal
-from .policy import RiskPolicy, loss_reached, positive_decimal, require_day
+from .policy import RiskPolicy, loss_reached, positive_decimal, require_day, require_exact
 from .sizing import require_policy
 
 
@@ -32,21 +32,17 @@ class HaltState:
         positive_decimal(self.day_start_equity, "day_start_equity", BadEquity)
         positive_decimal(self.experiment_start_equity, "experiment_start_equity", BadEquity)
         for name in ("daily_halted", "experiment_halted"):
-            if not isinstance(getattr(self, name), bool):
-                raise TypeError(f"{name} must be a bool, not {type(getattr(self, name)).__name__}")
+            require_exact(getattr(self, name), bool, name)
 
 
 def _require_state(state: object) -> HaltState:
-    if not isinstance(state, HaltState):
-        raise TypeError(f"state must be a HaltState, not {type(state).__name__}")
+    require_exact(state, HaltState, "state")
     return state
 
 
 def _authorize(policy: RiskPolicy, authorized_by: object, reason: object) -> None:
-    if not isinstance(authorized_by, str):
-        raise TypeError(f"authorized_by must be a str, not {type(authorized_by).__name__}")
-    if not isinstance(reason, str):
-        raise TypeError(f"reason must be a str, not {type(reason).__name__}")
+    require_exact(authorized_by, str, "authorized_by")
+    require_exact(reason, str, "reason")
     if authorized_by not in policy.halt_clearers:
         raise BadHaltClear(f"{authorized_by!r} is not allowed to start or restart this experiment")
     if not reason.strip():

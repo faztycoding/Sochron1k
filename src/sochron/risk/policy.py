@@ -7,7 +7,7 @@ rounded, once, in the costs module's Decimal context (docs/contracts/CORE-003-ri
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date
 from decimal import (
     MAX_EMAX,
     MAX_PREC,
@@ -39,13 +39,23 @@ POLICY_FIELDS = (
 _FRACTION_FIELDS = ("risk_per_trade", "daily_loss_limit", "experiment_loss_limit")
 
 
+# Exact types only (security pre-review F1): a subclass can answer validation (is_finite, <=, in,
+# ==, strip) differently from the decision (as_integer_ratio), so no subclass is accepted anywhere.
+
+
 def is_int(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool)
+    return type(value) is int
+
+
+def require_exact(value: object, kind: type, name: str) -> object:
+    if type(value) is not kind:
+        raise TypeError(f"{name} must be exactly {kind.__name__}, not {type(value).__name__}")
+    return value
 
 
 def require_decimal(value: object, name: str) -> Decimal:
-    if not isinstance(value, Decimal):
-        raise TypeError(f"{name} must be a Decimal, not {type(value).__name__}")
+    if type(value) is not Decimal:
+        raise TypeError(f"{name} must be exactly Decimal, not {type(value).__name__}")
     return value
 
 
@@ -58,8 +68,8 @@ def positive_decimal(value: object, name: str, error: type[RiskError]) -> Decima
 
 
 def require_day(value: object, name: str = "day") -> date:
-    if not isinstance(value, date) or isinstance(value, datetime):
-        raise TypeError(f"{name} must be a date (not a datetime), not {type(value).__name__}")
+    if type(value) is not date:
+        raise TypeError(f"{name} must be exactly a date (not a datetime or a subclass), not {type(value).__name__}")
     return value
 
 
@@ -130,11 +140,9 @@ class RiskPolicy:
             raise TypeError(f"max_open_exposures must be an int, not {type(self.max_open_exposures).__name__}")
         if self.max_open_exposures < 1:
             raise BadPolicy(f"max_open_exposures must be at least 1, got {self.max_open_exposures}")
-        if not isinstance(self.halt_clearers, tuple):
-            raise TypeError(f"halt_clearers must be a tuple, not {type(self.halt_clearers).__name__}")
+        require_exact(self.halt_clearers, tuple, "halt_clearers")
         for name in self.halt_clearers:
-            if not isinstance(name, str):
-                raise TypeError(f"halt_clearers must hold str, not {type(name).__name__}")
+            require_exact(name, str, "a halt_clearers name")
         if not self.halt_clearers:
             raise BadPolicy("halt_clearers must name at least one clearer")
         if any(not name.strip() for name in self.halt_clearers):
@@ -150,15 +158,14 @@ class RiskPolicy:
                 f"provenance must cover exactly the 5 policy fields; missing {sorted(expected - keys)}, extra {sorted(keys - expected)}"
             )
         for name, record in self.provenance.items():
-            if not isinstance(record, Provenance):
-                raise BadPolicy(f"provenance[{name!r}] must be a Provenance")
+            if type(record) is not Provenance:
+                raise BadPolicy(f"provenance[{name!r}] must be exactly a Provenance")
         object.__setattr__(self, "provenance", MappingProxyType(dict(self.provenance)))
 
 
 def unknowns(policy: RiskPolicy) -> tuple[str, ...]:
     """Names of the policy fields whose provenance status is assumed or unknown, sorted."""
-    if not isinstance(policy, RiskPolicy):
-        raise TypeError(f"policy must be a RiskPolicy, not {type(policy).__name__}")
+    require_exact(policy, RiskPolicy, "policy")
     return tuple(sorted(name for name, p in policy.provenance.items() if p.status in ("assumed", "unknown")))
 
 

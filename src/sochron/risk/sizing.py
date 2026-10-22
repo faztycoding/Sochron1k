@@ -14,7 +14,16 @@ from typing import Literal
 from sochron.costs import CostModel
 
 from .errors import BadEquity, BadPolicy, BadStop, RiskError
-from .policy import RiskPolicy, display, exact, exact_product, exact_sum, positive_decimal, require_decimal
+from .policy import (
+    RiskPolicy,
+    display,
+    exact,
+    exact_product,
+    exact_sum,
+    positive_decimal,
+    require_decimal,
+    require_exact,
+)
 
 Reason = Literal["ok", "below_min_volume", "capped_at_volume_max"]
 SIZE_REASONS = frozenset({"ok", "below_min_volume", "capped_at_volume_max"})
@@ -35,8 +44,7 @@ class SizeDecision:
             value = require_decimal(getattr(self, name), name)
             if not value.is_finite():
                 raise RiskError(f"{name} must be finite, got {value}")
-        if not isinstance(self.reason, str):
-            raise TypeError(f"reason must be a str, not {type(self.reason).__name__}")
+        require_exact(self.reason, str, "reason")
         if self.reason not in SIZE_REASONS:
             raise RiskError(f"unknown sizing reason {self.reason!r}")
         if self.lots < 0:
@@ -54,14 +62,15 @@ class _Exact:
 
 
 def require_model(model: object) -> CostModel:
-    if not isinstance(model, CostModel):
-        raise TypeError(f"model must be a CostModel, not {type(model).__name__}")
+    """Exactly a CostModel whose fields read by risk are exactly Decimal (costs accepts subclasses)."""
+    require_exact(model, CostModel, "model")
+    for name in ("contract_size", "volume_min", "volume_step", "volume_max"):
+        require_decimal(getattr(model, name), f"model.{name}")
     return model
 
 
 def require_policy(policy: object) -> RiskPolicy:
-    if not isinstance(policy, RiskPolicy):
-        raise TypeError(f"policy must be a RiskPolicy, not {type(policy).__name__}")
+    require_exact(policy, RiskPolicy, "policy")
     return policy
 
 
