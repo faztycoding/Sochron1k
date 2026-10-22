@@ -1,6 +1,6 @@
 # หลักฐาน CORE-003: `sochron.risk`
 
-Contract: `docs/contracts/CORE-003-risk.md` v1.3 (Tier High; เจ้าของอนุมัติแผน, acceptance และทางเลือก (ก)–(ช) 2026-10-22 07:4x หลัง contract reviews r1–r3 · เลือกการเปลี่ยนของ v1.3 08:5x หลัง security pre-review: F6 ด่านรับวันไทย, F3 เพดานตัวเลข, F7 ห้ามในระดับ E1 · Codex contract reviews r4–r5 ปิด F13/F14) · Branch `feat/CORE-003-risk` · ไฟล์นี้อัปเดตใน commit เดียวกับ implementation v1.3
+Contract: `docs/contracts/CORE-003-risk.md` v1.8 (v1.4–v1.8 ตามที่เจ้าของเลือกหลังแต่ละ review; Tier High; เจ้าของอนุมัติแผน, acceptance และทางเลือก (ก)–(ช) 2026-10-22 07:4x หลัง contract reviews r1–r3 · เลือกการเปลี่ยนของ v1.3 08:5x หลัง security pre-review: F6 ด่านรับวันไทย, F3 เพดานตัวเลข, F7 ห้ามในระดับ E1 · Codex contract reviews r4–r5 ปิด F13/F14) · Branch `feat/CORE-003-risk` · ไฟล์นี้อัปเดตใน commit เดียวกับ implementation v1.3
 
 ## สรุปสำหรับเจ้าของ
 
