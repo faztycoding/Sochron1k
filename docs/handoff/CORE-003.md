@@ -1142,3 +1142,20 @@ Review `docs/reviews/CORE-003-r3.md` (Claude reviewer under the role swap, HEAD 
 
 Full suite: `uv run --offline pytest tests -q -p no:cacheprovider` → 784 passed, 0 skipped. Locked
 tests unchanged since `a4bb3fe`.
+
+## Findings response (Claude Code), reviews r4 and r5
+
+Review `docs/reviews/CORE-003-r4.md` (Claude reviewer, closing recheck, committed `37daccf`): r3 F6/F7
+closed by the owner allocation; no src change since `18dcfea`; 784 passed; oracle 2,880 sizing and
+30,000 gate cases match. Review `docs/reviews/CORE-003-r5.md` (Claude reviewer, committed with this
+section): r4 F8 closed; 784 passed; `git diff 6f38403..HEAD -- src tests` empty.
+
+| ID | Accept/Dispute | Commit | Evidence |
+|----|----------------|--------|----------|
+| r4 F8 Low (question) | Accept | `45d4889` | Contract v1.8: the L2 principle, one exemption for every L2 ban, and a list covering the F7 reproduction (any ABC `.register(`, `__instancecheck__`/`__subclasscheck__`/`__subclasshook__`, ABCMeta metaclasses, numbers ABC subclasses, monkeypatching) and the F6 carrier. r5 closed it. |
+| r5 F9 Low (question) | Accept | this commit | Contract v1.9: the reviewer's exact replacement sentence (a narrow exemption for `object.__setattr__(self, "provenance", ...)` in `CostModel.__post_init__`, and the same list replaces the v1.3 invariant's list). Not re-reviewed; wording only, E1 obligation, no effect on `sochron.risk` code or any AC. |
+
+No code or test change in these rounds. Delivery state: implemented and verified locally (784
+passed, 0 skipped); not merged. Next: the owner runs the demo, opens the PR with
+`docs/proposals/CORE-003-pr-body.md`, applies the `owner-approved-control-change` label, waits for CI,
+and merges.
