@@ -34,6 +34,9 @@ def require_bars(bars: object) -> tuple[Bar, ...]:
         exact(item, Bar, "every bar")
         if item.timeframe != 1:
             raise ValueError("bars must be M1 (timeframe 1)")
+        if item.m1_count != 1:
+            # Review CORE-005-r1 F5: an M1 bar holds exactly one M1.
+            raise ValueError("an M1 bar must have m1_count 1")
     return items
 
 

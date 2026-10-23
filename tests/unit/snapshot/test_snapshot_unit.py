@@ -112,3 +112,13 @@ def test_calendar_times_with_seconds_are_refused(at):
         replace(H001_CLOSURES, daily_break=(at, time(18, 0)))
     with pytest.raises(ValueError):
         replace(H001_CLOSURES, weekend=((4, at), (6, time(18, 0))))
+
+
+def test_an_m1_bar_must_count_one_m1():
+    # Review CORE-005-r1 F5 (owner: tighten): an M1 bar claiming to hold two M1 passed validation.
+    bar = _bar(datetime(2026, 3, 10, 13, 0, tzinfo=UTC))
+    wrong = replace(bar, m1_count=2)
+    with pytest.raises(ValueError):
+        validate_m1([wrong], RULE, H001_CLOSURES, 5)
+    with pytest.raises(ValueError):
+        aggregate([wrong], 15, RULE, validate_m1([bar], RULE, H001_CLOSURES, 5))
