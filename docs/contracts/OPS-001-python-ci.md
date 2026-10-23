@@ -1,6 +1,6 @@
 # TASK OPS-001 — ให้ CI รัน Python test suite บน Linux ทุก PR
 
-Version v1 (ร่าง 2026-10-22 23:1x) · Owner เจ้าของ repository · Parent PROGRESS "Not done yet": Python test job ใน CI · Handbook ch.21 (pinned actions) · Tier **High** · Branch `chore/OPS-001-python-ci`
+Version v1.1 (ร่าง 2026-10-22 23:1x → v1.1 2026-10-23 11:0x: คำสั่งจริงของ job, ไม่ใส่ `-rs`, `PYTHONTZPATH=""` ตามที่เจ้าของเลือกหลัง review r1) · Owner เจ้าของ repository · Parent PROGRESS "Not done yet": Python test job ใน CI · Handbook ch.21 (pinned actions) · Tier **High** · Branch `chore/OPS-001-python-ci`
 Status: **approved by owner 2026-10-22 23:4x** (acceptance และแผน; ทางเลือก (ก) = `astral-sh/setup-uv` ตรึง full SHA + `version: 0.13.0`, (ข) = uv-managed Python 3.12.15, (ค) = required check ตั้งโดยเจ้าของหลัง merge ถ้าต้องการ · ผู้เขียน patch = Claude session ใหม่ตามการสลับบทบาทระหว่าง Codex หมดโควตา)
 Hypothesis (research tasks): ไม่ใช่งานวิจัย
 
@@ -29,7 +29,8 @@ High เพราะ Q6: เจ้าของอนุมัติแผน, pa
 ## Inputs / outputs / errors (contract)
 - job `python-tests`: `runs-on: ubuntu-24.04`, `timeout-minutes` ≤ 15, permissions สืบจาก workflow (`contents: read`)
 - ขั้นตอน: checkout (action เดิม pinned SHA, `persist-credentials: false`) → ติดตั้ง uv รุ่นตรึง (วิธีตามที่เจ้าของเลือก ดู Plan ข้อ 5) → Python 3.12 → `uv sync --frozen` (หรือ `--locked`) → `uv run --frozen pytest tests -q -p no:cacheprovider -rs`
-- job ล้มเมื่อ: test ล้มหรือ error, lockfile ไม่ตรงกับ `pyproject.toml`, หรือมี test ถูก skip (AGENTS.md: skipped ไม่นับว่าผ่าน)
+  - v1.1 (2026-10-23 11:0x, เจ้าของเลือกหลัง `docs/reviews/OPS-001-r1.md` F6; การแก้ตาม security pre-review ตาม D-013 amendment): คำสั่งจริงคือ `uv sync --locked --no-build` → `uv run --locked --no-build pytest tests -q -p no:cacheprovider` (`--frozen` ไม่ตรวจ lock จึงใช้ `--locked`; **ไม่ใส่ `-rs` โดยตั้งใจ** ให้ argument ของ pytest เท่ากับคำสั่งที่ verified ใน AGENTS.md เพราะ job แดงทุกครั้งที่มี skip อยู่แล้ว) · job ตั้ง `PYTHONTZPATH=""` (D-013 amendment) · ก่อนรัน test มี step ตรวจที่พิมพ์ `zoneinfo.TZPATH` และรุ่น `tzdata` แล้วทำให้ job **แดงถ้า TZPATH ไม่ว่าง** (patch r4; กันกรณี runner ไม่ส่งค่าว่าง · `docs/reviews/OPS-001-r2.md` F9)
+- job ล้มเมื่อ: test ล้มหรือ error, lockfile ไม่ตรงกับ `pyproject.toml`, หรือมี test ถูก skip (AGENTS.md: skipped ไม่นับว่าผ่าน) · v1.1: รวม deselected, xfailed, xpassed และบรรทัดสรุปที่ไม่ใช่ `<n> passed[, <m> warnings] in <t>s`
 
 ## Invariants
 - ไม่มี `continue-on-error`, `|| true` หรือการกลืน exit code ในขั้น test

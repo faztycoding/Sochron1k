@@ -156,3 +156,11 @@ Conditions:
 - เปลี่ยน SHA ของ action, รุ่น uv, รุ่น Python หรือเปิด cache ต้องผ่าน admission และบันทึกที่นี่ · `control-gate.yml` ไม่เปลี่ยน
 - ลงทะเบียนใน `docs/tooling/registry.md` และปรับแถว uv เดิม
 Review when: advisory ใหม่ของ uv/action, release ใหม่ของ action ที่แก้ความปลอดภัย, เปลี่ยน Python 3.12.x บนเครื่อง, หรือเพิ่ม Windows runner
+
+Amendment 2026-10-23 11:0x (เจ้าของยืนยันในแชท Claude หลัง `docs/reviews/OPS-001-r1.md` F4; ข้อความข้างบนคือฉบับที่ accepted 09:5x ไม่แก้):
+- ตาม `docs/reviews/OPS-001-security-pre-r1.md` (pre-review F1, F2, F5) คำสั่งใน job เป็น `uv sync --locked --no-build` และ `uv run --locked --no-build pytest tests -q -p no:cacheprovider` · `--no-build` ติดตั้งเฉพาะ wheel จึงไม่มี build requirement ที่ไม่ได้ตรวจ hash (pre-review F5)
+- job เขียวเฉพาะเมื่อบรรทัดสุดท้ายของ pytest เป็น `<n> passed[, <m> warnings] in <t>s` · failed, error, skipped, deselected, xfailed, xpassed เป็นแดงทั้งหมด · step ใช้ `shell: bash` (pre-review F1, F2)
+- job ตั้ง `PYTHONTZPATH=""` ให้ `zoneinfo` ใช้ package `tzdata==2026.5` (D-012) เหมือนบน Windows แทนข้อมูล time zone ของ runner (`docs/reviews/OPS-001-r1.md` F5)
+- ข้อจำกัดของการออกแบบ (pre-review F3): job รันโค้ด test ของ PR เอง ผลเขียวของ `python-tests` จึงไม่ใช่ด่านที่ทนการปลอมแปลง (เช่น conftest ที่ตัด test ออกเงียบๆ หรือพิมพ์บรรทัดสรุปปลอม) · ด่านที่ไว้ใจได้ยังเป็น `control-gate` · งานติดตามแยก: red-flag patterns สำหรับ `conftest.py`, `collect_ignore`, `pytest.xfail(`, `addopts`, `os._exit`, `atexit`
+- Review when เพิ่ม: มี package ใน `uv.lock` ที่ไม่มี wheel ที่ใช้ได้ (pre-review F5)
+- (proposed โดย Claude 2026-10-23 11:2x ตาม `docs/reviews/OPS-001-r2.md` F9 · รอเจ้าของยืนยันตอนตรวจ PR) เพื่อพิสูจน์ข้อ `PYTHONTZPATH=""` ข้างบน job มี step ก่อนรัน test ที่พิมพ์ `zoneinfo.TZPATH` และรุ่น `tzdata` แล้ว**แดงถ้า TZPATH ไม่ว่าง** (patch r4) · ถ้า runner ไม่ส่งค่าว่าง job จะแดงที่ step นี้ก่อน pytest
