@@ -38,6 +38,8 @@ data/
 src/sochron/data/**
 !src/sochron/data/**/
 !src/sochron/data/**/*.py
+# Never a dotfile there, even one ending in .py (review CORE-005-r1 F9, owner 2026-10-24).
+src/sochron/data/**/.*
 research/runs/
 reports/out/
 journal/
