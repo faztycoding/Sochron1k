@@ -91,3 +91,14 @@ def test_a_time_repeated_after_a_step_back_is_a_duplicate():
     report = validate_m1(first + overlap, RULE, H001_CLOSURES, 5)
     codes = sorted((defect.code, defect.time_raw) for defect in report.defects)
     assert codes == sorted(("duplicate_time", bar.time_raw) for bar in overlap)
+
+
+def test_a_slot_padded_by_a_duplicate_is_still_incomplete():
+    # Review CORE-005-r1 F2 (owner: tighten): fifteen M1 with one minute missing in session and one
+    # minute repeated used to pass as complete; "incomplete" now follows the missing minutes.
+    minutes = [*range(14), 13]  # 13:00..13:13 and 13:13 again; 13:14 is missing
+    bars = [_bar(datetime(2026, 3, 10, 13, minute, tzinfo=UTC)) for minute in minutes]
+    result = aggregate(bars, 15, RULE, validate_m1(bars, RULE, H001_CLOSURES, 5))
+    assert len(result) == 1
+    assert result[0].bar.m1_count == 15
+    assert result[0].flags == frozenset({"duplicate_time", "incomplete"})

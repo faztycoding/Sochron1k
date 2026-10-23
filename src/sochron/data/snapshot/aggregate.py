@@ -4,8 +4,8 @@ Grouping follows timebase.bar_open, so bars align to UTC boundaries under the ru
 first M1 open, high the maximum, low the minimum, close the last M1 close, tick_volume the sum,
 spread the last M1 spread (owner decision D1: the state at the close of the bar), m1_count the
 number of M1 read. A slot without any M1 makes no bar (nothing is filled in). flags are the defect
-codes reported for the M1 inside the bar, plus "incomplete" when fewer than timeframe M1 are
-present and a missing minute is in session under the report's calendar.
+codes reported for the M1 inside the bar, plus "incomplete" when a minute of the bar has no M1 and
+that minute is in session under the report's calendar (repeated M1 do not fill a missing minute).
 """
 
 from collections.abc import Sequence
@@ -19,9 +19,11 @@ from .validate import in_closure, require_bars
 
 
 def _incomplete(members: list[Bar], start_raw: int, timeframe: int, rule: TimeRule, report: ValidationReport) -> bool:
-    if len(members) >= timeframe:
-        return False
+    # Distinct minutes, not the M1 count (review CORE-005-r1 F2, contract v1.3): a repeated M1
+    # must not hide a missing in-session minute.
     present = {(bar.time_raw - start_raw) // 60 for bar in members}
+    if len(present) >= timeframe:
+        return False
     start_utc = to_utc(start_raw, rule)
     return any(
         not in_closure(start_utc + timedelta(minutes=index), report.calendar)
