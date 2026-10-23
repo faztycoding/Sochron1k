@@ -1,7 +1,7 @@
 # TASK FIX-001 — ด่านตรวจ architecture จับนาฬิกา, สุ่ม, process และ console ที่ยังหลุด
 
 Version v1 (ร่าง 2026-10-22 23:1x) · Owner เจ้าของ repository · Parent `docs/reviews/CORE-003-tests-r1.md` F5 (architecture checker gap) · AGENTS.md "One strategy implementation, a pure function … no I/O, clock" · Tier **High** · Branch `fix/FIX-001-architecture-side-effects`
-Status: **implemented and verified locally 2026-10-23 13:3x; รอ PR (label), CI และ merge** · เดิม: approved by owner 2026-10-22 23:4x (acceptance และแผน · ผู้เขียน patch และผู้ตรวจ = Claude session ใหม่ตามการสลับบทบาทระหว่าง Codex หมดโควตา) · patch D-006 3 รอบ, review r1–r3 (`docs/reviews/FIX-001-r3.md`: F6–F9 ปิด) · เจ้าของตัดสิน 2026-10-23: F9 ทาง (b) union กับ HEAD (12:5x), F5 แยกเป็นงานติดตาม (12:5x), F10–F12 บันทึกเป็นข้อจำกัดและรวม F5/F10/F11/X05 ในงานติดตาม, Q7–Q9 รับ (14:4x) · หลักฐาน `docs/evidence/FIX-001.md`
+Status: **merged 2026-10-23 14:58 (PR #14 → main `6bd9ef8`, label owner-approved-control-change); CI ของ PR และของ main เขียว** (`docs/evidence/FIX-001.md` หัวข้อ "หลัง merge") · implemented and verified locally 13:3x · เดิม: approved by owner 2026-10-22 23:4x (acceptance และแผน · ผู้เขียน patch และผู้ตรวจ = Claude session ใหม่ตามการสลับบทบาทระหว่าง Codex หมดโควตา) · patch D-006 3 รอบ, review r1–r3 (`docs/reviews/FIX-001-r3.md`: F6–F9 ปิด) · เจ้าของตัดสิน 2026-10-23: F9 ทาง (b) union กับ HEAD (12:5x), F5 แยกเป็นงานติดตาม (12:5x), F10–F12 บันทึกเป็นข้อจำกัดและรวม F5/F10/F11/X05 ในงานติดตาม, Q7–Q9 รับ (14:4x) · หลักฐาน `docs/evidence/FIX-001.md`
 Hypothesis (research tasks): ไม่ใช่งานวิจัย
 
 ## Risk tier (Q1–Q6, one line each; unsure = yes)
