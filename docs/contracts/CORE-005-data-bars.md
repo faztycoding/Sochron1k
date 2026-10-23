@@ -42,8 +42,8 @@ sochron.core
     open, high, low, close: Decimal   # bid, finite
     spread: int | None        # points, None = MT5 ไม่ให้ค่า
     tick_volume: int          # >= 0
-    m1_count: int             # M1 = 1; แท่งที่ประกอบ = จำนวน M1 ในแท่ง (1..timeframe)
-  ตรวจตอนสร้างเฉพาะชนิดและความเป็น finite เท่านั้น ความขัดกันของ OHLC ไม่ raise (เพื่อให้รายงานได้)
+    m1_count: int             # M1 = 1; แท่งที่ประกอบ = จำนวน M1 ที่อ่าน (>= 1, ไม่มีเพดานบน, v1.1)
+  ตรวจตอนสร้าง: ชนิด, ความเป็น finite, timeframe อยู่ในชุด และ (v1.1) tick_volume >= 0, m1_count >= 1, time_utc เป็น UTC · ความขัดกันของ OHLC และ spread ติดลบไม่ raise (เพื่อให้รายงานได้) (review tests-r2 F13)
 
 sochron.data.snapshot
   Severity = Literal["WARN", "UNKNOWN", "STOP"]
