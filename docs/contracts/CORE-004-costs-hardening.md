@@ -1,6 +1,6 @@
 # TASK CORE-004 — ทำให้ `sochron.costs` ปฏิเสธ input ผิดแบบเดียวกับ `sochron.risk`
 
-Version v1 (ร่าง 2026-10-22 23:2x) · Owner เจ้าของ repository · Parent `docs/contracts/CORE-002-costs.md` (merged PR #10) · `docs/reviews/CORE-003-security-pre-r1.md` ข้อ "Not checked": costs มี Mapping TOCTOU และรับ subclass แบบเดียวกับที่ risk แก้แล้ว · `docs/contracts/CORE-003-risk.md` v1.9 (ขอบเขตของการป้องกัน) · Tier **Standard** · Branch `fix/CORE-004-costs-hardening`
+Version v1.1 (ร่าง 2026-10-22 23:2x → v1.1 2026-10-23 18:3x: เจ้าของตัดสินตาม `docs/reviews/CORE-004-tests-r1.md` F1 = ขยาย allowed files ให้แก้ `tests/unit/risk/test_risk_unit.py` บรรทัด 252–254 โดยคงเจตนาเดิม, F2/F3 = ให้ผู้รับบท test author เขียน tests patch รอบ 2 ทันที · acceptance เดิมทุกข้อ) · Owner เจ้าของ repository · Parent `docs/contracts/CORE-002-costs.md` (merged PR #10) · `docs/reviews/CORE-003-security-pre-r1.md` ข้อ "Not checked": costs มี Mapping TOCTOU และรับ subclass แบบเดียวกับที่ risk แก้แล้ว · `docs/contracts/CORE-003-risk.md` v1.9 (ขอบเขตของการป้องกัน) · Tier **Standard** · Branch `fix/CORE-004-costs-hardening`
 Status: **approved by owner 2026-10-22 23:4x** (acceptance และแผน · ผู้เขียน tests ที่ล็อกและผู้ตรวจ = Claude session ใหม่ตามการสลับบทบาทระหว่าง Codex หมดโควตา)
 Hypothesis (research tasks): ไม่ใช่งานวิจัย (ให้บริการ H001 ข้อ 6 Costs)
 
@@ -23,7 +23,7 @@ Standard: ผู้ทำประกาศแผนแล้วทำต่อ�
 ## Scope
 - In scope: `src/sochron/costs/**` · unit tests ของผู้ทำ `tests/unit/costs/**` · tests ที่ล็อกใหม่ `tests/acceptance/CORE-004/**` (และ `tests/golden/CORE-004/**` ถ้าจำเป็น) โดยผู้รับบท test author · evidence · handoff · PROGRESS
 - Exclusions: เปลี่ยนสูตรหรือ context ของ costs (precision 28, ROUND_HALF_EVEN) · `sochron.risk` (ยกเว้นถ้า test ของ risk ต้องตามการเปลี่ยนนี้ ซึ่งไม่ควรเกิด) · tests ที่ล็อกของ CORE-002/003 (ห้ามแก้) · ขอบเขตการป้องกัน: เหมือน CORE-003 v1.7 — ไม่กันโค้ดร้ายที่รันใน process เดียวกันและแก้ภายในของ object หรือ runtime (เป็นของ E1 L2)
-- Allowed files: `src/sochron/costs/**`, `tests/unit/costs/**`, `docs/evidence/CORE-004.md`, `docs/handoff/CORE-004.md`, `docs/proposals/CORE-004-*.patch`, `PROGRESS.md` · โดย test author ผ่าน patch: `tests/acceptance/CORE-004/**`, `tests/golden/CORE-004/**`
+- Allowed files: `src/sochron/costs/**`, `tests/unit/costs/**`, `tests/unit/risk/test_risk_unit.py` บรรทัด 252–254 เท่านั้น (v1.1, F1: unit test ของ CORE-003 สร้าง `CostModel` ด้วย Decimal subclass ซึ่ง AC-01 ห้าม → ย้ายไปแอบใส่หลังสร้างด้วย `object.__setattr__` โดย risk ยังต้องปฏิเสธเหมือนเดิม), `docs/evidence/CORE-004.md`, `docs/handoff/CORE-004.md`, `docs/proposals/CORE-004-*.patch`, `PROGRESS.md` · โดย test author ผ่าน patch: `tests/acceptance/CORE-004/**`, `tests/golden/CORE-004/**`
 - Must not touch: `src/sochron/{timebase,core,risk}/**`, `tests/acceptance/CORE-00{1,2,3}/**`, `tests/golden/CORE-00{1,2,3}/**`, `tests/architecture/**`, `.github/**`, `scripts/controls/**`, `.claude/**`
 
 ## Inputs / outputs / errors (contract)
@@ -49,7 +49,7 @@ subclass ที่ตอบ `is_finite`/`as_integer_ratio`/`==` หลอก · 
 - AC-02 Given provenance เป็น `dict`, `MappingProxyType` และ `Mapping` ที่เขียนเอง, When สร้าง `CostModel`, Then รับ, อ่าน container ครั้งเดียว (หนึ่ง traversal, แต่ละ key ครั้งเดียว), เก็บเป็น `MappingProxyType` ของสำเนา · container ที่ไม่ใช่ Mapping หรือ key ที่ไม่ใช่ `str` พอดี → `TypeError`
 - AC-03 Given `CostModel` ที่ field ถูกแก้หลังสร้างเป็นค่าผิด (ทีละ field), When เรียกทุกฟังก์ชันที่รับ `model`, Then ได้ error เดียวกับตอนสร้าง
 - AC-04 Given Decimal เกินเพดาน (1,001 หลัก รวม trailing zero; `adjusted` ±1,100,001) ในแต่ละช่อง, When เรียก, Then ได้ error ของช่องนั้นภายใน 1.000 วินาที · ค่าที่ขอบพอดี (1,000 หลัก, ±1,100,000, ศูนย์เลขชี้กำลังใดก็ได้) รับได้
-- AC-05 Given input ที่ถูกต้องทั้งหมดของ CORE-002, When รัน `uv run --offline pytest tests -q -p no:cacheprovider`, Then tests ที่ล็อกของ CORE-002/003 และ unit tests ทั้งหมดผ่านโดยไม่แก้ tests เดิม, skipped 0
+- AC-05 Given input ที่ถูกต้องทั้งหมดของ CORE-002, When รัน `uv run --offline pytest tests -q -p no:cacheprovider`, Then tests ที่ล็อกของ CORE-002/003 และ unit tests ทั้งหมดผ่านโดยไม่แก้ tests เดิม (ยกเว้น `tests/unit/risk/test_risk_unit.py` บรรทัด 252–254 ตามที่เจ้าของอนุมัติใน v1.1), skipped 0
 - AC-06 Given int ขนาดยักษ์ที่ผิดโดเมนในช่องนับ (nights, triple_nights, sides, field int ของ model), When เรียก, Then ได้ error เดิมของช่องนั้น (ไม่ใช่ `ValueError` ธรรมดาจากการแปลงเป็นข้อความ)
 
 ## Verification per AC
