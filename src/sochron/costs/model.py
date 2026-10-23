@@ -147,9 +147,12 @@ def _check_model(model: CostModel) -> dict[str, Provenance]:
     construction is the only caller code this check can run, so every other field is read after it.
     The same check runs at construction and at every use (CORE-004 AC-03), with the same errors.
     """
-    if not isinstance(model.provenance, Mapping):
-        raise TypeError(f"provenance must be a Mapping, not {type(model.provenance).__name__}")
-    snapshot = dict(model.provenance)
+    # One read of the attribute (review CORE-004-r1 F1): isinstance() can run code of the object
+    # planted there, so reading model.provenance again could yield a different object.
+    container = model.provenance
+    if not isinstance(container, Mapping):
+        raise TypeError(f"provenance must be a Mapping, not {type(container).__name__}")
+    snapshot = dict(container)
     # Keys must be exactly str before anything compares them: a str subclass's __eq__ is caller code
     # that the key-set comparison below would otherwise run.
     for key in snapshot:

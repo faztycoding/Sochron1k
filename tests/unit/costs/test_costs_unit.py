@@ -187,3 +187,26 @@ def test_model_check_returns_a_private_copy_of_provenance_each_time():
     assert first is not second
     first.clear()
     assert set(H001_COSTS.provenance) == set(PROVENANCE_FIELDS)
+
+
+class _SwapOnClassRead:
+    """Claims to be a dict to isinstance(), and swaps the model's provenance while it is asked."""
+
+    def __init__(self, model, replacement):
+        self._model = model
+        self._replacement = replacement
+
+    @property
+    def __class__(self):
+        object.__setattr__(self._model, "provenance", self._replacement)
+        return dict
+
+
+def test_provenance_attribute_is_read_once_per_check():
+    # Review CORE-004-r1 F1: the check read model.provenance twice, so an object planted there could
+    # pass isinstance() and swap in a list of pairs that dict() then accepted for one call.
+    model = replace(H001_COSTS)
+    pairs = list(H001_COSTS.provenance.items())
+    object.__setattr__(model, "provenance", _SwapOnClassRead(model, pairs))
+    with pytest.raises(TypeError):
+        check_volume(Decimal("0.02"), model)
