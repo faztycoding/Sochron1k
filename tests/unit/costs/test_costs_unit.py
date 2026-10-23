@@ -164,3 +164,26 @@ def test_provenance_must_be_a_mapping():
         replace(H001_COSTS, provenance=list(PROVENANCE_FIELDS))  # type: ignore[arg-type]
     with pytest.raises(TypeError):
         replace(H001_COSTS, provenance="point")  # type: ignore[arg-type]
+
+
+def test_int_arguments_are_exact_and_not_size_bounded():
+    # CORE-004 implementer decision: the size bound protects rational conversions, which only
+    # Decimals reach; an int converts exactly, so an in-domain huge int keeps its CORE-002 result.
+    # 10**1500 points x 0.001 x 100 x 0.01 lots = 10**1497 USD
+    assert points_to_money(10**1500, Decimal("0.01"), H001_COSTS) == Decimal("1E+1497")
+    assert stress(H001_COSTS, 10**1500).stress_factor == Decimal("1E+1500")
+    with pytest.raises(BadStress):
+        stress(H001_COSTS, -(10**5000))
+
+
+def test_model_check_returns_a_private_copy_of_provenance_each_time():
+    # CORE-004: every use validates the model once and works from its own snapshot, so a caller
+    # who keeps the snapshot cannot reach the model's stored provenance.
+    from sochron.costs.model import validate_model
+
+    first = validate_model(H001_COSTS)
+    second = validate_model(H001_COSTS)
+    assert first == dict(H001_COSTS.provenance)
+    assert first is not second
+    first.clear()
+    assert set(H001_COSTS.provenance) == set(PROVENANCE_FIELDS)
