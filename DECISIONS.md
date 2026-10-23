@@ -141,3 +141,18 @@ Conditions:
 - เพิ่ม, ลบ หรือเปลี่ยน pin ใดๆ หลังจากนี้ต้องผ่าน admission และบันทึกใน DECISIONS
 - `uv lock` และ `uv sync` ทำครั้งแรกโดย Claude ภายใต้ CORE-001 เท่านั้น
 Review when: Python รุ่นใหม่, advisory ใหม่ของแพ็กเกจเหล่านี้ หรือเพิ่มโมดูลที่ต้องใช้แพ็กเกจอื่น (เช่น numpy, pyarrow ใน R1)
+
+## D-013 ติดตั้ง uv และ Python ใน CI ด้วย `astral-sh/setup-uv` ตรึง SHA, uv 0.13.0, CPython 3.12.15 (OPS-001) — 2026-10-23 — accepted (เจ้าของอนุมัติในแชท Claude 09:5x รวมการรับ advisory ของ uv 0.13.0 ไว้ชั่วคราว)
+Context: OPS-001 (High, Q6) เพิ่ม job `python-tests` ใน `.github/workflows/ci.yml` ให้ CI รัน pytest บน Linux ทุก PR · ต้องติดตั้ง uv และ Python บน runner ซึ่งเป็น dependency ใหม่ของ CI (ไม่ใช่ของโปรเจกต์ Python; D-012 ไม่เปลี่ยน) · ผล admission อยู่ใน `docs/reviews/OPS-001-admission.md` (Claude session ใหม่ในบทผู้ตรวจตามการสลับบทบาท ตรวจ GitHub/PyPI/OSV 2026-10-22 16:25–16:39 UTC) · เจ้าของเลือกทางนี้ไว้ใน contract OPS-001 (2026-10-22 23:4x)
+Decision: ADMIT สำหรับ job `python-tests` เท่านั้น
+- action `astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e` (release `v10.3.2`, 2026-10-22) ด้วย input `version: "0.13.0"`, `python-version: "3.12.15"`, `enable-cache: false`
+- uv `0.13.0` (archive Linux x86_64 SHA-256 `1468ebd5a5541121837c5a2817b9972ba6090fa6caa3d142620850a47fb75154` ตรวจโดย action)
+- CPython `3.12.15` build `20261009` จาก `astral-sh/python-build-standalone` (SHA-256 `ffa8f85f1b56e88b687f08d743d817015524b86a9365fd921243132b80f1a36d` ตรวจโดย uv) ติดตั้งด้วย `uv python install 3.12.15`
+- คำสั่งใน job: `uv sync --locked` และ `uv run --locked pytest tests -q -p no:cacheprovider` (`--locked` ล้มเมื่อ lock ไม่ตรง pyproject; `--frozen` ไม่ตรวจ) · job แดงเมื่อ test ล้ม, error หรือถูก skip
+Why: ผู้ผลิตเดียวกับ uv, MIT, ไม่มี advisory ของ action, ดาวน์โหลดจาก release ทางการผ่าน mirror ของ Astral พร้อมตรวจ SHA-256, token คง `contents: read`, ไม่มี secret · uv และ Python รุ่นเดียวกับเครื่องเจ้าของจึงเทียบผล test ได้ตรง
+Conditions:
+- **ความเสี่ยงที่เจ้าของรับไว้ชั่วคราว (2026-10-23 09:5x):** uv 0.13.0 มี advisory GHSA-hq85-5cpj-mr62 (CA root ที่ intermediate รั่ว, แก้ใน 0.13.4) · ใน job นี้ทุกการดาวน์โหลดของ uv ตรวจ hash ที่ตรึงไว้ ผลกระทบจึงจำกัดที่ job แดง · เครื่องเจ้าของมี exposure เดียวกัน
+- งานติดตาม: ยก uv เป็น ≥ 0.13.4 ทั้งเครื่องและ CI ในการตัดสินเดียว หลังตรวจว่า `uv.lock` ไม่เปลี่ยนภายใต้ `--locked` ด้วย uv รุ่นใหม่
+- เปลี่ยน SHA ของ action, รุ่น uv, รุ่น Python หรือเปิด cache ต้องผ่าน admission และบันทึกที่นี่ · `control-gate.yml` ไม่เปลี่ยน
+- ลงทะเบียนใน `docs/tooling/registry.md` และปรับแถว uv เดิม
+Review when: advisory ใหม่ของ uv/action, release ใหม่ของ action ที่แก้ความปลอดภัย, เปลี่ยน Python 3.12.x บนเครื่อง, หรือเพิ่ม Windows runner
