@@ -9,7 +9,7 @@ Contract: `docs/contracts/CORE-004-costs-hardening.md` v1.2 (Tier Standard; เ�
 | AC-02 provenance อ่านครั้งเดียว เก็บเป็นสำเนา, key ต้องเป็น `str` พอดี | **PASS** | tests ล็อก AC-02 เขียว (เดิม custom Mapping ถูกอ่าน 3 รอบ) |
 | AC-03 model ที่ถูกแก้หลังสร้าง → error เดียวกับตอนสร้างทุกฟังก์ชัน | **PASS** | tests ล็อก AC-03 เขียว: `-k ac03` เก็บได้ 917 แถว รวม 18 แถวของ `test_ac02_ac03_*` (นับเฉพาะ `test_ac03_*` = 899; เดิมเขียน 840 ผิด, review r2 F8) · ทุกแถวของ AC: `-k ac01` 559, `ac02` 41, `ac04` 454, `ac05` 1, `ac06` 42 จาก 1,993 |
 | AC-04 Decimal เกินเพดาน → error ของช่องนั้นภายใน 1 วินาที, ค่าที่ขอบรับได้ | **PASS** | tests ล็อก AC-04 รวมรอบ 2 (F2 ทีละ field ของ `CostBreakdown`, F3 `volume_step` เลขชี้กำลังบวก) เขียว · การปฏิเสธที่ช้าที่สุดราว 3.5 ms · 2 tests ที่เคยค้างจนถูก watchdog ฆ่าตอนนี้ผ่านในไม่กี่ ms |
-| AC-05 ผลของ input ที่ถูกต้องไม่เปลี่ยน, tests เดิมผ่าน | **PASS** | suite **2788 passed**, skipped 0 · `git diff origin/main` ของ tests ล็อก CORE-002/003 ว่าง · ผู้ตรวจ r1 เทียบโค้ดเก่ากับใหม่บน model สุ่ม 3,000 ชุด × caller context 3 แบบ × 11 ฟังก์ชัน: ผล, ชนิด error และ context ของผู้เรียกตรงกันทุกหลัก · แก้ unit test ของ risk 3 บรรทัดตามที่เจ้าของอนุมัติ (v1.1 F1) |
+| AC-05 ผลของ input ที่ถูกต้องไม่เปลี่ยน, tests เดิมผ่าน | **PASS** | suite **2795 passed** at `aa0feb0` (2788 at `d33d5da` ก่อนแถว F7), skipped 0 · `git diff origin/main` ของ tests ล็อก CORE-002/003 ว่าง · ผู้ตรวจ r1 เทียบโค้ดเก่ากับใหม่บน model สุ่ม 3,000 ชุด × caller context 3 แบบ × 11 ฟังก์ชัน: ผล, ชนิด error และ context ของผู้เรียกตรงกันทุกหลัก · แก้ unit test ของ risk 3 บรรทัดตามที่เจ้าของอนุมัติ (v1.1 F1) |
 | AC-06 int ยักษ์ผิดโดเมน → error ของช่องนั้น ไม่ใช่ `ValueError` | **PASS** | tests ล็อก AC-06 เขียว · ข้อความ error ไม่ format ค่า int อีก |
 
 ## สิ่งที่เปลี่ยน (พฤติกรรม)
@@ -48,10 +48,10 @@ Contract: `docs/contracts/CORE-004-costs-hardening.md` v1.2 (Tier Standard; เ�
    ```
    ผลที่ต้องได้: `subclass -> TypeError`, `1001 digits -> BadVolume`, `exponent -> BadVolume` แต่ละบรรทัดใช้เวลาไม่ถึง 1,000 ms
 
-ผลที่ Claude รัน (2026-10-24 02:0x, commit ก่อน F7–F9 + การแก้ใน working tree): ขั้น 1 `2795 passed in 5.93s` · ขั้น 2 ตรงตามที่เขียนทุกตัวอักษร · ขั้น 3 `subclass -> TypeError 0.0 ms`, `1001 digits -> BadVolume 0.0 ms`, `exponent -> BadVolume 0.0 ms`
+ผลที่ Claude รัน (2026-10-24 02:0x บน `d33d5da` + การแก้ F7–F9 ที่ยังไม่ commit ซึ่งต่อมาเป็น `f47a8b8`/`aa0feb0` โดย `src/` ไม่เปลี่ยน; pre-review r3 รันซ้ำบน `aa0feb0` 02:09–02:10 ได้ผลเดียวกัน, `docs/reviews/CORE-004-r3.md`): ขั้น 1 `2795 passed in 5.93s` · ขั้น 2 ตรงตามที่เขียนทุกตัวอักษร · ขั้น 3 `subclass -> TypeError 0.0 ms`, `1001 digits -> BadVolume 0.0 ms`, `exponent -> BadVolume 0.0 ms`
 
 ## Delivery state
-implemented และ verified ในเครื่อง (2795 passed) · reviews: tests-r1, r1, r2 (F1–F6 ปิด; F7–F9 ตอบแล้ว รอ subagent ตรวจซ้ำตามที่เจ้าของเลือก) · ยังไม่ merged, ไม่ deployed · CI รอ run ของ PR
+implemented และ verified ในเครื่อง (2795 passed at `aa0feb0`) · reviews: tests-r1, r1, r2 (F1–F6 ปิด), pre-review r3 โดย subagent (F7–F9 ปิด, F10 เอกสารแก้ในไฟล์นี้, Ready for PR: yes) · ยังไม่ merged, ไม่ deployed · CI รอ run ของ PR
 
 ## Review r1 (`docs/reviews/CORE-004-r1.md`) และการตอบ
 | ID | ผล | การตอบ | Regression |
@@ -89,6 +89,11 @@ r2 ปิด F1–F6 ทั้งหมด (regression ของ F1/F3 ล้ม
 | commit tests r2 | `0c0a5b0` | – | 19:19 |
 | F1: regression ล้มก่อนแก้ → แก้ → suite | `1 failed` → `1 passed` → **2785 passed** | f627350 | 20:1x |
 | F3: regression ล้มก่อนแก้ → แก้ → suite | `3 failed` → `3 passed` → **2788 passed** | d33d5da | 20:1x |
+| fresh review r2 (`docs/reviews/CORE-004-r2.md`) | F1–F6 ปิด · Low F7–F9 · `2788 passed` | 4ea84b7 | 20:15–20:33 |
+| F7: `timeout -k 10 300 uv run --offline pytest tests/unit/costs -q -p no:cacheprovider -k checked_again_at_use` | `10 passed` | d33d5da + F7 rows (= `f47a8b8`) | 2026-10-24 02:0x |
+| F7 mutant: `timeout -k 10 120 uv run --offline --no-sync python -I -B <scratch>/f7mut/run_f7_mutant.py <repo> <scratch>/f7mut` (สคริปต์ copy `src/sochron` ไป scratch, แทน `_check_provenance(record)` ใน `_check_model` ด้วยการตรวจเฉพาะ `status`, import สำเนาก่อน แล้วเรียก test function ทีละแถว) | import จาก scratch `src\sochron\costs\__init__.py` · แถว `status` 3 ผ่าน · แถว `source`/`note`/`as_of` 7 ล้ม (`rows failing on the mutant: 7 of 10`) | d33d5da + F7 rows | 2026-10-24 02:0x |
+| `timeout -k 10 900 uv run --offline pytest tests -q -p no:cacheprovider` (demo ขั้น 1) | **2795 passed in 5.93s** | d33d5da + F7–F9 (src = `aa0feb0`) | 2026-10-24 02:07:03 |
+| pre-review r3 (subagent `fresh-eyes-reviewer`, ตามที่เจ้าของเลือก): F7–F9 + demo ทั้ง 3 ขั้น + suite | F7–F9 ปิด · Low F10 (ไฟล์นี้) · `2795 passed in 8.64s` · Ready for PR: yes | aa0feb0 | 02:08–02:11 |
 
 ## ยังไม่ได้ทดสอบ / ข้อจำกัด
 - CI บน Linux จนกว่า PR จะรัน · เวลาที่วัดได้มาจากเครื่องนี้ (contract ระบุเป็นเครื่องอ้างอิง)
