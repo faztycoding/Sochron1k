@@ -1,7 +1,7 @@
 # TASK CORE-005 — `core.Bar` + `data.snapshot`: ตรวจคุณภาพแท่ง M1 และประกอบ M15 แบบ pure
 
-Version v1 (ร่าง 2026-10-23 15:0x) · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 7 (data flow: timebase → data snapshot + validation report), ข้อ 8 แถว `core` และ `data.snapshot`, ข้อ 10 แถว 2 (SLICE-R1: snapshot → validation) · H001 ข้อ 2 (M15 สร้างจาก M1), ข้อ 3 (Invalidation: แท่งใน lookback ขาดหาย, ช่วงที่ validation ให้ STOP) · Tier **Standard** · Branch `feat/CORE-005-data-bars`
-Status: **approved by owner 2026-10-23 15:0x** (acceptance AC-01–AC-07 และทางที่แนะนำทุกข้อ: D1 spread ของ M1 แท่งสุดท้าย · D2 ปฏิทินช่วงปิด [A] 17:00–18:00 NY และศุกร์ 17:00 → อาทิตย์ 18:00 NY · D3 `max_gap_minutes` = 5 [A] · D4 ผู้เขียน tests และผู้ตรวจ = Claude session ใหม่ตามการสลับบทบาท คนละ session กับผู้ทำเสมอ)
+Version v1.1 (v1 ร่าง 2026-10-23 15:0x → v1.1 2026-10-24 03:0x: เจ้าของรับข้อเสนอของ `docs/reviews/CORE-005-tests-r1.md` ทั้งหมด = tests รอบ 2 แก้ F1–F5, F7, F8, F11 · contract ข้อ (1)–(5) ในหัวข้อ "v1.1" ข้างล่าง · คำถาม 7 คง D2 ให้ R1 วัดจริง) · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 7 (data flow: timebase → data snapshot + validation report), ข้อ 8 แถว `core` และ `data.snapshot`, ข้อ 10 แถว 2 (SLICE-R1: snapshot → validation) · H001 ข้อ 2 (M15 สร้างจาก M1), ข้อ 3 (Invalidation: แท่งใน lookback ขาดหาย, ช่วงที่ validation ให้ STOP) · Tier **Standard** · Branch `feat/CORE-005-data-bars`
+Status: **v1.1 approved by owner 2026-10-24 03:0x (tests รอบ 2 กำลังเขียน)** · เดิม: approved by owner 2026-10-23 15:0x (acceptance AC-01–AC-07 และทางที่แนะนำทุกข้อ: D1 spread ของ M1 แท่งสุดท้าย · D2 ปฏิทินช่วงปิด [A] 17:00–18:00 NY และศุกร์ 17:00 → อาทิตย์ 18:00 NY · D3 `max_gap_minutes` = 5 [A] · D4 ผู้เขียน tests และผู้ตรวจ = Claude session ใหม่ตามการสลับบทบาท คนละ session กับผู้ทำเสมอ)
 Hypothesis (research tasks): ไม่ใช่งานวิจัย แต่ให้บริการ H001 (`docs/hypotheses/H001-m15-momentum-breakout.md`) · ไม่มีการดึงหรืออ่านข้อมูลตลาดจริง (ห้ามก่อน ENV-1) · tests ใช้ข้อมูลสังเคราะห์เท่านั้น
 
 ## Risk tier (Q1–Q6, one line each; unsure = yes)
@@ -51,7 +51,7 @@ sochron.data.snapshot
   Defect (frozen): code: str, severity: Severity, time_raw: int | None, detail: str
   ClosureCalendar (frozen): zone: str, daily_break: tuple[time, time], weekend: tuple[(weekday, time), (weekday, time)], provenance
   H001_CLOSURES: ClosureCalendar          # ค่า [A] ตาม D2
-  ValidationReport (frozen): defects: tuple[Defect, ...], days: Mapping[date, DayStatus] (read-only), m1_bars: int
+  ValidationReport (frozen): defects: tuple[Defect, ...], days: Mapping[date, DayStatus] (read-only), m1_bars: int, calendar: ClosureCalendar (v1.1)
   validate_m1(bars: Sequence[Bar], rule: TimeRule, calendar: ClosureCalendar, max_gap_minutes: int) -> ValidationReport
   aggregate(bars: Sequence[Bar], timeframe: int, rule: TimeRule, report: ValidationReport) -> tuple[AggregatedBar, ...]
   AggregatedBar (frozen): bar: Bar, flags: frozenset[str]   # flags มาจาก defect ของ M1 ภายในแท่งและช่องว่างที่ไม่คาด
@@ -61,11 +61,18 @@ sochron.data.snapshot
 
 กติกาสถานะรายวัน (วัน UTC): มี STOP อย่างน้อยหนึ่ง → STOP · ไม่มี STOP แต่มี UNKNOWN → UNKNOWN · มีแต่ WARN → WARN · ไม่มี defect → PASS
 
+**v1.1 (เจ้าของ 2026-10-24 03:0x, ตาม review tests-r1):**
+1. `Bar` ปฏิเสธเพิ่ม (`ValueError`): `tick_volume < 0`, `m1_count < 1`, และ `time_utc` ที่ aware แต่ offset ไม่ใช่ 0 (ต้องเป็น UTC) · **ไม่มีเพดานบนของ `m1_count`** (ผู้ทำปรับจากข้อเสนอ "1..timeframe": M1 ที่ซ้ำเวลาในข้อมูลโบรกเกอร์ซึ่งเป็น defect STOP อยู่แล้วทำให้ `aggregate` นับเกิน timeframe ได้จริง ถ้าตั้งเพดาน `aggregate` จะพังทั้งชุดเพราะแท่งซ้ำแท่งเดียว)
+2. `validate_m1` ปฏิเสธ `max_gap_minutes < 0` ด้วย `ValueError`
+3. `ValidationReport` มี field `calendar: ClosureCalendar` (ปฏิทินที่ใช้ตรวจ) และ `aggregate` ใช้ field นี้ตัดสิน `incomplete` ตามกติกาข้างล่าง (review F12)
+4. AC-06 ครอบ `src/sochron/data/__init__.py` ด้วย (review F10) และห้าม `float` (ชื่อและ literal) ใน `sochron.data.snapshot` แบบเดียวกับ costs/risk (คำถาม 8)
+5. `empty_weekday` ไม่มีเวลา (`time_raw` = None; วันที่อยู่ใน `days` และ `detail`) ซึ่งเป็นข้อยกเว้นเดียวของ invariant "มีรหัสและเวลา" (review F9) · วันเสาร์/อาทิตย์ที่ไม่มีแท่งไม่อยู่ใน `report.days` (review F3, คำถาม 5) · `aggregate` ไม่ปฏิเสธ input ที่ไม่เรียงหรือซ้ำ: จัดกลุ่มตาม `bar_open` เรียงในแท่งตาม `time_raw` แบบ stable และพึ่ง defect ใน report (คำถาม 4)
+
 กติกาประกอบแท่ง (D1): จัดกลุ่ม M1 ตาม `timebase.bar_open(time_raw, timeframe, rule)` · open = open ของ M1 แรก, high = max, low = min, close = close ของ M1 สุดท้าย, tick_volume = ผลรวม, `spread` = spread ของ M1 สุดท้าย (None ถ้าแท่งสุดท้ายไม่มีค่า), `m1_count` = จำนวน M1 · ช่องเวลา M15 ที่ไม่มี M1 เลยไม่สร้างแท่ง (ไม่เติม) · flags ของแท่ง = รหัส defect ของ M1 ในแท่ง + `incomplete` ถ้า `m1_count < timeframe` และช่องที่ขาดไม่อยู่ในช่วงปิดตามปฏิทิน
 
 ## Invariants
 - input ไม่ถูกแก้: `validate_m1` และ `aggregate` ไม่เปลี่ยน list หรือแท่งที่รับมา และไม่ลบ/เติม/ซ่อมแท่งใด
-- ข้อมูลเสียทุกแบบมีรหัสและเวลาใน report ไม่มีการกลืนเงียบ
+- ข้อมูลเสียทุกแบบมีรหัสและเวลาใน report ไม่มีการกลืนเงียบ (ยกเว้น `empty_weekday` ที่ไม่มีแท่งให้อ้างเวลา: วันที่อยู่ใน `days` และ `detail`, v1.1)
 - ผลขึ้นกับ input เท่านั้น (เรียกซ้ำได้ผลเดิม) · ไม่ใช้ float ในราคา
 - ทุกการแปลงเวลาไปผ่าน `timebase` (ไม่คำนวณ offset เอง)
 - import ได้เฉพาะ `core` และ `timebase` ตาม module map
@@ -79,7 +86,7 @@ sochron.data.snapshot
 - AC-03 Given แท่ง M1 ที่ใส่ความผิดปกติทีละแบบตามรายการรหัส defect When `validate_m1` Then report มีรหัส, severity และเวลาที่ถูกต้องของความผิดปกตินั้น · input ไม่ถูกแก้ (เทียบ copy ก่อนและหลัง) · แท่งไม่ถูกลบหรือเติม
 - AC-04 Given ช่องว่างใน M1 ที่ (ก) อยู่ในช่วงพักรายวัน (ข) ข้ามสุดสัปดาห์ (ค) อยู่ใน session ยาวเท่า `max_gap_minutes` พอดี (ง) ยาวเกินหนึ่งนาที รวมวันเปลี่ยน DST ของ NY When `validate_m1` Then (ก)–(ค) ไม่เป็น defect และ (ง) เป็น `unexpected_gap` (WARN) · แท่ง M15 ที่มีช่องว่างแบบ (ง) ได้ flag
 - AC-05 Given ชุดวันที่มี defect ผสมกัน When อ่าน `report.days` Then สถานะแต่ละวันเป็นไปตามกติกา STOP > UNKNOWN > WARN > PASS และวันธรรมดาที่ไม่มีแท่งได้ UNKNOWN
-- AC-06 Given source ของ `sochron.core` และ `sochron.data.snapshot` When รัน architecture test Then ไม่มี I/O, นาฬิกา, สุ่ม, `MetaTrader5`, network และไม่ import `broker`, `data.acquire`, `execution`, `journal`, `research` (import ได้เฉพาะ `core`, `timebase` และ stdlib ที่ไม่ใช่ side effect)
+- AC-06 Given source ของ `sochron.core`, `sochron.data` (`__init__.py`, v1.1) และ `sochron.data.snapshot` When รัน architecture test Then ไม่มี I/O, นาฬิกา, สุ่ม, `MetaTrader5`, network, `float` ใน snapshot (v1.1) และไม่ import `broker`, `data.acquire`, `execution`, `journal`, `research` (import ได้เฉพาะ `core`, `timebase` และ stdlib ที่ไม่ใช่ side effect)
 - AC-07 Given ทั้ง suite When `uv run --offline pytest tests -q -p no:cacheprovider` Then ผ่านทั้งหมด skipped 0 และ CI `python-tests` เขียว
 
 ## Verification per AC
