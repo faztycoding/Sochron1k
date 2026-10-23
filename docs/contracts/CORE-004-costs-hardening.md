@@ -1,7 +1,7 @@
 # TASK CORE-004 — ทำให้ `sochron.costs` ปฏิเสธ input ผิดแบบเดียวกับ `sochron.risk`
 
-Version v1.1 (ร่าง 2026-10-22 23:2x → v1.1 2026-10-23 18:3x: เจ้าของตัดสินตาม `docs/reviews/CORE-004-tests-r1.md` F1 = ขยาย allowed files ให้แก้ `tests/unit/risk/test_risk_unit.py` บรรทัด 252–254 โดยคงเจตนาเดิม, F2/F3 = ให้ผู้รับบท test author เขียน tests patch รอบ 2 ทันที · acceptance เดิมทุกข้อ) · Owner เจ้าของ repository · Parent `docs/contracts/CORE-002-costs.md` (merged PR #10) · `docs/reviews/CORE-003-security-pre-r1.md` ข้อ "Not checked": costs มี Mapping TOCTOU และรับ subclass แบบเดียวกับที่ risk แก้แล้ว · `docs/contracts/CORE-003-risk.md` v1.9 (ขอบเขตของการป้องกัน) · Tier **Standard** · Branch `fix/CORE-004-costs-hardening`
-Status: **approved by owner 2026-10-22 23:4x** (acceptance และแผน · ผู้เขียน tests ที่ล็อกและผู้ตรวจ = Claude session ใหม่ตามการสลับบทบาทระหว่าง Codex หมดโควตา)
+Version v1.2 (v1.2 2026-10-23 เจ้าของตอบระหว่าง 19:2x–20:1x ตาม `docs/reviews/CORE-004-r1.md`: F3 = ตรวจ field ของทุก Provenance record ซ้ำตอนใช้, F4 = status ที่ไม่ใช่ `str` เป็น `TypeError` (เดิม CORE-002 ให้ `BadProvenance`), F5 และ F6 = ข้อจำกัดที่รับไว้ ดูหัวข้อ Risk · acceptance เดิมทุกข้อ) · เดิม v1.1 (ร่าง 2026-10-22 23:2x → v1.1 2026-10-23 18:3x: เจ้าของตัดสินตาม `docs/reviews/CORE-004-tests-r1.md` F1 = ขยาย allowed files ให้แก้ `tests/unit/risk/test_risk_unit.py` บรรทัด 252–254 โดยคงเจตนาเดิม, F2/F3 = ให้ผู้รับบท test author เขียน tests patch รอบ 2 ทันที · acceptance เดิมทุกข้อ) · Owner เจ้าของ repository · Parent `docs/contracts/CORE-002-costs.md` (merged PR #10) · `docs/reviews/CORE-003-security-pre-r1.md` ข้อ "Not checked": costs มี Mapping TOCTOU และรับ subclass แบบเดียวกับที่ risk แก้แล้ว · `docs/contracts/CORE-003-risk.md` v1.9 (ขอบเขตของการป้องกัน) · Tier **Standard** · Branch `fix/CORE-004-costs-hardening`
+Status: **implemented and verified locally 2026-10-23 20:1x; รอ re-review ของ F1/F3, PR (label), CI และ merge** (`docs/evidence/CORE-004.md`) · เดิม: approved by owner 2026-10-22 23:4x (acceptance และแผน · ผู้เขียน tests ที่ล็อกและผู้ตรวจ = Claude session ใหม่ตามการสลับบทบาทระหว่าง Codex หมดโควตา)
 Hypothesis (research tasks): ไม่ใช่งานวิจัย (ให้บริการ H001 ข้อ 6 Costs)
 
 ## Risk tier (Q1–Q6, one line each; unsure = yes)
@@ -35,6 +35,8 @@ API ของ CORE-002 ไม่เปลี่ยนชื่อหรือ si
 | field ของ `CostModel` ที่ถูกแก้หลังสร้าง (เช่น `object.__setattr__`) | ทุกฟังก์ชันที่รับ `model` ตรวจ field ทั้งหมดซ้ำด้วยกติกาเดียวกับตอนสร้าง และให้ error เดียวกัน |
 | Decimal ที่ coefficient เกิน 1,000 หลัก หรือไม่ใช่ศูนย์และ `abs(adjusted())` > 1,100,000 (เพดานเดียวกับ risk) ทุกตำแหน่ง | error ของช่องนั้น: lots → `BadVolume`, points → `BadPoints`, `r` → `BadR`, `stress_factor`/factor → `BadStress`, field อื่นของ model และ `money` → `CostsError` · ปฏิเสธก่อนแปลงเป็นตรรกยะ และทุกครั้ง < 1.000 วินาทีบนเครื่องอ้างอิง (Decimal ที่สร้างไว้ก่อน, `perf_counter` รอบการเรียก) |
 | int ขนาดยักษ์ที่ผิดโดเมน (เช่น nights = −10**5000) | error เดิมของช่องนั้น ไม่ใช่ `ValueError` จากการแปลงเป็น str |
+| (v1.2, r1 F3) Provenance record ใน model ที่ field ถูกแก้หลังสร้าง | ทุกการใช้ model ตรวจ record ซ้ำด้วยกติกาเดียวกับตอนสร้าง Provenance และให้ error เดียวกัน |
+| (v1.2, r1 F4) `status` ที่ไม่ใช่ `str` (เช่น `None`, `1`) | `TypeError` ตามกติกาทั่วไป "ชนิดผิด = `TypeError`" (CORE-002 เดิมให้ `BadProvenance`) · `str` ที่ไม่อยู่ใน 4 ค่ายังเป็น `BadProvenance` |
 
 ## Invariants
 - input ที่ถูกต้องให้ผลเท่าเดิมทุกหลัก: tests ที่ล็อกของ CORE-002 และ CORE-003 ผ่านโดยไม่แก้ · `H001_COSTS` เท่าเดิม
@@ -61,6 +63,7 @@ subclass ที่ตอบ `is_finite`/`as_integer_ratio`/`==` หลอก · 
 
 ## Risk, data and external side effects
 ไม่มีผลภายนอก · ความเสี่ยงหลัก: ผลของ input ที่ถูกต้องเปลี่ยน → AC-05 และ golden ของ CORE-002 · risk พึ่ง costs (`CostModel`, `Provenance`, `CONTEXT`) → suite ของ CORE-003 ต้องผ่าน
+ข้อจำกัดที่เจ้าของรับไว้ (v1.2): **F5** int ในโดเมนที่ใหญ่ระดับล้านหลัก (points, sides, nights, factor) ทำให้การเรียกครั้งเดียวช้าราว 15 วินาที ซึ่งเป็นอยู่แล้วบน main ก่อน CORE-004 และ contract นี้คุมขนาดเฉพาะ Decimal · ค่าจริงมาจาก MT5 และ E1 ต้องตรวจตอนสร้าง (แนวเดียวกับ CORE-003 E1 L3) · **F6** subclass ที่ใช้ metaclass ประหลาดเลือกชนิด error ตอนถูกปฏิเสธได้ แต่ยังถูกปฏิเสธเสมอ (รูปแบบเดียวกับ risk; โค้ดร้ายใน process อยู่นอกขอบเขตตาม CORE-003 v1.7, E1 L2)
 
 ## Plan, dependencies and unknowns (P06)
 1. Understanding: ยกรูปแบบป้องกันของ risk (`require_exact`, `finite_bounded`, snapshot provenance, validate ตอนใช้) มาใช้ใน costs โดยไม่เปลี่ยนผลของ input ที่ถูกต้อง · เข้าใจผิดที่เป็นไปได้: (ก) คิดว่าเปลี่ยนสูตร/การปัด — ไม่ (ข) คิดว่าแก้ tests ที่ล็อกเดิม — ไม่ (ค) คิดว่ากันโค้ดร้ายใน process — ไม่ (ขอบเขต v1.7 ของ CORE-003)

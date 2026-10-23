@@ -354,3 +354,26 @@ Delivery state: round-2 test proposal **implemented**, and verified red (against
 green (against 5f7a382) in scratch. It is unapplied, unstaged, uncommitted, not reviewed and not
 merged. Next action: the implementer applies it via D-006, verifies the hashes, obtains a
 fresh-session review, then commits.
+
+## Implementer notes (Claude Code, the CORE-004 implementer)
+
+Commits: `5f7a382` (implementation), `f627350` (review r1 F1), `d33d5da` (review r1 F3). Evidence:
+`docs/evidence/CORE-004.md`. Contract v1.2 records the owner's decisions on tests-r1 F1-F3 and r1 F3-F6.
+
+Decisions taken in the code, for the re-reviewer:
+- **Exact types** follow `sochron.risk`: `type(x) is T` everywhere; `Provenance` and `CostModel` refuse to be
+  subclassed in `__post_init__`.
+- **One model check per public call.** `validate_model` runs first in every public function and returns the
+  validated provenance snapshot; private helpers (`_volume`, `_money`, `_slippage`, `_commission`, `_swap`) take
+  checked values, so provenance is read once per call. Argument checks keep the CORE-002 order after the model.
+- **Provenance read**: the attribute once into a local (F1), `dict()` of it once (one traversal), keys exactly
+  `str` before any comparison, then the other fields, then the key set, then each record's type and fields (F3).
+- **`stress()`** rebuilds with `provenance=snapshot`, so the caller's container is not read again.
+- **Size bound** only on Decimals (`bounded_decimal`, `_DIGITS.plus` with `Rounded` trapped, zero exempt from
+  the exponent bound). Ints convert exactly and are not bounded; known slow path for million-digit ints (F5).
+- **Messages** do not format ints or values that may be huge.
+- `validate_model`, `bounded_decimal`, `MAX_DIGITS`, `MAX_ADJUSTED` are module-level helpers, not exported from
+  `sochron.costs`; the CORE-002 public API is unchanged.
+
+Checks: `timeout -k 10 900 uv run --offline pytest tests -q -p no:cacheprovider` -> 2788 passed at `d33d5da`.
+Next: fresh-session re-review of r1 F1 and F3 (and the v1.2 contract text), then PR with the label.
