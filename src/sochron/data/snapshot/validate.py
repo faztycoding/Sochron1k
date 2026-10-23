@@ -18,7 +18,7 @@ from types import MappingProxyType
 from sochron.core import Bar
 from sochron.timebase import TimeRule, to_utc, to_zone
 
-from .model import ClosureCalendar, Defect, Severity, ValidationReport, exact
+from .model import ClosureCalendar, DayStatus, Defect, Severity, ValidationReport, exact
 
 _RANK: dict[str, int] = {"PASS": 0, "WARN": 1, "UNKNOWN": 2, "STOP": 3}
 _MINUTE = 60
@@ -110,7 +110,7 @@ def validate_m1(bars: Sequence[Bar], rule: TimeRule, calendar: ClosureCalendar, 
         raise ValueError("max_gap_minutes cannot be negative")
 
     defects: list[Defect] = []
-    days: dict[date, str] = {}
+    days: dict[date, DayStatus] = {}
     previous: tuple[int, datetime] | None = None
     # Every time already read (review CORE-005-r1 F1): overlapping downloads repeat earlier times
     # after one step back, and comparing with the bar just before would miss all but the first.
@@ -120,13 +120,16 @@ def validate_m1(bars: Sequence[Bar], rule: TimeRule, calendar: ClosureCalendar, 
         day = utc.date()
         days.setdefault(day, "PASS")
         found = _bar_defects(bar, utc)
-        if bar.time_raw in seen:
+        repeated = bar.time_raw in seen
+        if repeated:
             found.append(("duplicate_time", "STOP", "an open time already read earlier in the series"))
-        elif previous is not None:
+        if previous is not None:
             previous_raw, previous_utc = previous
-            if bar.time_raw < previous_raw:
+            if bar.time_raw < previous_raw and not repeated:
                 found.append(("time_not_increasing", "STOP", "an open time before the bar before"))
-            else:
+            # Every forward step is checked for a gap, repeated or not (review CORE-005-r2 F10):
+            # a repeated bar can be the one that ends a real gap.
+            if bar.time_raw > previous_raw:
                 missing = in_session_missing(previous_utc, utc, calendar, max_gap_minutes)
                 if missing > max_gap_minutes:
                     found.append(

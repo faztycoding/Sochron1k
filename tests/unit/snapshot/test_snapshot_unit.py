@@ -128,3 +128,16 @@ def test_an_m1_bar_must_count_one_m1():
         validate_m1([wrong], RULE, H001_CLOSURES, 5)
     with pytest.raises(ValueError):
         aggregate([wrong], 15, RULE, validate_m1([bar], RULE, H001_CLOSURES, 5))
+
+
+def test_a_repeated_bar_that_ends_a_real_gap_still_reports_the_gap():
+    # Review CORE-005-r2 F10: after the F1 fix a repeated time skipped the gap check, so a real gap
+    # closed by a repeated bar lost its unexpected_gap. Chunks joined newest first:
+    later = [_bar(datetime(2026, 3, 10, 13, minute, tzinfo=UTC)) for minute in range(30, 60)]
+    earlier = [_bar(datetime(2026, 3, 10, 13, minute, tzinfo=UTC)) for minute in [*range(11), *range(30, 36)]]
+    report = validate_m1(later + earlier, RULE, H001_CLOSURES, 5)
+    found = {(defect.code, defect.time_raw) for defect in report.defects}
+    at = int(datetime(2026, 3, 10, 13, 30, tzinfo=UTC).timestamp())
+    assert ("unexpected_gap", at) in found
+    assert ("duplicate_time", at) in found
+    assert ("time_not_increasing", int(datetime(2026, 3, 10, 13, 0, tzinfo=UTC).timestamp())) in found
