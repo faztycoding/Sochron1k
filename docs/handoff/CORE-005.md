@@ -505,7 +505,8 @@ Decisions, for the re-reviewer:
 
 Timing script used for the evidence (run from the repo root as
 `uv run --offline --no-sync python -I -B <script> <repo>/src 500000`; result on the reference machine 2026-10-24:
-build 2.92 s, `validate_m1` 3.08 s, `aggregate` 0.91 s, 0 defects):
+`validate_m1` 3.08 s, `aggregate` 0.91 s, 0 defects; the original scratch run also timed building the 500,000 bars,
+2.92 s, which this trimmed copy does not print):
 
 ```python
 import sys
