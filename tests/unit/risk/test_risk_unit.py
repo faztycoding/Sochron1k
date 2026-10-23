@@ -249,7 +249,10 @@ def test_subclasses_of_value_types_are_refused():
         EntryRequest("long", Decimal("0.02"), Decimal("4012.90"), Decimal("4000.90"), _Count(7))
     with pytest.raises(TypeError):
         size_position(_Lots("10000"), Decimal("12"), H001_COSTS, H001_RISK)
-    step_model = replace(H001_COSTS, volume_step=_Lots("0.01"))
+    # Since CORE-004 the constructor refuses a subclass, so it is planted after construction
+    # (review CORE-004-tests-r1 F1; owner decision 2026-10-23 18:3x).
+    step_model = replace(H001_COSTS)
+    object.__setattr__(step_model, "volume_step", _Lots("0.01"))
     with pytest.raises(TypeError):
         size_position(Decimal("10000"), Decimal("12"), step_model, H001_RISK)
 

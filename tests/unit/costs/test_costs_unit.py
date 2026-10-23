@@ -3,7 +3,7 @@ the contract; these cover internals the implementer relied on: the module-owned 
 sign handling, provenance isolation and the validation helpers."""
 
 from dataclasses import FrozenInstanceError, replace
-from datetime import date
+from datetime import date, datetime
 from decimal import Context, Decimal, localcontext
 
 import pytest
@@ -164,3 +164,91 @@ def test_provenance_must_be_a_mapping():
         replace(H001_COSTS, provenance=list(PROVENANCE_FIELDS))  # type: ignore[arg-type]
     with pytest.raises(TypeError):
         replace(H001_COSTS, provenance="point")  # type: ignore[arg-type]
+
+
+def test_int_arguments_are_exact_and_not_size_bounded():
+    # CORE-004 implementer decision: the size bound protects rational conversions, which only
+    # Decimals reach; an int converts exactly, so an in-domain huge int keeps its CORE-002 result.
+    # 10**1500 points x 0.001 x 100 x 0.01 lots = 10**1497 USD
+    assert points_to_money(10**1500, Decimal("0.01"), H001_COSTS) == Decimal("1E+1497")
+    assert stress(H001_COSTS, 10**1500).stress_factor == Decimal("1E+1500")
+    with pytest.raises(BadStress):
+        stress(H001_COSTS, -(10**5000))
+
+
+def test_model_check_returns_a_private_copy_of_provenance_each_time():
+    # CORE-004: every use validates the model once and works from its own snapshot, so a caller
+    # who keeps the snapshot cannot reach the model's stored provenance.
+    from sochron.costs.model import validate_model
+
+    first = validate_model(H001_COSTS)
+    second = validate_model(H001_COSTS)
+    assert first == dict(H001_COSTS.provenance)
+    assert first is not second
+    first.clear()
+    assert set(H001_COSTS.provenance) == set(PROVENANCE_FIELDS)
+
+
+class _SwapOnClassRead:
+    """Claims to be a dict to isinstance(), and swaps the model's provenance while it is asked."""
+
+    def __init__(self, model, replacement):
+        self._model = model
+        self._replacement = replacement
+
+    @property
+    def __class__(self):
+        object.__setattr__(self._model, "provenance", self._replacement)
+        return dict
+
+
+def test_provenance_attribute_is_read_once_per_check():
+    # Review CORE-004-r1 F1: the check read model.provenance twice, so an object planted there could
+    # pass isinstance() and swap in a list of pairs that dict() then accepted for one call.
+    model = replace(H001_COSTS)
+    pairs = list(H001_COSTS.provenance.items())
+    object.__setattr__(model, "provenance", _SwapOnClassRead(model, pairs))
+    with pytest.raises(TypeError):
+        check_volume(Decimal("0.02"), model)
+
+
+class _NotAStatus(str):
+    def __eq__(self, other):
+        return False
+
+    __hash__ = str.__hash__
+
+
+class _OtherDay(date):
+    pass
+
+
+@pytest.mark.parametrize(
+    ("field", "planted", "error"),
+    [
+        ("status", "bogus", BadProvenance),
+        ("status", None, TypeError),
+        ("status", _NotAStatus("assumed"), TypeError),
+        # Review CORE-004-r2 F7: every field is checked again, not only status.
+        ("source", 1, TypeError),
+        ("source", _NotAStatus("x"), TypeError),
+        ("note", None, TypeError),
+        ("note", _NotAStatus("x"), TypeError),
+        ("as_of", "2026-10-21", TypeError),
+        ("as_of", datetime(2026, 10, 21), TypeError),
+        ("as_of", _OtherDay(2026, 10, 21), TypeError),
+    ],
+)
+def test_provenance_records_are_checked_again_at_use(field, planted, error):
+    # Review CORE-004-r1 F3 (owner: fix): a record changed after construction kept its place, so
+    # unknowns() could drop an assumed constant; each use now re-runs the construction rule.
+    record = replace(H001_COSTS.provenance["commission_per_lot_per_side"])
+    model = replace(H001_COSTS, provenance={**H001_COSTS.provenance, "commission_per_lot_per_side": record})
+    assert "commission_per_lot_per_side" in unknowns(model)
+    object.__setattr__(record, field, planted)
+    with pytest.raises(error):
+        unknowns(model)
+    with pytest.raises(error):
+        stress(model)
+    with pytest.raises(error):
+        check_volume(Decimal("0.02"), model)

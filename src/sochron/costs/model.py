@@ -5,12 +5,16 @@ H001_COSTS encodes H001 section 6 and the XAUUSDm specification measured in SPIK
 values are today's specification and say nothing about 2018-2024, which stays UNKNOWN
 (docs/architecture.md section 13a, R1 data selection gate). All arithmetic runs in the module's
 own Decimal context (precision 28, ROUND_HALF_EVEN), never the caller's.
+
+Inputs are checked the way sochron.risk checks them (docs/contracts/CORE-004-costs-hardening.md):
+exact types only, provenance read once and first, every field checked again at each use, and a
+size bound on every Decimal that refuses oversized values before any rational conversion.
 """
 
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import date
-from decimal import ROUND_HALF_EVEN, Context, Decimal, localcontext
+from decimal import MAX_EMAX, MIN_EMIN, ROUND_HALF_EVEN, Context, Decimal, Rounded, localcontext
 from types import MappingProxyType
 from typing import Literal
 
@@ -47,8 +51,46 @@ _DECIMAL_FIELDS = (
 _INT_FIELDS = ("spread_fallback_points", "slippage_points_per_side", "triple_swap_weekday")
 
 
-def _is_int(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool)
+# Exact types only (CORE-004 AC-01, as in sochron.risk): a subclass can answer the validation
+# (is_finite, <=, in, ==) differently from the arithmetic that follows, so none is accepted.
+
+
+def is_int(value: object) -> bool:
+    return type(value) is int
+
+
+def require_exact(value: object, kind: type, name: str) -> object:
+    if type(value) is not kind:
+        raise TypeError(f"{name} must be exactly {kind.__name__}, not {type(value).__name__}")
+    return value
+
+
+# Size bound (CORE-004 AC-04, the same numbers as sochron.risk): rational conversion builds
+# 10**|exponent|, so oversized values are refused first, and quickly. plus() in _DIGITS signals
+# Rounded exactly when the coefficient has more than MAX_DIGITS digits (trailing zeros included),
+# counted in C. Zero is never bounded by its exponent: 0E-999999999999999999 is zero.
+MAX_DIGITS = 1000
+MAX_ADJUSTED = 1_100_000
+_DIGITS = Context(prec=MAX_DIGITS, rounding=ROUND_HALF_EVEN, Emax=MAX_EMAX, Emin=MIN_EMIN, traps=[Rounded])
+
+
+def bounded_decimal(value: object, name: str, error: type[CostsError]) -> Decimal:
+    """Exactly a finite Decimal within the supported size, or TypeError / the slot's error.
+
+    Messages never echo the value: an oversized value would make the message itself huge.
+    """
+    if type(value) is not Decimal:
+        raise TypeError(f"{name} must be exactly Decimal, not {type(value).__name__}")
+    if not value.is_finite():
+        raise error(f"{name} must be finite")
+    too_big = f"{name} is outside the supported size: at most {MAX_DIGITS} digits and |adjusted exponent| <= {MAX_ADJUSTED}"
+    if not value.is_zero() and abs(value.adjusted()) > MAX_ADJUSTED:
+        raise error(too_big)
+    try:
+        _DIGITS.plus(value)
+    except Rounded:
+        raise error(too_big) from None
+    return value
 
 
 @dataclass(frozen=True)
@@ -61,12 +103,21 @@ class Provenance:
     note: str = ""
 
     def __post_init__(self) -> None:
-        if not isinstance(self.source, str) or not isinstance(self.note, str):
-            raise TypeError("source and note must be str")
-        if not isinstance(self.as_of, date):
-            raise TypeError("as_of must be a date")
-        if self.status not in STATUSES:
-            raise BadProvenance(f"status must be one of {sorted(STATUSES)}, got {self.status!r}")
+        if type(self) is not Provenance:
+            raise TypeError(f"Provenance cannot be subclassed, got {type(self).__name__}")
+        _check_provenance(self)
+
+
+def _check_provenance(record: Provenance) -> None:
+    """The construction rule of a Provenance record; CostModel runs it again at every use (r1 F3)."""
+    require_exact(record.source, str, "source")
+    require_exact(record.note, str, "note")
+    if type(record.as_of) is not date:
+        raise TypeError(f"as_of must be exactly a date (not a datetime or a subclass), not {type(record.as_of).__name__}")
+    # A non-str status is a TypeError (owner decision on review CORE-004-r1 F4, contract v1.2).
+    require_exact(record.status, str, "status")
+    if record.status not in STATUSES:
+        raise BadProvenance(f"status must be one of {sorted(STATUSES)}")
 
 
 @dataclass(frozen=True)
@@ -89,58 +140,88 @@ class CostModel:
     stress_factor: Decimal = Decimal("1")
 
     def __post_init__(self) -> None:
-        if not isinstance(self.symbol, str):
-            raise TypeError("symbol must be str")
-        for name in _DECIMAL_FIELDS:
-            value = getattr(self, name)
-            if not isinstance(value, Decimal):
-                raise TypeError(f"{name} must be a Decimal, not {type(value).__name__}")
-            if not value.is_finite():
-                if name == "stress_factor":
-                    raise BadStress("stress_factor must be finite")
-                raise CostsError(f"{name} must be finite")
-        for name in _INT_FIELDS:
-            value = getattr(self, name)
-            if not _is_int(value):
-                raise TypeError(f"{name} must be an int, not {type(value).__name__}")
-        if self.point <= 0 or self.contract_size <= 0 or self.volume_step <= 0 or self.volume_min <= 0:
-            raise CostsError("point, contract_size, volume_step and volume_min must be positive")
-        if self.volume_max < self.volume_min:
-            raise CostsError("volume_max must not be below volume_min")
-        if self.commission_per_lot_per_side < 0 or self.spread_fallback_points < 0 or self.slippage_points_per_side < 0:
-            raise CostsError("commission, spread fallback and slippage cannot be negative")
-        if not 0 <= self.triple_swap_weekday <= 6:
-            raise CostsError("triple_swap_weekday must be 0 (Monday) to 6 (Sunday)")
-        if self.stress_factor <= 0:
-            raise BadStress(f"stress_factor must be positive, got {self.stress_factor}")
-        if not isinstance(self.provenance, Mapping):
-            raise TypeError(f"provenance must be a Mapping, not {type(self.provenance).__name__}")
-        keys = set(self.provenance)
-        expected = set(PROVENANCE_FIELDS)
-        if keys != expected:
-            raise BadProvenance(
-                f"provenance must cover exactly the 11 base fields; missing {sorted(expected - keys)}, extra {sorted(keys - expected)}"
-            )
-        for name, record in self.provenance.items():
-            if not isinstance(record, Provenance):
-                raise BadProvenance(f"provenance[{name!r}] must be a Provenance")
-        object.__setattr__(self, "provenance", MappingProxyType(dict(self.provenance)))
+        if type(self) is not CostModel:
+            raise TypeError(f"CostModel cannot be subclassed, got {type(self).__name__}")
+        snapshot = _check_model(self)
+        object.__setattr__(self, "provenance", MappingProxyType(snapshot))
+
+
+def _check_model(model: CostModel) -> dict[str, Provenance]:
+    """Type and domain of every model field; returns the one copy of provenance it validated.
+
+    Provenance is read first and only once (one traversal, each key once): a Mapping planted after
+    construction is the only caller code this check can run, so every other field is read after it.
+    The same check runs at construction and at every use (CORE-004 AC-03), with the same errors.
+    """
+    # One read of the attribute (review CORE-004-r1 F1): isinstance() can run code of the object
+    # planted there, so reading model.provenance again could yield a different object.
+    container = model.provenance
+    if not isinstance(container, Mapping):
+        raise TypeError(f"provenance must be a Mapping, not {type(container).__name__}")
+    snapshot = dict(container)
+    # Keys must be exactly str before anything compares them: a str subclass's __eq__ is caller code
+    # that the key-set comparison below would otherwise run.
+    for key in snapshot:
+        if type(key) is not str:
+            raise TypeError(f"provenance keys must be exactly str, not {type(key).__name__}")
+    require_exact(model.symbol, str, "symbol")
+    for name in _DECIMAL_FIELDS:
+        bounded_decimal(getattr(model, name), name, BadStress if name == "stress_factor" else CostsError)
+    for name in _INT_FIELDS:
+        if not is_int(getattr(model, name)):
+            raise TypeError(f"{name} must be exactly int, not {type(getattr(model, name)).__name__}")
+    if model.point <= 0 or model.contract_size <= 0 or model.volume_step <= 0 or model.volume_min <= 0:
+        raise CostsError("point, contract_size, volume_step and volume_min must be positive")
+    if model.volume_max < model.volume_min:
+        raise CostsError("volume_max must not be below volume_min")
+    if model.commission_per_lot_per_side < 0 or model.spread_fallback_points < 0 or model.slippage_points_per_side < 0:
+        raise CostsError("commission, spread fallback and slippage cannot be negative")
+    if not 0 <= model.triple_swap_weekday <= 6:
+        # The value is not echoed: a huge int exceeds Python's int-to-str limit (AC-06).
+        raise CostsError("triple_swap_weekday must be 0 (Monday) to 6 (Sunday)")
+    if model.stress_factor <= 0:
+        raise BadStress("stress_factor must be positive")
+    keys = set(snapshot)
+    expected = set(PROVENANCE_FIELDS)
+    if keys != expected:
+        raise BadProvenance(
+            f"provenance must cover exactly the 11 base fields; missing {sorted(expected - keys)}, extra {sorted(keys - expected)}"
+        )
+    for name, record in snapshot.items():
+        if type(record) is not Provenance:
+            raise BadProvenance(f"provenance[{name!r}] must be exactly a Provenance")
+        _check_provenance(record)
+    return snapshot
+
+
+def validate_model(model: object) -> dict[str, Provenance]:
+    """Exactly a CostModel whose fields still hold; returns its validated provenance snapshot."""
+    require_exact(model, CostModel, "model")
+    return _check_model(model)
 
 
 def stress(model: CostModel, factor: Decimal | int = Decimal("2")) -> CostModel:
     """A copy of the model whose every charge is multiplied by factor; provenance is unchanged."""
-    if not isinstance(factor, Decimal) and not _is_int(factor):
-        raise TypeError(f"factor must be a Decimal or int, not {type(factor).__name__}")
-    value = Decimal(factor)
-    if not value.is_finite() or value <= 0:
-        raise BadStress(f"stress factor must be finite and positive, got {value}")
+    snapshot = validate_model(model)
+    if is_int(factor):
+        # An int converts exactly and never reaches a rational conversion, so only Decimals are size-bounded.
+        value = Decimal(factor)
+    elif type(factor) is Decimal:
+        value = bounded_decimal(factor, "stress factor", BadStress)
+    else:
+        raise TypeError(f"factor must be exactly a Decimal or int, not {type(factor).__name__}")
+    if value <= 0:
+        raise BadStress("stress factor must be positive")
     with localcontext(CONTEXT):
-        return replace(model, stress_factor=model.stress_factor * value)
+        scaled = model.stress_factor * value
+    # Built from the validated snapshot, so the container is not read a second time.
+    return replace(model, stress_factor=scaled, provenance=snapshot)
 
 
 def unknowns(model: CostModel) -> tuple[str, ...]:
     """Names of the constants whose provenance status is assumed or unknown, sorted."""
-    return tuple(sorted(name for name, p in model.provenance.items() if p.status in ("assumed", "unknown")))
+    snapshot = validate_model(model)
+    return tuple(sorted(name for name, p in snapshot.items() if p.status in ("assumed", "unknown")))
 
 
 _SPIKE = "docs/evidence/SPIKE-001.md"
