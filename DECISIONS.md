@@ -141,3 +141,26 @@ Conditions:
 - เพิ่ม, ลบ หรือเปลี่ยน pin ใดๆ หลังจากนี้ต้องผ่าน admission และบันทึกใน DECISIONS
 - `uv lock` และ `uv sync` ทำครั้งแรกโดย Claude ภายใต้ CORE-001 เท่านั้น
 Review when: Python รุ่นใหม่, advisory ใหม่ของแพ็กเกจเหล่านี้ หรือเพิ่มโมดูลที่ต้องใช้แพ็กเกจอื่น (เช่น numpy, pyarrow ใน R1)
+
+## D-013 ติดตั้ง uv และ Python ใน CI ด้วย `astral-sh/setup-uv` ตรึง SHA, uv 0.13.0, CPython 3.12.15 (OPS-001) — 2026-10-23 — accepted (เจ้าของอนุมัติในแชท Claude 09:5x รวมการรับ advisory ของ uv 0.13.0 ไว้ชั่วคราว)
+Context: OPS-001 (High, Q6) เพิ่ม job `python-tests` ใน `.github/workflows/ci.yml` ให้ CI รัน pytest บน Linux ทุก PR · ต้องติดตั้ง uv และ Python บน runner ซึ่งเป็น dependency ใหม่ของ CI (ไม่ใช่ของโปรเจกต์ Python; D-012 ไม่เปลี่ยน) · ผล admission อยู่ใน `docs/reviews/OPS-001-admission.md` (Claude session ใหม่ในบทผู้ตรวจตามการสลับบทบาท ตรวจ GitHub/PyPI/OSV 2026-10-22 16:25–16:39 UTC) · เจ้าของเลือกทางนี้ไว้ใน contract OPS-001 (2026-10-22 23:4x)
+Decision: ADMIT สำหรับ job `python-tests` เท่านั้น
+- action `astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e` (release `v10.3.2`, 2026-10-22) ด้วย input `version: "0.13.0"`, `python-version: "3.12.15"`, `enable-cache: false`
+- uv `0.13.0` (archive Linux x86_64 SHA-256 `1468ebd5a5541121837c5a2817b9972ba6090fa6caa3d142620850a47fb75154` ตรวจโดย action)
+- CPython `3.12.15` build `20261009` จาก `astral-sh/python-build-standalone` (SHA-256 `ffa8f85f1b56e88b687f08d743d817015524b86a9365fd921243132b80f1a36d` ตรวจโดย uv) ติดตั้งด้วย `uv python install 3.12.15`
+- คำสั่งใน job: `uv sync --locked` และ `uv run --locked pytest tests -q -p no:cacheprovider` (`--locked` ล้มเมื่อ lock ไม่ตรง pyproject; `--frozen` ไม่ตรวจ) · job แดงเมื่อ test ล้ม, error หรือถูก skip
+Why: ผู้ผลิตเดียวกับ uv, MIT, ไม่มี advisory ของ action, ดาวน์โหลดจาก release ทางการผ่าน mirror ของ Astral พร้อมตรวจ SHA-256, token คง `contents: read`, ไม่มี secret · uv และ Python รุ่นเดียวกับเครื่องเจ้าของจึงเทียบผล test ได้ตรง
+Conditions:
+- **ความเสี่ยงที่เจ้าของรับไว้ชั่วคราว (2026-10-23 09:5x):** uv 0.13.0 มี advisory GHSA-hq85-5cpj-mr62 (CA root ที่ intermediate รั่ว, แก้ใน 0.13.4) · ใน job นี้ทุกการดาวน์โหลดของ uv ตรวจ hash ที่ตรึงไว้ ผลกระทบจึงจำกัดที่ job แดง · เครื่องเจ้าของมี exposure เดียวกัน
+- งานติดตาม: ยก uv เป็น ≥ 0.13.4 ทั้งเครื่องและ CI ในการตัดสินเดียว หลังตรวจว่า `uv.lock` ไม่เปลี่ยนภายใต้ `--locked` ด้วย uv รุ่นใหม่
+- เปลี่ยน SHA ของ action, รุ่น uv, รุ่น Python หรือเปิด cache ต้องผ่าน admission และบันทึกที่นี่ · `control-gate.yml` ไม่เปลี่ยน
+- ลงทะเบียนใน `docs/tooling/registry.md` และปรับแถว uv เดิม
+Review when: advisory ใหม่ของ uv/action, release ใหม่ของ action ที่แก้ความปลอดภัย, เปลี่ยน Python 3.12.x บนเครื่อง, หรือเพิ่ม Windows runner
+
+Amendment 2026-10-23 11:0x (เจ้าของยืนยันในแชท Claude หลัง `docs/reviews/OPS-001-r1.md` F4; ข้อความข้างบนคือฉบับที่ accepted 09:5x ไม่แก้):
+- ตาม `docs/reviews/OPS-001-security-pre-r1.md` (pre-review F1, F2, F5) คำสั่งใน job เป็น `uv sync --locked --no-build` และ `uv run --locked --no-build pytest tests -q -p no:cacheprovider` · `--no-build` ติดตั้งเฉพาะ wheel จึงไม่มี build requirement ที่ไม่ได้ตรวจ hash (pre-review F5)
+- job เขียวเฉพาะเมื่อบรรทัดสุดท้ายของ pytest เป็น `<n> passed[, <m> warnings] in <t>s` · failed, error, skipped, deselected, xfailed, xpassed เป็นแดงทั้งหมด · step ใช้ `shell: bash` (pre-review F1, F2)
+- job ตั้ง `PYTHONTZPATH=""` ให้ `zoneinfo` ใช้ package `tzdata==2026.5` (D-012) เหมือนบน Windows แทนข้อมูล time zone ของ runner (`docs/reviews/OPS-001-r1.md` F5)
+- ข้อจำกัดของการออกแบบ (pre-review F3): job รันโค้ด test ของ PR เอง ผลเขียวของ `python-tests` จึงไม่ใช่ด่านที่ทนการปลอมแปลง (เช่น conftest ที่ตัด test ออกเงียบๆ หรือพิมพ์บรรทัดสรุปปลอม) · ด่านที่ไว้ใจได้ยังเป็น `control-gate` · งานติดตามแยก: red-flag patterns สำหรับ `conftest.py`, `collect_ignore`, `pytest.xfail(`, `addopts`, `os._exit`, `atexit`
+- Review when เพิ่ม: มี package ใน `uv.lock` ที่ไม่มี wheel ที่ใช้ได้ (pre-review F5)
+- (proposed โดย Claude 2026-10-23 11:2x ตาม `docs/reviews/OPS-001-r2.md` F9 · รอเจ้าของยืนยันตอนตรวจ PR) เพื่อพิสูจน์ข้อ `PYTHONTZPATH=""` ข้างบน job มี step ก่อนรัน test ที่พิมพ์ `zoneinfo.TZPATH` และรุ่น `tzdata` แล้ว**แดงถ้า TZPATH ไม่ว่าง** (patch r4) · ถ้า runner ไม่ส่งค่าว่าง job จะแดงที่ step นี้ก่อน pytest

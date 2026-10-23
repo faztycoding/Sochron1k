@@ -3,6 +3,7 @@ name: ci
 # Runs the PR's OWN code: self-tests of the hooks and lock rules, and the red-flag scan.
 # Informational for reviewers. A PR can change these files, so this workflow is not the gate
 # for locked paths; that is control-gate.yml (review BOOT-001 F1).
+# OPS-001 adds the Python test suite (job python-tests) to this workflow.
 on:
   pull_request:
   push:
@@ -31,3 +32,58 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bash scripts/controls/red-flags.sh "origin/$BASE_REF"
+
+  python-tests:
+    # Runs the Python test suite on Linux with the pins of the dev machine (OPS-001, D-013):
+    # uv 0.13.0, uv-managed CPython 3.12.15, packages from uv.lock (hash-checked by uv).
+    # The lock must match pyproject.toml (--locked). The job is red on any failed, errored or
+    # skipped test; a skipped test never counts as passed (AGENTS.md).
+    # Not a tamper-proof gate: it runs the PR's own test code; control-gate.yml is the gate
+    # (security pre-review F3, docs/reviews/OPS-001-security-pre-r1.md).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # zoneinfo uses only the locked tzdata package, as on Windows (D-013 amendment 2026-10-23).
+    env:
+      PYTHONTZPATH: ""
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Pinned to a full commit SHA (Handbook ch.21). The action downloads the uv 0.13.0 release
+      # archive and checks it against the SHA-256 table bundled in the action, then sets
+      # UV_PYTHON=3.12.15 so every uv command below selects that exact interpreter. The GitHub
+      # Actions cache stays off: seven small wheels on Linux (tzdata and the six dev-group pins,
+      # colorama included) are not worth it, and it is one moving part fewer.
+      - name: Install uv 0.13.0 (sets UV_PYTHON=3.12.15)
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.13.0"
+          python-version: "3.12.15"
+          enable-cache: false
+
+      - name: Install uv-managed CPython 3.12.15
+        run: uv python install 3.12.15
+
+      # --no-build here and on uv run: wheels only, so no unhashed build requirements
+      # (security pre-review F5, docs/reviews/OPS-001-security-pre-r1.md).
+      - name: Sync the environment from uv.lock (red if the lock does not match pyproject.toml)
+        run: uv sync --locked --no-build
+
+      # Red unless zoneinfo.TZPATH is (), so zoneinfo reads only tzdata (D-013 amendment 2026-10-23).
+      - name: Check zoneinfo time zone source (red unless zoneinfo.TZPATH is empty)
+        shell: bash
+        run: |
+          uv run --locked --no-build python -c "import importlib.metadata, sys, zoneinfo; print('zoneinfo.TZPATH =', zoneinfo.TZPATH); print('tzdata version =', importlib.metadata.version('tzdata')); sys.exit(0 if zoneinfo.TZPATH == () else 1)"
+
+      - name: Python tests (red on any failed, errored or skipped test)
+        shell: bash
+        run: |
+          set -o pipefail
+          uv run --locked --no-build pytest tests -q -p no:cacheprovider | tee pytest-output.txt
+          summary="$(tail -n 1 pytest-output.txt)"
+          ok='^[1-9][0-9]* passed(, [1-9][0-9]* warnings?)? in [0-9]+\.[0-9]{2}s( \([0-9]+:[0-9]{2}:[0-9]{2}\))?$'
+          if [[ ! "$summary" =~ $ok ]]; then
+            echo "::error::only a last pytest line '<n> passed[, <m> warnings] in <t>s' counts as green; any failed, error, skipped, deselected, xfailed, xpassed or other outcome is red (AGENTS.md, D-013). Last line: $summary"
+            exit 1
+          fi
