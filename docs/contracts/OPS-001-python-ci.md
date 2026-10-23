@@ -1,7 +1,7 @@
 # TASK OPS-001 — ให้ CI รัน Python test suite บน Linux ทุก PR
 
 Version v1.1 (ร่าง 2026-10-22 23:1x → v1.1 2026-10-23 11:0x: คำสั่งจริงของ job, ไม่ใส่ `-rs`, `PYTHONTZPATH=""` ตามที่เจ้าของเลือกหลัง review r1) · Owner เจ้าของ repository · Parent PROGRESS "Not done yet": Python test job ใน CI · Handbook ch.21 (pinned actions) · Tier **High** · Branch `chore/OPS-001-python-ci`
-Status: **approved by owner 2026-10-22 23:4x** (acceptance และแผน; ทางเลือก (ก) = `astral-sh/setup-uv` ตรึง full SHA + `version: 0.13.0`, (ข) = uv-managed Python 3.12.15, (ค) = required check ตั้งโดยเจ้าของหลัง merge ถ้าต้องการ · ผู้เขียน patch = Claude session ใหม่ตามการสลับบทบาทระหว่าง Codex หมดโควตา)
+Status: **merged 2026-10-23 13:16 (PR #13 → main `5ca1949`, label owner-approved-control-change); CI ของ PR และของ main เขียว** (`docs/evidence/OPS-001.md` หัวข้อ "หลัง merge") · เดิม: approved by owner 2026-10-22 23:4x (acceptance และแผน; ทางเลือก (ก) = `astral-sh/setup-uv` ตรึง full SHA + `version: 0.13.0`, (ข) = uv-managed Python 3.12.15, (ค) = required check ตั้งโดยเจ้าของหลัง merge ถ้าต้องการ · ผู้เขียน patch = Claude session ใหม่ตามการสลับบทบาทระหว่าง Codex หมดโควตา)
 Hypothesis (research tasks): ไม่ใช่งานวิจัย
 
 ## Risk tier (Q1–Q6, one line each; unsure = yes)
