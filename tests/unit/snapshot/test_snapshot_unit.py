@@ -102,3 +102,13 @@ def test_a_slot_padded_by_a_duplicate_is_still_incomplete():
     assert len(result) == 1
     assert result[0].bar.m1_count == 15
     assert result[0].flags == frozenset({"duplicate_time", "incomplete"})
+
+
+@pytest.mark.parametrize("at", [time(17, 0, 30), time(17, 0, 0, 1)])
+def test_calendar_times_with_seconds_are_refused(at):
+    # Review CORE-005-r1 F4 (owner: tighten): closures work on whole minutes, so a time with seconds
+    # was cut to the minute silently; it is now refused.
+    with pytest.raises(ValueError):
+        replace(H001_CLOSURES, daily_break=(at, time(18, 0)))
+    with pytest.raises(ValueError):
+        replace(H001_CLOSURES, weekend=((4, at), (6, time(18, 0))))

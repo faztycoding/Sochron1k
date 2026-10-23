@@ -30,17 +30,24 @@ class Defect:
     detail: str
 
 
+def _wall_minute(at: object, name: str) -> None:
+    """A naive wall time on a whole minute (review CORE-005-r1 F4: seconds were cut silently)."""
+    exact(at, time, name)
+    if at.tzinfo is not None:
+        raise ValueError(f"{name} is a wall time in the calendar zone, without tzinfo")
+    if at.second or at.microsecond:
+        raise ValueError(f"{name} must be on a whole minute")
+
+
 def _weekly_point(value: object, name: str) -> tuple[int, time]:
     exact(value, tuple, name)
     if len(value) != 2:
         raise ValueError(f"{name} must be (weekday, time)")
     weekday, at = value
     exact(weekday, int, f"{name} weekday")
-    exact(at, time, f"{name} time")
+    _wall_minute(at, f"{name} time")
     if not 0 <= weekday <= 6:
         raise ValueError(f"{name} weekday must be 0 (Monday) to 6 (Sunday)")
-    if at.tzinfo is not None:
-        raise ValueError(f"{name} time is a wall time in the calendar zone, without tzinfo")
     return weekday, at
 
 
@@ -65,9 +72,7 @@ class ClosureCalendar:
         if len(self.daily_break) != 2:
             raise ValueError("daily_break must be (start, end)")
         for at in self.daily_break:
-            exact(at, time, "daily_break time")
-            if at.tzinfo is not None:
-                raise ValueError("daily_break times are wall times in the calendar zone, without tzinfo")
+            _wall_minute(at, "daily_break time")
         exact(self.weekend, tuple, "weekend")
         if len(self.weekend) != 2:
             raise ValueError("weekend must be ((weekday, time), (weekday, time))")
