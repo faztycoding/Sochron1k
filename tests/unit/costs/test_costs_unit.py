@@ -210,3 +210,29 @@ def test_provenance_attribute_is_read_once_per_check():
     object.__setattr__(model, "provenance", _SwapOnClassRead(model, pairs))
     with pytest.raises(TypeError):
         check_volume(Decimal("0.02"), model)
+
+
+class _NotAStatus(str):
+    def __eq__(self, other):
+        return False
+
+    __hash__ = str.__hash__
+
+
+@pytest.mark.parametrize(
+    ("planted", "error"),
+    [("bogus", BadProvenance), (None, TypeError), (_NotAStatus("assumed"), TypeError)],
+)
+def test_provenance_records_are_checked_again_at_use(planted, error):
+    # Review CORE-004-r1 F3 (owner: fix): a record changed after construction kept its place, so
+    # unknowns() could drop an assumed constant; each use now re-runs the construction rule.
+    record = replace(H001_COSTS.provenance["commission_per_lot_per_side"])
+    model = replace(H001_COSTS, provenance={**H001_COSTS.provenance, "commission_per_lot_per_side": record})
+    assert "commission_per_lot_per_side" in unknowns(model)
+    object.__setattr__(record, "status", planted)
+    with pytest.raises(error):
+        unknowns(model)
+    with pytest.raises(error):
+        stress(model)
+    with pytest.raises(error):
+        check_volume(Decimal("0.02"), model)

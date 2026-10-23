@@ -105,13 +105,19 @@ class Provenance:
     def __post_init__(self) -> None:
         if type(self) is not Provenance:
             raise TypeError(f"Provenance cannot be subclassed, got {type(self).__name__}")
-        require_exact(self.source, str, "source")
-        require_exact(self.note, str, "note")
-        if type(self.as_of) is not date:
-            raise TypeError(f"as_of must be exactly a date (not a datetime or a subclass), not {type(self.as_of).__name__}")
-        require_exact(self.status, str, "status")
-        if self.status not in STATUSES:
-            raise BadProvenance(f"status must be one of {sorted(STATUSES)}")
+        _check_provenance(self)
+
+
+def _check_provenance(record: Provenance) -> None:
+    """The construction rule of a Provenance record; CostModel runs it again at every use (r1 F3)."""
+    require_exact(record.source, str, "source")
+    require_exact(record.note, str, "note")
+    if type(record.as_of) is not date:
+        raise TypeError(f"as_of must be exactly a date (not a datetime or a subclass), not {type(record.as_of).__name__}")
+    # A non-str status is a TypeError (owner decision on review CORE-004-r1 F4, contract v1.2).
+    require_exact(record.status, str, "status")
+    if record.status not in STATUSES:
+        raise BadProvenance(f"status must be one of {sorted(STATUSES)}")
 
 
 @dataclass(frozen=True)
@@ -184,6 +190,7 @@ def _check_model(model: CostModel) -> dict[str, Provenance]:
     for name, record in snapshot.items():
         if type(record) is not Provenance:
             raise BadProvenance(f"provenance[{name!r}] must be exactly a Provenance")
+        _check_provenance(record)
     return snapshot
 
 
