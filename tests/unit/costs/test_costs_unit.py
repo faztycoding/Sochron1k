@@ -3,7 +3,7 @@ the contract; these cover internals the implementer relied on: the module-owned 
 sign handling, provenance isolation and the validation helpers."""
 
 from dataclasses import FrozenInstanceError, replace
-from datetime import date
+from datetime import date, datetime
 from decimal import Context, Decimal, localcontext
 
 import pytest
@@ -219,17 +219,33 @@ class _NotAStatus(str):
     __hash__ = str.__hash__
 
 
+class _OtherDay(date):
+    pass
+
+
 @pytest.mark.parametrize(
-    ("planted", "error"),
-    [("bogus", BadProvenance), (None, TypeError), (_NotAStatus("assumed"), TypeError)],
+    ("field", "planted", "error"),
+    [
+        ("status", "bogus", BadProvenance),
+        ("status", None, TypeError),
+        ("status", _NotAStatus("assumed"), TypeError),
+        # Review CORE-004-r2 F7: every field is checked again, not only status.
+        ("source", 1, TypeError),
+        ("source", _NotAStatus("x"), TypeError),
+        ("note", None, TypeError),
+        ("note", _NotAStatus("x"), TypeError),
+        ("as_of", "2026-10-21", TypeError),
+        ("as_of", datetime(2026, 10, 21), TypeError),
+        ("as_of", _OtherDay(2026, 10, 21), TypeError),
+    ],
 )
-def test_provenance_records_are_checked_again_at_use(planted, error):
+def test_provenance_records_are_checked_again_at_use(field, planted, error):
     # Review CORE-004-r1 F3 (owner: fix): a record changed after construction kept its place, so
     # unknowns() could drop an assumed constant; each use now re-runs the construction rule.
     record = replace(H001_COSTS.provenance["commission_per_lot_per_side"])
     model = replace(H001_COSTS, provenance={**H001_COSTS.provenance, "commission_per_lot_per_side": record})
     assert "commission_per_lot_per_side" in unknowns(model)
-    object.__setattr__(record, "status", planted)
+    object.__setattr__(record, field, planted)
     with pytest.raises(error):
         unknowns(model)
     with pytest.raises(error):
