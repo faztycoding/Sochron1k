@@ -184,3 +184,173 @@ The contract leaves these to the test author; each is written so the stricter re
 Delivery state: test proposal **implemented** and verified red locally; unapplied, unstaged,
 uncommitted, not reviewed, not merged. Next action: the implementer applies via D-006, verifies
 the hashes, obtains a fresh-session review, then commits red.
+
+## Round 2 patch (tests-r1 F2, F3)
+
+Date: 2026-10-23, Asia/Bangkok (+07:00), 18:4x to 18:5x.
+Role: test author for round 2, a fresh Claude Code session under the PLAN-001 role swap. It is
+not the implementer, not the round-1 test author and not a reviewer of this task.
+Contract: v1.1, with the owner's decision of 2026-10-23 18:3x to close tests-r1 F2 and F3 now.
+Branch: `fix/CORE-004-costs-hardening` at `5f7a3823e6a278c005a2fb9a9ac47bdc0491e686`. The
+committed locked file is blob `e74213c204a0db1d9392430ed698133ce137d029` (SHA256
+`0d75e147b710036f093471303c51ac16038cad26115db27d57e1c5d8304d8e01`), unchanged since `594388d`.
+
+Inputs: the contract, `docs/reviews/CORE-004-tests-r1.md` (F2, F3), this handoff, the locked
+file, and the CORE-002 contract (API block, "Decimal context", error table). The new rows were
+written and proven red and green before this session read any implementation code. Afterwards it
+read `src/sochron/costs/model.py:60-194` and `charges.py:1-50` only to build the three mutants in scratch.
+
+Deliverable: `docs/proposals/CORE-004-tests-r2.patch` (gitignored) and this section. Nothing was
+applied to the repository, staged, committed or pushed.
+
+### What the patch adds (64 lines added, 0 removed, 23 rows)
+
+| Addition | Rows | Closes | What a row proves when green |
+|---|---|---|---|
+| `test_ac04_oversized_breakdown_field_rejected_alone` | 13: `spread`, `commission`, `slippage`, `swap` x `coefficient`, `trailing_zero_coefficient`, `negative_adjusted`; plus `total` x `trailing_zero_coefficient` | F2 | A `CostBreakdown` with exactly one field over the size bound raises exactly `CostsError` in under 1.000 s, with the caller's context untouched. The other components are zero (or the honest ones when `total` is the target) and `total` is the CORE-002 ordered sum, so no other field is out of bound or inconsistent. Each row asserts this with `_within_bound`; for `total` it also asserts equality with the honest ordered sum |
+| `test_ac04_positive_adjusted_volume_step_rejected_fast` | 10: `CostModel` construction plus the 9 model-taking callables | F3 | `volume_step = 1E+1100001` raises exactly `CostsError` in under 1.000 s at construction and at every use (Q2: the model is validated before the arguments) |
+| Helpers `_COMPONENTS`, `_BREAKDOWN_ALONE`, `_TOTAL_1001`, `_ordered_sum`, `_within_bound`, `_breakdown_alone`, `_STEP_ABOVE`; a second import line `from decimal import Context, ROUND_HALF_EVEN` | - | - | `_ordered_sum` follows CORE-002 "Decimal context": left to right, each addition rounded in `Context(prec=28, rounding=ROUND_HALF_EVEN)`, with the decimal module's defaults for the other settings |
+
+Both tests reuse the unchanged `_timed_rejection` harness (`perf_counter` around the public call,
+daemon worker, `join(timeout=10)`, the 20 s faulthandler watchdog), plus `_oversized`,
+`_assert_oversized` and `_changed_call`. They sit after
+`test_ac04_extreme_exponent_volume_step_rejected_fast_at_use`. Their names avoid the round-1
+filter, so `-k "not huge_on_grid_lots and not extreme_exponent_volume_step"` still deselects only
+the 2 watchdog rows.
+
+Existing tests are unchanged. The scratch tool `ast_compare.py` found all 112 top-level nodes of
+`git show HEAD:tests/acceptance/CORE-004/test_costs_hardening.py` unchanged (`ast.dump`) and in
+order. It found 10 added nodes (1 `ImportFrom`, 4 `Assign` to new names, 5 `FunctionDef`), none
+of which rebinds a HEAD name. The patch hunks contain only added lines (the only `^-` line is the
+`---` header), so comments are unchanged too.
+
+Not added, because no single-defect fixture exists (CORE-002 `:100`). Recorded for the reviewer:
+- **`positive_adjusted` component rows.** The ordered sum of a `1E+1100001` component overflows
+  the precision-28 context, so no consistent in-bound `total` exists. The round-1 rows for this
+  shape set component and `total` both to `1E+1100001`. A bound on `total` alone still satisfies
+  them for this one shape.
+- **`total` in the `coefficient`, `negative_adjusted` and `positive_adjusted` shapes.** Only a
+  trailing-zero form of the ordered sum is both oversized and consistent.
+- **An accepted-edge row for `volume_step = 1E+1100000`.** It would pass on the
+  pre-implementation code, which breaks this round's rule that every new row fails red. At use,
+  only `stress()` and `unknowns()` could return. The round-1 edge rows cover the bound in general
+  (M07, M08), but an over-strict bound on the positive step alone goes undetected. This is an
+  optional follow-up for the owner.
+- **Dependence on the exponent range.** The `negative_adjusted` component rows catch S01 only
+  because the costs context has the decimal default exponent range: the sum underflows to zero,
+  which equals the computed `total`. A correct implementation passes these rows regardless,
+  since it raises `CostsError` either way. CORE-002 does not state Emin or Emax.
+
+### D-006 artifact and expected bytes
+
+Patch: `docs/proposals/CORE-004-tests-r2.patch`. A regular file of 80 lines and 4,385 bytes with
+0 CR bytes. It was produced by `diff -u --label a/tests/acceptance/CORE-004/test_costs_hardening.py --label b/tests/acceptance/CORE-004/test_costs_hardening.py tests/acceptance/CORE-004/test_costs_hardening.py <scratch copy>`
+and has two hunks, `@@ -9,6 +9,7 @@` and `@@ -861,6 +862,69 @@`.
+
+Patch SHA256: `6c098f52fca998a355f36783bb22f56111208ba057ae89918d5c8c0cc8cc43b2`
+
+`git apply --numstat` reports exactly one path: `64 0 tests/acceptance/CORE-004/test_costs_hardening.py`.
+
+| Repository-relative file | Expected post-apply SHA256 | Expected Git blob |
+|---|---|---|
+| `tests/acceptance/CORE-004/test_costs_hardening.py` | `4d79519faaf67fd0cdc30bb38d329c0db67bd4b04639bf2f8702fc1a432e91f8` | `cc64a0736c9a752a7a75a34e8214a97ef5ccc1c4` |
+
+Both digests are of the scratch copy the patch was generated from. It has 1,155 lines and 51,670
+bytes, with 0 CR, 0 tab and 0 non-ASCII bytes (counted with `tr`), and its last bytes are `)\n`.
+The blob id is the same with `--path=tests/acceptance/CORE-004/test_costs_hardening.py` and with
+`--no-filters`. The patch was not applied anywhere, as in round 1.
+
+### Checks (Git Bash, repository root unless noted, +07:00)
+
+| Command or procedure | Result | Commit | Time |
+|---|---|---|---|
+| `git status --short --untracked-files=all`, `git branch --show-current`, `git rev-parse HEAD`, `git hash-object --path=... <locked file>`, `git rev-parse HEAD:<locked file>` | PASS: clean tree, expected branch and HEAD, blob `e74213c...` both ways | 5f7a382 | 18:4x |
+| `git show HEAD:<locked file>` to the scratch draft; `sha256sum` of both | PASS: identical `0d75e147...` before editing | 5f7a382 | 18:4x |
+| `git show 82a7f3e:src/sochron/...` to scratch `red/src`; `git diff --stat 82a7f3e 5ca1949 -- src/sochron/costs src/sochron/core src/sochron/__init__.py` | PASS: empty, so the pre-implementation costs equal main | 82a7f3e | 18:4x |
+| `uv run --offline --no-sync python -I <scratch>/tools/ast_compare.py <HEAD copy> <draft>` | PASS: 112/112 unchanged and in order, 10 added, no rebinding | 5f7a382 | 18:4x; final bytes 18:50:4x |
+| `pytest -c pyproject.toml --rootdir . <draft> --collect-only -q -p no:cacheprovider` | PASS: 1993 collected, 23 of them new | 5f7a382 | 18:4x |
+| RED, new rows, from scratch `red/`: `timeout -k 10 600 uv run --project <repo> --offline --no-sync pytest -c pytest.ini --rootdir . -q -p no:cacheprovider --tb=line -k "rejected_alone or positive_adjusted_volume_step_rejected_fast" <draft>` | FAIL as intended: **23 failed**, 1970 deselected in 1.14s, exit 1 | 82a7f3e costs | 18:51:12 to 18:51:14 |
+| RED, whole file, same tree: `timeout -k 10 900 ... -k "not huge_on_grid_lots and not extreme_exponent_volume_step" <draft>` | FAIL as intended: **1831 failed, 160 passed, 2 deselected** in 7.41s (round 1: 1808 / 160 / 2) | 82a7f3e costs | 18:51:14 to 18:51:22 |
+| GREEN, whole file: `timeout -k 10 900 uv run --offline pytest -c pyproject.toml --rootdir . -q -p no:cacheprovider <draft>` | PASS: **1993 passed in 2.45s**, exit 0, 0 skipped | 5f7a382 | 18:50:50 to 18:50:53 |
+| Mutants S01 to S03, each from its own scratch tree (table below) | each one caught | scratch | 18:51:43 to 18:51:52 |
+| `diff -u --label ... > docs/proposals/CORE-004-tests-r2.patch` | written; diff exit 1 (differences present) | 5f7a382 | 18:50 |
+| `git apply --check docs/proposals/CORE-004-tests-r2.patch` (standalone) | PASS: exit 0, no output | 5f7a382 | 18:50 |
+| `git apply --check --whitespace=error docs/proposals/CORE-004-tests-r2.patch` (standalone) | PASS: exit 0, no output | 5f7a382 | 18:50 |
+| `git apply --numstat docs/proposals/CORE-004-tests-r2.patch` (standalone) | PASS: the one path above | 5f7a382 | 18:50 |
+| `sha256sum`; `git hash-object --path=...` and `--no-filters`; `tr`, `wc`, `od` byte checks | PASS: the values above | 5f7a382 | 18:50 |
+| `timeout -k 10 900 uv run --offline pytest tests -q -p no:cacheprovider` (verified command, untouched tree) | PASS: **2761 passed in 8.20s** | 5f7a382 | 18:52:08 to 18:52:16 |
+| `bash scripts/controls/red-flags.sh main`, plus its 10 pattern groups run by hand on the 64 added lines | The script reports 1 inherited group, "Type checks disabled": prose `as any` in the round-1 docstring `:313` and in the r1 review that quotes it. Its control-file list is the committed locked file. The added lines: 0 hits in every group | 5f7a382 | 18:52 |
+
+### Red against the pre-implementation costs (82a7f3e), per row
+
+The scratch tree `red/` holds `git show 82a7f3e:src/sochron/{__init__.py,core/__init__.py,costs/*.py}`
+and a `pytest.ini` with `pythonpath = src`. The run starts in that tree, so `_api` imports the
+pre-implementation package. Every row failed at the harness assertion `actual_error is error`
+(`:827`); none failed at a fixture self-check.
+
+| Rows | Result on 82a7f3e | Contract reason |
+|---|---|---|
+| F2, all 13 | `expected CostsError, got None; return is forbidden` (4.6 to 12.7 us) | AC-04: `CostBreakdown` fields have no size bound; the fixture is otherwise valid, so it is accepted |
+| F3 `CostModel.volume_step` | `got None` (13.7 us) | AC-04: no size bound at construction |
+| F3 `stress` | `got None` (21.4 us) | AC-03/04: its `replace` reruns the constructor rule, which has no bound |
+| F3 `unknowns` | `got None` (6.6 us) | AC-03: no model validation at use |
+| F3 `check_volume`, `points_to_money`, `spread_charge`, `slippage_charge`, `commission_charge`, `swap_charge`, `round_trip_cost` | `got BadVolume` (0.140 to 0.144 s) | AC-03/04: the model is not validated first, so the honest lots 0.02 is compared with the unbounded step `1E+1100001` (the grid check builds `10**1100001`) |
+
+### Green against the committed implementation (5f7a382)
+
+The run uses the repository's `src` with the draft as the only test path: 1993 passed in 2.45s.
+The new rows took 5.4 to 57 microseconds. The slowest of the file's 426 timed calls (403 from
+round 1 plus 23 new) took 0.0035 s.
+
+### Surviving tests-r1 mutants (scratch copies of HEAD `src/sochron/costs`, one change each)
+
+| Mutant | Change | Committed locked file (1970 rows) | Amended file (1993 rows) | Rows that catch it |
+|---|---|---|---|---|
+| S01 | `CostBreakdown.__post_init__` (`charges.py:37-38`) size-bounds only `total` and `stress_factor`; the components keep the exact-type and finiteness checks | 1970 passed (survives) | **12 failed**, 1981 passed | the 12 F2 component rows, each `got None` |
+| S02 | the same loop bounds every field except `total`, which keeps the exact-type and finiteness checks | 1970 passed (survives) | **1 failed**, 1992 passed | the F2 `total` row, `got None` |
+| S03 | `bounded_decimal` (`model.py:87`) skips the adjusted-exponent bound for `volume_step` with a positive adjusted exponent | 1970 passed (survives) | **10 failed**, 1983 passed | all 10 F3 rows: 3 `got None`, 7 `got BadVolume` |
+
+No row outside those listed failed (checked with grep). The runs use the reviewer's method: from
+the mutant tree, `timeout -k 10 600 uv run --project <repo> --offline --no-sync pytest -c pytest.ini --rootdir . -q -p no:cacheprovider <test file>`.
+The locked file was run in place and never copied for this.
+
+### What the implementer does (D-006)
+
+1. Confirm the branch, HEAD `5f7a382` (or a descendant that leaves the locked file alone), the
+   committed blob `e74213c...` of `tests/acceptance/CORE-004/test_costs_hardening.py`, and
+   `sha256sum docs/proposals/CORE-004-tests-r2.patch` = `6c098f52...`.
+2. Run each of these alone from the repository root:
+   `git apply --check docs/proposals/CORE-004-tests-r2.patch`, then
+   `git apply docs/proposals/CORE-004-tests-r2.patch`. The post-run detector should name exactly
+   `tests/acceptance/CORE-004/test_costs_hardening.py` (modified); anything else means stop (N6).
+3. Check that `sha256sum tests/acceptance/CORE-004/test_costs_hardening.py` gives `4d79519f...`
+   and `git hash-object --path=tests/acceptance/CORE-004/test_costs_hardening.py tests/acceptance/CORE-004/test_costs_hardening.py`
+   gives `cc64a073...`. Stop on any mismatch. Then run
+   `git apply -R --check docs/proposals/CORE-004-tests-r2.patch` alone.
+4. Run `timeout -k 10 900 uv run --offline pytest tests -q -p no:cacheprovider`. Expected:
+   **2784 passed** (2761 + 23), 0 skipped, and no watchdog trip. No source change is expected,
+   because the committed implementation already passes the 23 rows. Their red state exists only
+   in this section, measured against 82a7f3e.
+5. Get a fresh-session review of the contract and the applied test diff (this session's checks
+   are not that review). Then commit only the locked file, for example
+   `test(costs): add CORE-004 round-2 rows for tests-r1 F2 and F3` with body `Refs: CORE-004`.
+
+### Blocks and deviations
+
+- No hook or deny rule blocked any command in this session, and the post-run detector never fired
+  (no locked path changed).
+- One read-only byte-count command fed the scratch draft to `tr` through an input redirect from a
+  shell variable (`< "$F"`). That breaks the task's rule of literal paths in redirects. It touched
+  scratch only, every later command used literal paths, and the byte checks above were rerun that way.
+- The first red, green and mutant runs (18:45 to 18:49) used a draft in which the insertion had
+  dropped one space from an existing comment (`# Accepted edge:the ...`). The AST compare cannot
+  see comments. The space was restored before the patch was generated, and every result above
+  was rerun on the final bytes (18:50 to 18:52).
+- The `write-acceptance-tests` precondition asks for a session that has seen neither a handoff nor
+  the implementation. The task required reading this handoff, and the mutants required reading
+  the implementation. The rows were fixed before any implementation code was read.
+
+Delivery state: round-2 test proposal **implemented**, and verified red (against 82a7f3e) and
+green (against 5f7a382) in scratch. It is unapplied, unstaged, uncommitted, not reviewed and not
+merged. Next action: the implementer applies it via D-006, verifies the hashes, obtains a
+fresh-session review, then commits.

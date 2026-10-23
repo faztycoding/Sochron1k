@@ -9,6 +9,7 @@ from collections.abc import KeysView, Mapping
 from dataclasses import fields, replace
 from datetime import date, datetime
 from decimal import Decimal, Inexact, ROUND_UP, Rounded, Subnormal, getcontext, localcontext
+from decimal import Context, ROUND_HALF_EVEN
 from importlib import import_module
 from pathlib import Path
 from types import MappingProxyType
@@ -858,6 +859,69 @@ def test_ac04_huge_on_grid_lots_rejected_before_rational_conversion(api, record_
 
 def test_ac04_extreme_exponent_volume_step_rejected_fast_at_use(api, record_property, capsys):
     function, arguments = _changed_call(api, "check_volume", "model.volume_step", Decimal("1E-999999999"))
+    _timed_rejection(api["CostsError"], function, arguments, record_property, capsys)
+
+
+# tests-r1 F2: one oversized CostBreakdown field per row. The other components are zero (or the
+# honest ones when total is the oversized field) and total is their ordered sum, so every other
+# field is within the bound and consistent: a bound on any other field cannot reject the row.
+# An oversized total equals a precision-28 ordered sum only through trailing zeros, and a component
+# with adjusted exponent +1,100,001 has no ordered sum within the bound; those shapes stay covered
+# together with total by test_ac04_oversized_decimal_rejected_fast_in_every_slot.
+_COMPONENTS = ("spread", "commission", "slippage", "swap")
+_BREAKDOWN_ALONE = (
+    *((field, bound) for field in _COMPONENTS
+      for bound in ("coefficient", "trailing_zero_coefficient", "negative_adjusted")),
+    ("total", "trailing_zero_coefficient"),
+)
+_TOTAL_1001 = "1.68760" + "0" * 995  # the honest total 1.68760 written with 1,001 stored digits
+
+
+def _ordered_sum(spread, commission, slippage, swap):
+    """CORE-002 Decimal context: left to right, each addition rounded at precision 28 ROUND_HALF_EVEN."""
+    context = Context(prec=28, rounding=ROUND_HALF_EVEN)
+    return context.add(context.add(context.add(spread, commission), slippage), swap)
+
+
+def _within_bound(value):
+    return len(value.as_tuple().digits) <= 1000 and (value.is_zero() or abs(value.adjusted()) <= 1_100_000)
+
+
+def _breakdown_alone(field, value):
+    """Breakdown arguments whose only out-of-bound field is `field`; total is the ordered sum."""
+    if field == "total":
+        # Numerically equal to the ordered sum of the honest components: consistent, only too long.
+        assert value == _ordered_sum(*(_HONEST_BREAKDOWN[name] for name in _COMPONENTS))
+        return dict(_HONEST_BREAKDOWN, total=value)
+    zero = Decimal("0")
+    arguments = dict(spread=zero, commission=zero, slippage=zero, swap=zero, stress_factor=Decimal("1"))
+    arguments[field] = value
+    # Rounded to 28 digits, or underflowed to zero for the negative exponent: within the bound.
+    arguments["total"] = _ordered_sum(*(arguments[name] for name in _COMPONENTS))
+    return arguments
+
+
+@pytest.mark.parametrize("field,bound", _BREAKDOWN_ALONE,
+                         ids=[f"CostBreakdown.{field}.{bound}" for field, bound in _BREAKDOWN_ALONE])
+def test_ac04_oversized_breakdown_field_rejected_alone(api, field, bound, record_property, capsys):
+    value = Decimal(_TOTAL_1001 if field == "total" else _oversized(field, bound))
+    _assert_oversized(value, bound)
+    arguments = _breakdown_alone(field, value)
+    assert all(_within_bound(arguments[name]) for name in BREAKDOWN_FIELDS if name != field)
+    _timed_rejection(api["CostsError"], api["CostBreakdown"], arguments, record_property, capsys)
+
+
+# tests-r1 F3: volume_step above the bound on the positive side. The constructor never sees lots,
+# and at use the model is validated before the arguments are compared with it (handoff Q2), so the
+# size of the step is the only defect in every row.
+_STEP_ABOVE = (("CostModel", "volume_step"), *((public, "model.volume_step") for public in MODEL_PUBLICS))
+
+
+@pytest.mark.parametrize("public,path", _STEP_ABOVE, ids=[_slot_id(row) + ".positive_adjusted" for row in _STEP_ABOVE])
+def test_ac04_positive_adjusted_volume_step_rejected_fast(api, public, path, record_property, capsys):
+    value = Decimal("1E+1100001")
+    _assert_oversized(value, "positive_adjusted")
+    function, arguments = _changed_call(api, public, path, value)
     _timed_rejection(api["CostsError"], function, arguments, record_property, capsys)
 
 
