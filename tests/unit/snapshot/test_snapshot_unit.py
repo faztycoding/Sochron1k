@@ -72,8 +72,14 @@ def test_fifty_thousand_m1_validate_and_aggregate_quickly():
     # Contract plan: real 2018-2024 data is about 2.5 million M1. 500,000 synthetic bars took about
     # 3.1 s to validate and 0.9 s to aggregate on the reference machine; this smaller run keeps a
     # generous bound so a slower CI runner still passes while a quadratic regression fails.
-    start = datetime(2026, 3, 9, 0, 0, tzinfo=UTC)
-    bars = [_bar(start + timedelta(minutes=step)) for step in range(50_000) if not in_closure(start + timedelta(minutes=step), H001_CLOSURES)]
+    # Review CORE-005-r1 F8: exactly 50,000 in-session M1 (closure minutes are skipped, not counted).
+    minute = datetime(2026, 3, 9, 0, 0, tzinfo=UTC)
+    bars = []
+    while len(bars) < 50_000:
+        if not in_closure(minute, H001_CLOSURES):
+            bars.append(_bar(minute))
+        minute += timedelta(minutes=1)
+    assert len(bars) == 50_000
     began = perf_counter()
     report = validate_m1(bars, RULE, H001_CLOSURES, 5)
     result = aggregate(bars, 15, RULE, report)
