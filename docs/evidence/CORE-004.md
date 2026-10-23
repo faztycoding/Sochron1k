@@ -50,8 +50,20 @@ Contract: `docs/contracts/CORE-004-costs-hardening.md` v1.2 (Tier Standard; เ�
 
 ผลที่ Claude รัน (2026-10-24 02:0x บน `d33d5da` + การแก้ F7–F9 ที่ยังไม่ commit ซึ่งต่อมาเป็น `f47a8b8`/`aa0feb0` โดย `src/` ไม่เปลี่ยน; pre-review r3 รันซ้ำบน `aa0feb0` 02:09–02:10 ได้ผลเดียวกัน, `docs/reviews/CORE-004-r3.md`): ขั้น 1 `2795 passed in 5.93s` · ขั้น 2 ตรงตามที่เขียนทุกตัวอักษร · ขั้น 3 `subclass -> TypeError 0.0 ms`, `1001 digits -> BadVolume 0.0 ms`, `exponent -> BadVolume 0.0 ms`
 
+## หลัง merge (2026-10-24, GitHub REST API แบบไม่ล็อกอิน)
+- PR #15 · เจ้าของกด update branch (`5262f8c`, tree ไม่เปลี่ยน: `git diff 5f2e9e3 origin/main` ว่าง) แล้ว merge เป็น `b7e0dd2` 03:21 +07 · label `owner-approved-control-change`
+
+| Run | Event / head | ผล |
+|-----|--------------|----|
+| `40016833532` ci | pull_request `5f2e9e3` | success |
+| `40016830940` control-gate | pull_request_target `5f2e9e3` (opened) | failure: event "opened" มาก่อน label (เหมือนทุก PR) |
+| `40016863886` control-gate | pull_request_target `5f2e9e3` (labeled) | success |
+| `40017903752` ci | pull_request `5262f8c` | success |
+| `40017902365` control-gate | pull_request_target `5262f8c` | success |
+| `40018549782` ci | push `b7e0dd2` (main) | success |
+
 ## Delivery state
-implemented และ verified ในเครื่อง (2795 passed at `aa0feb0`) · reviews: tests-r1, r1, r2 (F1–F6 ปิด), pre-review r3 โดย subagent (F7–F9 ปิด, F10 เอกสารแก้ในไฟล์นี้, Ready for PR: yes) · ยังไม่ merged, ไม่ deployed · CI รอ run ของ PR
+**merged** 2026-10-24 03:21 (PR #15 → `b7e0dd2`) · CI เขียวบน PR และ main · เดิม: implemented และ verified ในเครื่อง (2795 passed at `aa0feb0`) · reviews: tests-r1, r1, r2 (F1–F6 ปิด), pre-review r3 โดย subagent (F7–F9 ปิด, F10 เอกสารแก้ในไฟล์นี้, Ready for PR: yes) · ยังไม่ merged, ไม่ deployed · CI รอ run ของ PR
 
 ## Review r1 (`docs/reviews/CORE-004-r1.md`) และการตอบ
 | ID | ผล | การตอบ | Regression |
