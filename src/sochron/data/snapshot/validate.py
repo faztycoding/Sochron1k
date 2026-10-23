@@ -1,8 +1,8 @@
 """validate_m1: report every defect of an M1 series without repairing anything (CORE-005 AC-03 to AC-05).
 
 Conventions (docs/contracts/CORE-005-data-bars.md and the locked tests):
-- The previous bar is the one just before in input order: an equal time is duplicate_time, a
-  smaller one time_not_increasing.
+- A time already read anywhere earlier in the input is duplicate_time; otherwise a time below the
+  bar just before is time_not_increasing (one code per bar).
 - A gap is the minutes missing between two increasing bars; minutes inside a closure of the
   calendar do not count, and more than max_gap_minutes in-session minutes is unexpected_gap,
   reported at the first bar after the gap.
@@ -109,16 +109,19 @@ def validate_m1(bars: Sequence[Bar], rule: TimeRule, calendar: ClosureCalendar, 
     defects: list[Defect] = []
     days: dict[date, str] = {}
     previous: tuple[int, datetime] | None = None
+    # Every time already read (review CORE-005-r1 F1): overlapping downloads repeat earlier times
+    # after one step back, and comparing with the bar just before would miss all but the first.
+    seen: set[int] = set()
     for bar in items:
         utc = to_utc(bar.time_raw, rule)
         day = utc.date()
         days.setdefault(day, "PASS")
         found = _bar_defects(bar, utc)
-        if previous is not None:
+        if bar.time_raw in seen:
+            found.append(("duplicate_time", "STOP", "an open time already read earlier in the series"))
+        elif previous is not None:
             previous_raw, previous_utc = previous
-            if bar.time_raw == previous_raw:
-                found.append(("duplicate_time", "STOP", "the same open time as the bar before"))
-            elif bar.time_raw < previous_raw:
+            if bar.time_raw < previous_raw:
                 found.append(("time_not_increasing", "STOP", "an open time before the bar before"))
             else:
                 missing = in_session_missing(previous_utc, utc, calendar, max_gap_minutes)
@@ -131,6 +134,7 @@ def validate_m1(bars: Sequence[Bar], rule: TimeRule, calendar: ClosureCalendar, 
             if _RANK[severity] > _RANK[days[day]]:
                 days[day] = severity
         previous = (bar.time_raw, utc)
+        seen.add(bar.time_raw)
 
     if days:
         first, last = min(days), max(days)

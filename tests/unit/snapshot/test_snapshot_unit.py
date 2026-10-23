@@ -81,3 +81,13 @@ def test_fifty_thousand_m1_validate_and_aggregate_quickly():
     assert report.defects == ()
     assert sum(item.bar.m1_count for item in result) == len(bars)
     assert elapsed < 30
+
+
+def test_a_time_repeated_after_a_step_back_is_a_duplicate():
+    # Review CORE-005-r1 F1: two overlapping downloads joined together repeat earlier times after
+    # one step back; only the first repeat was below its predecessor, the rest went unreported.
+    first = [_bar(datetime(2026, 3, 10, 13, minute, tzinfo=UTC)) for minute in range(6)]
+    overlap = [_bar(datetime(2026, 3, 10, 13, minute, tzinfo=UTC)) for minute in range(2, 6)]
+    report = validate_m1(first + overlap, RULE, H001_CLOSURES, 5)
+    codes = sorted((defect.code, defect.time_raw) for defect in report.defects)
+    assert codes == sorted(("duplicate_time", bar.time_raw) for bar in overlap)
