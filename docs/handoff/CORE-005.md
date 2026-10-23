@@ -485,3 +485,56 @@ earlier logs). Nothing was deleted.
    expect 849 passed, 0 skipped once the implementation is complete.
 
 Delivery state: **proposal written and checked; not applied, committed, merged or deployed.**
+
+## Implementer notes (Claude Code, the CORE-005 implementer)
+
+Commits: red `3605818`, F13 `5993560`, merge main `d97bd1f`, `core.Bar` `7fd6fe1` (committed by the owner from the
+implementer's file, byte-identical), `.gitignore` `b54605d` and `b067cda` (F9), implementation `07d2639`, review r1
+fixes `e52312a` (F1), `da2ba68` (F2), `61b75ed` (F4), `e9a0875` (F5), `280538b` (F8). Evidence: `docs/evidence/CORE-005.md`.
+
+Decisions, for the re-reviewer:
+- `core` imports nothing from `sochron`, so `TIMEFRAMES_MINUTES` is repeated there; a unit test keeps it equal to
+  timebase's set.
+- Duplicates: every time read is remembered; a repeat anywhere is `duplicate_time`, otherwise a time below the bar just
+  before is `time_not_increasing` (one code per bar).
+- Gaps: minutes strictly between two increasing bars are walked one by one through `timebase.to_zone`, stopping once
+  more than `max_gap_minutes` in-session minutes are found (weekends are walked in full).
+- `incomplete`: a minute of the slot with no M1 whose wall time is in session under `report.calendar`.
+- Unit tests for snapshot live in `tests/unit/snapshot/` because `.gitignore`'s market-data rule `data/` also hides
+  `tests/unit/data/`.
+
+Timing script used for the evidence (run from the repo root as
+`uv run --offline --no-sync python -I -B <script> <repo>/src 500000`; result on the reference machine 2026-10-24:
+build 2.92 s, `validate_m1` 3.08 s, `aggregate` 0.91 s, 0 defects):
+
+```python
+import sys
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from time import perf_counter
+
+sys.path.insert(0, sys.argv[1])
+from sochron.core import Bar
+from sochron.data.snapshot import H001_CLOSURES, aggregate, validate_m1
+from sochron.timebase import rule_for, to_utc, to_zone
+
+count = int(sys.argv[2])
+rule = rule_for("Exness-MT5Trial14")
+minute, price, bars = datetime(2024, 1, 1, tzinfo=UTC), Decimal("2000.000"), []
+while len(bars) < count:
+    local = to_zone(minute, "America/New_York")
+    closed = (local.hour == 17 or (local.weekday() == 4 and local.hour >= 17)
+              or local.weekday() == 5 or (local.weekday() == 6 and local.hour < 18))
+    if not closed:
+        raw = int(minute.timestamp())
+        bars.append(Bar(raw, to_utc(raw, rule), 1, price, price + Decimal("0.5"), price - Decimal("0.5"), price, 240, 10, 1))
+    minute += timedelta(minutes=1)
+started = perf_counter()
+report = validate_m1(bars, rule, H001_CLOSURES, 5)
+print("validate_m1", perf_counter() - started, len(report.defects))
+started = perf_counter()
+m15 = aggregate(bars, 15, rule, report)
+print("aggregate", perf_counter() - started, len(m15))
+```
+
+Checks: `timeout -k 10 900 uv run --offline pytest tests -q -p no:cacheprovider` -> 2875 passed after the r1 fixes.

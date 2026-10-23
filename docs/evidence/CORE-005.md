@@ -52,5 +52,21 @@ Contract: `docs/contracts/CORE-005-data-bars.md` v1.2 (Tier Standard; เจ้�
 - ปฏิทินช่วงปิด (D2) และ `max_gap_minutes` (D3) เป็นค่า [A]: กับข้อมูลรูปแบบ SPIKE-001 แท่ง M15 16:45 NY จะติด `incomplete` ทุกวัน และช่วงพัก 67 นาทีขึ้นไปเป็น WARN → R1 ต้องวัดช่วงพักจริงก่อนตั้งค่า (เจ้าของเลือก 2026-10-24 03:0x)
 - การอ่าน Parquet/manifest ยังไม่มี (ต้อง admission dependency ใน SLICE-R1)
 
+## Implementation review r1 (`docs/reviews/CORE-005-r1.md`) และการตอบ
+ผล: ยังไม่พร้อม PR · F1 Medium + Low F2–F9 · เจ้าของตัดสิน 2026-10-24 ~06:3x ตามที่แนะนำทุกข้อ (contract v1.3)
+| ID | การตอบ | commit | Regression |
+|----|--------|--------|------------|
+| F1 Medium | เวลาซ้ำที่ใดก็ตามก่อนหน้าเป็น `duplicate_time` (เดิมเทียบแค่แท่งติดกัน) | `e52312a` | `test_a_time_repeated_after_a_step_back_is_a_duplicate` ล้มก่อน ผ่านหลัง |
+| F2 | `incomplete` ตามนาทีที่ขาด ไม่ใช่จำนวน M1 | `da2ba68` | `test_a_slot_padded_by_a_duplicate_is_still_incomplete` ล้มก่อน ผ่านหลัง · golden ไม่เปลี่ยน |
+| F3 | ข้อจำกัด (contract v1.3) | – | – |
+| F4 | ปฏิทินที่มีวินาที → `ValueError` · `Defect`/`ValidationReport` ไม่ตรวจตอนสร้าง (ข้อจำกัด) | `61b75ed` | `test_calendar_times_with_seconds_are_refused` 2 กรณี ล้มก่อน ผ่านหลัง |
+| F5 | M1 ที่ `m1_count` ≠ 1 → `ValueError` | `e9a0875` | `test_an_m1_bar_must_count_one_m1` ล้มก่อน ผ่านหลัง |
+| F6 | ข้อจำกัด (contract v1.3) | – | – |
+| F7 | PR body ระบุเอกสาร CORE-004/CORE-006 ที่มากับ branch (merge main, contracts ของ PLAN-002) | – | – |
+| F8 | test เวลาสร้าง 50,000 แท่งจริง (0.48 s) · สคริปต์ 500,000 แท่งบันทึกใน handoff | `280538b` | – |
+| F9 | `.gitignore` กัน dotfile ใต้ `src/sochron/data/` | `b067cda` | `git check-ignore`: `.hidden.py`, `.secrets.py` ถูกกัน · `model.py`, `__init__.py` track · `bars.parquet` ถูกกัน |
+
+suite หลังแก้ครบ: **2875 passed** (`e9a0875`) · block ของผู้ตรวจ: guard-bash ปฏิเสธ `git check-ignore` ที่มี path ชื่อ `.env` (ผู้ตรวจหยุด ไม่เลี่ยง)
+
 ## Delivery state
-implemented และ verified ในเครื่อง (2870 passed at `07d2639`) · tests reviews r1–r2 ปิดแล้ว · implementation review: รอ · ยังไม่ merged, ไม่ deployed
+implemented และ verified ในเครื่อง (2875 passed) · tests reviews r1–r2 ปิด · implementation review r1 ตอบครบ รอ subagent ตรวจซ้ำแคบๆ (เจ้าของเลือก เพราะ headless ครบงบ 5) · ยังไม่ merged, ไม่ deployed
