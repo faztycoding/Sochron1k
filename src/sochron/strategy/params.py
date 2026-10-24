@@ -3,9 +3,11 @@
 from dataclasses import dataclass
 from decimal import ROUND_HALF_EVEN, Context, Decimal
 from types import MappingProxyType
-from typing import Literal
+from typing import Literal, TypeVar, cast
 
+T = TypeVar("T")
 Variant = Literal["A", "B", "C"]
+_VARIANTS: tuple[Variant, ...] = ("A", "B", "C")
 STRATEGY_ID = "H001"
 STRATEGY_VERSION = "H001-v1"
 
@@ -18,22 +20,24 @@ class StrategyError(ValueError):
     """A strategy input of the right type with a value outside the contract."""
 
 
-def exact(value: object, kind: type, name: str) -> None:
+def exact(value: object, kind: type[T], name: str) -> T:
+    """The same object when its type is exactly kind; typed as kind for the checker (CHORE-001)."""
     if type(value) is not kind:
         raise TypeError(f"{name} must be exactly {kind.__name__}, not {type(value).__name__}")
+    return cast(T, value)
 
 
 def _int_in(value: object, name: str, low: int, high: int) -> None:
-    exact(value, int, name)
-    if not low <= value <= high:
+    number = exact(value, int, name)
+    if not low <= number <= high:
         raise StrategyError(f"{name} must be {low} to {high}")
 
 
 def _decimal_in(value: object, name: str, low: str, high: str) -> None:
-    exact(value, Decimal, name)
-    if not value.is_finite():
+    number = exact(value, Decimal, name)
+    if not number.is_finite():
         raise StrategyError(f"{name} must be finite")
-    if not Decimal(low) <= value <= Decimal(high):
+    if not Decimal(low) <= number <= Decimal(high):
         raise StrategyError(f"{name} must be {low} to {high}")
 
 
@@ -72,5 +76,5 @@ class H001Params:
 
 
 H001_DEFAULTS = MappingProxyType(
-    {variant: H001Params(variant, 16, 64, 20, Decimal("0.50"), 96, 48, Decimal("2.0")) for variant in ("A", "B", "C")}
+    {variant: H001Params(variant, 16, 64, 20, Decimal("0.50"), 96, 48, Decimal("2.0")) for variant in _VARIANTS}
 )

@@ -16,9 +16,11 @@ from dataclasses import dataclass, replace
 from datetime import date
 from decimal import MAX_EMAX, MIN_EMIN, ROUND_HALF_EVEN, Context, Decimal, Rounded, localcontext
 from types import MappingProxyType
-from typing import Literal
+from typing import Literal, TypeVar, cast
 
 from .errors import BadProvenance, BadStress, CostsError
+
+T = TypeVar("T")
 
 Status = Literal["measured", "spec", "assumed", "unknown"]
 STATUSES = frozenset({"measured", "spec", "assumed", "unknown"})
@@ -59,10 +61,11 @@ def is_int(value: object) -> bool:
     return type(value) is int
 
 
-def require_exact(value: object, kind: type, name: str) -> object:
+def require_exact(value: object, kind: type[T], name: str) -> T:
+    """The same object when its type is exactly kind; typed as kind for the checker (CHORE-001)."""
     if type(value) is not kind:
         raise TypeError(f"{name} must be exactly {kind.__name__}, not {type(value).__name__}")
-    return value
+    return cast(T, value)
 
 
 # Size bound (CORE-004 AC-04, the same numbers as sochron.risk): rational conversion builds
@@ -196,8 +199,7 @@ def _check_model(model: CostModel) -> dict[str, Provenance]:
 
 def validate_model(model: object) -> dict[str, Provenance]:
     """Exactly a CostModel whose fields still hold; returns its validated provenance snapshot."""
-    require_exact(model, CostModel, "model")
-    return _check_model(model)
+    return _check_model(require_exact(model, CostModel, "model"))
 
 
 def stress(model: CostModel, factor: Decimal | int = Decimal("2")) -> CostModel:

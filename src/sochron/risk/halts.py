@@ -30,23 +30,23 @@ class HaltState:
         validate_state(self)
 
 
-def validate_state(state: HaltState) -> HaltState:
+def validate_state(state: object) -> HaltState:
     """Type and domain of every state field; run at construction and again at use (pre-review F4).
 
     The policy is validated first, because reading its provenance is the only caller code validation
     can run; every other field is read after it, and the policy object is pinned (pre-review r2 F9).
     """
-    require_exact(state, HaltState, "state")
-    policy = state.policy
+    checked = require_exact(state, HaltState, "state")
+    policy = checked.policy
     require_policy(policy)
-    require_day(state.day)
-    positive_decimal(state.day_start_equity, "day_start_equity", BadEquity)
-    positive_decimal(state.experiment_start_equity, "experiment_start_equity", BadEquity)
+    require_day(checked.day)
+    positive_decimal(checked.day_start_equity, "day_start_equity", BadEquity)
+    positive_decimal(checked.experiment_start_equity, "experiment_start_equity", BadEquity)
     for name in ("daily_halted", "experiment_halted"):
-        require_exact(getattr(state, name), bool, name)
-    if state.policy is not policy:
+        require_exact(getattr(checked, name), bool, name)
+    if checked.policy is not policy:
         raise RiskError("state.policy was replaced while the state was being validated")
-    return state
+    return checked
 
 
 def _require_state(state: object) -> HaltState:
@@ -76,11 +76,11 @@ def _new_state(
 
 
 def _authorize(policy: RiskPolicy, authorized_by: object, reason: object) -> None:
-    require_exact(authorized_by, str, "authorized_by")
-    require_exact(reason, str, "reason")
-    if authorized_by not in policy.halt_clearers:
-        raise BadHaltClear(f"{authorized_by!r} is not allowed to start or restart this experiment")
-    if not reason.strip():
+    clearer = require_exact(authorized_by, str, "authorized_by")
+    text = require_exact(reason, str, "reason")
+    if clearer not in policy.halt_clearers:
+        raise BadHaltClear(f"{clearer!r} is not allowed to start or restart this experiment")
+    if not text.strip():
         raise BadHaltClear("a start or restart needs a reason")
 
 
