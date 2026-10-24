@@ -482,3 +482,9 @@ unit tests (`tests/unit/strategy/test_strategy_unit.py`); no locked file changed
 The reviewer re-checks only these IDs in the next round file (`docs/reviews/CORE-006-r2.md`). The implementer does not
 close findings. The headless budget for this task is used up (5 of 5), so the re-check runs as the
 `fresh-eyes-reviewer` subagent, a fresh context, the same pattern as CORE-004 r3 and CORE-005 r2.
+
+Re-check r2 (`docs/reviews/CORE-006-r2.md`): F1–F5 closed, Ready for PR: yes, one new Low finding.
+
+| ID | Accept/Dispute | Commit | Evidence (command → result) |
+|----|----------------|--------|-----------------------------|
+| F6 | accept | the `F6:` commit after `42f63bb` | `docs/evidence/CORE-006.md` AC-07 row, unit-test list, tests-r2 F6 line and delivery state now cite 3093 passed at `52c8680` and the r1/r2 reviews; the checks table has a row per fix, the re-check and the push. `PROGRESS.md` current-task line and "Next safe action" updated. `grep -n "3093" docs/evidence/CORE-006.md` → rows found |
