@@ -1,7 +1,7 @@
 # TASK CORE-007 — `backtest`: จำลองการเทรด H001 บนแท่ง bid พร้อมต้นทุน, SL ใน M1 และ R-multiple แบบ pure
 
-Version v1.3 (v1 ร่าง 2026-10-24 07:xx → v1.1 ตอบ contract review r1 F1–F15 → v1.2 ตอบ r2 F16–F32 → v1.3 ตอบ r3 F33–F38 ดูหัวข้อ "Answers to contract reviews") · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 7, 8 (แถว `backtest`), 10 แถว 2 (SLICE-R1) · H001 ข้อ 3, 6, 7, 8 · ต่อจาก CORE-005 (`Bar`, `AggregatedBar`) และ CORE-006 (`indicators`, `decide`) · Tier **Standard** · Branch `feat/CORE-007-backtest`
-Status: **approved by delegation 2026-10-24** — เจ้าของสั่งในแชท Claude 2026-10-24 ~07:0x "ทำให้เสร็จทั้งหมดเลย" และ "มึงตัดสินไปเลย… เอา recommanded ทุกอัน" Claude จึงอนุมัติ acceptance และทางที่แนะนำทุกข้อแทน · ค่าทุกค่ามาจาก H001, SPIKE-001, CORE-002/003/005/006 ค่าใหม่ติดป้าย [A] · ผู้ตรวจอิสระอ่าน contract แทนเจ้าของ (r1: 15, r2: 19 findings) ต้องได้ "Ready for test authoring: yes" ก่อนเขียน tests · **เจ้าของ veto หรือแก้ acceptance ได้ทุกเมื่อก่อน merge**
+Version v1.4 (v1 ร่าง 2026-10-24 07:xx → v1.1 ตอบ contract review r1 F1–F15 → v1.2 ตอบ r2 F16–F32 → v1.3 ตอบ r3 F33–F38 → v1.4 ตอบ r4 F39–F40 ดูหัวข้อ "Answers to contract reviews") · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 7, 8 (แถว `backtest`), 10 แถว 2 (SLICE-R1) · H001 ข้อ 3, 6, 7, 8 · ต่อจาก CORE-005 (`Bar`, `AggregatedBar`) และ CORE-006 (`indicators`, `decide`) · Tier **Standard** · Branch `feat/CORE-007-backtest`
+Status: **approved by delegation 2026-10-24** — เจ้าของสั่งในแชท Claude 2026-10-24 ~07:0x "ทำให้เสร็จทั้งหมดเลย" และ "มึงตัดสินไปเลย… เอา recommanded ทุกอัน" Claude จึงอนุมัติ acceptance และทางที่แนะนำทุกข้อแทน · ค่าทุกค่ามาจาก H001, SPIKE-001, CORE-002/003/005/006 ค่าใหม่ติดป้าย [A] · ผู้ตรวจอิสระอ่าน contract แทนเจ้าของ (r1: 15, r2: 19, r3: 6, r4: 2 findings) ต้องได้ "Ready for test authoring: yes" ก่อนเขียน tests · **เจ้าของ veto หรือแก้ acceptance ได้ทุกเมื่อก่อน merge**
 Hypothesis (research tasks): H001 · เขียน simulator เท่านั้น **ไม่รัน backtest กับข้อมูลจริง** (ห้ามก่อน ENV-1 และ SLICE-R1) · tests ใช้ข้อมูลสังเคราะห์
 
 ## Risk tier (Q1–Q6, one line each; unsure = yes)
@@ -56,9 +56,9 @@ sochron.backtest
 - แท่ง M15 รับแบบ duck typing: `.bar` เป็น `core.Bar` พอดี (timeframe 15) และ `.flags` เป็น `frozenset` ของ `str` · `sochron.backtest` ไม่ import `data.snapshot` · ใน R1 คือผลของ `data.snapshot.aggregate`
 - `run` ปฏิเสธด้วย `BacktestError`: `m1` หรือ `m15` ว่าง · equity เริ่ม ≤ 0 · M1 timeframe ≠ 1 หรือเวลาไม่เพิ่มขึ้นเคร่งครัด · M15 timeframe ≠ 15 หรือเวลาไม่เพิ่มขึ้นเคร่งครัด · M1 ที่ไม่อยู่ในแท่ง M15 ใด (`timebase.bar_open(t, 15, rule)`) หรือแท่ง M15 ที่ไม่มี M1 · M1 ที่ `time_utc ≠ to_utc(time_raw, rule)` · M1 ที่มีข้อบกพร่องระดับ STOP ที่ทำให้ fill ผิด: spread ติดลบ, OHLC ขัดกัน, ราคาไม่เป็นบวก (R1 ต้องตัดวัน STOP ก่อนเรียก)
 - `Rollover.__post_init__` ตรวจตอนสร้าง (r3 F36): `zone` str พอดีและรู้จัก (zone ที่ไม่รู้จัก → `BacktestError`) · `at` เป็น `time` พอดี ไม่มี tzinfo และตรงนาที (ไม่ใช่ → `BacktestError`; ชนิดผิด → `TypeError`) · `run` และ `simulate_trade` รับเฉพาะ `Rollover` พอดี (`TypeError`)
-- `SizedLots.__post_init__`: ชนิดพอดีทุก field (`TypeError`) · `risk_money` > 0 · lots None ⇒ `actual_risk` None · lots มีค่า ⇒ `actual_risk` None หรือ > 0 · `reason` เป็น str ไม่ว่าง (ค่าผิด → `BacktestError`) (r3 F33) · `run` หลังได้ SizedLots ที่ lots ไม่ใช่ None: `costs.check_volume(lots, model)` (`BadVolume` ส่งต่อ)
+- `SizedLots.__post_init__`: ชนิดพอดีทุก field (`TypeError`) · Decimal ทุก field ที่ไม่ใช่ None เป็น finite (r4 F39) · `risk_money` > 0 · lots None ⇒ `actual_risk` None · lots มีค่า ⇒ `actual_risk` None หรือ > 0 · `reason` เป็น str ไม่ว่าง (ค่าผิด → `BacktestError` ซึ่งเกิดใน sizer และส่งต่อ) (r3 F33) · `run` หลังได้ SizedLots ที่ lots ไม่ใช่ None: `costs.check_volume(lots, model)` (`BadVolume` ส่งต่อ)
 - `simulate_trade` (r3 F34, F35): `0 ≤ entry_index < len(m1)` · `exit_index` None หรือ `entry_index < exit_index < len(m1)` · ใช้การตรวจราย M1 ชุดเดียวกับ `run` (timeframe 1, เวลาเพิ่มขึ้นเคร่งครัด, spread ติดลบ, OHLC ขัดกัน, ราคาไม่เป็นบวก) กับทุก M1 ที่อ่าน ก่อน fill ใดๆ · ไม่ตรง → `BacktestError`
-- ค่าโดเมนที่ตรวจก่อน fill ใดๆ ทั้งใน `run` และ `simulate_trade` (r3 F35): side เป็น "long" หรือ "short" · `stop_distance` > 0 · `risk_money` > 0 · `actual_risk` None หรือ > 0 · `sides` เป็น frozenset ไม่ว่างที่เป็นสับเซตของ {"long", "short"} · Decimal ทุกตัวเป็น finite · ไม่ตรง → `BacktestError` (ชนิดผิด → `TypeError`)
+- ค่าโดเมนที่ตรวจก่อน fill ใดๆ ทั้งใน `run` และ `simulate_trade` (r3 F35): side เป็น "long" หรือ "short" · `stop_distance` > 0 · `risk_money` > 0 · `actual_risk` None หรือ > 0 · `sides` เป็น frozenset ไม่ว่างที่เป็นสับเซตของ {"long", "short"} · Decimal ที่เป็น argument ของ `run`/`simulate_trade` (equity, stop_distance, lots, risk_money, actual_risk) เป็น finite · ไม่ตรง → `BacktestError` (ชนิดผิด → `TypeError`) · ขอบเขต (r4 F39): field ของ `CostModel` และ `H001Params` ตรวจโดยโมดูลของมันเอง (error ของ costs/strategy) และ field ของ `SizedLots` ตรวจใน `SizedLots.__post_init__`
 - เวลา (r3 F38): `sochron.backtest` แปลงเวลาผ่าน `timebase` เท่านั้น (`to_zone`, `to_utc`, `bar_open`) ไม่ import `zoneinfo` และไม่เรียก `astimezone` เอง
 
 ### กติกา fill และ SL — `s` = spread (points) ของ M1 ที่เกิดเหตุการณ์ ถ้า None ใช้ `model.spread_fallback_points` · `p` = `model.point`
@@ -166,6 +166,8 @@ gap เลย SL ทั้งสองฝั่ง (low < open < stop) · SL ใ
 | r3 | F36 | `Rollover.__post_init__` ใน "Input และการตรวจ" |
 | r3 | F37 | ลำดับเหตุการณ์ข้อ 5 |
 | r3 | F38 | "เวลา" ใน "Input และการตรวจ" · AC-06 |
+| r4 | F39 | SizedLots (finite) และขอบเขตของ "Decimal ทุกตัว" ใน "Input และการตรวจ" |
+| r4 | F40 | DoR status และ Status (นับ findings ทุกรอบ) |
 
 ## Authorization (filled by the owner)
 - อนุมัติแทนโดย delegation 2026-10-24 (คำสั่งเจ้าของข้างบน) · veto ได้ก่อน merge · ผู้เขียน tests: patch ของ `tests/acceptance/CORE-007/**`, `tests/golden/CORE-007/**`, `tests/architecture/**` · Claude: implement, apply ตาม D-006, evidence, handoff, PROGRESS, push task branch
@@ -177,7 +179,7 @@ gap เลย SL ทั้งสองฝั่ง (low < open < stop) · SL ใ
 revert PR · ไม่มีผลข้างเคียง
 
 ## DoR status / missing items / next action
-ครบ: H001, costs, risk, data.snapshot, contract v1.3 (r3 ระบุว่าแก้ F33–F38 แล้วพร้อมเขียน tests; การตรวจแคบๆ ยืนยันการแก้ v1.3) · ขาด: CORE-006 implementation (ส่วน `run` ของ AC-02 ต้องใช้ decide จริง) · next: ผู้เขียน tests หลัง CORE-006 implement
+ครบ: H001, costs, risk, data.snapshot, contract v1.4 · ประวัติการตรวจ: r3 (`docs/reviews/CORE-007-contract-r3.md`) "Ready for test authoring: no" จนกว่าจะแก้ F33–F38 → v1.3 · r4 ตรวจแคบๆ (`docs/reviews/CORE-007-contract-r4.md`) ปิด F33–F38 พบ Low F39, F40 → v1.4 · ต้องมีการตรวจ F39/F40 ที่ได้ "ready" ก่อนเขียน tests · (แก้ข้อความเดิมของ v1.3 ที่อ้างการตรวจแคบๆ ก่อนการตรวจนั้นเกิดขึ้น และสรุปผล r3 ผิด, r4 F40) · ขาด: CORE-006 implementation (ส่วน `run` ของ AC-02 ต้องใช้ decide จริง) · next: ตรวจ F39/F40 แล้วผู้เขียน tests หลัง CORE-006 implement
 
 ## Done scope
 merge แล้ว, suite เขียวใน CI
