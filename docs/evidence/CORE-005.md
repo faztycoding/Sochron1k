@@ -75,5 +75,15 @@ F1, F2, F4, F5, F8, F9 ปิด (regression ล้มบน commit แม่แ
 | F10 | ผลข้างเคียงของ F1: แท่งซ้ำที่ปิดช่องว่างจริงข้ามการตรวจช่องว่าง → ตรวจช่องว่างทุกครั้งที่เวลาเดินหน้า, `time_not_increasing` เฉพาะเวลาที่ยังไม่เคยอ่าน | `a158abf` | `test_a_repeated_bar_that_ends_a_real_gap_still_reports_the_gap` ล้มก่อน ผ่านหลัง · suite 2876 passed |
 | F11 | แก้ถ้อยคำ: contract บรรทัดกติกาประกอบแท่งเป็นแบบ v1.3 และ Version เป็น v1.3 · หลักฐาน: version, ตัวเลข AC-07, F7 · handoff: เวลา build มาจากสคริปต์ scratch เดิม | (commit เอกสารนี้) | – |
 
+## หลัง merge (2026-10-24, GitHub REST API แบบไม่ล็อกอิน)
+- PR #16 `feat/CORE-005-data-bars` head `b91cff7` · เจ้าของ merge เป็น `419eee3` 09:00 +07 (02:00:29Z) · label `owner-approved-control-change` · `git diff b91cff7 origin/main` ว่าง
+
+| Run | Event / head | ผล |
+|-----|--------------|----|
+| `40052145657` ci | pull_request `b91cff7` | success |
+| `40052144404` control-gate | pull_request_target `b91cff7` (opened) | failure: event "opened" มาก่อน label (เหมือนทุก PR) |
+| `40052149733` control-gate | pull_request_target `b91cff7` (labeled) | success |
+| `40052338519` ci | push `419eee3` (main) | success |
+
 ## Delivery state
-implemented และ verified ในเครื่อง (2876 passed at `a158abf`) · tests reviews r1–r2 ปิด · implementation review r1 ตอบครบ · review r2 (subagent) Ready for PR: yes, F10/F11 แก้แล้ว · ยังไม่ merged, ไม่ deployed
+**merged** 2026-10-24 09:00 (PR #16 → `419eee3`) · CI เขียวบน PR และ main · เดิม: implemented และ verified ในเครื่อง (2876 passed at `a158abf`) · tests reviews r1–r2 ปิด · implementation review r1 ตอบครบ · review r2 (subagent) Ready for PR: yes, F10/F11 แก้แล้ว · ยังไม่ merged, ไม่ deployed
