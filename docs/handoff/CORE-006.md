@@ -463,3 +463,22 @@ refused, and t of a wrong type.
 9. Implement within the stdlib list (decision 2). From the contract (not from code): bars are duck-typed, with
    exact type checks on `.bar` and `.flags`; `decide` checks its arguments (types, position, the range of t)
    before it reads a row.
+
+## Findings response (implementation review r1, `docs/reviews/CORE-006-r1.md`)
+
+The implementer (Claude, the planning session) answered every finding by accepting the reviewer's minimal fix, under
+the owner's standing delegation of 2026-10-24 ~07:0x ("take the recommended option on every decision", veto before
+merge). The fix shapes came from the reviewer, not from this session. Every regression check is in the implementer's
+unit tests (`tests/unit/strategy/test_strategy_unit.py`); no locked file changed. Suite 3084 at review → 3093 passed.
+
+| ID | Accept/Dispute | Commit | Evidence (command → result) |
+|----|----------------|--------|-----------------------------|
+| F1 | accept | `6b22b5b` | `negative_theta = theta.copy_negate()` (exact, no context). `pytest -k mirrors` failed before (`enter_short` expected, `none` returned) and passes after; suite 3085 passed |
+| F2 | accept | `9338b46` | `decide` raises StrategyError("next_open_utc must be timezone-aware") right after the type check, for every position. `pytest -k naive` failed 6/6 before (flat, long, short × no signal, breakout) and passes after; suite 3091 passed |
+| F3 | accept | `7055ea9` | Zero counts are deleted when a bar leaves the lookback; `lookback_flags = frozenset(flags)`. The test counts Counter keys with a subclass patched into the module (no timing): 600 keys before against a bound of L + 1 = 98, passes after. My first bound of L was off by one (bar t joins before bar t − L leaves); corrected before the commit and re-run on the old code (`git stash` of `indicators.py`): 600 > 98, fails. Probe with a new flag on every bar: 2,000 / 4,000 / 8,000 / 16,000 bars → 0.025 / 0.052 / 0.115 / 0.258 s; suite 3092 passed |
+| F4 | accept | `52c8680` | New unit test at f = 22, s = 78 checks `ema_f` and `ema_s` row by row. The M2 mutant `keep_f = (f − 1)/(f + 1)` in a scratch copy of `src` (`pytest -c <scratch>/pytest.ini --rootdir . tests`) gives 1 failed (this test), 3092 passed; the real code gives 3093 passed |
+| F5 | accept | `6f93f6e` | The tests-r2 F5 limitation is now in PROGRESS.md "Claude ถัดไป" item (ข); the evidence line points there and says the earlier claim was not on record. `grep -c "CORE-006 tests-r2 F5" PROGRESS.md` → 1 |
+
+The reviewer re-checks only these IDs in the next round file (`docs/reviews/CORE-006-r2.md`). The implementer does not
+close findings. The headless budget for this task is used up (5 of 5), so the re-check runs as the
+`fresh-eyes-reviewer` subagent, a fresh context, the same pattern as CORE-004 r3 and CORE-005 r2.
