@@ -9,7 +9,7 @@ the end of the data. Every trade is built by the same fill code as simulate_trad
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from decimal import Decimal, localcontext
+from decimal import Decimal, Overflow, localcontext
 
 from sochron.core import Bar
 from sochron.costs import CONTEXT, CostModel, check_volume
@@ -17,7 +17,7 @@ from sochron.strategy import STRATEGY_VERSION, H001Params, decide, indicators
 from sochron.timebase import RAW_MAX_EXCLUSIVE, RAW_MIN, TimeRule, bar_open, to_utc
 
 from .model import BACKTEST_VERSION, SIDES, BacktestError, Result, Rollover, Side, SizedLots, Sizer, Skip, Trade, exact, finite
-from .trade import Plan, check_flags, check_m1, simulate, stop_fill, stop_price
+from .trade import Plan, check_flags, check_m1, simulate, stop_fill, stop_price, too_large
 
 
 def _sequence(value: object, name: str) -> Sequence:
@@ -164,8 +164,11 @@ class _Run:
         return Result(tuple(self.trades), tuple(self.skips), tuple(self.points), BACKTEST_VERSION, STRATEGY_VERSION)
 
     def _stopped(self, held: _Open, t: int) -> bool:
-        return any(stop_fill(held.side, self.m1[index], held.stop, self.model) is not None
-                   for index in range(self.first[t], self.end[t]))
+        try:
+            return any(stop_fill(held.side, self.m1[index], held.stop, self.model) is not None
+                       for index in range(self.first[t], self.end[t]))
+        except Overflow as error:
+            raise too_large(error) from error
 
     def _decide(self, t: int) -> None:
         held = self.open
@@ -192,7 +195,10 @@ class _Run:
             return
         check_volume(sized.lots, self.model)
         entry_index = self.first[t + 1]
-        stop = stop_price(side, self.m1[entry_index], stop_distance, self.model)
+        try:
+            stop = stop_price(side, self.m1[entry_index], stop_distance, self.model)
+        except Overflow as error:
+            raise too_large(error) from error
         self.open = _Open(side, entry_index, t, stop_distance, stop, sized.lots, sized.risk_money, sized.actual_risk)
 
     def _close(self, held: _Open, exit_index: int | None, exit_bar: int) -> None:
@@ -206,7 +212,10 @@ class _Run:
                     held.risk_money, held.actual_risk, exit_index, flags)
         trade = simulate(self.m1, plan, checked=True)
         self.trades.append(trade)
-        with localcontext(CONTEXT):
-            self.equity = self.equity + trade.net_money
+        try:
+            with localcontext(CONTEXT):
+                self.equity = self.equity + trade.net_money
+        except Overflow as error:
+            raise too_large(error) from error
         self.points.append((trade.exit_time_raw, self.equity))
         self.open = None

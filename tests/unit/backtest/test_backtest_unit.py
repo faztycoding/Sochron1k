@@ -112,3 +112,24 @@ def test_raw_time_outside_the_timebase_range_is_a_backtest_error():
     bad_m15 = (AggregatedBar(replace(m15[0].bar, time_raw=0), m15[0].flags),) + tuple(m15[1:])
     with pytest.raises(BacktestError):
         run(m1, bad_m15, H001_DEFAULTS["B"], H001_COSTS, sizer, Decimal("10000"), RULE, ROLLOVER)
+
+
+@pytest.mark.parametrize("side", ["long", "short"])
+def test_a_stop_distance_too_large_for_the_arithmetic_is_a_backtest_error(side):
+    # Review CORE-007-r1 F2: a finite stop_distance of 1E+1000000 overflowed costs.CONTEXT (Emax 999999)
+    # and raised decimal.Overflow, which is not a ValueError.
+    m1 = _m1(10, seed=5)
+    with pytest.raises(BacktestError):
+        simulate_trade(m1, 0, side, Decimal("1E+1000000"), Decimal("0.10"), H001_COSTS, ROLLOVER,
+                       risk_money=Decimal("25"), exit_index=4)
+
+
+def test_a_starting_equity_too_large_for_the_arithmetic_is_a_backtest_error():
+    # Review CORE-007-r1 F2 (same arithmetic in run): the equity update after a close overflows when the
+    # starting equity sits at the top of the context's range; it must surface as a BacktestError too.
+    m1 = _m1(20_000, seed=11)
+    m15 = _m15(m1)
+    params = H001Params("B", 8, 32, 10, Decimal("0.50"), 48, 24, Decimal("2.0"))
+    with pytest.raises(BacktestError):
+        run(m1, m15, params, H001_COSTS, _FixedSizer("0.03"), Decimal("9.9999999999999999999999999999E+999999"),
+            RULE, ROLLOVER)

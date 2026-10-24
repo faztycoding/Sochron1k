@@ -11,7 +11,7 @@ bid prices and never multiplied by the stress factor; costs come once from costs
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from decimal import Decimal, localcontext
+from decimal import Decimal, Overflow, localcontext
 
 from sochron.core import Bar
 from sochron.costs import CONTEXT, CostModel, check_volume, r_multiple, round_trip_cost
@@ -102,8 +102,20 @@ class Plan:
     data_flags: frozenset[str]
 
 
+def too_large(error: Overflow) -> BacktestError:
+    """A finite value whose arithmetic leaves the Decimal context's exponent range is outside the domain."""
+    return BacktestError(f"a value is too large for the backtest's Decimal arithmetic ({type(error).__name__})")
+
+
 def simulate(m1: Sequence[Bar], plan: Plan, *, checked: bool) -> Trade:
     """Fill the planned trade; checked=False runs the per-M1 checks on every M1 it reads first."""
+    try:
+        return _simulate(m1, plan, checked)
+    except Overflow as error:
+        raise too_large(error) from error
+
+
+def _simulate(m1: Sequence[Bar], plan: Plan, checked: bool) -> Trade:
     entry = m1[plan.entry_index]
     if not checked:
         check_m1(entry, None, f"m1[{plan.entry_index}]")
