@@ -340,8 +340,8 @@ def decode(line: bytes) -> RunRecord:
         raise ResearchError("the line holds a byte that is not ASCII")
     try:
         obj = json.loads(line.decode("ascii"))
-    except ValueError as error:
-        raise ResearchError(f"the line is not JSON ({error})") from None
+    except (ValueError, RecursionError) as error:  # RecursionError: nesting deeper than the decoder allows (r1 F2)
+        raise ResearchError(f"the line is not JSON ({type(error).__name__}: {error})") from None
     obj = _object(obj, RECORD_FIELDS + ("run_id",), "the record")
     values = dict(obj)
     del values["run_id"]

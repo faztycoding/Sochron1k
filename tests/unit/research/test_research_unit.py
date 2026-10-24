@@ -145,6 +145,18 @@ def test_an_exponent_beyond_decimal_in_a_registry_line_is_a_research_error_with_
         read_records(path)
 
 
+def test_a_deeply_nested_line_is_a_research_error_with_its_line(tmp_path):
+    # implementation review r1 F2: json.loads raises RecursionError, not ValueError, on deep nesting.
+    path = tmp_path / "registry.jsonl"
+    content = _record().line() + b"[" * 100_000 + b"]" * 100_000 + b"\n"
+    path.write_bytes(content)
+    with pytest.raises(ResearchError, match=r"registry line 2\b"):
+        read_records(path)
+    with pytest.raises(ResearchError):
+        append_record(path, _record(seq=3))
+    assert path.read_bytes() == content
+
+
 def _summary(**changes):
     values = dict(trades=1, expectancy_r=Decimal("0.5"), max_drawdown_r=Decimal("0"), net_money=Decimal("12.5"),
                   long_trades=1, long_expectancy_r=Decimal("0.5"), short_trades=0, short_expectancy_r=None,
