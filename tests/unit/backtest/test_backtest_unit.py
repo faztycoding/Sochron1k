@@ -59,7 +59,8 @@ class _FixedSizer:
                          ids=["both", "long", "short"])
 def test_every_run_trade_equals_simulate_trade_on_random_data(variant, sides):
     # The invariant "every trade of run equals simulate_trade of the same entry and exit" on data the
-    # golden scenarios do not cover: thousands of bars, missing spreads, gaps from the random walk.
+    # golden scenarios do not cover: one random dataset of 20,000 consecutive M1 (each opening at the previous
+    # close, so no price gaps or missing minutes) with missing spreads, in 9 variant/side configurations.
     m1 = _m1(20_000, seed=11)
     m15 = _m15(m1)
     params = H001Params(variant, 8, 32, 10, Decimal("0.50"), 48, 24, Decimal("2.0"))

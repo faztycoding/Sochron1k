@@ -9,14 +9,14 @@ Contract: `docs/contracts/CORE-007-backtest.md` v1.5 (Tier Standard; อนุ�
 | AC-02 ตาราง fill ทุกแถวทั้งสองฝั่ง และ `run` กับ decide จริงตรงคำตอบที่คำนวณด้วยมือ | **PASS** | 32 + 2 fill cases, 10 run scenarios เขียว |
 | AC-03 sizer ปลอม, equity หมด, Rollover ผิด, input ไม่สอดคล้องทุกแบบ, M1 ระดับ STOP → error ตามชนิด | **PASS** | tests ล็อก AC-03 เขียว |
 | AC-04 nights/triple ของ 4 ช่วงถือ (+ rollover คนละ zone/เวลา/วัน triple) และต้นทุน 2× พอดี | **PASS** | tests ล็อก AC-04 เขียว |
-| AC-05 ตัดข้อมูลที่ขอบแท่งแล้วไม้เดิมไม่เปลี่ยน, ทุกไม้ของ `run` = `simulate_trade` | **PASS** | tests ล็อก AC-05 + unit test บนข้อมูลสุ่ม 9 ชุด |
+| AC-05 ตัดข้อมูลที่ขอบแท่งแล้วไม้เดิมไม่เปลี่ยน, ทุกไม้ของ `run` = `simulate_trade` | **PASS** | tests ล็อก AC-05 + unit test บนข้อมูลสุ่มชุดเดียว 9 แบบ (3 variant × 3 ชุด sides; ไม่มี price gap หรือนาทีที่ขาด ซึ่ง golden และ oracle ของ review r1 ครอบไว้) |
 | AC-06 pure, import เฉพาะ core/timebase/strategy/costs + stdlib ตามรายการ, ไม่ import/อ้าง `zoneinfo`/`ZoneInfo`, ไม่เรียก astimezone | **PASS** | architecture 17 tests เขียว |
 | AC-07 ทั้ง suite ผ่าน skipped 0 | **PASS ในเครื่อง** · CI รอ run ของ PR | `3206 passed` ที่ `29eacf3` |
 | ความเร็ว: M1 500,000 แท่งภายใน 60 วินาที | **PASS** | `run` 3.53 / 3.56 / 3.61 s (V-A/B/C) |
 
 ## สิ่งที่ส่งมอบ (ไฟล์)
 - `src/sochron/backtest/{__init__,model,trade,engine}.py`
-- `tests/unit/backtest/test_backtest_unit.py` (ทุกไม้ของ `run` = `simulate_trade` บนข้อมูลสุ่ม 3 variant × 3 ชุด sides, ความเร็ว 100,000 แท่ง)
+- `tests/unit/backtest/test_backtest_unit.py` (ทุกไม้ของ `run` = `simulate_trade` บนข้อมูลสุ่มชุดเดียว 3 variant × 3 ชุด sides, ความเร็ว 100,000 แท่ง · regression ของ review r1: F1 time_raw นอกช่วงของ timebase, F2 ค่าใหญ่เกินช่วงของ Decimal, F3 SL ที่นาทีสุดท้ายของแท่ง)
 - tests ล็อก: `tests/acceptance/CORE-007/test_backtest.py`, `tests/golden/CORE-007/backtest_cases.py`, `tests/architecture/test_imports.py` (patch D-006 2 รอบ)
 - `docs/contracts/CORE-007-backtest.md` v1.5 · `docs/handoff/CORE-007.md` · `docs/reviews/CORE-007-tests-r1.md`, `-tests-r2.md` · ไฟล์นี้
 
