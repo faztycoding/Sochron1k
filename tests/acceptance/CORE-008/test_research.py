@@ -2552,3 +2552,173 @@ def test_ac06_r2_records_out_of_seq_order_give_the_same_report(monkeypatch, tmp_
     wrong += [f"the rerun registry reversed: {item}"
               for item in _text_diff(kit.render_report(rerun[::-1], {}), g["REPORT_RERUN"])]
     assert not wrong, "AC-06:\n" + "\n".join(wrong)
+
+
+# ======================================================================= tests r3 (implementation review r1 F4)
+# Appended by the round-3 test author under contract v1.5 (docs/reviews/CORE-008-r1.md F4). Every statement
+# above is unchanged and the conventions of the module docstring hold. The known answers and their arithmetic
+# are in the "tests r3" part of tests/golden/CORE-008/research_cases.py.
+
+
+class _WindowBaseline(_Baseline):
+    """random_entry_baseline on the WINDOW series (golden r3) with RUN_PARAMS (V-B) and a hand-built variant."""
+
+    def __init__(self, kit, spec, summary):
+        g = kit.g
+        self.kit = kit
+        self.m1 = tuple(_m1(kit, row) for row in g["window_m1_rows"]())
+        self.m15 = _m15(kit, self.m1)
+        self.params = _run_params(kit)
+        self.model = _flat_model(kit)
+        self.dataset = _dataset(kit, g["WINDOW_DATASET"])
+        self.variant = self.result(spec)
+        self.summary = _summary(kit, summary)
+
+
+def _window_variant_premises(kit, bench):
+    """Fixture: every variant trade leaves by "signal" one M1 after its entry and the hand summary is its own."""
+    index = {bar.time_raw: position for position, bar in enumerate(bench.m1)}
+    holds = [(t.exit_reason, t.ambiguous, index.get(t.exit_time_raw, -1) - index[t.entry_time_raw])
+             for t in bench.variant.trades]
+    wrong = []
+    if any(hold != ("signal", False, 1) for hold in holds):
+        wrong.append(f"fixture: the variant trades close {holds}, expected signal exits with hold 1")
+    if kit.summarize(bench.variant, kit.rule) != bench.summary:
+        wrong.append(f"fixture: summarize of the {len(holds)}-trade variant is not its hand summary")
+    return wrong
+
+
+def _window_premises(kit, bench):
+    """Fixture: the layout of the WINDOW series, the New York window of each bar open, no blocker but the window
+    from bar 97 on, the contract's eligible set and the other sets of the three wrong rules, and the r of a
+    trade entering each bar."""
+    g = kit.g
+    m1, m15 = bench.m1, bench.m15
+    blockers = kit.strategy.entry_blockers
+    rows = kit.strategy.indicators(m15, bench.params)
+    opens = [item.bar.time_utc for item in m15]
+    wrong = []
+    if (tuple(moment.strftime("%Y-%m-%dT%H:%M") for moment in opens) != g["WINDOW_BAR_OPENS"]
+            or len(m1) != g["WINDOW_M1_COUNT"]
+            or any(m1[2 * u].time_raw != item.bar.time_raw or m1[2 * u + 1].time_raw != item.bar.time_raw + 300
+                   or item.flags or item.bar.spread != g["window_spread"](u) for u, item in enumerate(m15))):
+        wrong.append("fixture: the layout of the window series (bar opens, two M1 per bar, spreads, no flags)")
+    windows = {u: kit.tb.in_entry_window(opens[u]) for u in g["WINDOW_IN"]}
+    if windows != g["WINDOW_IN"]:
+        wrong.append(f"fixture: in_entry_window of the bar opens {windows}, expected {g['WINDOW_IN']}")
+    inside = _utc(g["WINDOW_INSIDE"])
+    warm = g["WINDOW_WARM_FROM"]
+    if any("warmup" not in blockers(rows[t], inside) for t in range(warm)):
+        wrong.append(f"fixture: a bar before {warm} is not blocked by warmup")
+    other = {t: blockers(rows[t], inside) for t in range(warm, len(m15)) if blockers(rows[t], inside)}
+    if other:
+        wrong.append(f"fixture: blockers other than the window from bar {warm} on: {other}")
+    last = len(m15) - 1
+    later = opens[last] + timedelta(minutes=15)
+    for label, expected, got in (
+        ("the contract (bar t+1's open, t <= len(m15) - 2)", g["WINDOW_ELIGIBLE"],
+         [t for t in range(last) if blockers(rows[t], opens[t + 1]) == ()]),
+        ("bar t's own open", g["WINDOW_OWN_OPEN"], [t for t in range(last) if blockers(rows[t], opens[t]) == ()]),
+        ("no window check", g["WINDOW_NO_WINDOW"],
+         [t for t in range(last) if set(blockers(rows[t], opens[t + 1])) <= {"outside_window"}]),
+        ("the last bar at its own open and 15 minutes later", (last,),
+         [t for t in (last,) if blockers(rows[t], opens[t]) == () and blockers(rows[t], later) == ()]),
+    ):
+        if tuple(got) != tuple(expected):
+            wrong.append(f"fixture: eligible by {label}: {got}, expected {expected}")
+    for u, text in g["WINDOW_ENTRY_R"].items():
+        for side in ("long", "short"):
+            trade = kit.bt.simulate_trade(m1, 2 * u, side, Decimal("3"), Decimal("0.02"), bench.model, _rollover(kit),
+                                          risk_money=Decimal("25"), exit_index=2 * u + 1)
+            if (trade.exit_reason, trade.ambiguous, trade.r) != ("signal", False, Decimal(text)):
+                wrong.append(f"fixture: a {side} trade entering bar {u}: {trade.exit_reason} r {trade.r}, "
+                             f"expected signal r {text}")
+    if len(set(g["WINDOW_ENTRY_R"].values())) != len(g["WINDOW_ENTRY_R"]):
+        wrong.append("fixture: two entry bars give the same r")
+    return wrong
+
+
+def test_ac04_r3_eligible_bars_are_judged_in_the_entry_window_at_the_open_of_bar_t_plus_1(monkeypatch, tmp_path):
+    """F4 (baseline step 4): at both window edges and around the gaps the contract's eligible bars are
+    (98, 99, 100, 102, 104): every round's first randrange gets n = 5 and each scripted draw enters its bar."""
+    kit = _kit(monkeypatch, "AC-04", "random_entry_baseline", "BaselineResult", "summarize")
+    g = kit.g
+    bench = _WindowBaseline(kit, g["WINDOW_VARIANT"], g["WINDOW_SUMMARY"])
+    wrong = _window_premises(kit, bench) + _window_variant_premises(kit, bench)
+    path = tmp_path / "registry.jsonl"
+    base = bench.base(path)
+    fake = _fake_random(lambda: cycle(g["WINDOW_SCRIPT"]))
+    monkeypatch.setattr(random, "Random", fake)
+    sizer = _Sizer(kit)
+    result = bench.call(base.run_id, path, sizer=sizer)
+    seed = int(base.run_id[:15], 16)
+    eligible = g["WINDOW_ELIGIBLE"]
+    if len(fake.instances) != 1 or _seed_of(fake.instances[0]) != seed:
+        wrong.append(f"random.Random built {len(fake.instances)} times, seeds {[_seed_of(item) for item in fake.instances]}"
+                     f", expected one with {seed}")
+    elif fake.instances[0].calls != list(g["WINDOW_SCRIPT_N"]) * 1000:
+        calls = fake.instances[0].calls
+        wrong.append(f"randrange arguments {calls[:9]}... ({len(calls)} calls), expected "
+                     f"{list(g['WINDOW_SCRIPT_N'])} in every round: the first n is len(eligible) = {len(eligible)}, "
+                     f"eligible {eligible}")
+    if type(result) is not kit.BaselineResult:
+        pytest.fail(f"AC-04: random_entry_baseline returned {result!r}", pytrace=False)
+    got = result.expectancies_r
+    expected_r = tuple(Decimal(g["WINDOW_ROUND_EXPECTANCY"][i % 5]) for i in range(1000))
+    if type(got) is not tuple or any(type(item) is not Decimal for item in got) or got != expected_r:
+        bar_of = {Decimal(text): u - 1 for u, text in g["WINDOW_ENTRY_R"].items()}
+        drawn = [bar_of.get(item, item) for item in tuple(got)[:10]]
+        wrong.append(f"bars drawn in rounds 1-10 (t named by the round's r): {drawn}, expected "
+                     f"{[g['WINDOW_DRAWS'][i % 5] for i in range(10)]} ({len(got)} rounds)")
+    expected = _baseline(kit, g["WINDOW_BASELINE"], seed)
+    wrong += _check_baseline_summary(kit, result.summary, expected, "summary")
+    if len(sizer.calls) != 1000 or any(call != (Decimal("10000"), Decimal("3")) for call in sizer.calls):
+        wrong.append(f"sizer calls: {len(sizer.calls)}, the first {sizer.calls[:3]}")
+    lines, last = _check_lines(kit, bench, path, base, expected, "lines", 2)
+    wrong += lines
+    if last is not None and result.record != last:
+        wrong.append("the returned record is not the ok line")
+    assert not wrong, "AC-04:\n" + "\n".join(wrong)
+
+
+def test_ac04_r3_k_equal_to_len_eligible_draws_each_eligible_bar_and_one_more_trade_is_refused(monkeypatch, tmp_path):
+    """F4 (baseline steps 4 and 7): with len(eligible) = 5, K = 5 empties every round's pool with the five
+    eligible bars, and K = 6 is a ResearchError before the started line."""
+    kit = _kit(monkeypatch, "AC-04", "random_entry_baseline", "BaselineResult", "summarize")
+    g = kit.g
+    five = _WindowBaseline(kit, g["WINDOW_VARIANT_5"], g["WINDOW_SUMMARY_5"])
+    six = _WindowBaseline(kit, g["WINDOW_VARIANT_6"], g["WINDOW_SUMMARY_6"])
+    wrong = _window_variant_premises(kit, five) + _window_variant_premises(kit, six)
+    path = tmp_path / "five.jsonl"
+    base = five.base(path)
+    fake = _fake_random(lambda: cycle((0,)))
+    monkeypatch.setattr(random, "Random", fake)
+    sizer = _Sizer(kit)
+    result = five.call(base.run_id, path, sizer=sizer)
+    made = list(fake.instances)
+    seed = int(base.run_id[:15], 16)
+    if len(made) != 1 or _seed_of(made[0]) != seed:
+        wrong.append(f"random.Random built {len(made)} times, seeds {[_seed_of(item) for item in made]}, "
+                     f"expected one with {seed}")
+    elif made[0].calls != list(g["WINDOW_ALL_SCRIPT_N"]) * 1000:
+        calls = made[0].calls
+        wrong.append(f"randrange arguments {calls[:15]}... ({len(calls)} calls), expected "
+                     f"{list(g['WINDOW_ALL_SCRIPT_N'])} in every round (pool 5, 4, 3, 2, 1)")
+    if type(result) is not kit.BaselineResult:
+        pytest.fail(f"AC-04: random_entry_baseline returned {result!r}", pytrace=False)
+    got = result.expectancies_r
+    if (type(got) is not tuple or len(got) != 1000 or any(type(item) is not Decimal for item in got)
+            or set(got) != {Decimal(g["WINDOW_ALL_EXPECTANCY"])}):
+        wrong.append(f"round expectancies {sorted(set(got))} ({len(got)} rounds), expected only "
+                     f"{g['WINDOW_ALL_EXPECTANCY']}: the mean r of the five eligible bars")
+    expected = _baseline(kit, g["WINDOW_ALL_BASELINE"], seed)
+    wrong += _check_baseline_summary(kit, result.summary, expected, "summary")
+    if len(sizer.calls) != 5000 or any(call != (Decimal("10000"), Decimal("3")) for call in sizer.calls):
+        wrong.append(f"sizer calls: {len(sizer.calls)}, the first {sizer.calls[:3]}")
+    lines, _ = _check_lines(kit, five, path, base, expected, "lines", 2)
+    wrong += lines
+    other = tmp_path / "six.jsonl"
+    own = six.base(other)
+    wrong += _refusal(kit, other, "research", lambda: six.call(own.run_id, other),
+                      "a variant of 6 trades on 5 eligible bars")
+    assert not wrong, "AC-04:\n" + "\n".join(wrong)
