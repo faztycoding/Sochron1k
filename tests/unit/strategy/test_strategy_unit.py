@@ -7,9 +7,11 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal, localcontext
 from time import perf_counter
 
+import pytest
+
 from sochron.core import Bar
 from sochron.data.snapshot import AggregatedBar
-from sochron.strategy import H001Params, IndicatorRow, decide, indicators
+from sochron.strategy import H001Params, IndicatorRow, StrategyError, decide, indicators
 from sochron.strategy.params import CONTEXT
 
 
@@ -113,3 +115,14 @@ def test_variant_a_short_threshold_mirrors_the_long_one_at_every_digit():
     short_rows = (_row(Decimal("-0.25")), _row(Decimal("-0.2500000000000000000000000001")))
     assert decide(long_rows, 1, "flat", IN_WINDOW, params).action == "enter_long"
     assert decide(short_rows, 1, "flat", IN_WINDOW, params).action == "enter_short"
+
+
+@pytest.mark.parametrize("position", ["flat", "long", "short"])
+@pytest.mark.parametrize("breakout", [False, True], ids=["no_signal", "breakout"])
+def test_naive_next_open_is_refused_for_every_position(position, breakout):
+    # Review CORE-006-r1 F2: a naive next_open_utc used to surface only on a flat bar with an entry signal,
+    # and then as timebase's NaiveDatetime. It is now refused up front as a StrategyError.
+    params = H001Params("B", 16, 64, 20, Decimal("0.50"), 96, 48, Decimal("2.0"))
+    rows = (_row(None), _row(None, hh_n=Decimal("1999.00") if breakout else None))
+    with pytest.raises(StrategyError, match="timezone"):
+        decide(rows, 1, position, datetime(2026, 3, 10, 13, 45), params)

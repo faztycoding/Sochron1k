@@ -95,6 +95,8 @@ def decide(
     exact(t, int, "t")
     exact(position, str, "position")
     exact(next_open_utc, datetime, "next_open_utc")
+    if next_open_utc.utcoffset() is None:
+        raise StrategyError("next_open_utc must be timezone-aware")
     if position not in ("flat", "long", "short"):
         raise StrategyError("position must be 'flat', 'long' or 'short'")
     if not 0 <= t < len(rows):
