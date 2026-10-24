@@ -55,8 +55,10 @@ def _bars(bars: object) -> list[tuple[Bar, frozenset[str]]]:
         raise TypeError(f"bars must be a sequence of aggregated bars, not {type(bars).__name__}")
     checked = []
     for item in bars:
-        bar = exact(getattr(item, "bar", None), Bar, "an aggregated bar's .bar")
-        flags = exact(getattr(item, "flags", None), frozenset, "an aggregated bar's .flags")
+        raw_bar = getattr(item, "bar", None)
+        raw_flags = getattr(item, "flags", None)
+        bar = exact(raw_bar, Bar, "an aggregated bar's .bar")
+        flags = exact(raw_flags, frozenset, "an aggregated bar's .flags")
         for flag in flags:
             exact(flag, str, "a flag")
         if bar.timeframe != 15:
