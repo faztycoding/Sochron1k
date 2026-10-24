@@ -5,9 +5,9 @@ Contract: `docs/contracts/CHORE-001-mypy-clean.md` v1.1 (Tier Lite; เจ้า
 ## สรุปสำหรับเจ้าของ
 | AC | ผล | หลักฐาน |
 |----|----|---------|
-| AC-01 mypy ตัวเดียวกับ extension ไม่พบ error ทั้งแพ็กเกจ | **PASS** | main: **Found 32 errors in 9 files** (strategy 10, costs 1, risk 12, data.snapshot 9) → branch นี้: **Success: no issues found in 27 source files** |
+| AC-01 mypy ตัวเดียวกับ extension ไม่พบ error ทั้งแพ็กเกจ | **PASS** | main: **Found 32 errors in 9 files** (strategy 10, costs 1, risk 11, data.snapshot 10 · นับต่อแพ็กเกจด้วย `grep ": error:"` ของผลเดียวกัน; เดิมเขียน 12/9 ผิด, review r2 F3) → branch นี้: **Success: no issues found in 27 source files** |
 | AC-02 ทั้ง suite ผ่านเท่าเดิม | **PASS ในเครื่อง** · CI รอ run ของ PR | `3093 passed` (เท่ากับ main ก่อนแก้) |
-| AC-03 แตะเฉพาะไฟล์ที่อนุญาต ไม่มี `type: ignore` ไม่เปลี่ยนพฤติกรรม | **PASS ตามผู้ทำ** · review r1: F1 แก้แล้ว · รอผู้ตรวจรอบ 2 | diff 9 ไฟล์ใน src + เอกสาร |
+| AC-03 แตะเฉพาะไฟล์ที่อนุญาต ไม่มี `type: ignore` ไม่เปลี่ยนพฤติกรรม | **PASS** (review r2) | diff 9 ไฟล์ใน src + เอกสาร · probe 47,433 กรณีเท่ากับ main |
 
 หมายเหตุ: แผง Problems ของ VS Code แสดงเฉพาะไฟล์ที่เปิดอยู่ (`reportingScope` ค่าเริ่มต้น "file") จะอัปเดตเมื่อเปิดหรือบันทึกไฟล์หลังงานนี้ merge · `src/sochron/backtest/` (4 ข้อ) แก้ใน CORE-007 (`cde8945`)
 
@@ -26,6 +26,8 @@ Contract: `docs/contracts/CHORE-001-mypy-clean.md` v1.1 (Tier Lite; เจ้า
 | แก้ F1 → probe item ที่ `.bar` ผิดและ `.flags` raise | main และ branch: `RuntimeError` + log `['bar', 'flags']` เท่ากัน | `aee9e67` | 13:4x |
 | ขยายขอบเขต (v1.1) → mypy ของ extension `-p sochron` (ทั้งแพ็กเกจ) | **Success: no issues found in 27 source files** | `f58d3f9` | 13:47 |
 | `timeout -k 10 900 uv run --offline pytest tests -q -p no:cacheprovider` | **3093 passed** | `f58d3f9` | 13:47:22 |
+| review r2 (subagent, `docs/reviews/CHORE-001-r2.md`) | F1, F2 ปิด · probe 47,433 กรณีบนสำเนา main และ branch: ผล, error และลำดับการอ่านเท่ากัน (รวม `check_entry` 30,720 กรณี, `size_position` 4,200, halt 300 ลำดับ) · F3 Low: ตัวเลขแยกแพ็กเกจในหลักฐานนี้ผิด | `7a61b20` | 13:51–14:04 |
+| แก้ F3 → นับ error ต่อแพ็กเกจบนสำเนา main | costs 1, data 10, risk 11, strategy 10 (รวม 32) | หลัง `7a61b20` | 14:1x |
 
 mypy ไม่ได้เพิ่มเป็น dependency ของโปรเจค: ใช้ตัวที่ extension `ms-python.mypy-type-checker` 2026.6.0 ติดมาอยู่แล้ว และเขียน cache ไว้ใน scratch นอก repo (`.mypy_cache` ใต้ src ใน worktree มาจาก extension ตอนวิเคราะห์ไฟล์ และ `.gitignore` กันไว้)
 
@@ -33,4 +35,4 @@ mypy ไม่ได้เพิ่มเป็น dependency ของโปร
 - CI บน Linux จนกว่า run ของ PR นี้เสร็จ · แผง Problems จริงหลัง merge (ต้องเปิดไฟล์ใน editor)
 
 ## Delivery state
-implemented และ verified ในเครื่อง · review r1 ตอบแล้ว (F1 แก้, F2 ขยายขอบเขต) → re-check r2 → push → PR · ยังไม่ merged
+implemented และ verified ในเครื่อง · review r1 ตอบแล้ว (F1 แก้, F2 ขยายขอบเขต) · review r2: F1, F2 ปิด, F3 (ตัวเลขพิมพ์ผิด) แก้แล้ว · push → PR · ยังไม่ merged

@@ -15,7 +15,7 @@ Hypothesis (research tasks): ไม่ใช่งานวิจัย
 Lite เพราะแก้เฉพาะคำประกาศ type และการ narrow ชนิดในโค้ดที่ merge แล้ว ไม่เปลี่ยนค่าที่คืน ข้อผิดพลาดที่ raise หรือ API
 
 ## Goal / user outcome (Thai)
-mypy ตัวเดียวกับที่ extension ของ VS Code ใช้ ไม่พบ error ในแพ็กเกจ `sochron` ทั้งหมดบน main (เดิม 32 ข้อใน 9 ไฟล์: strategy 10, costs 1, risk 12, data.snapshot 9) แผง Problems จึงไม่แสดง error เมื่อเปิดไฟล์ใดๆ และทุก test ยังผ่านเหมือนเดิม · ส่วน `src/sochron/backtest/` (4 ข้อ) แก้ใน CORE-007 ซึ่งเป็นเจ้าของไฟล์นั้น
+mypy ตัวเดียวกับที่ extension ของ VS Code ใช้ ไม่พบ error ในแพ็กเกจ `sochron` ทั้งหมดบน main (เดิม 32 ข้อใน 9 ไฟล์: strategy 10, costs 1, risk 11, data.snapshot 10 · แก้ตัวเลขที่พิมพ์ผิดตาม review r2 F3) แผง Problems จึงไม่แสดง error เมื่อเปิดไฟล์ใดๆ และทุก test ยังผ่านเหมือนเดิม · ส่วน `src/sochron/backtest/` (4 ข้อ) แก้ใน CORE-007 ซึ่งเป็นเจ้าของไฟล์นั้น
 
 ## Current behavior and evidence (revision)
 `mcp__claude-vscode__getDiagnostics` 2026-10-24 13:2x (main `6fbed53` + branch CORE-007): Mypy error 11 ข้อใน 4 ไฟล์ข้างบน · ทุกข้อเกิดเพราะ helper ตรวจชนิด (`exact`, `require_exact`) คืน `None`/`object` mypy จึงไม่รู้ว่าค่าหลังการตรวจเป็นชนิดใด, `H001_DEFAULTS` วนด้วย str, และ `params.k * row.atr` ที่ `atr` เป็น `Decimal | None` (ตอนรันจริงไม่เป็น None เพราะ invalidation `atr_zero` ข้ามไปก่อน) · ไม่มีข้อใดเป็น bug ตอนรัน (tests 3211 ข้อผ่าน)
