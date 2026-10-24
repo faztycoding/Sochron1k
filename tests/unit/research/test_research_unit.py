@@ -257,6 +257,31 @@ def test_decimal_text_does_not_depend_on_the_callers_capitals(tmp_path):
     assert "1E-7" in default[-1][1].value
 
 
+def _result(*trades) -> Result:
+    return Result(trades=trades, skips=(), equity=((946684800, Decimal("10000")),), backtest_version=BACKTEST_VERSION,
+                  strategy_version=STRATEGY_VERSION)
+
+
+@pytest.mark.parametrize("r, net", [("NaN", "1"), ("sNaN", "1"), ("Infinity", "1"), ("1", "-Infinity")])
+def test_summarize_refuses_a_trade_whose_r_or_net_money_is_not_finite(r, net):
+    # implementation review r1 F3: a hand-built variant (baseline step 1) may hold such a trade.
+    with pytest.raises(ResearchError, match="finite"):
+        summarize(_result(_trade("1", "1"), _trade(r, net)), RULE)
+
+
+@pytest.mark.parametrize("label", ["an object", "a float r", "a float net_money", "trades as a list"])
+def test_summarize_refuses_trades_of_the_wrong_type(label):
+    good = _trade("1", "1")
+    result = {
+        "an object": lambda: _result(good, object()),
+        "a float r": lambda: _result(good, replace(good, r=1.0)),
+        "a float net_money": lambda: _result(good, replace(good, net_money=1.0)),
+        "trades as a list": lambda: replace(_result(good), trades=[good]),
+    }[label]()
+    with pytest.raises(TypeError):
+        summarize(result, RULE)
+
+
 def test_evaluate_needs_a_sequence_for_robustness():
     with pytest.raises(TypeError):
         evaluate(_record(), None, None, None, None)

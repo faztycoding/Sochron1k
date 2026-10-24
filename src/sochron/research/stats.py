@@ -63,7 +63,12 @@ def summarize(result: Result, rule: TimeRule) -> Summary:
     """The statistics of result's trades; years are UTC years of the entry time read by rule (D8)."""
     exact(result, Result, "result")
     exact(rule, TimeRule, "rule")
-    trades = result.trades
+    trades = exact(result.trades, tuple, "result.trades")
+    for index, trade in enumerate(trades):  # a caller-built Result is allowed (baseline step 1), so check it
+        exact(trade, Trade, f"result.trades[{index}]")
+        for name in ("r", "net_money"):
+            if not exact(getattr(trade, name), Decimal, f"result.trades[{index}].{name}").is_finite():
+                raise ResearchError(f"result.trades[{index}].{name} must be finite")
     longs = [trade.r for trade in trades if trade.side == "long"]
     shorts = [trade.r for trade in trades if trade.side == "short"]
     by_year: dict[int, list[Decimal]] = {}
