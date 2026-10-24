@@ -528,3 +528,20 @@ the runner can write.
   4.5 us per M1 read with every cost included, about 2.5x the review's 1.5 us/M1 + 47 us/trade model.
   The time is in `backtest.simulate_trade`, which checks every M1 it reads; research must use it. Details
   and the R1 estimate: `docs/evidence/CORE-008.md`.
+
+## Findings response (implementation review)
+
+Review r1 (`docs/reviews/CORE-008-r1.md`, fresh session, headless 4 of 6): Ready for PR: yes, F1-F5 Low. Every
+finding is accepted with the reviewer's recommended fix, under the owner's delegation of 2026-10-24. Suite at review
+3343 passed, after F1-F3 3353 passed.
+
+| ID | Accept/Dispute | Commit | Evidence |
+|----|----------------|--------|----------|
+| F1 | accept | `dadf7ce` | `model.text()` writes a Decimal inside `localcontext(CONTEXT)`; records, params and cost_model pairs, the stress-factor check, neighbour values, evaluate's Check strings and the report use it. `test_decimal_text_does_not_depend_on_the_callers_capitals` failed before (`ResearchError: registry line 1: equity is not a decimal number: '1e+4'`), passes after |
+| F2 | accept | `a5d824c` | `decode` also turns `RecursionError` from `json.loads` into the line's ResearchError. `test_a_deeply_nested_line_is_a_research_error_with_its_line` (100,000 brackets on line 2) failed before (RecursionError), passes after; the refused append leaves the file unchanged |
+| F3 | accept | `9c6c2fb` | `summarize` needs `result.trades` to be a tuple of exactly Trade with Decimal r and net_money (TypeError) that are finite (ResearchError) before any arithmetic. Two new unit tests: 5 of 8 cases failed before (InvalidOperation, AttributeError, a list accepted), all pass after |
+| F4 | accept (test author) | tests r3 | Needs a locked test, so a D-006 patch by a fresh test-author session (headless 5 of 6): the entry window must be judged at bar t+1's open in the baseline's eligible bars, killing the reviewer's mutant `baseline_current_bar_time` |
+| F5 | accept | this commit | `docs/evidence/CORE-008.md` and the PR body name the four out-of-scope files of `9f3bc63` (post-merge records of CORE-007 and CHORE-001 in their contracts and evidence) |
+
+The reviewer re-checks only these IDs in the next round (`docs/reviews/CORE-008-r2.md`), as a fresh-eyes-reviewer
+subagent, together with the tests r3 patch.

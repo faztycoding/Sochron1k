@@ -21,7 +21,8 @@ Contract: `docs/contracts/CORE-008-research.md` v1.5 (Tier Standard; อนุ�
 - `src/sochron/strategy/h001.py`, `__init__.py`: `entry_blockers` แทน `_invalid` (D1) · decide ให้ผลเดิม (tests ล็อกของ CORE-006 เขียวครบ) · `STRATEGY_VERSION` คงเดิม
 - `tests/unit/research/test_research_unit.py` (21 tests)
 - tests ล็อก: `tests/acceptance/CORE-008/test_research.py`, `tests/golden/CORE-008/research_cases.py`, `tests/architecture/test_imports.py` (patch D-006 2 รอบ)
-- `docs/handoff/CORE-008.md` · `docs/reviews/CORE-008-tests-r1.md`, `-tests-r2.md` · ไฟล์นี้
+- `docs/handoff/CORE-008.md` · `docs/reviews/CORE-008-tests-r1.md`, `-tests-r2.md`, `CORE-008-r1.md` · ไฟล์นี้
+- **นอกขอบเขตของ CORE-008 (implementation review r1 F5):** commit `9f3bc63` บันทึกสถานะหลัง merge ของ CORE-007 และ CHORE-001 ใน `docs/contracts/CORE-007-backtest.md`, `docs/contracts/CHORE-001-mypy-clean.md`, `docs/evidence/CORE-007.md`, `docs/evidence/CHORE-001.md` (เอกสารล้วน ไม่มีพฤติกรรม) · PROGRESS.md
 
 ## การตัดสินใจของผู้ทำ (ที่ contract เปิดไว้)
 - ทุกการเทียบที่ contract ให้เทียบ "แบบ string ของ record" (ฐาน, setup, identity ของรัน, ความสอดคล้องใน evaluate, จำนวน params/ชุดข้อมูลที่ต่างกัน) เทียบค่าในรูปที่เขียนลงไฟล์ ดังนั้น equity `1E+4` กับ `10000` ถือว่าต่างกัน รวมถึง setup lock (ผู้ตรวจ tests r2 ถามข้อนี้ไว้ F2: ผมเลือกทางเดียวกับข้อ 4 ของ runner และมี unit test ล็อกไว้) · **เจ้าของ veto ได้**
@@ -49,6 +50,10 @@ Contract: `docs/contracts/CORE-008-research.md` v1.5 (Tier Standard; อนุ�
 | mypy 1.15 ของ extension VS Code `-p sochron` | Success: no issues found in 42 source files | 23ba734 | 16:5x |
 | `bash scripts/controls/red-flags.sh origin/main` | 1 กลุ่ม (Lint disabled): `# noqa: E731` 3 บรรทัดใน tests ล็อกของผู้เขียน (ผู้ตรวจ r1 อธิบายแล้ว: test code, style เท่านั้น) และคำว่า noqa ในเอกสาร · โค้ดใน `src` ไม่มี hit · control files: tests ล็อก 3 ไฟล์ | 23ba734 | 16:5x |
 | สคริปต์ scratch `measure_r1.py`: M1 random walk 100,000 แท่ง, variant 100 ไม้ถือ 200 M1 (สร้างเอง), baseline 1,000 รอบ | **72.3 s** · ไม้สุ่ม 100,000 ไม้ ถือเฉลี่ย 158.5 M1 (median 200) · อ่าน M1 ≈ 15.9 ล้านแท่ง ≈ 4.5 µs ต่อ M1 รวมทุกต้นทุน | scratch = โค้ดของ 23ba734 ก่อนเพิ่ม overflow guard | 15:54–15:55 (ขณะ session review รันพร้อมกัน) |
+| implementation review r1 (Claude session ใหม่, headless ที่ 4 จาก 6, `docs/reviews/CORE-008-r1.md`) | **Ready for PR: yes** · Low F1–F5 · oracle อิสระ: baseline 76 กรณีตรงทุกค่า, งบ 7,100 ขั้นตรงทั้งหมด, registry fuzz 208,667 + 31,246 จุดถูกปฏิเสธถูกต้อง, evaluate 32,000 กรณี, report 10,664 registry · วัดความเร็วซ้ำได้ 70.7 s (≈ 4.43 µs/M1) ตรงกับข้างบน | 0722050 | 17:0x–17:4x |
+| แก้ F1 (ข้อความของ Decimal ไม่ขึ้นกับ `capitals` ของผู้เรียก) → suite | regression ล้มก่อนแก้ (registry อ่านไม่ได้: `'1e+4'`) · 3344 passed | dadf7ce | 17:5x |
+| แก้ F2 (JSON ซ้อนลึก → ResearchError) → suite | regression ล้มก่อนแก้ (RecursionError) · 3345 passed | a5d824c | 17:5x |
+| แก้ F3 (summarize ตรวจไม้ของ Result ที่สร้างเอง) → suite · mypy ของ extension | ก่อนแก้ล้ม 5/8 (InvalidOperation, AttributeError) · **3353 passed** · no issues in 42 source files | 9c6c2fb | 18:0x |
 
 ## ความเร็วและเวลาที่คาดของ R1
 - contract ประมาณ ≈ 1.5 µs ต่อ M1 + ≈ 47 µs ต่อไม้ (ผู้ตรวจ contract วัด) → ขนาดข้างบนควรใช้ ≈ 29 วินาที · วัดจริง 72.3 วินาที (≈ 2.5 เท่า) ในขณะที่อีก session ใช้ CPU อยู่ด้วย
