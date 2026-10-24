@@ -133,7 +133,10 @@ def run(
     _check_m1(m1, rule)
     _check_m15(bars15, rule)
     first, end = _m1_spans(m1, bars15, rule)
-    rows = indicators(m15, params)
+    try:
+        rows = indicators(m15, params)
+    except Overflow as error:
+        raise too_large(error) from error
     return _Run(m1, bars15, rows, first, end, params, model, sizer, equity, rollover, sides).result()
 
 
@@ -173,7 +176,10 @@ class _Run:
     def _decide(self, t: int) -> None:
         held = self.open
         position = "flat" if held is None else held.side
-        decision = decide(self.rows, t, position, self.bars15[t + 1][0].time_utc, self.params)
+        try:
+            decision = decide(self.rows, t, position, self.bars15[t + 1][0].time_utc, self.params)
+        except Overflow as error:
+            raise too_large(error) from error
         time_raw = self.bars15[t][0].time_raw
         if decision.action == "exit" and held is not None:
             self._close(held, self.first[t + 1], t + 1)  # step 3: the open of the first M1 of t+1

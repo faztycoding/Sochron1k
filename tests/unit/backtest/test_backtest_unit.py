@@ -173,6 +173,17 @@ def test_a_stop_in_the_last_minute_of_a_bar_closes_in_that_bar():
     assert trade.data_flags == frozenset()
 
 
+def test_m15_prices_too_large_for_the_strategy_arithmetic_are_a_backtest_error():
+    # Review CORE-007-r2 F5: run passes M15 bars to strategy.indicators, whose ATR sum overflows the Decimal
+    # context when M15 highs sit near the top of its range; that must surface as a BacktestError as well.
+    m1 = _m1(3_000, seed=11)
+    m15 = list(_m15(m1))
+    for t in range(40):
+        m15[t] = AggregatedBar(replace(m15[t].bar, high=Decimal("9E+999999")), m15[t].flags)
+    with pytest.raises(BacktestError):
+        run(m1, tuple(m15), H001_DEFAULTS["B"], H001_COSTS, _FixedSizer("0.02"), Decimal("10000"), RULE, ROLLOVER)
+
+
 def test_a_starting_equity_too_large_for_the_arithmetic_is_a_backtest_error():
     # Review CORE-007-r1 F2 (same arithmetic in run): the equity update after a close overflows when the
     # starting equity sits at the top of the context's range; it must surface as a BacktestError too.
