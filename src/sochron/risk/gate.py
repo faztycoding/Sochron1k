@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from fractions import Fraction
-from typing import Literal
+from typing import Literal, cast
 
 from sochron.costs import CostModel
 
@@ -48,10 +48,10 @@ REASONS = ENTRY_REASONS | STOP_REASONS
 
 
 def _side(side: object) -> Side:
-    require_exact(side, str, "side")
-    if side not in ("long", "short"):
-        raise RiskError(f"side must be 'long' or 'short', got {side!r}")
-    return side
+    text = require_exact(side, str, "side")
+    if text not in ("long", "short"):
+        raise RiskError(f"side must be 'long' or 'short', got {text!r}")
+    return cast(Side, text)
 
 
 def _optional_stop(value: object, name: str) -> Decimal | None:

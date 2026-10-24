@@ -25,10 +25,13 @@ from decimal import (
 )
 from fractions import Fraction
 from types import MappingProxyType
+from typing import TypeVar, cast
 
 from sochron.costs import CONTEXT, Provenance
 
 from .errors import BadPolicy, RiskError
+
+T = TypeVar("T")
 
 POLICY_FIELDS = (
     "risk_per_trade",
@@ -48,10 +51,11 @@ def is_int(value: object) -> bool:
     return type(value) is int
 
 
-def require_exact(value: object, kind: type, name: str) -> object:
+def require_exact(value: object, kind: type[T], name: str) -> T:
+    """The same object when its type is exactly kind; typed as kind for the checker (CHORE-001)."""
     if type(value) is not kind:
         raise TypeError(f"{name} must be exactly {kind.__name__}, not {type(value).__name__}")
-    return value
+    return cast(T, value)
 
 
 def require_decimal(value: object, name: str) -> Decimal:
@@ -222,9 +226,9 @@ def _check_policy(policy: RiskPolicy) -> dict[str, Provenance]:
 
 def validate_policy(policy: object) -> RiskPolicy:
     """Exactly a RiskPolicy whose fields still hold; run again at every use (pre-review F4)."""
-    require_exact(policy, RiskPolicy, "policy")
-    _check_policy(policy)
-    return policy
+    checked = require_exact(policy, RiskPolicy, "policy")
+    _check_policy(checked)
+    return checked
 
 
 def unknowns(policy: RiskPolicy) -> tuple[str, ...]:

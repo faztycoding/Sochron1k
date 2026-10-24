@@ -3,11 +3,12 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time
-from typing import Literal
+from typing import Literal, TypeVar, cast
 
 from sochron.core import Bar
 from sochron.timebase import to_zone
 
+T = TypeVar("T")
 _PROBE = datetime(2026, 1, 1, tzinfo=UTC)
 
 Severity = Literal["WARN", "UNKNOWN", "STOP"]
@@ -15,9 +16,11 @@ DayStatus = Literal["PASS", "WARN", "UNKNOWN", "STOP"]
 SEVERITIES = ("WARN", "UNKNOWN", "STOP")
 
 
-def exact(value: object, kind: type, name: str) -> None:
+def exact(value: object, kind: type[T], name: str) -> T:
+    """The same object when its type is exactly kind; typed as kind for the checker (CHORE-001)."""
     if type(value) is not kind:
         raise TypeError(f"{name} must be exactly {kind.__name__}, not {type(value).__name__}")
+    return cast(T, value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,25 +33,26 @@ class Defect:
     detail: str
 
 
-def _wall_minute(at: object, name: str) -> None:
+def _wall_minute(at: object, name: str) -> time:
     """A naive wall time on a whole minute (review CORE-005-r1 F4: seconds were cut silently)."""
-    exact(at, time, name)
-    if at.tzinfo is not None:
+    clock = exact(at, time, name)
+    if clock.tzinfo is not None:
         raise ValueError(f"{name} is a wall time in the calendar zone, without tzinfo")
-    if at.second or at.microsecond:
+    if clock.second or clock.microsecond:
         raise ValueError(f"{name} must be on a whole minute")
+    return clock
 
 
 def _weekly_point(value: object, name: str) -> tuple[int, time]:
-    exact(value, tuple, name)
-    if len(value) != 2:
+    pair = exact(value, tuple, name)
+    if len(pair) != 2:
         raise ValueError(f"{name} must be (weekday, time)")
-    weekday, at = value
-    exact(weekday, int, f"{name} weekday")
-    _wall_minute(at, f"{name} time")
-    if not 0 <= weekday <= 6:
+    weekday, at = pair
+    day = exact(weekday, int, f"{name} weekday")
+    clock = _wall_minute(at, f"{name} time")
+    if not 0 <= day <= 6:
         raise ValueError(f"{name} weekday must be 0 (Monday) to 6 (Sunday)")
-    return weekday, at
+    return day, clock
 
 
 @dataclass(frozen=True, slots=True)
