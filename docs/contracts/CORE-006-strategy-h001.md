@@ -50,6 +50,17 @@ sochron.strategy
   decide(rows: Sequence[IndicatorRow], t: int, position: Position, next_open_utc: datetime, params: H001Params) -> Decision
 ```
 
+**v1.1 (2026-10-24, ตอบคำถามเปิดของผู้เขียน tests ใน `docs/handoff/CORE-006.md` โดยอำนาจที่เจ้าของมอบไว้ "เอา recommanded ทุกอัน"; veto ได้ก่อน merge):**
+1. สูตร EMA (D1/D2): `α = 2/(p+1)` และ `1 − α` คำนวณครั้งเดียวใน context ของโมดูล · `EMA_p[t] = α × close[t] + (1 − α) × EMA_p[t−1]` ปัดหลังแต่ละ operation ตามลำดับที่เขียน (คูณ, คูณ, บวก)
+2. `atr` เป็น None ก่อน t = n − 1 (ชนิด `Decimal | None`) · `ts` เป็น None เมื่อ `atr` เป็น None หรือ 0 · TR สำหรับ t ≥ 1 = max(high − low, |high − close[t−1]|, |low − close[t−1]|)
+3. `spread_median_96[t]` = ค่าเฉลี่ยของตัวที่ 48 และ 49 เมื่อเรียงจากน้อย ของ spread[t−96 … t−1] · None ถ้า t < 96 หรือ spread ใดในช่วงนั้นเป็น None (เหตุผล `spread_unknown`)
+4. "ช่วงที่ data validation ให้ STOP" ของ H001 บังคับที่ต้นทาง: SLICE-R1 ตัดวันที่ report เป็น STOP หรือ UNKNOWN ออกจากข้อมูลก่อน `aggregate`/`indicators` · strategy เห็นเฉพาะ flags รายแท่งใน lookback (D3)
+5. ไม่มีสัญญาณเข้าระหว่างอุ่นเครื่อง → `none` (ไม่มี skip) · `warmup` เป็นเหตุผลเฉพาะเมื่อมีสัญญาณเข้า
+6. ATR = 0: V-A/V-C ไม่มีสัญญาณเพราะกฎที่ใช้ TS เป็นเท็จ → `none` · V-B ที่มีสัญญาณ breakout → `skip` เหตุผล `atr_zero`
+7. แท่ง M15 รับแบบ duck typing (`.bar` เป็น `core.Bar` พอดี, `.flags` เป็น `frozenset`) เพราะ strategy import `data.snapshot` ไม่ได้ · ชนิดผิด → `TypeError` · position ที่ไม่รู้จักหรือ t นอกช่วง → `StrategyError`
+8. กฎปิดทำงานเมื่อ indicator ที่ใช้มีค่า แม้ยังไม่ warm (backtest ถือไม้ระหว่างอุ่นเครื่องไม่ได้อยู่แล้ว)
+9. ผลจริงของ D3 (บันทึกไว้ ไม่แก้): flag ระดับ WARN (`missing_spread`, `unexpected_gap`) ทำให้ข้ามไม้ราว L แท่ง (≈1 วันทำการ) · R1 ต้องวัดผลกระทบจากข้อมูลจริงก่อนเชื่อจำนวนไม้
+
 กฎ (H001 ข้อ 3 แปลตรงตัว; long แสดงไว้ short กลับด้านตาม D5):
 - เข้า long: V-A `ts[t] > theta` และ `ts[t−1] <= theta` · V-B `close[t] > hh_n[t]` · V-C เงื่อนไข V-B และ `ts[t] > 0`
 - เข้า short: V-A `ts[t] < −theta` และ `ts[t−1] >= −theta` · V-B `close[t] < ll_n[t]` · V-C เงื่อนไข V-B และ `ts[t] < 0`
