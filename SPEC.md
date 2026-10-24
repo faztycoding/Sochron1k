@@ -50,8 +50,8 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 | Data | Class | Source of truth | Retention | Who can access |
 |------|-------|-----------------|-----------|----------------|
 | ราคา/ticks/bars จากโบรกเกอร์ | contract-limited (ตามเงื่อนไขโบรกเกอร์) | MT5 terminal → snapshot ที่บันทึก manifest | TBD | เครื่องเจ้าของ |
-| Holdout | internal, ปิดผนึก | Windows VPS ที่เป็น acquisition host นอกเครื่องวิจัย (เจ้าของ 2026-10-21, `docs/architecture.md` ข้อ 6.1) · ระหว่างยังไม่มี VPS ห้ามตัด holdout · วัน cutoff TBD (Q-08) | ตลอดอายุการทดลอง [A] (รอเจ้าของยืนยัน, Q-12) | เจ้าของ (เปิดเฉพาะวันประเมิน) |
-| Registry การทดลอง | internal | `research/registry/*.jsonl` (append-only) | ตลอดอายุโปรเจกต์ [A] (รอเจ้าของยืนยัน, Q-12) | repo |
+| Holdout | internal, ปิดผนึก | Windows VPS ที่เป็น acquisition host นอกเครื่องวิจัย (เจ้าของ 2026-10-21, `docs/architecture.md` ข้อ 6.1) · ระหว่างยังไม่มี VPS ห้ามตัด holdout · วัน cutoff TBD (Q-08) | ปิดผนึกตลอดอายุโปรเจกต์ หรืออย่างน้อยจนทุกสมมติฐานที่ใช้ cutoff เดียวกันมีคำตัดสิน · ลบได้เฉพาะเมื่อเจ้าของตัดสินและบันทึกใน DECISIONS (D-019, Q-12) | เจ้าของ (เปิดเฉพาะวันประเมิน) |
+| Registry การทดลอง | internal | `research/registry/*.jsonl` (append-only) รวมไฟล์ของ holdout ที่คัดลอกเข้ามาหลังประเมิน (D-017) | ตลอดอายุโปรเจกต์ (D-019, Q-12) | repo |
 | คำสั่ง/deals/positions | confidential operational | MT5 (ความจริง) + journal ในเครื่อง | TBD | เครื่องเจ้าของ |
 | Login/รหัสผ่าน MT5 | restricted | ใน terminal หรือ .env บนเครื่อง runner เท่านั้น | – | เจ้าของ |
 - Personal data: ไม่มีข้อมูลส่วนบุคคลของผู้อื่น ข้อมูลบัญชีของเจ้าของไม่ลง log/prompt/report แบบเต็ม
@@ -92,7 +92,7 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 | Q-09 | Demo runner จะรันที่ไหน (เครื่องนี้ หรือ Windows VPS) | เจ้าของ | ก่อน OPS-1 | ตอบแล้ว (เจ้าของ 2026-10-21): Windows VPS ในอนาคต ส่วนระยะนี้ใช้เครื่องนี้ไปก่อน (`docs/architecture.md` ข้อ 6.1) |
 | Q-10 | งบรายเดือน และ kill criteria ของทั้งโปรเจกต์ | เจ้าของ | ก่อน SLICE-R1 | TBD (open) |
 | Q-11 | ใช้ Codex เป็น test author + reviewer ตาม binding ค่าเริ่มต้น (D-002) | เจ้าของ | ก่อน contract แรก | TBD (open) |
-| Q-12 | ระยะเวลาเก็บ holdout และ registry ในข้อ 5 (ตอนนี้เป็น [A]) | เจ้าของ | ก่อน SLICE-R1 | TBD (open) |
+| Q-12 | ระยะเวลาเก็บ holdout และ registry ในข้อ 5 (ตอนนี้เป็น [A]) | เจ้าของ | ก่อน SLICE-R1 | ตอบแล้ว (เจ้าของ 2026-10-24 ~20:0x "เอาที่ดีที่สุด" = ทางที่แนะนำ): D-019 · registry ตลอดอายุโปรเจกต์ · holdout ปิดผนึกบน VPS ลบได้เฉพาะเมื่อเจ้าของสั่ง · snapshot ก่อน holdout เก็บพร้อม manifest ตลอดอายุโปรเจกต์ |
 | A-01 | เอกสารฝั่งเจ้าของเป็นภาษาไทย ส่วนโค้ด/commit/คำสั่ง agent เป็นอังกฤษ | เจ้าของยืนยัน | ก่อน contract แรก | [A] assumed |
 | A-02 | Blueprint v1.1 และโค้ดรอบก่อนเป็นเพียงข้อมูลอ้างอิงใน git history ไม่ใช่ข้อกำหนด | เจ้าของยืนยัน (D-003) | ก่อน contract แรก | ยืนยันแล้วโดย D-003 (accepted) |
 
@@ -105,3 +105,4 @@ Version 0.1 (ร่าง) · Owner: เจ้าของ repository · Stage: 
 | 2026-10-21 | ข้อ 5 และ 8 ปรับตามการแยกเครื่องของ D-001 (Windows VPS เป็นเป้าหมาย, ระยะนี้ใช้เครื่องเดียวแบบจำกัด, ด่าน ENV-1 ก่อนวิจัย) ตาม review D-001 r2 F3 | เจ้าของ (เลือก VPS) | มีค่า VPS (Q-10) · งานวิจัยเริ่มได้หลัง ENV-1 |
 | 2026-10-21 | Q-06 ตอบแล้ว (H001 momentum + breakout M15, ข่าวเป็น H002) · เพิ่ม journey J5 trade attribution แบบ journal-driven · research memo ใน `docs/research/H001-background.md` | เจ้าของ (ให้ทิศทางกลยุทธ์) | ไม่มีผลต่อเวลา/ค่าใช้จ่าย · H002 ต้องมีแหล่งข้อมูลปฏิทินที่ผ่าน admission |
 | 2026-10-21 | บันทึกคำตอบที่มีหลักฐานแล้ว: Q-02, Q-03 ครบจาก SPIKE-001 (USD, 1:200, hedging, spec `XAUUSDm`) · Q-05, Q-08 สำหรับ H001 (หน้าต่าง NY, ถือข้ามคืน, cutoff 2025-01-01) · โบรกเกอร์ในข้อ 7 = Exness · ไม่เปลี่ยนค่าใดๆ | Claude (งานบ้านหลัง CORE-001 merge ตามคำสั่งเจ้าของ "เอาเต็มระบบ") | ไม่มีผลต่อเวลา/ค่าใช้จ่าย |
+| 2026-10-24 | Q-12 ตอบแล้ว (D-019): ระยะเก็บ holdout และ registry ในข้อ 5 ไม่เป็น [A] แล้ว · กติกาของ R1 ที่เจ้าของรับพร้อมกัน D-014–D-018, D-020 (PLAN-003) | เจ้าของ ("เอาที่ดีที่สุด" = ทางที่แนะนำทุกข้อ) | ไม่มีผลต่อค่าใช้จ่าย · เงื่อนไขของ contract SLICE-R1 |

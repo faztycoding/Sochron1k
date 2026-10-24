@@ -206,12 +206,12 @@ Trust boundaries ที่ต้องบังคับจริง:
 | `strategy` | features + `decide()` แบบ pure และมี version | I/O, clock, MetaTrader5, random ที่ไม่มี seed | core, timebase |
 | `costs` | spread, commission, slippage, swap และ stress ×2 | – | core |
 | `backtest` | จำลองการเทรดด้วย bid/ask, ติดป้าย ambiguous เมื่อ SL/TP อยู่ในแท่งเดียวกัน | อ่าน holdout | core, timebase, strategy, costs |
-| `research` | runner, registry, random-entry baseline, holdout gate, สถิติ, รายงาน | เรียก broker, execution หรือ `data.acquire` | core, timebase, data.snapshot, strategy, costs, backtest |
+| `research` | runner, registry, random-entry baseline, holdout gate, สถิติ, รายงาน | เรียก broker, execution หรือ import `data` ทั้งแพ็กเกจ (โหลด snapshot ใน `app`, D-020) | core, timebase, strategy, costs, backtest |
 | `risk` | sizing ด้วย Decimal, limits, halt state | ถูกเปลี่ยนโดย AI หรือ config ระหว่างรัน | core, costs |
 | `execution` | วงจรชีวิตคำสั่ง, idempotency, reconcile | ส่งคำสั่งโดยไม่ผ่าน risk gate และ journal | core, risk, journal, broker (port) |
 | `broker` | port + `mt5` adapter (ตัวเดียวที่ import MetaTrader5) | ตัดสินใจเชิงกลยุทธ์ | core, timebase |
 | `journal` | SQLite WAL: intent, events, external IDs, halts | ลบประวัติ | core |
-| `app` | CLI, ตรวจ config ตอนเริ่ม (fail fast), ประกอบชิ้นส่วน | business logic | ทุกโมดูล |
+| `app` | CLI, ตรวจ config ตอนเริ่ม (fail fast), ประกอบชิ้นส่วน · สคริปต์ R1 ที่โหลด snapshot ด้วย `data.snapshot` แล้วส่งแท่งให้ `research` (D-020) | business logic | ทุกโมดูล |
 
 ```text
 src/sochron/<modules>        # implementation (Claude Code)
