@@ -281,3 +281,185 @@ reference with `entry_blockers` added.
 ## Findings response (filled after review)
 | ID | Accept/Dispute | Commit | Evidence |
 |----|----------------|--------|----------|
+
+## Round 2 (tests-r1 F1-F6)
+
+Test-author handoff (tests r2). Author: a fresh Claude Code session acting as test author under the role
+swap of contract D15 (Codex out of quota until 2026-10-28 19:41). This session is not the implementer, not
+the round-1 author and not a reviewer of CORE-008. It read AGENTS.md, CLAUDE.md, contract v1.5 in full,
+docs/reviews/CORE-008-tests-r1.md, the round-1 part of this handoff, the two CORE-008 test files and the
+CORE-008 part of tests/architecture/test_imports.py in place, and the merged code the tests call
+(backtest, strategy, costs, timebase, core). It wrote no implementation and staged, committed, pushed and
+applied nothing. Base: branch feat/CORE-008-research at 7523407. Written 2026-10-24, finished about 09:30 UTC.
+Earlier text of this file is unchanged; this section is appended.
+
+### Deliverable
+
+One D-006 patch, never applied by this session: `docs/proposals/CORE-008-tests-r2.patch` · 258 lines ·
+17867 bytes · SHA256 `ff1e1ca0623e74d82ea94aac270f5524096f12629678eba2aab2f63768a3b581`. It only appends
+(no line removed or changed); `tests/architecture/` is not touched. `docs/proposals/` is git-ignored, so
+the patch is a local file.
+
+| Path | Numstat | Base blob (HEAD 7523407) | Base SHA256 | Expected SHA256 after apply | Expected Git blob |
+|---|---|---|---|---|---|
+| tests/acceptance/CORE-008/test_research.py | +158 -0 | `f1089df2c8fcee26d4b128d4718d87ce2f045f1f` | `9817bb68fb57090f1069c61db3acc87ce2912373a040edcd83f9e69e5c1143a5` | `97ac11c6d0a2c82531e268a67872d7d9412792ce5aa473cfdd5da1deb4cac587` | `ee1acb15e0f3e4096e28efe5444592d2fabe3d52` |
+| tests/golden/CORE-008/research_cases.py | +88 -0 | `a711d15088ce45e4b5fe440e19d96a764c390b87` | `f896083d5826d34ae75ecd3dc2b9620c844ee03c7177198debed195322f16fa9` | `82bfdec9eb928c0e6687ebe0768cacd1d85f0cfab9478b5f5ea2538e2b436b7e` | `0176b20bda455ba9347d9db5955a1b1a295d7f80` |
+
+The patch has no `index` lines, so check the base blobs before applying. Each expected blob was computed
+twice, `git hash-object --no-filters` and `git hash-object --path=<path>` (through `*.py text eol=lf`):
+equal for both files, so they are LF only. 0 CR bytes in the patch, no trailing space on any added line,
+each file ends with one newline.
+
+### New tests (what each proves; all fail today at `_kit` like round 1)
+
+| Finding | Test | Proves |
+|---|---|---|
+| F1 | test_ac04_r2_the_baseline_computes_in_the_costs_context_and_leaves_the_caller_context | The WAVE baseline with the real generator, called inside a caller context of precision 3 and ROUND_UP, equals the contract's steps computed in costs.CONTEXT (round-1 `_oracle`): every round expectancy, every BaselineSummary field, the stop distances given to the sizer (k x ATR[t]) and the lines; the caller's context (precision, rounding, traps and flags) is left as it was. Premises checked: that precision changes at least one stop distance and the mean of the 1000 expectancies |
+| F6 | test_ac04_r2_a_variant_exit_time_that_is_no_m1_is_refused_before_the_started_line | A FLAT variant whose exit_time_raw is moved 60 s onto no M1, once on T1 (signal exit, a hold in hs) and once on T2 (stop at its entry open, not in hs), while every entry time stays an M1 time: ResearchError and the registry unchanged. Premises checked: only that exit is off the grid, and summarize(variant) still equals the base's summary (summarize reads no exit time) |
+| F4 | test_ac05_r2_evaluate_row_10_fails_when_the_base_has_no_trades[no trades with a long-only run that has trades] | Base ZERO_SUMMARY with EVAL_GO's long-only run (100 trades, 0.10, drawdown 25), stress, random entry and robustness left out: rows 1-9 as in "no trades and every optional input missing", row 10 `("expectancy:none/0.10;max_drawdown:0/25", "better on one", False)`, verdict insufficient, screen True. It calls the round-1 test function with the new case, so the checks are the round-1 ones |
+| F5 | test_ac05_r2_evaluate_refuses_a_record_of_another_variant_base_or_rollover_zone | ResearchError for `replace(stress, variant="A")`, a long-only record whose base_run_id is the run_id of another B select ok (k 2.9) and `replace(random_entry, rollover_zone="Europe/London")` (its seed still follows its base). Premises checked: the consistent records are accepted and each case differs from them in exactly one field |
+| F2 | test_ac06_r2_an_interrupted_stress_and_its_rerun_in_the_stress_row_and_the_budget | B select ok, a stress started line left interrupted, its rerun started + ok: the literal report REPORT_RERUN with the row `\| B \| stress \| 2 \| 1 \| 0 \| 1 \| 1/1 \|` and `รวมที่นับงบ: 3/63` |
+| F3 (a) | test_ac06_r2_records_out_of_seq_order_give_the_same_report | REPORT_RECORDS reversed and "odd seq first" give REPORT_FULL (with the three Evaluations) and REPORT_NO_EVALUATION; the rerun registry reversed gives REPORT_RERUN |
+
+Golden additions (tests/golden/CORE-008/research_cases.py, arithmetic in comments): HOSTILE_PRECISION = 3,
+REPORT_RERUN_RECORDS, REPORT_RERUN (with its helper _RERUN_ROWS), EVALUATE_CASES_R2; F5 and F6 need no
+value (refusals), F3 (a) reuses REPORT_FULL, REPORT_NO_EVALUATION and REPORT_RERUN.
+
+### Checks run (command -> result -> commit -> time UTC 2026-10-24)
+
+- `PYTHONDONTWRITEBYTECODE=1 timeout -k 10 900 uv run --offline pytest tests -q -p no:cacheprovider` (repo
+  root, round-1 files only) -> 104 failed, 3212 passed in 35.01 s -> 7523407 -> 09:23:24-09:24:00. This is
+  the current tree, not the patched one.
+- `git apply --check docs/proposals/CORE-008-tests-r2.patch` (standalone) -> exit 0, no output -> 7523407 -> 09:2x.
+- `git apply --numstat docs/proposals/CORE-008-tests-r2.patch` -> 158 0 test_research.py, 88 0 research_cases.py.
+- AST comparison (scratch `tools/ast_compare.py`, base = the committed file, new = the patched copy, both
+  parsed, nothing executed): test_research.py 146 top-level statements -> 153; all 146 equal by `ast.dump`
+  and in place, no line span moved (the module docstring included); appended `_wave_lots` and the six
+  tests above. research_cases.py 106 -> 111; all 106 equal and in place; appended HOSTILE_PRECISION,
+  REPORT_RERUN_RECORDS, _RERUN_ROWS, REPORT_RERUN, EVALUATE_CASES_R2.
+- Static check of the appended code (scratch `tools/static_names.py`, parses the patched test file and runs
+  the plain-Python golden file only) -> "no problem found": every name resolves (local, module-level or
+  builtin), every `g[...]`/`_G[...]` key exists in the golden, every call of a module function matches its
+  parameters.
+- Independent golden check (scratch `tools/check_golden_r2.py`, no sochron import, its own template lines
+  typed from the contract) -> REPORT_RERUN and the 10 rows, verdict and screen of EVALUATE_CASES_R2 agree
+  with the contract rules; the F2 text changes under "stress column {started}/1" and under "total adds
+  stress ok", and row 10 changes when "base has no trades" is ignored.
+- Red-flag patterns (noqa, skip, xfail, type-ignore, bare or swallowed except, TODO, secrets) over the two
+  appended blocks -> 0 hits (round 2 adds no `noqa`: the sizer pattern is a function, `_wave_lots`).
+
+### BLOCKED: the patched tests were never run
+
+Copying the patched files into my scratch test trees was refused by a deny rule. I stopped that step and
+did not retry it in any form (no absolute path, no Write/Edit, no renamed folder, no loader script), per
+CLAUDE.md, the owner's N6 rule and the task instruction. Exact message:
+
+`cp to 'C:\Users\MSI\Desktop\โปรเจคต่างๆ\Sochron1k\red\tests\acceptance\CORE-008\test_research.py' was blocked by a deny rule.`
+
+The command began with `cd <scratchpad> &&` and used relative destinations
+(`cp r2/test_research.py red/tests/acceptance/CORE-008/test_research.py && ...`); the permission check
+resolved them against the repository root, where `tests/acceptance/` is locked. Nothing was written: the
+scratch copies still have the committed blobs, `git status` is clean and no `red/` folder exists in the
+repository. Every step below needs the patched files in a test tree, so each is BLOCKED (not passed):
+
+- Red run with round 2. Predicted, not measured (UNKNOWN until run): 3322 tests, 110 failed, 3212 passed.
+  Each new test starts with `_kit(...)`, so each should fail with `AC-04/AC-05/AC-06: sochron.research not
+  implemented (No module named 'sochron.research')` (AC-04 x2, AC-05 x2, AC-06 x2). The module reads
+  `_G["EVALUATE_CASES_R2"]` at import for the F4 parametrization; the key exists (static check).
+- Satisfiability with a contract-only reference: not done; I wrote no reference. What supports it without
+  a run: every expected value was derived from the contract and agrees with the independent check; F5 and
+  F6 expect refusals the contract names; F1's "caller context untouched" can hold because the merged code
+  on the baseline path computes only in its own context (read in costs/charges.py, backtest/trade.py,
+  strategy/indicators.py and the filter in strategy/h001.py; `bounded_decimal` uses its own `_DIGITS`
+  context); review r1 reports that its own reference satisfied the same six expectations (proof.py,
+  probe_context.py). That is an argument, not evidence.
+- Mutants: not run. The ones to run on a reference: baseline arithmetic in the caller's context (F1);
+  report stress column {started}/1 (F2); report total adding stress ok (F2); report bullets in input order
+  (F3 a); row 10 ignoring "base has no trades" (F4); evaluate not comparing variant, not checking
+  long_only's base_run_id, not comparing rollover_zone (F5); baseline checking entry times only (F6). The
+  setup-line mutant is out because F3 (b) is not built.
+
+Options for the owner: (1) allow absolute literal scratchpad paths for this kind of copy (like the
+standing variable-path exception), then a session reruns red, reference and mutants; (2) let the
+implementer's apply step give the red run (step 4 below) and have the fresh tests review r2 build the
+reference and run the nine mutants; (3) accept round 2 as statically checked only.
+
+### Values compared with the review
+
+No value differs. F4: my rows 1-10, verdict and screen equal the review's fix (row 10
+`("expectancy:none/0.10;max_drawdown:0/25", "better on one", False)`). F2: the row
+`| B | stress | 2 | 1 | 0 | 1 | 1/1 |` and `รวมที่นับงบ: 3/63` equal the review's; the rest of the text is
+mine (two bullets: B select seq 2 and B stress seq 5, both with counters 0, 3, 2, 1). Beyond the review's
+minimal fixes: F1 also compares the sizer's stop distances and the caller's flags and checks its premises;
+F3 (a) also uses a second order, the no-Evaluation text and the rerun registry; F5's long-only record
+names a real other select ok instead of `"f" * 64`; F6 also moves the exit of a stop trade (not in hs).
+
+### F3 (b) left out, and why
+
+Inside one runner-written file the setup line cannot differ between "the base record" and "the first H001
+record": runner step 5 (F33) freezes code_commit, sizer_label, equity, rollover, time rule, every cost pair
+but stress_factor and the provenance at the first H001 started line; ok and failed lines carry their
+started line's identity (append_record); and the first H001 line is always a select at stress_factor "1",
+like every base. The only ways to make them differ are records that do not come from one runner-written
+file: a file written with append_record alone (it does not check the setup), or records gathered from
+several files. The contract's Invariants exclude the first ("ภายในไฟล์หนึ่ง setup ของ hypothesis คงที่", one
+runner per file), and render_report's seq and started_seq rules presume one file, which excludes the
+second. The one in-file corner, equity "10000" on the first line and "1E+4" on the base, depends on
+whether the setup lock compares record strings or values, which runner step 5 does not say (open question
+2). A test there would pin render_report on records outside the contract's invariants, so the mutant
+"setup line from the first record of the hypothesis" stays alive; it has no visible effect on a registry
+the runner can write.
+
+### Conventions (round 2, where the contract leaves room)
+
+1. render_report accepts its records in any order: the contract names no refusal for order and sorts the
+   bullets by seq.
+2. A second started line with the identity of an interrupted one is a valid registry line (append_record
+   pairs only ok and failed lines); F2 uses it as the runner's rerun.
+3. evaluate's input rules must refuse records no runner would pair (another variant on the base's
+   run_id, a long-only record on another select ok) as long as RunRecord itself accepts them.
+4. The F4 test calls the round-1 function test_ac05_evaluate_every_row_at_its_threshold with its case, so
+   both rounds check evaluate the same way.
+
+### Open questions
+
+1. F3 (b): for records that do not share one H001 setup, should render_report refuse them or print the
+   base's setup? The contract says only "จาก record ฐาน (F33)".
+2. Runner step 5 setup lock: are equity and the other setup fields compared as record strings (as step 4
+   says for the base) or by value ("10000" vs "1E+4")?
+3. F1 checks the caller's flags too (as round 1 does for summarize). It relies on the merged modules never
+   computing in the caller's context; that holds today by reading, and a future change in costs, backtest
+   or strategy that breaks it would also fail this test.
+4. Round-1 open questions 1-8 are unchanged by round 2.
+
+### Implementer apply steps
+
+1. On `feat/CORE-008-research` with `tests/acceptance/CORE-008/test_research.py` at blob `f1089df2…` and
+   `tests/golden/CORE-008/research_cases.py` at blob `a711d150…` (the state of 7523407), run each as its own
+   command: `git apply --check docs/proposals/CORE-008-tests-r2.patch`, then
+   `git apply docs/proposals/CORE-008-tests-r2.patch`.
+2. The post-run detector must report exactly these two paths. Verify both SHA256 values (`sha256sum`) and
+   Git blobs (`git hash-object`) against the table. Any mismatch, missing hash or other report: stop and ask
+   the owner (N6).
+3. Optional, standalone: `git apply -R --check docs/proposals/CORE-008-tests-r2.patch`.
+4. Run `uv run --offline pytest tests -q -p no:cacheprovider` under an outer timeout. Expected (predicted,
+   never measured here): 3322 tests, 110 failed, 3212 passed. Because this session could not run the
+   patched tests, read the message of each of the six new failures (`--tb=line -rf`): it must be the
+   `_kit` message "sochron.research not implemented". A NameError, KeyError, collection error or any other
+   message means the patch is wrong: stop and report it; never fix locked tests.
+5. Fresh-session review of round 2 (tests review r2). Ask it to do the BLOCKED steps: an independent
+   contract-only reference that passes every CORE-008 test (rounds 1 and 2) and tests/architecture, and the
+   nine mutants above. Then commit the red tests: `test(core-008): acceptance tests r2 for CORE-008` with
+   `Refs: CORE-008`.
+
+### Blocks and failures during this session
+
+- The deny-rule block above (step stopped, not retried).
+- My error, not a block: a first `git -C <repo> hash-object red/...` resolved the relative scratch paths
+  against the repository and failed (`fatal: could not open ... No such file or directory`, exit 128);
+  nothing was written. I reran `git hash-object` without `-C`, with the paths relative to the scratchpad.
+
+### Not verified
+
+- The patched tests were never executed (BLOCKED above); no reference implementation exists; CI not run.
+- The patch was not applied (by instruction).

@@ -2394,3 +2394,161 @@ def test_ac06_invalid_is_gone_and_the_strategy_version_is_unchanged(monkeypatch)
     if strategy.STRATEGY_VERSION != "H001-v1":
         wrong.append(f"STRATEGY_VERSION {strategy.STRATEGY_VERSION!r}")
     assert not wrong, "AC-06:\n" + "\n".join(wrong)
+
+
+# ======================================================================= tests r2 (review tests-r1 F1-F6)
+# Appended by the round-2 test author under contract v1.5 (docs/reviews/CORE-008-tests-r1.md F1-F6). Every
+# statement above is unchanged and the conventions of the module docstring hold. The known answers and
+# their arithmetic are in the "tests r2" part of tests/golden/CORE-008/research_cases.py.
+
+
+def _wave_lots(index):
+    """The sizer pattern of the round-1 wave tests: lots None on calls 3, 10, 17, ... (index % 7 == 2)."""
+    every, at = _G["WAVE_SIZER_NONE_EVERY"]
+    return None if index % every == at else "0.02"
+
+
+def test_ac04_r2_the_baseline_computes_in_the_costs_context_and_leaves_the_caller_context(monkeypatch, tmp_path):
+    """F1: k x ATR[t], each round's expectancy, mean_r and the mean holds are computed in costs.CONTEXT."""
+    kit = _kit(monkeypatch, "AC-04", "random_entry_baseline", "BaselineResult", "summarize")
+    g = kit.g
+    bench = _Baseline(kit, "wave")
+    path = tmp_path / "registry.jsonl"
+    base = bench.base(path)
+    sizer = _Sizer(kit, lots_for=_wave_lots)
+    with localcontext() as context:
+        _hostile(context, prec=g["HOSTILE_PRECISION"])
+        before = _context_state()
+        result = bench.call(base.run_id, path, sizer=sizer)
+        changed = _context_state() != before
+    if type(result) is not kit.BaselineResult:
+        pytest.fail(f"AC-04: random_entry_baseline returned {result!r}", pytrace=False)
+    seed = int(base.run_id[:15], 16)
+    oracle_sizer = _Sizer(kit, lots_for=_wave_lots)
+    expectancies, holds, _, _ = _oracle(kit, bench, oracle_sizer, random.Random(seed))
+    expected = _expected_summary(kit, bench, expectancies, holds, seed)
+    with localcontext() as context:  # premises: the caller context would change the CONTEXT arithmetic
+        _hostile(context, prec=g["HOSTILE_PRECISION"])
+        stops_move = any(+stop != stop for _, stop in oracle_sizer.calls)
+        total = Decimal(0)
+        for value in expectancies:
+            total = total + value
+        mean_moves = total / 1000 != expected.mean_r
+    wrong = []
+    if not stops_move or not mean_moves:
+        wrong.append(f"fixture: the caller context changes no stop distance ({stops_move}) or not the mean "
+                     f"({mean_moves})")
+    if changed:
+        wrong.append("the caller's Decimal context changed")
+    if result.expectancies_r != tuple(expectancies):
+        wrong.append("expectancies differ from the contract's steps computed in costs.CONTEXT")
+    if sizer.calls != oracle_sizer.calls:
+        wrong.append("the stop distances given to the sizer are not k x ATR[t] computed in costs.CONTEXT")
+    wrong += _check_baseline_summary(kit, result.summary, expected, "summary under a precision-3 caller context")
+    lines, last = _check_lines(kit, bench, path, base, expected, "lines", 2)
+    wrong += lines
+    if last is not None and result.record != last:
+        wrong.append("the returned record is not the ok line")
+    assert not wrong, "AC-04:\n" + "\n".join(wrong)
+
+
+def test_ac04_r2_a_variant_exit_time_that_is_no_m1_is_refused_before_the_started_line(monkeypatch, tmp_path):
+    """F6: baseline step 2 needs the entry_time_raw and the exit_time_raw of every variant trade in m1."""
+    kit = _kit(monkeypatch, "AC-04", "random_entry_baseline", "summarize")
+    bench = _Baseline(kit, "flat")
+    path = tmp_path / "registry.jsonl"
+    base = bench.base(path)
+    times = {bar.time_raw for bar in bench.m1}
+    trades = bench.variant.trades
+    wrong = []
+    for label, position in (("a signal exit (a hold in hs)", 0), ("a stop exit (not in hs)", 1)):
+        moved = replace(trades[position], exit_time_raw=trades[position].exit_time_raw + 60)
+        variant = replace(bench.variant, trades=trades[:position] + (moved,) + trades[position + 1:])
+        off_grid = [index for index, trade in enumerate(variant.trades) if trade.exit_time_raw not in times]
+        if off_grid != [position] or any(trade.entry_time_raw not in times for trade in variant.trades):
+            wrong.append(f"fixture: {label}: exit times off the M1 grid at {off_grid}")
+        if kit.summarize(variant, kit.rule) != base.summary:
+            wrong.append(f"fixture: {label}: the variant no longer matches the summary of its base")
+        wrong += _refusal(kit, path, "research", lambda: bench.call(base.run_id, path, variant=variant), label)
+    assert not wrong, "AC-04:\n" + "\n".join(wrong)
+
+
+@pytest.mark.parametrize("label, changes, verdict, screen, rows", _G["EVALUATE_CASES_R2"],
+                         ids=[case[0] for case in _G["EVALUATE_CASES_R2"]])
+def test_ac05_r2_evaluate_row_10_fails_when_the_base_has_no_trades(monkeypatch, label, changes, verdict, screen, rows):
+    """F4: row 10 fails for a base without trades although its drawdown 0 is below the long-only one."""
+    kit = _kit(monkeypatch, "AC-05", "evaluate", "Evaluation", "Check")
+    base, _, long_only, _, _ = _eval_inputs(kit, changes)
+    if base.summary.trades != 0 or long_only is None or long_only.summary.trades == 0:
+        pytest.fail(f"AC-05 {label}: fixture: a base without trades and a long-only run with trades", pytrace=False)
+    # The round-1 checks, unchanged: verdict, screen and value/threshold/passed of all 10 rows.
+    test_ac05_evaluate_every_row_at_its_threshold(monkeypatch, label, changes, verdict, screen, rows)
+
+
+def test_ac05_r2_evaluate_refuses_a_record_of_another_variant_base_or_rollover_zone(monkeypatch):
+    """F5: evaluate's input rules compare the variant and the rollover zone and check long_only's base_run_id."""
+    kit = _kit(monkeypatch, "AC-05", "evaluate", "Evaluation")
+    base, stress, long_only, random_entry, robustness = _eval_inputs(kit, {})
+    consistent = {"stress": stress, "long_only": long_only, "random_entry": random_entry}
+    other_base = _rec(kit, seq=2, status="ok", started_seq=1, params=_params(kit, "B", k="2.9"), dataset=base.dataset,
+                      summary=base.summary)
+    wrong = []
+    accepted = _outcome(lambda: kit.evaluate(base, stress, long_only, random_entry, robustness))
+    if accepted is not None:
+        wrong.append(f"fixture: the consistent records were refused: {accepted!r}")
+    if other_base.run_id == base.run_id or (other_base.status, other_base.purpose, other_base.variant) != ("ok", "select", "B"):
+        wrong.append("fixture: the other select ok of B")
+    for label, slot, record, name in (
+        ("a stress record of variant A", "stress", replace(stress, variant="A"), "variant"),
+        ("a long-only record on another select ok of B", "long_only",
+         replace(long_only, base_run_id=other_base.run_id), "base_run_id"),
+        ("a random-entry record with another rollover zone", "random_entry",
+         replace(random_entry, rollover_zone="Europe/London"), "rollover_zone"),
+    ):
+        differs = [item.name for item in fields(record) if getattr(record, item.name) != getattr(consistent[slot], item.name)]
+        if differs != [name]:
+            wrong.append(f"fixture: {label} differs in {differs}")
+        inputs = {**consistent, slot: record}
+        error = _outcome(lambda: kit.evaluate(base, inputs["stress"], inputs["long_only"], inputs["random_entry"],
+                                              robustness))
+        if not _is(kit, error, "research"):
+            wrong.append(f"{label}: expected ResearchError, got {error!r}")
+    assert not wrong, "AC-05:\n" + "\n".join(wrong)
+
+
+def test_ac06_r2_an_interrupted_stress_and_its_rerun_in_the_stress_row_and_the_budget(monkeypatch, tmp_path):
+    """F2: the stress "งบ" column is {ok}/1 and "นับงบ" counts every stress started line, reruns included."""
+    kit = _kit(monkeypatch, "AC-06", "render_report")
+    g = kit.g
+    records = _report_registry(kit, tmp_path / "registry.jsonl", g["REPORT_RERUN_RECORDS"])
+    interrupted, rerun, ok = records[3], records[4], records[5]
+    text = g["REPORT_RERUN"]
+    wrong = []
+    if ((interrupted.status, rerun.status, ok.status, ok.started_seq) != ("started", "started", "ok", 4)
+            or replace(interrupted, seq=4) != rerun):
+        wrong.append("fixture: seq 3 is an interrupted stress line, seq 4 its rerun and seq 5 the rerun's ok")
+    if "\n| B | stress | 2 | 1 | 0 | 1 | 1/1 |\n" not in text or "\nรวมที่นับงบ: 3/63\n" not in text:
+        wrong.append("fixture: the golden stress row or budget line")
+    wrong += _text_diff(kit.render_report(tuple(records.values()), {}), text) + _layout_rules(text)
+    assert not wrong, "AC-06:\n" + "\n".join(wrong)
+
+
+def test_ac06_r2_records_out_of_seq_order_give_the_same_report(monkeypatch, tmp_path):
+    """F3 (a): the bullets follow seq and every count is free of order, so the input order changes nothing."""
+    kit = _kit(monkeypatch, "AC-06", "render_report", "Evaluation", "Check")
+    g = kit.g
+    table = _report_registry(kit, tmp_path / "registry.jsonl", g["REPORT_RECORDS"])
+    records = tuple(table.values())
+    evaluations = _report_evaluations(kit, table)
+    rerun = tuple(_report_registry(kit, tmp_path / "rerun.jsonl", g["REPORT_RERUN_RECORDS"]).values())
+    wrong = []
+    for label, order in (("reversed", records[::-1]), ("odd seq first", records[0::2] + records[1::2])):
+        if order == records or sorted(record.seq for record in order) != [record.seq for record in records]:
+            wrong.append(f"fixture: {label} is not another order of the same records")
+        wrong += [f"{label}, three evaluations: {item}"
+                  for item in _text_diff(kit.render_report(order, evaluations), g["REPORT_FULL"])]
+        wrong += [f"{label}, no evaluation: {item}"
+                  for item in _text_diff(kit.render_report(order, {}), g["REPORT_NO_EVALUATION"])]
+    wrong += [f"the rerun registry reversed: {item}"
+              for item in _text_diff(kit.render_report(rerun[::-1], {}), g["REPORT_RERUN"])]
+    assert not wrong, "AC-06:\n" + "\n".join(wrong)

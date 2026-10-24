@@ -832,3 +832,91 @@ REPORT_H002 = "\n".join(
      "## ข้อจำกัดที่ต้องรายงาน", "", "- drawdown วัดจาก realized curve เท่านั้น",
      "- B select seq 20: ambiguous 0, data flag 3, fill หลังข้อมูลขาด 2, ข้อมูลหมด 1", "", *_OWNER)
 ) + "\n"
+
+
+# ===================================================================== tests r2 (review tests-r1 F1-F6)
+#
+# Appended by the round-2 test author (docs/reviews/CORE-008-tests-r1.md F1-F6); every statement above
+# is unchanged. Each value below was worked out by hand from contract v1.5, the arithmetic beside it.
+#
+# F1 (random_entry_baseline computes in sochron.costs.CONTEXT: contract "Inputs" and baseline steps 7-8).
+# No new known answer: the test runs the WAVE baseline with the real generator inside a caller context of
+# precision HOSTILE_PRECISION and ROUND_UP (Inexact and Rounded not trapped) and compares the result with
+# the contract's steps computed in CONTEXT by the oracle of the round-1 wave tests. Such a context changes
+# what the contract computes in CONTEXT. Example: four r values that sum to 0.4292 give a round
+# expectancy of 0.4292 / 4 = 0.1073 in CONTEXT; at precision 3 ROUND_UP the sum rounds away from zero to
+# 0.430, and 0.430 / 4 = 0.1075 rounds to 0.108. The test also checks on its own data that at least one
+# stop distance k x ATR[t] and the mean of the 1000 round expectancies change at that precision, so the
+# comparison can fail.
+HOSTILE_PRECISION = 3
+
+# F2 (render_report: the stress column and "นับงบ" after an interrupted stress run and its rerun). The
+# records use the format of REPORT_RECORDS; all are H001 with the setup of the normative example, dataset D1:
+#   seq 1 started select B0; seq 2 its ok (summary SB), the base;
+#   seq 3 started stress B0 on base 2, interrupted: no ok or failed line names started_seq 3;
+#   seq 4 started stress B0 on base 2, the rerun of seq 3 with the same identity (runner step 5 accepts a
+#         rerun while the identity has no ok line);
+#   seq 5 the ok of seq 4 (started_seq 4, summary SBS).
+REPORT_RERUN_RECORDS = (
+    (1, "started", None, "select", "B0", "D1", None, {}),
+    (2, "ok", 1, "select", "B0", "D1", None, {"summary": "SB"}),
+    (3, "started", None, "stress", "B0", "D1", 2, {"stress": True}),  # interrupted
+    (4, "started", None, "stress", "B0", "D1", 2, {"stress": True}),  # its rerun
+    (5, "ok", 4, "stress", "B0", "D1", 2, {"stress": True, "summary": "SBS"}),
+)
+# Registry rows (started/ok/failed count lines by status; interrupted = started lines that no ok or failed
+# line names). B select: started 1 (seq 1), ok 1 (seq 2), failed 0, interrupted 0, distinct params {B0}
+# -> 1/6. B stress: started 2 (seq 3, 4), ok 1 (seq 5), failed 0, interrupted 1 (seq 3); the "งบ" column
+# of stress is {ok}/1 = 1/1 (a {started}/1 column would show 2/1). Every other row is 0.
+# "นับงบ" = select params per variant (A 0 + B 1 + C 0 = 1) + robustness started 0 + stress started 2 = 3:
+# both stress started lines count (runner step 5 "รันซ้ำนับด้วย"; adding stress ok instead would give 2).
+# Limits: one bullet per ok line with a summary, by seq: seq 2 (SB: ambiguous 0, flagged 3, gap fills 2,
+# end of data 1) and seq 5 (SBS: 0, 3, 2, 1); no random_entry ok, so no baseline bullet. No Evaluation:
+# "รวมที่นับงบ", one blank line, then the limits (F38).
+_RERUN_ROWS = tuple(
+    {("B", "select"): "| B | select | 1 | 1 | 0 | 0 | 1/6 |",
+     ("B", "stress"): "| B | stress | 2 | 1 | 0 | 1 | 1/1 |"}.get(
+        (variant, purpose), f"| {variant} | {purpose} | 0 | 0 | 0 | 0 | {budget} |")
+    for variant in ("A", "B", "C")
+    for purpose, budget in (("select", "0/6"), ("robustness", "0/14"), ("stress", "0/1"),
+                            ("long_only", "ไม่นับ"), ("random_entry", "ไม่นับ"))
+)
+REPORT_RERUN = "\n".join(
+    ("# รายงานวิจัย H001", "", *_REPORT_REGISTRY_HEAD, *_RERUN_ROWS, "", "รวมที่นับงบ: 3/63", "",
+     "## ข้อจำกัดที่ต้องรายงาน", "", "- drawdown วัดจาก realized curve เท่านั้น",
+     "- B select seq 2: ambiguous 0, data flag 3, fill หลังข้อมูลขาด 2, ข้อมูลหมด 1",
+     "- B stress seq 5: ambiguous 0, data flag 3, fill หลังข้อมูลขาด 2, ข้อมูลหมด 1", "", *_OWNER)
+) + "\n"
+
+# F3 (render_report and the order of its records). (a) has no new value: REPORT_RECORDS in another order
+# must give REPORT_FULL and REPORT_NO_EVALUATION again, and REPORT_RERUN_RECORDS reversed REPORT_RERUN
+# (the bullets are "เรียงตาม seq"; every count is free of order). (b) is not built: docs/handoff/CORE-008.md,
+# round 2, says why.
+
+# F4 (evaluate row 10 when the base has no trades). Base ZERO_SUMMARY with the long-only run of EVAL_GO
+# (100 trades, expectancy 0.10, drawdown 25); stress, random entry and robustness left out. Rows 1-9 are
+# those of "no trades and every optional input missing": 1 "0" < 100 fails; 2 none; 3 none (no stress);
+# 4 "0" <= 24 passes; 5 none with threshold 7/8 (V-B: 8 neighbours, ceil(0.8 x 8) = ceil(6.4) = 7);
+# 6 none / none (no baseline); 7 none; 8 none (no year); 9 long:none;short:none.
+# Row 10: "expectancy:" + none + "/" + str(Decimal("0.10")) + ";max_drawdown:" + str(Decimal("0")) + "/" +
+# str(Decimal("25")) = "expectancy:none/0.10;max_drawdown:0/25". The drawdown 0 < 25 would be better on one,
+# but the contract adds "(ถ้า long-only ไม่มีไม้ หรือ base ไม่มีไม้ = ไม่ผ่าน)": the base has no trades, so the
+# row fails. Row 1 fails -> insufficient; EVAL_DATASET starts 2023-01-02, before the cutoff -> screen True.
+# Same format as EVALUATE_CASES.
+EVALUATE_CASES_R2 = (
+    ("no trades with a long-only run that has trades",
+     {"base": ZERO_SUMMARY, "stress": None, "random": None, "robustness": ()}, "insufficient", True,
+     {1: ("0", "100", False), 2: ("none", "0.10", False), 3: ("none", "0", False), 4: ("0", "24", True),
+      5: ("none", "7/8", False), 6: ("none", "none", False), 7: ("none", "0", False), 8: ("none", "0", False),
+      9: ("long:none;short:none", "0", False),
+      10: ("expectancy:none/0.10;max_drawdown:0/25", "better on one", False)}),
+)
+
+# F5 (evaluate input rules) and F6 (baseline step 2, exit times) are refusals and need no new value.
+# F5 changes one field of one consistent EVAL_GO record: the variant of the stress record (A), the
+# base_run_id of the long-only record (the run_id of another B select ok, k 2.9, built in the test) and
+# the rollover_zone of the random-entry record (Europe/London; its seed still follows its base).
+# F6 moves the exit time of one FLAT_VARIANT trade by 60 s onto no M1: T1 ("signal", exit M1 300 = bar 100
+# minute 0 -> minute 1, a hold in hs) and T2 ("stop" at its entry open, exit M1 303 = bar 101 minute 0 ->
+# minute 1, not in hs). Every entry time stays an M1 time, and summarize reads no exit time, so the
+# variant still matches the summary of its base (baseline step 1) and only step 2 can refuse it.
