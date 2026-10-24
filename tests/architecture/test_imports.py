@@ -13,7 +13,8 @@ side-effect-free stdlib only, and neither may import the random module. CORE-005
 also checks src/sochron/data/__init__.py under the snapshot import rules and bans float
 names and literals in sochron.data.snapshot, as in costs and risk. CORE-006 AC-06 runs the
 same checker over sochron.strategy: it may import sochron.core, sochron.timebase, itself and
-side-effect-free stdlib only, with no random module and no float names or literals.
+side-effect-free stdlib only, with no random module and no float names or literals. CORE-006
+tests r2 (review F4) narrows that stdlib to an explicit list, _STRATEGY_STDLIB, for strategy only.
 """
 
 import ast
@@ -1666,3 +1667,144 @@ def test_ac06_strategy_import_boundaries_no_io_clock_random_float_or_forbidden_p
             continue
         findings.extend(f"{relative}: {violation}" for violation in violations)
     assert not findings, "AC-06: forbidden dependencies or side effects:\n" + "\n".join(findings)
+
+
+# CORE-006 tests r2 (review docs/reviews/CORE-006-tests-r1.md F4, owner 2026-10-24): the strategy
+# scan uses an explicit stdlib list instead of "any stdlib module except socket". sochron.strategy
+# may import exactly these stdlib modules (by full name), sochron.core, sochron.timebase and
+# itself; every other import is a finding. _inspect_strategy_source and every table above stay as
+# they were, so the round-1 test keeps its meaning and no other package's check changes: the new
+# checker runs every round-1 strategy check and adds one finding per stdlib import not listed.
+_STRATEGY_STDLIB = frozenset({
+    "bisect", "collections", "collections.abc", "dataclasses", "datetime", "decimal", "enum",
+    "functools", "itertools", "operator", "types", "typing",
+})
+
+
+def _inspect_strategy_listed_source(source, current_package):
+    """CORE-006 tests r2 (F4): _inspect_strategy_source plus one finding for each absolute import of
+    a stdlib module that is not in _STRATEGY_STDLIB, wherever the import statement stands."""
+    findings = list(_inspect_strategy_source(source, current_package))
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            names = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.level == 0:
+            names = [node.module or ""]
+        else:
+            continue
+        for name in names:
+            if name.split(".")[0] in sys.stdlib_module_names and name not in _STRATEGY_STDLIB:
+                findings.append(f"line {node.lineno}: forbidden stdlib import {name}")
+    return sorted(set(findings))
+
+
+def _inspect_as_listed_strategy(source):
+    return _inspect_strategy_listed_source(source, "sochron.strategy")
+
+
+# (label, source lines, exact findings); line 1 is _HEADER, so the first source line is 2.
+_STRATEGY_UNLISTED = (
+    ("logging", ("import logging", 'LOG = logging.getLogger("strategy")'),
+     ("line 2: forbidden stdlib import logging",)),
+    ("a logging submodule", ("import logging.handlers",),
+     ("line 2: forbidden stdlib import logging.handlers",)),
+    ("logging, from-imported", ("from logging import getLogger",),
+     ("line 2: forbidden stdlib import logging",)),
+    ("sqlite3", ("import sqlite3", 'DB = sqlite3.connect("bars.db")'),
+     ("line 2: forbidden stdlib import sqlite3",)),
+    ("sqlite3, aliased", ("import sqlite3 as db",), ("line 2: forbidden stdlib import sqlite3",)),
+    ("threading", ("import threading", "LOCK = threading.Lock()"),
+     ("line 2: forbidden stdlib import threading",)),
+    ("threading, from-imported", ("from threading import Thread",),
+     ("line 2: forbidden stdlib import threading",)),
+    ("asyncio", ("import asyncio", "LOOP = asyncio.new_event_loop()"),
+     ("line 2: forbidden stdlib import asyncio",)),
+    ("asyncio inside a function", ("def run(job):", "    import asyncio", "    return asyncio.run(job)"),
+     ("line 3: forbidden stdlib import asyncio",)),
+    ("shutil", ("import shutil", 'COPY = shutil.copyfile("a.csv", "b.csv")'),
+     ("line 2: forbidden stdlib import shutil",)),
+    ("shutil, from-imported", ("from shutil import rmtree",), ("line 2: forbidden stdlib import shutil",)),
+    ("pathlib", ("import pathlib", 'HERE = pathlib.Path("bars")'),
+     ("line 2: forbidden stdlib import pathlib",)),
+    ("pathlib, from-imported", ("from pathlib import Path",), ("line 2: forbidden stdlib import pathlib",)),
+    ("three in one statement", ("import logging, sqlite3, threading",),
+     ("line 2: forbidden stdlib import logging", "line 2: forbidden stdlib import sqlite3",
+      "line 2: forbidden stdlib import threading")),
+    ("os.path", ("from os import path",), ("line 2: forbidden stdlib import os",)),
+    ("math is free of side effects but not listed", ("import math",),
+     ("line 2: forbidden stdlib import math",)),
+    ("zoneinfo: strategy reads New York time through sochron.timebase", ("from zoneinfo import ZoneInfo",),
+     ("line 2: forbidden stdlib import zoneinfo",)),
+    ("__future__ is not listed either", ("from __future__ import annotations",),
+     ("line 2: forbidden stdlib import __future__",)),
+    ("next to a round-1 finding", ("import socket", "import logging"),
+     ("line 2: forbidden import socket", "line 2: forbidden stdlib import socket",
+      "line 3: forbidden stdlib import logging")),
+)
+_STRATEGY_LISTED = (
+    ("each listed module", tuple(f"import {name}" for name in sorted(_STRATEGY_STDLIB))),
+    ("each listed module, aliased",
+     tuple(f"import {name} as listed_{index}" for index, name in enumerate(sorted(_STRATEGY_STDLIB)))),
+    ("from-imports of listed modules", (
+        "from bisect import bisect_left, bisect_right", "from collections import deque",
+        "from collections.abc import Mapping, Sequence", "from dataclasses import dataclass, fields",
+        "from datetime import UTC, datetime, timedelta",
+        "from decimal import ROUND_HALF_EVEN, Context, Decimal, localcontext", "from enum import Enum",
+        "from functools import cache, reduce", "from itertools import accumulate, islice",
+        "from operator import attrgetter", "from types import MappingProxyType",
+        "from typing import Final, Literal",
+    )),
+    ("a listed import inside a function", ("def window(rows):", "    from itertools import islice",
+                                           "    return list(islice(rows, 96))")),
+    ("core, timebase and the strategy package itself", (
+        "import sochron.core", "from sochron.core import Bar", "from sochron import core",
+        "import sochron.timebase", "from sochron.timebase import NY_ENTRY_WINDOW, in_entry_window",
+        "from sochron import timebase", "from . import params", "from .indicators import indicators",
+        "from sochron.strategy.h001 import decide",
+    )),
+)
+
+
+def test_ac06_r2_strategy_imports_only_listed_stdlib_modules_core_timebase_and_itself():
+    wrong = []
+    # The checker first: exact findings for unlisted stdlib imports, none for the listed ones.
+    for label, lines, expected in _STRATEGY_UNLISTED:
+        findings = _inspect_as_listed_strategy(_synthetic(lines))
+        if findings != list(expected):
+            wrong.append(f"{label}: expected {list(expected)}, got {findings}")
+    for label, lines in _STRATEGY_LISTED:
+        findings = _inspect_as_listed_strategy(_synthetic(lines))
+        if findings:
+            wrong.append(f"{label}: listed import reported: {findings}")
+    # The list only adds stdlib-import findings: every round-1 strategy finding stays, on every table.
+    sources = [(label, source) for label, source, _ in _forbidden_cases()]
+    for table in (_SCOPED_CASES, _LEGITIMATE_SOURCES, _BINDING_CASES, _ORIGINAL_CASES, _STRATEGY_FORBIDDEN,
+                  _STRATEGY_ALLOWED, _STRATEGY_UNLISTED, _STRATEGY_LISTED):
+        sources += [(row[0], _synthetic(row[1])) for row in table]
+    for label, source in sources:
+        base = _inspect_as_strategy(source)
+        findings = _inspect_as_listed_strategy(source)
+        added = set(findings) - set(base)
+        listed_only = all(": forbidden stdlib import " in item for item in added)
+        if not set(base) <= set(findings) or not listed_only:
+            wrong.append(f"{label}: round-1 strategy checker {base}; with the list {findings}")
+    assert not wrong, "AC-06: the strategy stdlib list:\n" + "\n".join(wrong)
+
+    # Then the package itself, which must exist.
+    source_root = Path.cwd() / "src"
+    directory = source_root / "sochron" / "strategy"
+    assert directory.is_dir(), f"AC-06: {directory} does not exist; implementation missing"
+    files = sorted(directory.rglob("*.py"))
+    assert files, f"AC-06: {directory} contains no Python source; implementation missing"
+    findings = []
+    for path in files:
+        relative = path.relative_to(source_root)
+        current_package = ".".join(relative.parent.parts)
+        try:
+            text = path.read_text(encoding="utf-8-sig")
+            violations = _inspect_strategy_listed_source(text, current_package)
+        except SyntaxError as error:
+            findings.append(f"{relative}:{error.lineno}: invalid Python syntax: {error.msg}")
+            continue
+        findings.extend(f"{relative}: {violation}" for violation in violations)
+    assert not findings, "AC-06: unlisted or forbidden imports or side effects:\n" + "\n".join(findings)

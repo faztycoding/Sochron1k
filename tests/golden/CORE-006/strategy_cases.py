@@ -3,7 +3,9 @@
 No expected value below comes from sochron.strategy. The test author computed every value from
 the contract text (docs/contracts/CORE-006-strategy-h001.md D1, D2, D3, D4 and H001 section 3):
   D1  Decimal, precision 28, ROUND_HALF_EVEN, rounded after each operation in the written order.
-  D2  EMA_p[0] = close[0], alpha = 2 / (p + 1), EMA_p[t] from alpha, close[t] and EMA_p[t-1];
+  D2  EMA_p[0] = close[0], alpha = 2 / (p + 1), EMA_p[t] from alpha, close[t] and EMA_p[t-1]
+      (v1.1 item 1: alpha and 1 - alpha computed once, EMA_p[t] = alpha * close[t] + (1 - alpha)
+      * EMA_p[t-1], rounded after each multiply and after the add);
       TR[0] = high[0] - low[0]; TR[t] = max(high - low, |high - close[t-1]|, |low - close[t-1]|)
       (the true range of H001 section 3); ATR[n-1] = (TR[0] + ... + TR[n-1]) / n;
       ATR[t] = (ATR[t-1] * (n - 1) + TR[t]) / n; warm[t] = t >= max(3s, N+1, M+1, 97, n+1).
@@ -15,12 +17,15 @@ the contract text (docs/contracts/CORE-006-strategy-h001.md D1, D2, D3, D4 and H
 Bars are counted as given, never by clock slots: series G has no bar from 21:00 to 21:45 UTC (the
 17:00 New York break) and its windows still count bars.
 
-Parameters inside H001 section 4 were picked so that alpha is a short decimal: f = 9 gives
-alpha 0.2 (1 - alpha = 0.8) and s = 39 gives alpha 0.05 (0.95). Every EMA value below is exact:
-no digit is dropped at precision 28 (checked with an Inexact trap), so it is the same for
-alpha * c + (1 - alpha) * e and for e + alpha * (c - e). ATR and TS do round, by D1, and the
-28-digit values were checked twice (Decimal under D1, and exact fractions rounded half-even by
-hand after each operation).
+For series S, P and G, parameters inside H001 section 4 were picked so that alpha is a short
+decimal: f = 9 gives alpha 0.2 (1 - alpha = 0.8) and s = 39 gives alpha 0.05 (0.95). Every EMA
+value of S, P and G is exact: no digit is dropped at precision 28 (checked with an Inexact trap),
+so it is the same for alpha * c + (1 - alpha) * e and for e + alpha * (c - e). ATR and TS do
+round, by D1, and the 28-digit values were checked twice (Decimal under D1, and exact fractions
+rounded half-even by hand after each operation).
+Series E (tests r2, review CORE-006-tests-r1 F1) uses the defaults f = 16 and s = 64 instead:
+alpha 2/17 and 2/65 are not exact, so every EMA and TS digit of E depends on the v1.1 form and
+on rounding after each operation; EMA_TRAPS_E lists what the wrong forms give.
 
 Each bar: (open time UTC "YYYY-MM-DDTHH:MM", open, high, low, close, spread); prices are bid
 Decimal strings, spread is points (int, None = no value). Every bar has timeframe 15,
@@ -259,4 +264,170 @@ ROWS_G = (
     (119, 119, "4000.21561856", "4000.63076060609375", "3.58995937",
      "-0.1156397617095454759979637318",
      "4012.00", "3994.00", "4012.00", "3994.00", "260.5", True),
+)
+
+
+# ---------------------------------------------------------------------------------------------
+# Series E (tests r2, review CORE-006-tests-r1 F1): the defaults of H001 section 4 (f = 16,
+# s = 64, n = 20, theta 0.50, N = 96, M = 48, k 2.0), whose alphas are not exact. Contract v1.1
+# item 1: alpha = 2/(p+1) and 1 - alpha are computed once in the module context, then
+#   EMA_p[t] = alpha * close[t] + (1 - alpha) * EMA_p[t-1],
+# rounded to 28 digits half even after the first multiply, after the second and after the add.
+#   alpha_16 = 2/17 = 0.117647058823529411764705882352941... -> 0.1176470588235294117647058824
+#   1 - alpha_16 = 0.8823529411764705882352941176 (exact)
+#   alpha_64 = 2/65 = 0.0307692307692307692307692307692307... -> 0.03076923076923076923076923077
+#   1 - alpha_64 = 0.96923076923076923076923076923 (29 digits) -> 0.9692307692307692307692307692
+# 26 bars from 2026-03-10T13:00 UTC, each opening at the previous close (so TR = high - low).
+# ATR_20 and ts exist from t = 19 = n - 1; no Donchian value (t < M = 48), no spread median
+# (t < 96), never warm (t < 192). Bar 7 has no spread.
+PARAMS_E = {"f": 16, "s": 64, "n": 20, "theta": "0.50", "N": 96, "M": 48, "k": "2.0"}
+_E = (
+    # open, high, low, close, spread              TR
+    ("3999.50", "4001.64", "3999.15", "4001.05", 230),  # 2.49
+    ("4001.05", "4003.56", "4000.42", "4003.04", 233),  # 3.14
+    ("4003.04", "4003.92", "4002.05", "4002.18", 236),  # 1.87
+    ("4002.18", "4002.83", "3999.23", "3999.99", 239),  # 3.6
+    ("3999.99", "4001.16", "3999.58", "4001.03", 242),  # 1.58
+    ("4001.03", "4003.13", "4000.29", "4002.59", 245),  # 2.84
+    ("4002.59", "4003.55", "4002.40", "4003.42", 248),  # 1.15
+    ("4003.42", "4003.86", "4001.10", "4002.22", None),  # 2.76
+    ("4002.22", "4002.53", "4000.58", "4001.14", 254),  # 1.95
+    ("4001.14", "4004.21", "4000.58", "4004.16", 257),  # 3.63
+    ("4004.16", "4007.80", "4003.26", "4006.79", 260),  # 4.54
+    ("4006.79", "4009.85", "4005.64", "4009.21", 263),  # 4.21
+    ("4009.21", "4012.60", "4009.16", "4011.83", 266),  # 3.44
+    ("4011.83", "4013.97", "4011.48", "4013.10", 269),  # 2.49
+    ("4013.10", "4015.92", "4012.38", "4014.91", 272),  # 3.54
+    ("4014.91", "4015.79", "4011.92", "4012.85", 275),  # 3.87
+    ("4012.85", "4014.82", "4011.82", "4014.24", 278),  # 3
+    ("4014.24", "4015.21", "4013.52", "4013.92", 281),  # 1.69
+    ("4013.92", "4014.28", "4013.05", "4013.31", 284),  # 1.23
+    ("4013.31", "4015.58", "4013.16", "4015.40", 287),  # 2.42
+    ("4015.40", "4016.48", "4014.16", "4014.63", 290),  # 2.32
+    ("4014.63", "4015.60", "4011.35", "4012.29", 293),  # 4.25
+    ("4012.29", "4015.96", "4011.97", "4015.39", 296),  # 3.99
+    ("4015.39", "4016.35", "4014.41", "4014.55", 299),  # 1.94
+    ("4014.55", "4017.18", "4013.80", "4016.14", 302),  # 3.38
+    ("4016.14", "4017.13", "4013.81", "4014.71", 305),  # 3.32
+)
+BARS_E = tuple((stamp, *row) for stamp, row in zip(_clock("2026-03-10T13:00", len(_E)), _E))
+# Hand arithmetic at t = 1 (close 4003.04 after EMA[0] = close[0] = 4001.05):
+#   EMA_16: 0.1176470588235294117647058824 * 4003.04 = 470.945882352941176470588235482496
+#     -> 470.9458823529411764705882355; 0.8823529411764705882352941176 * 4001.05 =
+#     3530.33823529411764705882352922348 -> 3530.338235294117647058823529; the sum
+#     4001.2841176470588235294117645 has 29 digits and ends in an exact tie, so half even keeps
+#     the even 4: 4001.284117647058823529411764.
+#   EMA_64: 0.03076923076923076923076923077 * 4003.04 = 123.1704615384615384615384615415408
+#     -> 123.1704615384615384615384615; 0.9692307692307692307692307692 * 4001.05 =
+#     3877.94076923076923076923076910766 -> 3877.940769230769230769230769; the sum
+#     4001.1112307692307692307692305 is a tie again: 4001.111230769230769230769230.
+#   The wrong forms end in ...765 and ...231. e + alpha * (c - e): c - e = 1.99 and
+#     0.1176470588235294117647058824 * 1.99 = 0.234117647058823529411764705976
+#     -> 0.2341176470588235294117647060, and 4001.05 + 0.2341176470588235294117647060 =
+#     4001.284117647058823529411764706 -> ...411765;
+#     0.03076923076923076923076923077 * 1.99 = 0.0612307692307692307692307692323
+#     -> 0.06123076923076923076923076923, 4001.05 + that -> 4001.111230769230769230769231.
+#   One rounding per step: (2 * 4003.04 + 15 * 4001.05) / 17 = 68021.83 / 17 =
+#     4001.284117647058823529411764705882... -> ...411765, and (2 * 4003.04 + 63 * 4001.05) / 65
+#     = 260072.23 / 65 = 4001.11123076923076923076923076923... -> ...769231.
+# t = 2 (close 4002.18), EMA_16: 0.1176470588235294117647058824 * 4002.18 =
+#   470.844705882352941176470588423632 -> 470.8447058823529411764705884;
+#   0.8823529411764705882352941176 * 4001.284117647058823529411764 =
+#   3530.5448096885813148788927327528807474048442906574394464 -> 3530.544809688581314878892733;
+#   the sum 4001.3895155709342560553633214 -> 4001.389515570934256055363321.
+# ATR_20: ATR[19] = (2.49 + 3.14 + 1.87 + ... + 1.23 + 2.42) / 20 = 55.44 / 20 = 2.772; then
+#   ATR[t] = (ATR[t-1] * 19 + TR[t]) / 20 = 2.7494, 2.82443, 2.8827085, 2.835573075,
+#   2.86279442125, 2.8856547001875 (all exact).
+# TS[19] = (4009.985349977596107718688286 - 4004.397650704061060953513416) / 2.772
+#   = 5.58769927353504676517487 / 2.772 = 2.015764528692296812833647186147... -> ...647186.
+# Every value was computed with exact fractions rounded half even to 28 digits after each
+# operation (no decimal module), and again with Decimal under D1: 0 differences.
+ROWS_E = (
+    (0, 0, "4001.05", "4001.05", None, None,
+     None, None, None, None, None, False),
+    (1, 1, "4001.284117647058823529411764", "4001.111230769230769230769230", None, None,
+     None, None, None, None, None, False),
+    (2, 2, "4001.389515570934256055363321", "4001.144115976331360946745561", None, None,
+     None, None, None, None, None, False),
+    (3, 3, "4001.224866680236108284144106", "4001.108604715521165225307236", None, None,
+     None, None, None, None, None, False),
+    (4, 4, "4001.201941188443624956597741", "4001.106186108889744756836244", None, None,
+     None, None, None, None, None, False),
+    (5, 5, "4001.365242225097316138174478", "4001.151841920923906456625898", None, None,
+     None, None, None, None, None, False),
+    (6, 6, "4001.606978433909396592506893", "4001.221631400280093950268178", None, None,
+     None, None, None, None, None, False),
+    (7, 7, "4001.679098618155349934564906", "4001.252350434117629521029157", None, None,
+     None, None, None, None, None, False),
+    (8, 8, "4001.615675251313544059910211", "4001.248893497683240920382106", None, None,
+     None, None, None, None, None, False),
+    (9, 9, "4001.915007574688421229332539", "4001.338466005446833507447272", None, None,
+     None, None, None, None, None, False),
+    (10, 10, "4002.488536095313312849411064", "4001.506205512971546322602740", None, None,
+     None, None, None, None, None, False),
+    (11, 11, "4003.279296554688217220068586", "4001.743245343341652589599579", None, None,
+     None, None, None, None, None, False),
+    (12, 12, "4004.285261665901368135354635", "4002.053607025084986356073438", None, None,
+     None, None, None, None, None, False),
+    (13, 13, "4005.322289705207089531195267", "4002.393496039697756006655794", None, None,
+     None, None, None, None, None, False),
+    (14, 14, "4006.450255622241549586348765", "4002.778619238476286591066385", None, None,
+     None, None, None, None, None, False),
+    (15, 15, "4007.203166725507249635013616", "4003.088507877292400849802804", None, None,
+     None, None, None, None, None, False),
+    (16, 16, "4008.031029463682867325012014", "4003.431630711837250054424256", None, None,
+     None, None, None, None, None, False),
+    (17, 17, "4008.723849526779000580892954", "4003.754349766857642360441971", None, None,
+     None, None, None, None, None, False),
+    (18, 18, "4009.263396641275588747846724", "4004.048369774031253364736064", None, None,
+     None, None, None, None, None, False),
+    (19, 19, "4009.985349977596107718688286", "4004.397650704061060953513416", "2.772",
+     "2.015764528692296812833647186",
+     None, None, None, None, None, False),
+    (20, 20, "4010.531779391996565634136723", "4004.712492220859182154943772", "2.7494",
+     "2.116566222134787036878210155",
+     None, None, None, None, None, False),
+    (21, 21, "4010.738628875291087324238285", "4004.945646306371207319407041", "2.82443",
+     "2.051027134296080980881538576",
+     None, None, None, None, None, False),
+    (22, 22, "4011.285849007609782933151428", "4005.267011035405939401886824", "2.8827085",
+     "2.087910717370085643853550923",
+     None, None, None, None, None, False),
+    (23, 23, "4011.669866771420396705721848", "4005.552641465085756651059537", "2.835573075",
+     "2.157315344918289596420402955",
+     None, None, None, None, None, False),
+    (24, 24, "4012.195764798312114740342808", "4005.878406343083117984873090", "2.86279442125",
+     "2.206710481317274837298000760",
+     None, None, None, None, None, False),
+    (25, 25, "4012.491557174981277712067183", "4006.150147686372868200723148", "2.8856547001875",
+     "2.197563515896883418557795345",
+     None, None, None, None, None, False),
+)
+
+# What the wrong EMA forms of review tests-r1 F1 give on BARS_E, each run over the whole series
+# as an implementation would (exact fractions). The test checks that every one differs from ROWS_E,
+# so series E cannot pass with any of them.
+# (t, column, e + alpha * (c - e) rounded after each operation, exact alpha with one rounding per
+#  step, 28-digit alpha and 1 - alpha with one rounding per step)
+EMA_TRAPS_E = (
+    (1, "ema_f", "4001.284117647058823529411765",
+     "4001.284117647058823529411765", "4001.284117647058823529411765"),
+    (1, "ema_s", "4001.111230769230769230769231",
+     "4001.111230769230769230769231", "4001.111230769230769230769231"),
+    (2, "ema_f", "4001.389515570934256055363322",
+     "4001.389515570934256055363322", "4001.389515570934256055363322"),
+    (2, "ema_s", "4001.144115976331360946745562",
+     "4001.144115976331360946745562", "4001.144115976331360946745562"),
+    (19, "ema_f", "4009.985349977596107718688284",
+     "4009.985349977596107718688284", "4009.985349977596107718688284"),
+    (19, "ema_s", "4004.397650704061060953513418",
+     "4004.397650704061060953513418", "4004.397650704061060953513417"),
+    (19, "ts", "2.015764528692296812833645743",
+     "2.015764528692296812833645743", "2.015764528692296812833646104"),
+    (25, "ema_f", "4012.491557174981277712067181",
+     "4012.491557174981277712067181", "4012.491557174981277712067181"),
+    (25, "ema_s", "4006.150147686372868200723150",
+     "4006.150147686372868200723150", "4006.150147686372868200723149"),
+    (25, "ts", "2.197563515896883418557793959",
+     "2.197563515896883418557793959", "2.197563515896883418557794305"),
 )

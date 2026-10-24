@@ -20,18 +20,23 @@ Conventions the contract leaves to these tests (also in docs/handoff/CORE-006.md
    of those 96 spreads is None. lookback_flags holds the defect flags of bars t-L+1 .. t (D3) and
    is empty when those bars carry nothing but "incomplete" (whether "incomplete" is listed next to
    a defect is left open). warm is t >= max(3s, N+1, M+1, 97, n+1) for every variant (D2). Bars
-   are counted as given, never by clock slots. The golden EMA values are exact (no rounding), so
-   they do not depend on how the EMA recurrence is written (open question 1 in the handoff).
+   are counted as given, never by clock slots. The golden EMA values of series S, P and G are
+   exact (no rounding); series E (tests r2) uses the default alphas 2/17 and 2/65 and pins the
+   EMA form of contract v1.1 item 1 and its rounding after each operation.
 4. Decision: skip has every failed reason in the contract order and stop_distance None; enter_*
    has reasons () and stop_distance = k x atr[t] in the module's own context (D1); exit, hold and
    none have reasons () and stop_distance None. spread_unknown replaces spread_filter when
    spread[t] or spread_median_96[t] is None. A flat position without an entry signal is "none".
    The caller's Decimal context is never used or changed (D1 "context of the module").
 
-Left untested because the contract does not say: what decide() returns without an entry signal
-during warm-up (none or skip), V-A/V-C entries when atr[t] = 0 (none or skip with atr_zero), exits
-during warm-up, wrong argument types of indicators() and decide(), flag strings that are not
-validation defect codes.
+Contract v1.1 (2026-10-24) answered what round 1 left open, and tests r2 (review
+docs/reviews/CORE-006-tests-r1.md F1-F3) cover it: the EMA form (item 1, golden series E); no
+entry signal during warm-up gives none, never skip (item 5); at ATR 0, V-A and V-C have no signal
+(none) while a V-B breakout skips with atr_zero (item 6); duck-typed M15 bars, StrategyError for
+an unknown position or a t outside 0 .. len(rows) - 1, TypeError for a wrong argument type (item
+7); exit rules apply once their indicators exist, warm or not (item 8). Left untested because the
+contract does not say: flag strings that are not validation defect codes, a frozenset of flags
+that holds something other than strings, a bar whose timeframe is not 15, a naive next_open_utc.
 """
 
 from collections.abc import Mapping
@@ -1030,3 +1035,260 @@ def test_ac06_indicators_and_decide_are_deterministic_and_leave_inputs_untouched
             assert decide(rows, t, position, IN_WINDOW, params) == one
             assert decide(tuple(rows), t, position, IN_WINDOW, params) == one
     assert [(id(item), item) for item in rows] == rows_before
+
+
+# ----------------------------------------------------------------------------------- tests r2
+# Review docs/reviews/CORE-006-tests-r1.md F1-F3: contract v1.1 items 1 and 5 to 8.
+
+class _Attrs:
+    """Any object with the given attributes: never a core.Bar, an AggregatedBar or an IndicatorRow."""
+
+    def __init__(self, **values):
+        self.__dict__.update(values)
+
+
+class _DateTime(datetime):
+    pass
+
+
+class _FrozenSet(frozenset):
+    pass
+
+
+@pytest.mark.parametrize("variant", ("A", "B", "C"))
+def test_ac02_v11_default_alphas_pin_the_ema_form_and_its_rounding(monkeypatch, variant):
+    """v1.1 item 1 (F1): with f = 16 and s = 64 the alphas 2/17 and 2/65 are not exact, so every EMA
+    and TS digit of golden series E depends on alpha * close[t] + (1 - alpha) * EMA[t-1] and on
+    rounding after each multiply and after the add (the arithmetic is in the golden file)."""
+    H001Params, IndicatorRow, indicators, Bar, AggregatedBar = _api(
+        monkeypatch, "AC-02", "strategy.H001Params", "strategy.IndicatorRow", "strategy.indicators",
+        "core.Bar", "snapshot.AggregatedBar",
+    )
+    golden = _golden()
+    expected = _expected_rows(golden, "E")
+    # Not vacuous: the wrong EMA forms give other digits than the golden rows.
+    columns = {"ema_f": 0, "ema_s": 1, "ts": 3}
+    for t, column, *traps in golden["EMA_TRAPS_E"]:
+        assert Decimal(expected[t][columns[column]]) not in {Decimal(trap) for trap in traps}, (t, column)
+    params = _golden_params(H001Params, golden, "E", variant)
+    assert (params.f, params.s, params.n, params.N, params.M) == (16, 64, 20, 96, 48)
+    bars = tuple(_bar(Bar, AggregatedBar, *row) for row in golden["BARS_E"])
+    before = _context_state()
+    rows = indicators(bars, params)
+    assert _context_state() == before, "AC-02: indicators changed the caller's Decimal context"
+    wrong = _golden_mismatches(rows, bars, expected, IndicatorRow, f"E/{variant}")
+    assert not wrong, "AC-02: rows differ from golden series E:\n" + "\n".join(wrong)
+    with localcontext() as caller:
+        _hostile(caller)
+        hostile = indicators(bars, params)
+    assert hostile == rows, "AC-02: series E depends on the caller's Decimal context"
+
+
+# The AC-03 edges without an entry signal (they give none on warm rows).
+_NO_SIGNAL = tuple(case for case in _ENTRY_EDGES if case[4] == "none")
+
+
+@pytest.mark.parametrize("case", _NO_SIGNAL, ids=[case[0] for case in _NO_SIGNAL])
+def test_ac05_v11_no_entry_signal_during_warm_up_is_none_never_skip(monkeypatch, case):
+    """v1.1 item 5 (F2): flat without an entry signal gives none while the rows are not warm, even
+    when the window, the spread, the median or a flag fails too; warmup is a reason only next to an
+    entry signal (with a signal, AC-05 above skips with warmup)."""
+    decide, IndicatorRow, H001Params = _decider(monkeypatch, "AC-05")
+    label, variant, values, previous_ts, _ = case
+    params = _params(H001Params, variant=variant)
+    for t in (150, 191):
+        rows = _rows(IndicatorRow, _row(IndicatorRow, **values, warm=False), previous_ts, t=t)
+        _expect(decide(rows, t, "flat", IN_WINDOW, params), "none", label=(label, t))
+        for blocker, extra, next_open, _ in _ALONE:
+            rows = _rows(IndicatorRow, _row(IndicatorRow, **{**values, **extra}, warm=False), previous_ts, t=t)
+            _expect(decide(rows, t, "flat", next_open, params), "none", label=(label, blocker, t))
+
+
+@pytest.mark.parametrize("case", _KNOWN_FLAGS, ids=[case[0] for case in _KNOWN_FLAGS])
+def test_ac05_v11_known_answer_series_gives_none_before_its_first_signal(monkeypatch, case):
+    """v1.1 item 5 (F2) on rows from indicators(): bars 0 to 95 of the known-answer series carry no
+    entry signal (close 4000.00 inside HH_48 = 4001 and LL_48 = 3999, TS 0 or unknown) and are not
+    warm, so every variant gives none there, flags or not; V-A also at t = 96 (TS about 0.154)."""
+    indicators, H001Params, Bar, AggregatedBar = _api(
+        monkeypatch, "AC-05", "strategy.indicators", "strategy.H001Params", "core.Bar", "snapshot.AggregatedBar",
+    )
+    decide, _, _ = _decider(monkeypatch, "AC-05")
+    label, flags = case[0], case[1]
+    changes = {t: dict(values) for t, values in _KNOWN_CHANGES.items()}
+    for t, codes in flags.items():
+        changes.setdefault(t, {})["flags"] = codes
+    bars = _series(Bar, AggregatedBar, 106, start="2026-03-10T12:45", changes=changes)
+    for variant in ("A", "B", "C"):
+        params = _params(H001Params, variant=variant, f=8, s=32, n=10, N=48, M=24)
+        rows = indicators(bars, params)
+        for t in range(97 if variant == "A" else 96):
+            assert rows[t].warm is False, (label, variant, t)
+            next_open = _KNOWN_START + timedelta(minutes=15 * (t + 1))
+            _expect(decide(rows, t, "flat", next_open, params), "none", label=(label, variant, t))
+
+
+def test_ac05_v11_atr_zero_gives_none_in_v_a_and_v_c_and_skips_a_v_b_breakout(monkeypatch):
+    """v1.1 item 6 (F2): at ATR 0 ts is None, so the TS rules of V-A and V-C are false and a flat
+    position gets none, whatever else fails; a V-B breakout or breakdown still skips with atr_zero."""
+    decide, IndicatorRow, H001Params = _decider(monkeypatch, "AC-05")
+    zero = {"ts": None, "atr": "0"}
+    # (label, variant, row values at t, TS at t - 1 or None for a quiet row, action, reasons)
+    cases = (
+        ("V-C breakout", "C", {**zero, "close": "4015.01"}, None, "none", ()),
+        ("V-C breakdown", "C", {**zero, "close": "3984.99"}, None, "none", ()),
+        ("V-A after 0.45", "A", zero, "0.45", "none", ()),
+        ("V-A after -0.45", "A", zero, "-0.45", "none", ()),
+        ("V-A after 0.30 with a Donchian breakout", "A", {**zero, "close": "4015.01"}, "0.30", "none", ()),
+        ("V-B breakout", "B", {**zero, "close": "4015.01"}, None, "skip", ("atr_zero",)),
+        ("V-B breakdown", "B", {**zero, "close": "3984.99"}, None, "skip", ("atr_zero",)),
+        ("V-B without a breakout", "B", zero, None, "none", ()),
+    )
+    for label, variant, values, previous_ts, action, reasons in cases:
+        params = _params(H001Params, variant=variant)
+        rows = _rows(IndicatorRow, _row(IndicatorRow, **values), previous_ts)
+        _expect(decide(rows, T, "flat", IN_WINDOW, params), action, reasons, label=label)
+        # Every other check failing as well: still none without a signal, every reason with one.
+        blocked = {**values, "spread": None, "flags": ("unexpected_gap",)}
+        rows = _rows(IndicatorRow, _row(IndicatorRow, **blocked, warm=False), previous_ts, t=150)
+        many = ("outside_window", "spread_unknown", "atr_zero", "data_flag", "warmup") if reasons else ()
+        _expect(decide(rows, 150, "flat", OUT_OF_WINDOW, params), action, many, label=(label, "all checks fail"))
+    # ATR 0 at t and at t - 1: V-A has no crossing.
+    rows = list(_rows(IndicatorRow, _row(IndicatorRow, **zero)))
+    rows[T - 1] = _row(IndicatorRow, **zero)
+    _expect(decide(tuple(rows), T, "flat", IN_WINDOW, _params(H001Params, variant="A")), "none",
+            label="V-A, ATR 0 at t and t - 1")
+
+
+@pytest.mark.parametrize("case", _EXIT_CASES, ids=[case[0] for case in _EXIT_CASES])
+def test_ac04_v11_exit_rules_apply_while_the_rows_are_not_warm(monkeypatch, case):
+    """v1.1 item 8 (F2): an exit rule works once the indicators it uses exist, warm or not, so every
+    AC-04 case gives the same exit or hold at t = 20 and t = 150, where no row is warm."""
+    decide, IndicatorRow, H001Params = _decider(monkeypatch, "AC-04")
+    label, variant, position, values, previous_ts, action = case
+    params = _params(H001Params, variant=variant)
+    for t in (20, 150):
+        rows = _rows(IndicatorRow, _row(IndicatorRow, **values, warm=False), previous_ts, t=t)
+        _expect(decide(rows, t, position, IN_WINDOW, params), action, label=(label, t))
+
+
+def test_ac04_v11_known_answer_series_exits_before_warm_once_the_indicators_exist(monkeypatch):
+    """v1.1 item 8 (F2) on rows from indicators(), none warm before t = 97: ts is None before
+    t = n - 1 = 9 and exactly 0 from t = 9 to 95 (every close is 4000.00, so both EMAs stay 4000),
+    so V-A holds before t = 9 and from t = 9 exits a long (ts <= 0) and a short (ts >= 0, D5). V-B
+    and V-C hold while close 4000.00 stays inside LL_24 = 3999 and HH_24 = 4001 (no value before
+    t = 24); at t = 96, close 4002.00 > HH_24 = 4001 exits a short, and TS about 0.154 exits a V-A
+    short while a V-A long holds."""
+    indicators, H001Params, Bar, AggregatedBar = _api(
+        monkeypatch, "AC-04", "strategy.indicators", "strategy.H001Params", "core.Bar", "snapshot.AggregatedBar",
+    )
+    decide, _, _ = _decider(monkeypatch, "AC-04")
+    bars = _series(Bar, AggregatedBar, 106, start="2026-03-10T12:45", changes=_KNOWN_CHANGES)
+    for variant in ("A", "B", "C"):
+        params = _params(H001Params, variant=variant, f=8, s=32, n=10, N=48, M=24)
+        rows = indicators(bars, params)
+        assert rows[8].ts is None and rows[9].ts == 0 and rows[95].ts == 0 and rows[96].ts > 0, variant
+        for t in range(97):
+            assert rows[t].warm is False, (variant, t)
+            next_open = _KNOWN_START + timedelta(minutes=15 * (t + 1))
+            for position in ("long", "short"):
+                if variant == "A":
+                    action = "hold" if t < 9 or (t == 96 and position == "long") else "exit"
+                else:
+                    action = "exit" if t == 96 and position == "short" else "hold"
+                _expect(decide(rows, t, position, next_open, params), action, label=(variant, position, t))
+
+
+def test_ac03_v11_decide_refuses_unknown_positions_t_out_of_range_and_wrong_types(monkeypatch):
+    """v1.1 item 7 (F3) and the contract's error rule: an unknown position or a t outside
+    0 .. len(rows) - 1 is StrategyError, so a negative t never reads rows from the end; a wrong type
+    of rows, of row t, of t, position, next_open_utc or params, a subclass included, is TypeError."""
+    decide, StrategyError, IndicatorRow, H001Params, H001_DEFAULTS = _api(
+        monkeypatch, "AC-03", "strategy.decide", "strategy.StrategyError", "strategy.IndicatorRow",
+        "strategy.H001Params", "strategy.H001_DEFAULTS",
+    )
+    params = _params(H001Params, variant="B")
+    rows = _rows(IndicatorRow, _row(IndicatorRow, close="4015.01"))  # rows[-1] is the breakout at T
+    assert decide(rows, T, "flat", IN_WINDOW, params).action == "enter_long"
+    for position in ("Long", "LONG", "", "none", "buy", "flat ", " short"):
+        with pytest.raises(StrategyError):
+            decide(rows, T, position, IN_WINDOW, params)
+    for t in (-1, -2, -len(rows), -len(rows) - 1, len(rows), len(rows) + 1):
+        with pytest.raises(StrategyError):
+            decide(rows, t, "flat", IN_WINDOW, params)
+    # t = 0 is inside: row 0 is quiet, and there is no row t - 1 to read, least of all rows[-1].
+    assert decide(rows, 0, "flat", IN_WINDOW, params).action == "none"
+    crossing = (_row(IndicatorRow, ts="1.20", warm=False),) + rows[1:T] + (_row(IndicatorRow, ts="0.45"),)
+    assert decide(crossing, 0, "flat", IN_WINDOW, _params(H001Params, variant="A")).action == "none"
+    for t in (True, False, _Int(T), Decimal(T), float(T), str(T), None):
+        with pytest.raises(TypeError):
+            decide(rows, t, "flat", IN_WINDOW, params)
+    for position in (None, 1, True, b"flat", _Str("flat"), ("flat",)):
+        with pytest.raises(TypeError):
+            decide(rows, T, position, IN_WINDOW, params)
+    subclass_open = _DateTime(2026, 3, 10, 13, 45, tzinfo=UTC)
+    for next_open in (None, IN_WINDOW.isoformat(), int(IN_WINDOW.timestamp()), IN_WINDOW.date(), subclass_open):
+        with pytest.raises(TypeError):
+            decide(rows, T, "flat", next_open, params)
+    for make in (lambda: None, lambda: dict(_VALID), lambda: "B", lambda: H001_DEFAULTS,
+                 lambda: type("_Params", (H001Params,), {})(**_VALID)):
+        with pytest.raises(TypeError):
+            decide(rows, T, "flat", IN_WINDOW, make())
+    for wrong_rows in (None, 5, {index: row for index, row in enumerate(rows)}):
+        with pytest.raises(TypeError):
+            decide(wrong_rows, T, "flat", IN_WINDOW, params)
+    copy = _Attrs(**{name: getattr(rows[T], name) for name in _ROW_FIELDS})
+    for item in (None, copy, tuple(getattr(rows[T], name) for name in _ROW_FIELDS)):
+        with pytest.raises(TypeError):
+            decide(rows[:T] + (item,), T, "flat", IN_WINDOW, params)
+
+
+def test_ac02_v11_indicators_accept_duck_typed_m15_bars_and_refuse_wrong_types(monkeypatch):
+    """v1.1 item 7 (F3): strategy may not import sochron.data.snapshot, so indicators() takes any
+    object whose .bar is exactly a core.Bar (M15) and whose .flags is a frozenset of strings, and
+    gives the same rows as for AggregatedBar. A wrong type of bars, of an item, of .bar or .flags (a
+    subclass included) or of params is TypeError."""
+    H001Params, H001_DEFAULTS, indicators, Bar, AggregatedBar = _api(
+        monkeypatch, "AC-02", "strategy.H001Params", "strategy.H001_DEFAULTS", "strategy.indicators",
+        "core.Bar", "snapshot.AggregatedBar",
+    )
+    bars = list(_random_bars(Bar, AggregatedBar, random.Random(11), 230, "2026-03-10T00:00", 400_000))
+    for t, codes in ((40, ("missing_spread",)), (41, ("incomplete",)), (150, ("unexpected_gap", "incomplete"))):
+        bars[t] = AggregatedBar(bars[t].bar, frozenset(codes))
+    bars = tuple(bars)
+    for variant in ("A", "B", "C"):
+        params = _params(H001Params, variant=variant)
+        expected = indicators(bars, params)
+        assert any(row.lookback_flags for row in expected) and expected[-1].warm, variant
+        ducks = tuple(_Attrs(bar=item.bar, flags=item.flags) for item in bars)
+        assert indicators(ducks, params) == expected, variant
+        mixed = [ducks[t] if t % 2 else bars[t] for t in range(len(bars))]
+        assert indicators(mixed, params) == expected, variant
+    params = _params(H001Params)
+    item = bars[40]
+    values = {name: getattr(item.bar, name) for name in (field.name for field in fields(Bar))}
+    subclass_bar = type("_Bar", (Bar,), {})(**values)
+    wrong_items = (
+        item.bar,  # a core.Bar has no .bar and no .flags
+        _Attrs(bar=item.bar),
+        _Attrs(flags=item.flags),
+        _Attrs(bar=None, flags=item.flags),
+        _Attrs(bar=_Attrs(**values), flags=item.flags),
+        _Attrs(bar=values, flags=item.flags),
+        _Attrs(bar=subclass_bar, flags=item.flags),
+        _Attrs(bar=item.bar, flags=set(item.flags)),
+        _Attrs(bar=item.bar, flags=tuple(item.flags)),
+        _Attrs(bar=item.bar, flags=list(item.flags)),
+        _Attrs(bar=item.bar, flags="missing_spread"),
+        _Attrs(bar=item.bar, flags=None),
+        _Attrs(bar=item.bar, flags=_FrozenSet(item.flags)),
+    )
+    for wrong in wrong_items:
+        with pytest.raises(TypeError):
+            indicators(bars[:3] + (wrong,) + bars[4:10], params)
+    for wrong in (None, 5, bars[0]):
+        with pytest.raises(TypeError):
+            indicators(wrong, params)
+    for make in (lambda: None, lambda: dict(_VALID), lambda: "B", lambda: H001_DEFAULTS,
+                 lambda: type("_Params", (H001Params,), {})(**_VALID)):
+        with pytest.raises(TypeError):
+            indicators(bars[:10], make())
