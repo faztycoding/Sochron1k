@@ -42,7 +42,7 @@ Contract: `docs/contracts/CORE-006-strategy-h001.md` v1.1 (Tier Standard; เจ
 | `bash scripts/controls/red-flags.sh origin/main` | 2 กลุ่ม: Lint disabled (คำว่า noqa ในเอกสาร) และ Destructive or bypass (flag `--force-local` ของ tar ในข้อความ handoff/review) ไม่ใช่โค้ด | 3fc487e | 09:09 |
 
 ## ข้อจำกัดที่รับไว้ (โดยอำนาจที่เจ้าของมอบ)
-- **tests-r2 F5:** ด่าน architecture แบบ static มองไม่เห็นโค้ดที่รันจาก string (`exec`, `eval`, `compile`) · ไม่มีใน src และ review จะจับได้ · ใส่ในงานติดตามของ FIX-001
+- **tests-r2 F5:** ด่าน architecture แบบ static มองไม่เห็นโค้ดที่รันจาก string (`exec`, `eval`, `compile`) · ไม่มีใน src และ review จะจับได้ · บันทึกเป็นงานติดตามใน PROGRESS.md หัวข้อ "Claude ถัดไป" ข้อ (ข) (เดิมเขียนว่าใส่ในงานติดตามของ FIX-001 แล้ว ซึ่งยังไม่มีบันทึกจริง: review CORE-006-r1 F5)
 - **tests-r2 F6:** golden ล็อกการคำนวณ 1 − α แค่ที่ period ค่าตั้งต้น · ผู้ทำล็อกการอ่าน "1 − α จาก α ที่ปัดแล้ว" ด้วย unit test ที่ s = 62 (ไม่ใช่ test ล็อก) เพื่อไม่ใช้ headless session เกินงบ 5
 - ผลจริงของ D3 (WARN flags ทำให้ข้ามไม้ราวหนึ่งวัน) ต้องวัดใน R1
 
