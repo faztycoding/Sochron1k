@@ -439,3 +439,34 @@ round-1 table) and the round-2 files:
 - CI and Linux were not run; Python other than 3.12 was not run.
 - The reference and the mutants prove satisfiability and sensitivity only; they stay in the
   session scratchpad and are not deliverables.
+
+## Apply and red (implementer, Claude)
+
+- Round 1 applied at a7a0a0f and round 2 at 7b70336, each as standalone `git apply --check`,
+  `git apply`, `git apply -R --check`. The post-run detector reported exactly the three targets both
+  times; every SHA256 and blob matched the tables above. Red: 86 failed / 3093 passed after round 1,
+  103 failed / 3093 passed after round 2.
+- Tests review r1 (`docs/reviews/CORE-007-tests-r1.md`, fresh session): not ready, F1 Medium,
+  F2-F7 Low. Contract v1.5 (`7b70336`) answered F3, F6 and open questions 1, 3, 5, 6. Re-check r2
+  (`docs/reviews/CORE-007-tests-r2.md`, fresh-eyes-reviewer subagent, under the owner's delegation
+  as for CORE-004 r3 and CORE-005 r2): F1-F7 closed, ready to commit red. Red commit `e74e298`.
+
+## Implementer notes (Claude, for the implementation review)
+
+- Implementation `29eacf3`: `src/sochron/backtest/model.py` (types, BacktestError, SizedLots and
+  Rollover checks), `trade.py` (the fill code: `stop_price`, `gap_at_open`, `stop_fill`,
+  `count_nights`, `simulate`, and `simulate_trade` with its argument checks), `engine.py` (`run`:
+  input checks, M1-to-M15 spans, the event loop in `_Run`). Unit tests
+  `tests/unit/backtest/test_backtest_unit.py`.
+- `run` builds every trade with `trade.simulate(..., checked=True)`, the code `simulate_trade` uses
+  with `checked=False`; `run` has already checked every M1. For a stop found in step 1 and for the
+  end of data, the plan has `exit_index=None` and the fill code finds the same stop M1 again from
+  the entry M1 (no earlier M1 triggered, or step 1 of an earlier bar would have closed it).
+- Contract v1.5 item 3: `simulate_trade` checks only the M1 it reads, entry to the closing M1. The
+  reviewer's whole-range reading was declined in the contract for CORE-008 speed.
+- Suite 3206 passed at `29eacf3`; 500,000 synthetic M1 run in 3.5-3.6 s per variant. Details and
+  the V-B = V-C observation on random-walk data: `docs/evidence/CORE-007.md`.
+
+## Findings response (implementation review)
+| ID | Accept/Dispute | Commit | Evidence |
+|----|----------------|--------|----------|
