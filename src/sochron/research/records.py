@@ -33,6 +33,7 @@ from .model import (
     is_ascii,
     is_digits,
     is_hex,
+    text,
     utc_text,
 )
 
@@ -198,7 +199,7 @@ def _json(value: object) -> Any:
     if value is None or type(value) in (str, int, bool):
         return value
     if isinstance(value, Decimal):
-        return str(value)
+        return text(value)  # in CONTEXT: the caller's `capitals` must not change the bytes (review r1 F1)
     if isinstance(value, datetime):
         return utc_text(value)
     if isinstance(value, tuple):

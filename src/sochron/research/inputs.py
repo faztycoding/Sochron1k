@@ -37,6 +37,7 @@ from .model import (
     exact,
     is_ascii,
     is_hex,
+    text,
     utc_text,
 )
 from .records import COST_FIELDS, SHARED, RunRecord, costs_but_stress, identity, plain, setup
@@ -107,9 +108,9 @@ def check_types(m1: object, m15: object, params: object, model: object, sizer: o
 def check_values(model: CostModel, equity: Decimal, code_commit: str, sizer_label: str, path: Path,
                  stress_factor: str) -> None:
     """Scalar values: the stress factor as a record string (F19), commit, label, equity and the path."""
-    if str(model.stress_factor) != stress_factor:
+    if text(model.stress_factor) != stress_factor:
         raise ResearchError(f"this purpose needs a model with stress_factor {stress_factor!r}, "
-                            f"not {str(model.stress_factor)!r}")
+                            f"not {text(model.stress_factor)!r}")
     if not is_hex(code_commit, 40):
         raise ResearchError("code_commit must be 40 lower-case hex characters")
     if not sizer_label or not is_ascii(sizer_label):
@@ -184,7 +185,7 @@ def check_dataset(dataset: Dataset, m1: Sequence[Bar]) -> None:
 
 
 def param_pairs(params: H001Params) -> tuple[tuple[str, str], ...]:
-    return tuple((name, str(getattr(params, name))) for name in PARAM_NAMES)
+    return tuple((name, text(getattr(params, name))) for name in PARAM_NAMES)
 
 
 def params_of(record: RunRecord) -> H001Params:
@@ -211,7 +212,7 @@ def started_record(*, seq: int, purpose: str, params: H001Params, base_run_id: s
         seq=seq, status="started", started_seq=None, hypothesis=HYPOTHESIS, purpose=purpose, variant=params.variant,
         params=param_pairs(params), base_run_id=base_run_id, strategy_version=STRATEGY_VERSION,
         backtest_version=BACKTEST_VERSION, research_version=RESEARCH_VERSION, code_commit=code_commit,
-        dataset=dataset, cost_model=tuple((name, str(getattr(model, name))) for name in COST_FIELDS),
+        dataset=dataset, cost_model=tuple((name, text(getattr(model, name))) for name in COST_FIELDS),
         cost_provenance=tuple(sorted((name, item.status) for name, item in model.provenance.items())),
         equity=equity, sizer_label=sizer_label, rollover_zone=rollover.zone,
         rollover_at=f"{rollover.at.hour:02d}:{rollover.at.minute:02d}", time_rule_server=rule.server,

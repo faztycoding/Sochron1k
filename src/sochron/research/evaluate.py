@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Literal
 
 from .inputs import different_field, param_pairs, params_of
-from .model import HOLDOUT_CUTOFF_UTC, Dataset, ResearchError, Summary, exact, exact_optional
+from .model import HOLDOUT_CUTOFF_UTC, Dataset, ResearchError, Summary, exact, exact_optional, text
 from .records import RunRecord, stress_factor
 from .robustness import neighbours
 
@@ -57,7 +57,7 @@ class Evaluation:
 
 
 def _text(value: Decimal | None) -> str:
-    return "none" if value is None else str(value)
+    return "none" if value is None else text(value)
 
 
 def _summary(record: RunRecord) -> Summary:
@@ -123,7 +123,7 @@ def evaluate(base: RunRecord, stress: RunRecord | None, long_only: RunRecord | N
         _trades(summary),
         _expectancy(summary),
         _stress(None if stress is None else _summary(stress)),
-        Check("max_drawdown_r", str(summary.max_drawdown_r), "24", summary.max_drawdown_r <= _MAX_DRAWDOWN),
+        Check("max_drawdown_r", text(summary.max_drawdown_r), "24", summary.max_drawdown_r <= _MAX_DRAWDOWN),
         _robustness(len(every), [_summary(item) for item in robustness]),
         _random_entry(summary, p95),
         _top5(summary),
@@ -172,8 +172,8 @@ def _top5(summary: Summary) -> Check:
 
 def _years(summary: Summary) -> Check:
     years = summary.expectancy_by_year
-    text = ";".join(f"{year}:{value}" for year, value in years) or "none"
-    return Check("years", text, "0", bool(years) and all(value >= 0 for _, value in years))
+    written = ";".join(f"{year}:{text(value)}" for year, value in years) or "none"
+    return Check("years", written, "0", bool(years) and all(value >= 0 for _, value in years))
 
 
 def _sides(summary: Summary) -> Check:
@@ -187,7 +187,7 @@ def _long_only(summary: Summary, other: Summary | None) -> Check:
     theirs = None if other is None else other.expectancy_r
     their_drawdown = None if other is None else other.max_drawdown_r
     value = (f"expectancy:{_text(mine)}/{_text(theirs)};"
-             f"max_drawdown:{summary.max_drawdown_r}/{_text(their_drawdown)}")
+             f"max_drawdown:{text(summary.max_drawdown_r)}/{_text(their_drawdown)}")
     passed = (other is not None and other.trades > 0 and summary.trades > 0 and mine is not None
               and theirs is not None and (mine > theirs or summary.max_drawdown_r < other.max_drawdown_r))
     return Check("vs_long_only", value, "better on one", passed)

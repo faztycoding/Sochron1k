@@ -16,6 +16,7 @@ from .model import (
     VARIANTS,
     ResearchError,
     exact,
+    text,
     utc_text,
 )
 from .records import RunRecord, record_string
@@ -88,7 +89,7 @@ def _section(records: Sequence[RunRecord], evaluation: Evaluation, base: RunReco
         f"## ผลการประเมิน {variant}",
         "",
         f"ชุดข้อมูล: {dataset.snapshot_id} {utc_text(dataset.period_start_utc)} ถึง {utc_text(dataset.period_end_utc)}",
-        f"setup: commit {base.code_commit} · sizer {base.sizer_label} · equity {base.equity} · rollover "
+        f"setup: commit {base.code_commit} · sizer {base.sizer_label} · equity {text(base.equity)} · rollover "
         f"{base.rollover_zone} {base.rollover_at} · กฎเวลา {base.time_rule_server} {base.time_rule_version} · "
         f"cost_model {costs}",
         f"ชุดข้อมูลที่ select ของ {variant} ใช้: {datasets}",
@@ -115,9 +116,10 @@ def _limits(records: Sequence[RunRecord]) -> list[str]:
         baseline = item.baseline
         if item.status == "ok" and baseline is not None:
             lines.append(f"- baseline {item.variant} seq {item.seq}: runs {baseline.runs}, seed {baseline.seed}, "
-                         f"mean {baseline.mean_r}, P5 {baseline.p05_r}, P50 {baseline.p50_r}, P95 {baseline.p95_r}, "
-                         f"ระยะถือ M1 variant {baseline.variant_mean_hold_m1}/{baseline.variant_median_hold_m1}, "
-                         f"baseline {baseline.baseline_mean_hold_m1}/{baseline.baseline_median_hold_m1}")
+                         f"mean {text(baseline.mean_r)}, P5 {text(baseline.p05_r)}, P50 {text(baseline.p50_r)}, "
+                         f"P95 {text(baseline.p95_r)}, ระยะถือ M1 variant {text(baseline.variant_mean_hold_m1)}/"
+                         f"{baseline.variant_median_hold_m1}, baseline {text(baseline.baseline_mean_hold_m1)}/"
+                         f"{baseline.baseline_median_hold_m1}")
     return lines + [""]
 
 

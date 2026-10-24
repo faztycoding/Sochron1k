@@ -4,6 +4,7 @@ file is open, a corrupt exponent in a registry line, the Summary value checks, a
 result of a real run_variant (the R1 speed estimate is in docs/evidence/CORE-008.md)."""
 
 import random
+from dataclasses import replace
 from datetime import UTC, datetime, time, timedelta
 from decimal import ROUND_UP, Decimal, localcontext
 from time import perf_counter
@@ -24,9 +25,11 @@ from sochron.research import (
     Summary,
     append_record,
     evaluate,
+    neighbours,
     percentile,
     random_entry_baseline,
     read_records,
+    render_report,
     run_variant,
     summarize,
 )
@@ -217,6 +220,29 @@ def test_the_setup_lock_compares_equity_as_its_record_string(tmp_path):
     assert path.read_bytes() == before
     select("2.2", "10000")
     assert len(read_records(path)) == 4
+
+
+def test_decimal_text_does_not_depend_on_the_callers_capitals(tmp_path):
+    # implementation review r1 F1: str(Decimal) reads `capitals` from the current context ("1E+4" vs "1e+4").
+    record = replace(_record(), equity=Decimal("1E+4"))
+    summary = _summary(expectancy_r=Decimal("1E-7"), long_expectancy_r=Decimal("1E-7"),
+                       expectancy_by_year=((2024, Decimal("1E-7")),))
+    ok = replace(record, seq=2, status="ok", started_seq=1, summary=summary)
+    params = H001Params("B", 16, 64, 20, Decimal("0.50"), 96, 48, Decimal("2.0"))
+    default = (record.line(), record.run_id, ok.line(), [n.value for n in neighbours(params)],
+               param_pairs(replace(params, k=Decimal("2.0E0"))), evaluate(ok, None, None, None, ()).checks)
+    path = tmp_path / "registry.jsonl"
+    with localcontext() as context:
+        context.capitals = 0
+        lowered = (record.line(), record.run_id, ok.line(), [n.value for n in neighbours(params)],
+                   param_pairs(replace(params, k=Decimal("2.0E0"))), evaluate(ok, None, None, None, ()).checks)
+        append_record(path, record)
+        append_record(path, ok)
+        lowered_report = render_report(read_records(path), {})
+    assert lowered == default
+    assert b'"equity":"1E+4"' in path.read_bytes() and read_records(path) == (record, ok)
+    assert render_report(read_records(path), {}) == lowered_report
+    assert "1E-7" in default[-1][1].value
 
 
 def test_evaluate_needs_a_sequence_for_robustness():

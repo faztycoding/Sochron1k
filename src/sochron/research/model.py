@@ -7,9 +7,11 @@ an int, a list is not a tuple) and a right type with a value outside the contrac
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from types import MappingProxyType
 from typing import Literal, TypeVar, cast, get_args
+
+from sochron.costs import CONTEXT
 
 RESEARCH_VERSION = "research-v1"
 HOLDOUT_CUTOFF_UTC = datetime(2025, 1, 1, tzinfo=UTC)  # H001 section 5
@@ -47,6 +49,15 @@ class BudgetExceeded(ResearchError):
 
 class HoldoutRefused(ResearchError):
     """The input holds data from the holdout cutoff on (H001 section 5)."""
+
+
+def text(value: object) -> str:
+    """str() of a value; a Decimal is written in CONTEXT, so the caller's `capitals` never turns "1E+4" into
+    "1e+4" in a registry line, a Check or the report (implementation review r1 F1)."""
+    if isinstance(value, Decimal):
+        with localcontext(CONTEXT):
+            return str(value)
+    return str(value)
 
 
 def too_large(error: ArithmeticError) -> ResearchError:

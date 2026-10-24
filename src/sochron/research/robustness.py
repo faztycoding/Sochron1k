@@ -7,7 +7,7 @@ from typing import Any, Literal
 from sochron.costs import CONTEXT
 from sochron.strategy import H001Params, StrategyError
 
-from .model import PARAM_NAMES, USED_PARAMETERS, exact
+from .model import PARAM_NAMES, USED_PARAMETERS, exact, text
 
 _INTEGERS = frozenset({"f", "s", "n", "N", "M"})
 Direction = Literal["-", "+"]
@@ -42,5 +42,5 @@ def neighbours(params: H001Params) -> tuple[Neighbour, ...]:
                 candidate: H001Params | None = replace(params, **change)
             except StrategyError:  # outside its range, s < 3f or M > N: invalid, counted as failed
                 candidate = None
-            out.append(Neighbour(name, direction, str(moved), candidate))
+            out.append(Neighbour(name, direction, text(moved), candidate))
     return tuple(out)
