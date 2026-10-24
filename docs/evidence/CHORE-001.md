@@ -34,5 +34,18 @@ mypy ไม่ได้เพิ่มเป็น dependency ของโปร
 ## ไม่ได้ตรวจ
 - CI บน Linux จนกว่า run ของ PR นี้เสร็จ · แผง Problems จริงหลัง merge (ต้องเปิดไฟล์ใน editor)
 
+## หลัง merge (2026-10-24, GitHub REST API แบบไม่ล็อกอิน)
+- PR #19 `chore/CHORE-001-mypy-clean` · Claude push ถึง `fc7f3f0` · เจ้าของกด "Update branch" → `f920c07` (รวม main ที่มี CORE-007 แล้ว ไม่มี conflict) · merge เป็น `3af8333` 14:56 +07 (07:56:23Z) · มี label `owner-approved-control-change` (ไม่จำเป็น เพราะ check-locked-paths ผ่าน แต่ไม่มีผลเสีย)
+- ตรวจซ้ำบน main `3af8333` ใน worktree แยก: **3212 passed** · mypy ของ extension `-p sochron` (รวม backtest) → **no issues found in 31 source files** (14:59)
+
+| Run | Event / head | ผล |
+|-----|--------------|----|
+| `40073682417` ci | pull_request `fc7f3f0` | success |
+| `40073680550` control-gate | pull_request_target `fc7f3f0` | success (ไม่มีไฟล์ล็อก) |
+| `40073694469` control-gate | pull_request_target `fc7f3f0` (labeled) | success |
+| `40073892062` ci | pull_request `f920c07` | success |
+| `40073892251` control-gate | pull_request_target `f920c07` | success |
+| `40076092321` ci | push `3af8333` (main) | success |
+
 ## Delivery state
-implemented และ verified ในเครื่อง · review r1 ตอบแล้ว (F1 แก้, F2 ขยายขอบเขต) · review r2: F1, F2 ปิด, F3 (ตัวเลขพิมพ์ผิด) แก้แล้ว · push → PR · ยังไม่ merged
+**merged** 2026-10-24 14:56 (PR #19 → `3af8333`) · CI เขียวบน PR และ main · เดิม: implemented และ verified ในเครื่อง · review r1 ตอบแล้ว (F1 แก้, F2 ขยายขอบเขต) · review r2: F1, F2 ปิด, F3 (ตัวเลขพิมพ์ผิด) แก้แล้ว · push → PR · ยังไม่ merged
