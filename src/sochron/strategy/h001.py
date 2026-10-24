@@ -114,6 +114,9 @@ def decide(
     reasons = _invalid(row, next_open_utc)
     if reasons:
         return _decision("skip", reasons=reasons)
+    atr = row.atr
+    if atr is None:  # not reached: _invalid reports atr_zero for a missing ATR, so the entry is a skip
+        raise StrategyError("an entry needs a known ATR")
     with localcontext(CONTEXT):
-        stop_distance = params.k * row.atr
+        stop_distance = params.k * atr
     return _decision("enter_long" if long_entry else "enter_short", stop_distance)
