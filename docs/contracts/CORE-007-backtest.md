@@ -179,7 +179,7 @@ gap เลย SL ทั้งสองฝั่ง (low < open < stop) · SL ใ
 revert PR · ไม่มีผลข้างเคียง
 
 ## DoR status / missing items / next action
-ครบ: H001, costs, risk, data.snapshot, contract v1.4 · ประวัติการตรวจ: r3 (`docs/reviews/CORE-007-contract-r3.md`) "Ready for test authoring: no" จนกว่าจะแก้ F33–F38 → v1.3 · r4 ตรวจแคบๆ (`docs/reviews/CORE-007-contract-r4.md`) ปิด F33–F38 พบ Low F39, F40 → v1.4 · ต้องมีการตรวจ F39/F40 ที่ได้ "ready" ก่อนเขียน tests · (แก้ข้อความเดิมของ v1.3 ที่อ้างการตรวจแคบๆ ก่อนการตรวจนั้นเกิดขึ้น และสรุปผล r3 ผิด, r4 F40) · ขาด: CORE-006 implementation (ส่วน `run` ของ AC-02 ต้องใช้ decide จริง) · next: ตรวจ F39/F40 แล้วผู้เขียน tests หลัง CORE-006 implement
+ครบ: H001, costs, risk, data.snapshot, contract v1.4 · ประวัติการตรวจ: r3 (`docs/reviews/CORE-007-contract-r3.md`) "Ready for test authoring: no" จนกว่าจะแก้ F33–F38 → v1.3 · r4 ตรวจแคบๆ (`docs/reviews/CORE-007-contract-r4.md`) ปิด F33–F38 พบ Low F39, F40 → v1.4 · r5 ตรวจแคบๆ (`docs/reviews/CORE-007-contract-r5.md`) ปิด F39, F40, findings open 0, **"Ready for test authoring: yes"** · (แก้ข้อความเดิมของ v1.3 ที่อ้างการตรวจแคบๆ ก่อนการตรวจนั้นเกิดขึ้น และสรุปผล r3 ผิด, r4 F40) · ขาด: CORE-006 implementation (ส่วน `run` ของ AC-02 ต้องใช้ decide จริง) · next: ผู้เขียน tests หลัง CORE-006 implement
 
 ## Done scope
 merge แล้ว, suite เขียวใน CI
