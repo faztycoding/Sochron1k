@@ -124,6 +124,54 @@ def test_a_stop_distance_too_large_for_the_arithmetic_is_a_backtest_error(side):
                        risk_money=Decimal("25"), exit_index=4)
 
 
+def _scenario_stop_in_the_last_minute() -> tuple[tuple[Bar, ...], tuple[AggregatedBar, ...]]:
+    """Flat bars from Sunday 2026-03-08 22:00 UTC (the open after the weekend, the daily break of Monday
+    21:00-21:59 UTC left out), a V-B breakout in bar D = 155 (13:45 UTC on Tuesday), the long's stop touched
+    only in the last minute of bar D+1 and bar D+2 opening below the stop with an unexpected_gap flag."""
+    start = datetime(2026, 3, 8, 22, 0, tzinfo=UTC)
+    flat = ("2000.00", "2000.50", "1999.50", "2000.00")
+    rows = []
+    when = start
+    while when < datetime(2026, 3, 10, 14, 30, tzinfo=UTC):
+        if not (datetime(2026, 3, 9, 21, 0, tzinfo=UTC) <= when < datetime(2026, 3, 9, 22, 0, tzinfo=UTC)):
+            prices = flat
+            if when == datetime(2026, 3, 10, 13, 59, tzinfo=UTC):
+                prices = ("2000.00", "2003.20", "1999.50", "2003.00")  # bar D closes above HH_48 = 2000.50
+            elif datetime(2026, 3, 10, 14, 0, tzinfo=UTC) <= when < datetime(2026, 3, 10, 14, 14, tzinfo=UTC):
+                prices = ("2003.00", "2003.50", "2002.50", "2003.00")  # bar D+1, minutes 0-13: above the stop
+            elif when == datetime(2026, 3, 10, 14, 14, tzinfo=UTC):
+                prices = ("2003.00", "2003.50", "1999.00", "2002.00")  # bar D+1, minute 14: low under the stop
+            elif when >= datetime(2026, 3, 10, 14, 15, tzinfo=UTC):
+                prices = ("1999.20", "1999.40", "1999.00", "1999.20")  # bar D+2 opens under the stop
+            o, h, l, c = (Decimal(p) for p in prices)
+            rows.append(Bar((when - _EPOCH) // timedelta(seconds=1), when, 1, o, h, l, c, 200, 10, 1))
+        when += timedelta(minutes=1)
+    m1 = tuple(rows)
+    m15 = list(_m15(m1))
+    assert len(m15) == 158 and m15[156].bar.time_utc == datetime(2026, 3, 10, 14, 0, tzinfo=UTC)
+    assert all(not item.flags for item in m15), "fixture: every bar complete"
+    m15[157] = AggregatedBar(m15[157].bar, frozenset({"unexpected_gap"}))
+    return m1, tuple(m15)
+
+
+def test_a_stop_in_the_last_minute_of_a_bar_closes_in_that_bar():
+    # Review CORE-007-r1 F3: contract step 1 checks the stop on every M1 of bar t, the last one included.
+    # A scan that skipped the last minute would keep the long open through bar D+1 and close it in D+2,
+    # so data_flags would wrongly carry bar D+2's unexpected_gap (the fill itself is found again from the
+    # entry M1 and would not change).
+    m1, m15 = _scenario_stop_in_the_last_minute()
+    params = H001Params("B", 8, 32, 10, Decimal("0.50"), 48, 24, Decimal("3.0"))
+    sizer = _FixedSizer("0.02")
+    result = run(m1, m15, params, H001_COSTS, sizer, Decimal("10000"), RULE, ROLLOVER)
+    assert sizer.calls == [(Decimal("10000"), Decimal("3.810"))]  # k 3.0 x ATR 1.27 at bar D
+    (trade,) = result.trades
+    assert (trade.side, trade.exit_reason, trade.stop_price, trade.exit_bid) == (
+        "long", "stop", Decimal("1999.390"), Decimal("1999.390"))
+    assert trade.entry_time_raw == m15[156].bar.time_raw
+    assert trade.exit_time_raw == m15[156].bar.time_raw + 14 * 60
+    assert trade.data_flags == frozenset()
+
+
 def test_a_starting_equity_too_large_for_the_arithmetic_is_a_backtest_error():
     # Review CORE-007-r1 F2 (same arithmetic in run): the equity update after a close overflows when the
     # starting equity sits at the top of the context's range; it must surface as a BacktestError too.
