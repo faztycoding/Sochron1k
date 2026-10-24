@@ -11,7 +11,9 @@ FIX-001 is still reported. CORE-005 AC-06 runs the same checker over sochron.cor
 sochron.data.snapshot: the latter may import sochron.core, sochron.timebase, itself and
 side-effect-free stdlib only, and neither may import the random module. CORE-005 v1.1
 also checks src/sochron/data/__init__.py under the snapshot import rules and bans float
-names and literals in sochron.data.snapshot, as in costs and risk.
+names and literals in sochron.data.snapshot, as in costs and risk. CORE-006 AC-06 runs the
+same checker over sochron.strategy: it may import sochron.core, sochron.timebase, itself and
+side-effect-free stdlib only, with no random module and no float names or literals.
 """
 
 import ast
@@ -41,6 +43,9 @@ def _allowed_import(name, package):
         return True
     # CORE-005 AC-06: data.snapshot may use timebase (docs/architecture.md section 8).
     if package == "sochron.data.snapshot" and _within(name, "sochron.timebase"):
+        return True
+    # CORE-006 AC-06: strategy may use timebase (docs/architecture.md section 8).
+    if package == "sochron.strategy" and _within(name, "sochron.timebase"):
         return True
     return _within(name, "sochron.core") or _within(name, package)
 
@@ -1506,3 +1511,158 @@ def test_ac06_v11_data_package_init_checker_reports_acquire_io_random_and_admits
         if findings:
             wrong.append(f"{label}: legitimate code reported: {findings}")
     assert not wrong, "AC-06: data package __init__ rules:\n" + "\n".join(wrong)
+
+
+# CORE-006 AC-06: sochron.strategy (docs/architecture.md section 8, row strategy) may import
+# sochron.core, sochron.timebase, itself and side-effect-free stdlib only: no broker,
+# data.acquire, data.snapshot, execution, journal, backtest, research, risk or costs, no
+# MetaTrader5, no I/O, clock, randomness, process, console or network, and no float.
+def _inspect_strategy_source(source, current_package):
+    """CORE-006 AC-06: the snapshot checks (random ban included) under the strategy package's
+    rules, plus the costs/risk float ban."""
+    findings = _inspect_data_snapshot_source(source, "sochron.strategy", current_package)
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Name) and node.id == "float":
+            findings.append(f"line {node.lineno}: forbidden float name")
+        if isinstance(node, ast.Constant) and type(node.value) is float:
+            findings.append(f"line {node.lineno}: forbidden float literal")
+    return sorted(set(findings))
+
+
+def _inspect_as_strategy(source):
+    return _inspect_strategy_source(source, "sochron.strategy")
+
+
+# (label, source lines, exact findings); line 1 is _HEADER, so the first source line is 2.
+_STRATEGY_FORBIDDEN = (
+    ("broker", ("import sochron.broker",), ("line 2: forbidden import sochron.broker",)),
+    ("broker adapter", ("from sochron.broker.mt5 import connect",),
+     ("line 2: forbidden import sochron.broker.mt5",)),
+    ("broker via the top package", ("from sochron import broker",),
+     ("line 2: forbidden import sochron.broker",)),
+    ("data.acquire", ("import sochron.data.acquire",),
+     ("line 2: forbidden import sochron.data.acquire",)),
+    ("data.acquire via the data package", ("from sochron.data import acquire",),
+     ("line 2: forbidden import sochron.data",)),
+    ("data.snapshot, which the module map does not grant",
+     ("from sochron.data.snapshot import AggregatedBar",),
+     ("line 2: forbidden import sochron.data.snapshot",)),
+    ("execution", ("from sochron.execution import send",),
+     ("line 2: forbidden import sochron.execution",)),
+    ("journal", ("import sochron.journal",), ("line 2: forbidden import sochron.journal",)),
+    ("backtest", ("from sochron.backtest import run",),
+     ("line 2: forbidden import sochron.backtest",)),
+    ("research", ("from sochron import research",),
+     ("line 2: forbidden import sochron.research",)),
+    ("risk", ("from sochron.risk import size_position",),
+     ("line 2: forbidden import sochron.risk",)),
+    ("costs", ("from sochron.costs import H001_COSTS",),
+     ("line 2: forbidden import sochron.costs",)),
+    ("MetaTrader5", ("import MetaTrader5",), ("line 2: forbidden import MetaTrader5",)),
+    ("MetaTrader5 aliased", ("import MetaTrader5 as mt5",),
+     ("line 2: forbidden import MetaTrader5",)),
+    ("a third-party package", ("import numpy",), ("line 2: forbidden import numpy",)),
+    ("random, imported", ("import random",), ("line 2: forbidden random import",)),
+    ("random, from-imported", ("from random import Random",),
+     ("line 2: forbidden random import",)),
+    ("a seeded generator is still random", ("import random", "RNG = random.Random(7)"),
+     ("line 2: forbidden random import",)),
+    ("a clock", ("import time", "STAMP = time.time()"),
+     ("line 3: forbidden clock/I/O call time.time",)),
+    ("the current date", ("from datetime import datetime", "NOW = datetime.now()"),
+     ("line 3: forbidden clock/I/O call datetime.datetime.now",)),
+    ("file I/O", ("from pathlib import Path", 'ROWS = Path("bars.parquet").read_bytes()'),
+     ("line 3: forbidden file I/O call .read_bytes",)),
+    ("console output", ('print("decision")',), ("line 2: forbidden clock/I/O call print",)),
+    ("the environment", ("import os", 'KEY = os.environ["MT5_LOGIN"]'),
+     ("line 3: forbidden environment/network access os.environ",)),
+    ("a process", ("import subprocess",), ("line 2: forbidden process import subprocess",)),
+    ("a socket", ("import socket",), ("line 2: forbidden import socket",)),
+    ("http", ("import http.client",), ("line 2: forbidden network import http.client",)),
+    ("a float call", ('THETA = float("0.5")',), ("line 2: forbidden float name",)),
+    ("a float literal", ("THETA = 0.5",), ("line 2: forbidden float literal",)),
+    ("a float return type", ("def ratio(a, b) -> float:", "    return a / b"),
+     ("line 2: forbidden float name",)),
+)
+_STRATEGY_ALLOWED = (
+    ("core", ("import sochron.core", "from sochron.core import Bar", "from sochron import core")),
+    ("timebase", ("import sochron.timebase",
+                  "from sochron.timebase import NY_ENTRY_WINDOW, in_entry_window",
+                  "from sochron import timebase")),
+    ("its own package", ("from . import params", "from .indicators import indicators",
+                         "from sochron.strategy.h001 import decide")),
+    ("side-effect-free stdlib", ("from collections.abc import Mapping, Sequence",
+                                 "from dataclasses import dataclass",
+                                 "from datetime import datetime",
+                                 "from decimal import ROUND_HALF_EVEN, Context, Decimal, localcontext",
+                                 "from types import MappingProxyType", "from typing import Literal",
+                                 "import bisect", "import math")),
+    ("Decimal values in a module context", ("from decimal import ROUND_HALF_EVEN, Context, Decimal",
+                                            "CONTEXT = Context(prec=28, rounding=ROUND_HALF_EVEN)",
+                                            'THETA = Decimal("0.50")',
+                                            "WARM = max(3 * 64, 96 + 1, 48 + 1, 97, 20 + 1)")),
+)
+
+
+def test_ac06_strategy_import_boundaries_no_io_clock_random_float_or_forbidden_package():
+    wrong = []
+    # The checker first: exact findings for forbidden sources, none for the granted imports.
+    for label, lines, expected in _STRATEGY_FORBIDDEN:
+        findings = _inspect_as_strategy(_synthetic(lines))
+        if findings != list(expected):
+            wrong.append(f"{label}: expected {list(expected)}, got {findings}")
+    for label, lines in _STRATEGY_ALLOWED:
+        findings = _inspect_as_strategy(_synthetic(lines))
+        if findings:
+            wrong.append(f"{label}: legitimate import reported: {findings}")
+    # The new timebase grant is for strategy only: core, costs and risk still may not use it.
+    source = _synthetic(("from sochron.timebase import to_utc",))
+    for package, findings in (
+        ("sochron.core", _inspect_core_source(source, "sochron.core")),
+        ("sochron.costs", _inspect_costs_source(source, "sochron.costs")),
+        ("sochron.risk", _inspect_risk_source(source, "sochron.risk")),
+    ):
+        if findings != ["line 2: forbidden import sochron.timebase"]:
+            wrong.append(f"{package} importing timebase: got {findings}")
+    # Every FIX-001 and CORE-001 rule, and the float and random row, hold for strategy too.
+    for label, source, expected in _forbidden_cases():
+        findings = _inspect_as_strategy(source)
+        wrong += [f"{label}: line {line} lacks {name}; got {findings}"
+                  for line, name in expected if not _reported(findings, line, name)]
+    for label, lines, expected in _SCOPED_CASES:
+        findings = _inspect_as_strategy(_synthetic(lines))
+        wrong += [f"{label}: line {line} lacks {name}; got {findings}"
+                  for line, name in expected if not _reported(findings, line, name)]
+    for label, lines in _LEGITIMATE_SOURCES:
+        findings = _inspect_as_strategy(_synthetic(lines))
+        if findings:
+            wrong.append(f"{label}: legitimate code reported: {findings}")
+    for label, lines, expected, absent in _BINDING_CASES:
+        findings = _inspect_as_strategy(_synthetic(lines))
+        wrong += [f"{label}: line {line} lacks {name}; got {findings}"
+                  for line, name in expected if not _reported(findings, line, name)]
+        wrong += [f"{label}: line {line} reports {name}; got {findings}"
+                  for line, name in absent if _reported(findings, line, name)]
+    for label, lines, common, money in _ORIGINAL_CASES:
+        findings = _inspect_as_strategy(_synthetic(lines))
+        wrong += [f"{label}: lacks {finding!r}; got {findings}" for finding in common + money
+                  if finding not in findings]
+    assert not wrong, "AC-06: the strategy checker:\n" + "\n".join(wrong)
+
+    # Then the package itself, which must exist.
+    source_root = Path.cwd() / "src"
+    directory = source_root / "sochron" / "strategy"
+    assert directory.is_dir(), f"AC-06: {directory} does not exist; implementation missing"
+    files = sorted(directory.rglob("*.py"))
+    assert files, f"AC-06: {directory} contains no Python source; implementation missing"
+    findings = []
+    for path in files:
+        relative = path.relative_to(source_root)
+        current_package = ".".join(relative.parent.parts)
+        try:
+            violations = _inspect_strategy_source(path.read_text(encoding="utf-8-sig"), current_package)
+        except SyntaxError as error:
+            findings.append(f"{relative}:{error.lineno}: invalid Python syntax: {error.msg}")
+            continue
+        findings.extend(f"{relative}: {violation}" for violation in violations)
+    assert not findings, "AC-06: forbidden dependencies or side effects:\n" + "\n".join(findings)
