@@ -1,6 +1,6 @@
 # TASK CORE-007 — `backtest`: จำลองการเทรด H001 บนแท่ง bid พร้อมต้นทุน, SL ใน M1 และ R-multiple แบบ pure
 
-Version v1.2 (v1 ร่าง 2026-10-24 07:xx → v1.1 ตอบ contract review r1 F1–F15 → v1.2 ตอบ r2 F16–F32 ดูหัวข้อ "Answers to contract reviews") · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 7, 8 (แถว `backtest`), 10 แถว 2 (SLICE-R1) · H001 ข้อ 3, 6, 7, 8 · ต่อจาก CORE-005 (`Bar`, `AggregatedBar`) และ CORE-006 (`indicators`, `decide`) · Tier **Standard** · Branch `feat/CORE-007-backtest`
+Version v1.3 (v1 ร่าง 2026-10-24 07:xx → v1.1 ตอบ contract review r1 F1–F15 → v1.2 ตอบ r2 F16–F32 → v1.3 ตอบ r3 F33–F38 ดูหัวข้อ "Answers to contract reviews") · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 7, 8 (แถว `backtest`), 10 แถว 2 (SLICE-R1) · H001 ข้อ 3, 6, 7, 8 · ต่อจาก CORE-005 (`Bar`, `AggregatedBar`) และ CORE-006 (`indicators`, `decide`) · Tier **Standard** · Branch `feat/CORE-007-backtest`
 Status: **approved by delegation 2026-10-24** — เจ้าของสั่งในแชท Claude 2026-10-24 ~07:0x "ทำให้เสร็จทั้งหมดเลย" และ "มึงตัดสินไปเลย… เอา recommanded ทุกอัน" Claude จึงอนุมัติ acceptance และทางที่แนะนำทุกข้อแทน · ค่าทุกค่ามาจาก H001, SPIKE-001, CORE-002/003/005/006 ค่าใหม่ติดป้าย [A] · ผู้ตรวจอิสระอ่าน contract แทนเจ้าของ (r1: 15, r2: 19 findings) ต้องได้ "Ready for test authoring: yes" ก่อนเขียน tests · **เจ้าของ veto หรือแก้ acceptance ได้ทุกเมื่อก่อน merge**
 Hypothesis (research tasks): H001 · เขียน simulator เท่านั้น **ไม่รัน backtest กับข้อมูลจริง** (ห้ามก่อน ENV-1 และ SLICE-R1) · tests ใช้ข้อมูลสังเคราะห์
 
@@ -55,9 +55,11 @@ sochron.backtest
 ### Input และการตรวจ
 - แท่ง M15 รับแบบ duck typing: `.bar` เป็น `core.Bar` พอดี (timeframe 15) และ `.flags` เป็น `frozenset` ของ `str` · `sochron.backtest` ไม่ import `data.snapshot` · ใน R1 คือผลของ `data.snapshot.aggregate`
 - `run` ปฏิเสธด้วย `BacktestError`: `m1` หรือ `m15` ว่าง · equity เริ่ม ≤ 0 · M1 timeframe ≠ 1 หรือเวลาไม่เพิ่มขึ้นเคร่งครัด · M15 timeframe ≠ 15 หรือเวลาไม่เพิ่มขึ้นเคร่งครัด · M1 ที่ไม่อยู่ในแท่ง M15 ใด (`timebase.bar_open(t, 15, rule)`) หรือแท่ง M15 ที่ไม่มี M1 · M1 ที่ `time_utc ≠ to_utc(time_raw, rule)` · M1 ที่มีข้อบกพร่องระดับ STOP ที่ทำให้ fill ผิด: spread ติดลบ, OHLC ขัดกัน, ราคาไม่เป็นบวก (R1 ต้องตัดวัน STOP ก่อนเรียก)
-- `Rollover`: `zone` str พอดีและรู้จัก (zone ที่ไม่รู้จัก → `BacktestError`) · `at` เป็น `time` พอดี ไม่มี tzinfo และตรงนาที (ไม่ใช่ → `BacktestError`; ชนิดผิด → `TypeError`)
-- `SizedLots.__post_init__`: ชนิดพอดีทุก field (`TypeError`) · `risk_money` > 0 · `actual_risk` None หรือ > 0 · `reason` เป็น str ไม่ว่าง (ค่าผิด → `BacktestError`) · `run` หลังได้ SizedLots ที่ lots ไม่ใช่ None: `costs.check_volume(lots, model)` (`BadVolume` ส่งต่อ)
-- `simulate_trade`: `0 ≤ entry_index < len(m1)` · `exit_index` None หรือ `entry_index < exit_index < len(m1)` · ไม่ตรง → `BacktestError`
+- `Rollover.__post_init__` ตรวจตอนสร้าง (r3 F36): `zone` str พอดีและรู้จัก (zone ที่ไม่รู้จัก → `BacktestError`) · `at` เป็น `time` พอดี ไม่มี tzinfo และตรงนาที (ไม่ใช่ → `BacktestError`; ชนิดผิด → `TypeError`) · `run` และ `simulate_trade` รับเฉพาะ `Rollover` พอดี (`TypeError`)
+- `SizedLots.__post_init__`: ชนิดพอดีทุก field (`TypeError`) · `risk_money` > 0 · lots None ⇒ `actual_risk` None · lots มีค่า ⇒ `actual_risk` None หรือ > 0 · `reason` เป็น str ไม่ว่าง (ค่าผิด → `BacktestError`) (r3 F33) · `run` หลังได้ SizedLots ที่ lots ไม่ใช่ None: `costs.check_volume(lots, model)` (`BadVolume` ส่งต่อ)
+- `simulate_trade` (r3 F34, F35): `0 ≤ entry_index < len(m1)` · `exit_index` None หรือ `entry_index < exit_index < len(m1)` · ใช้การตรวจราย M1 ชุดเดียวกับ `run` (timeframe 1, เวลาเพิ่มขึ้นเคร่งครัด, spread ติดลบ, OHLC ขัดกัน, ราคาไม่เป็นบวก) กับทุก M1 ที่อ่าน ก่อน fill ใดๆ · ไม่ตรง → `BacktestError`
+- ค่าโดเมนที่ตรวจก่อน fill ใดๆ ทั้งใน `run` และ `simulate_trade` (r3 F35): side เป็น "long" หรือ "short" · `stop_distance` > 0 · `risk_money` > 0 · `actual_risk` None หรือ > 0 · `sides` เป็น frozenset ไม่ว่างที่เป็นสับเซตของ {"long", "short"} · Decimal ทุกตัวเป็น finite · ไม่ตรง → `BacktestError` (ชนิดผิด → `TypeError`)
+- เวลา (r3 F38): `sochron.backtest` แปลงเวลาผ่าน `timebase` เท่านั้น (`to_zone`, `to_utc`, `bar_open`) ไม่ import `zoneinfo` และไม่เรียก `astimezone` เอง
 
 ### กติกา fill และ SL — `s` = spread (points) ของ M1 ที่เกิดเหตุการณ์ ถ้า None ใช้ `model.spread_fallback_points` · `p` = `model.point`
 | เหตุการณ์ | long | short |
@@ -83,7 +85,7 @@ nights = จำนวนเวลา T = `rollover.at` ตามเวลา `ro
 2. ถ้า t ไม่ใช่แท่งสุดท้าย: `decide(rows, t, position, next_open_utc, params)` โดย position คือสถานะหลังข้อ 1 และ `next_open_utc` = `time_utc` ของแท่ง M15 ถัดไปที่มีอยู่จริง · โดน SL ในแท่ง t แล้ว position = flat จึงเข้าไม้ใหม่ (รวมฝั่งตรงข้าม) ที่ t+1 ได้ และไม่มีการปิดซ้ำ
 3. `exit` → ปิดที่ open ของ M1 แรกของแท่ง t+1 (หรือ `stop` + ambiguous ถ้า open นั้นเลย SL)
 4. `enter_*` ฝั่งที่อยู่ใน `sides` → ถ้า equity ปัจจุบัน ≤ 0: `Skip(time_raw ของแท่ง t, ("equity_exhausted",))` · ไม่เช่นนั้น sizer(equity, stop_distance) · lots None → `Skip(time_raw ของแท่ง t, (reason,))` · ไม่เช่นนั้นเข้าไม้ที่ open ของ M1 แรกของแท่ง t+1 · `enter_*` ฝั่งที่ไม่อยู่ใน `sides` ถือเป็น `none` (ไม่มี Skip)
-5. `skip` จาก decide → `Skip(time_raw ของแท่ง t, reasons ของ decide)` · `none`/`hold` ไม่บันทึก
+5. `skip` จาก decide → `Skip(time_raw ของแท่ง t, reasons ของ decide)` บันทึกเสมอไม่ว่า `sides` เป็นอะไร เพราะ `Decision` ไม่บอกฝั่ง (r3 F37) · `none`/`hold` ไม่บันทึก
 6. แท่งสุดท้าย: ไม่เรียก decide · ไม้ที่ยังถืออยู่ปิด `end_of_data`
 - equity points: (time_raw ของ M1 แรก, equity เริ่มต้น) แล้วหนึ่งจุดต่อการปิดไม้ (exit_time_raw, equity หลัง net) · realized curve
 - `data_flags` = union ของ flags ของแท่ง M15 ตั้งแต่แท่งตัดสินใจเข้าไม้ (t) จนถึงแท่งที่มี M1 ของการปิด รวมทั้งสองปลาย · `unexpected_gap` บนแท่งที่ fill คือเครื่องหมาย "fill หลังข้อมูลขาด" ที่ R1 ต้องรายงาน
@@ -104,7 +106,7 @@ gap เลย SL ทั้งสองฝั่ง (low < open < stop) · SL ใ
 - AC-03 Given sizer ปลอม (ขนาดต่างๆ, None, lots นอก grid, risk_money ≤ 0, ชนิดผิด), equity ที่หมด, Rollover ผิด, input ไม่สอดคล้องทุกแบบในหัวข้อ "Input และการตรวจ" และ M1 ระดับ STOP When `run`/`simulate_trade` Then ได้ `TypeError`/`BacktestError`/`BadVolume` ตามหัวข้อนั้น · sizer ได้ equity หลังไม้ก่อนหน้า · ไม่เปิดไม้ซ้อน · equity points ตามรูปแบบ · `backtest_version` = "backtest-v1" และ `strategy_version` = `STRATEGY_VERSION`
 - AC-04 Given ไม้ผ่าน `simulate_trade` ที่ถือ ศุกร์ 10:00 NY→จันทร์ 10:00 NY, จันทร์ 10:00→จันทร์ถัดไป 10:00, อังคาร 10:00→พฤหัส 10:00 และ ศุกร์ 2026-10-30 14:00 UTC→จันทร์ 2026-11-02 21:30 UTC When คำนวณ Then (nights, triple) = (1,0), (5,1), (2,1), (1,0) · และด้วย lots คงที่ model กับ `stress(model, 2)` ให้ราคา, stop_price และ gross เท่ากัน ต้นทุนทุกส่วนเป็น 2× พอดี
 - AC-05 Given ข้อมูลชุดหนึ่งและไม้ k ที่ปิดใน M1 ของแท่ง M15 u When ตัดข้อมูลที่ขอบแท่ง (เก็บแท่ง M15 ถึง u ทั้งแท่งโดยไม่ aggregate ใหม่ และ M1 ในแท่งเหล่านั้น) แล้ว `run` ใหม่ Then ไม้ 1..k ทุก field, Skip ที่ time_raw < open ของ u และ equity points ถึงการปิดไม้ k เหมือนเดิม · และทุกไม้ของ `run` เท่ากับ `simulate_trade` ของจุดเข้า/ออกเดียวกันตามการแมปในลำดับเหตุการณ์
-- AC-06 Given source ของ `sochron.backtest` When รัน architecture test Then ไม่มี I/O, นาฬิกา, สุ่ม, float, network และ import ได้เฉพาะ `core`, `timebase`, `strategy`, `costs` (ไม่ `data`, `risk`, `broker`, `execution`, `journal`, `research`)
+- AC-06 Given source ของ `sochron.backtest` When รัน architecture test Then ไม่มี I/O, นาฬิกา, สุ่ม, float, network, ไม่ import `zoneinfo` และไม่เรียก `astimezone` (แปลงเวลาผ่าน `timebase` เท่านั้น, r3 F38) และ import ได้เฉพาะ `core`, `timebase`, `strategy`, `costs` (ไม่ `data`, `risk`, `broker`, `execution`, `journal`, `research`)
 - AC-07 Given ทั้ง suite When `uv run --offline pytest tests -q -p no:cacheprovider` Then ผ่านทั้งหมด skipped 0 และ CI เขียว
 
 ## Verification per AC
@@ -123,7 +125,7 @@ gap เลย SL ทั้งสองฝั่ง (low < open < stop) · SL ใ
 2. Files / reuse: `strategy.indicators/decide/STRATEGY_VERSION`, `costs.round_trip_cost/r_multiple/stress/check_volume/CONTEXT`, `timebase.to_zone/to_utc/bar_open`
 3. Steps: (1) CORE-006 พร้อม (2) contract review จน ready (3) ผู้เขียน tests (4) apply + review → red (5) implement (6) review → PR
 4. Decisions (อนุมัติแทนโดย delegation ตามทางที่แนะนำ):
-   - **D1 sizing:** ผู้เรียกส่ง `sizer` · ตัวแปลงจาก `risk.size_position` (lots 0 → None พร้อม reason, risk_money = `SizeDecision.risk_money`, actual_risk = `SizeDecision.actual_risk`) ประกอบใน `app` ไม่แก้ module map
+   - **D1 sizing:** ผู้เรียกส่ง `sizer` · ตัวแปลงจาก `risk.size_position`: lots 0 → `SizedLots(lots=None, risk_money=SizeDecision.risk_money, actual_risk=None, reason=SizeDecision.reason)` · lots > 0 → `SizedLots(lots, risk_money, actual_risk=SizeDecision.actual_risk, reason)` (r3 F33) · ประกอบใน `app` ไม่แก้ module map
    - **D2 ราคา:** ตามตาราง fill · gross ไม่คูณ stress
    - **D3 ambiguous:** exit ที่ open เลย SL = `stop` + ambiguous ราคา open
    - **D4 nights [A]:** ตามหัวข้อ nights
@@ -159,6 +161,11 @@ gap เลย SL ทั้งสองฝั่ง (low < open < stop) · SL ใ
 | r2 | F23 | `sides` (D11) · eligible-bar predicate เป็นของ CORE-008 (Exclusions) |
 | r2 | F31 | ตารางนี้ |
 | r2 | F32 | แถว "ความเร็ว" ใน Verification · Risk |
+| r3 | F33 | D1 (ตัวแปลง) · SizedLots ใน "Input และการตรวจ" |
+| r3 | F34, F35 | `simulate_trade` และ "ค่าโดเมนที่ตรวจก่อน fill" ใน "Input และการตรวจ" |
+| r3 | F36 | `Rollover.__post_init__` ใน "Input และการตรวจ" |
+| r3 | F37 | ลำดับเหตุการณ์ข้อ 5 |
+| r3 | F38 | "เวลา" ใน "Input และการตรวจ" · AC-06 |
 
 ## Authorization (filled by the owner)
 - อนุมัติแทนโดย delegation 2026-10-24 (คำสั่งเจ้าของข้างบน) · veto ได้ก่อน merge · ผู้เขียน tests: patch ของ `tests/acceptance/CORE-007/**`, `tests/golden/CORE-007/**`, `tests/architecture/**` · Claude: implement, apply ตาม D-006, evidence, handoff, PROGRESS, push task branch
@@ -170,7 +177,7 @@ gap เลย SL ทั้งสองฝั่ง (low < open < stop) · SL ใ
 revert PR · ไม่มีผลข้างเคียง
 
 ## DoR status / missing items / next action
-ครบ: H001, costs, risk, data.snapshot, contract v1.2 · ขาด: CORE-006 implementation, contract review รอบ 3 · next: contract review รอบ 3
+ครบ: H001, costs, risk, data.snapshot, contract v1.3 (r3 ระบุว่าแก้ F33–F38 แล้วพร้อมเขียน tests; การตรวจแคบๆ ยืนยันการแก้ v1.3) · ขาด: CORE-006 implementation (ส่วน `run` ของ AC-02 ต้องใช้ decide จริง) · next: ผู้เขียน tests หลัง CORE-006 implement
 
 ## Done scope
 merge แล้ว, suite เขียวใน CI
