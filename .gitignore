@@ -32,6 +32,14 @@ node_modules/
 # Market data, research runs and runtime state never go into git (Handbook ch.19, ch.34).
 # research/registry/*.jsonl is the exception: it is committed and append-only.
 data/
+# Exception (owner, CORE-005, 2026-10-24): src/sochron/data/ is the sochron.data source package.
+# Only its Python files are tracked; any other file placed there (a parquet, a csv) stays ignored.
+!src/sochron/data/
+src/sochron/data/**
+!src/sochron/data/**/
+!src/sochron/data/**/*.py
+# Never a dotfile there, even one ending in .py (review CORE-005-r1 F9, owner 2026-10-24).
+src/sochron/data/**/.*
 research/runs/
 reports/out/
 journal/

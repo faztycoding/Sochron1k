@@ -1,0 +1,143 @@
+"""Implementer unit tests for sochron.data.snapshot (CORE-005). The locked acceptance and golden tests
+own the contract; these cover the helpers and decisions the implementer relied on."""
+
+from dataclasses import replace
+from datetime import UTC, datetime, time, timedelta
+from decimal import Decimal
+from time import perf_counter
+
+import pytest
+
+from sochron.core import Bar
+from sochron.data.snapshot import H001_CLOSURES, ClosureCalendar, aggregate, validate_m1
+from sochron.data.snapshot.validate import in_closure, in_session_missing
+from sochron.timebase import rule_for, to_utc
+
+RULE = rule_for("Exness-MT5Trial14")
+
+
+def _bar(when: datetime) -> Bar:
+    raw = int(when.timestamp())
+    price = Decimal("2000.000")
+    return Bar(raw, to_utc(raw, RULE), 1, price, price, price, price, 240, 1, 1)
+
+
+@pytest.mark.parametrize(
+    ("utc", "closed"),
+    [
+        (datetime(2026, 3, 9, 20, 59, tzinfo=UTC), False),  # 16:59 EDT
+        (datetime(2026, 3, 9, 21, 0, tzinfo=UTC), True),  # 17:00 EDT
+        (datetime(2026, 3, 9, 21, 59, tzinfo=UTC), True),  # 17:59 EDT
+        (datetime(2026, 3, 9, 22, 0, tzinfo=UTC), False),  # 18:00 EDT
+        (datetime(2026, 3, 5, 22, 0, tzinfo=UTC), True),  # 17:00 EST, before the March change
+        (datetime(2026, 3, 7, 12, 0, tzinfo=UTC), True),  # Saturday
+        (datetime(2026, 3, 8, 21, 59, tzinfo=UTC), True),  # Sunday 17:59 EDT
+        (datetime(2026, 3, 8, 22, 0, tzinfo=UTC), False),  # Sunday 18:00 EDT, the week opens
+    ],
+)
+def test_in_closure_follows_new_york_wall_time(utc, closed):
+    assert in_closure(utc, H001_CLOSURES) is closed
+
+
+def test_in_session_missing_stops_counting_after_the_limit():
+    # The count is only compared with the limit, so a long gap stops at limit + 1 minutes.
+    start = datetime(2026, 3, 10, 13, 0, tzinfo=UTC)
+    assert in_session_missing(start, start + timedelta(hours=3), H001_CLOSURES, 5) == 6
+    assert in_session_missing(start, start + timedelta(minutes=4), H001_CLOSURES, 5) == 3
+
+
+def test_a_calendar_with_an_unknown_zone_is_refused_at_construction():
+    # Fail fast: the zone is resolved through timebase when the calendar is built.
+    with pytest.raises(KeyError):
+        replace(H001_CLOSURES, zone="Not/AZone")
+
+
+def test_a_wrapped_daily_break_crosses_midnight():
+    calendar = ClosureCalendar(
+        zone="UTC", daily_break=(time(23, 30), time(0, 30)), weekend=H001_CLOSURES.weekend, provenance="test"
+    )
+    assert in_closure(datetime(2026, 3, 10, 23, 45, tzinfo=UTC), calendar)
+    assert in_closure(datetime(2026, 3, 11, 0, 15, tzinfo=UTC), calendar)
+    assert not in_closure(datetime(2026, 3, 11, 0, 30, tzinfo=UTC), calendar)
+
+
+def test_aggregate_refuses_a_report_made_for_other_bars():
+    bars = [_bar(datetime(2026, 3, 10, 13, minute, tzinfo=UTC)) for minute in range(3)]
+    report = validate_m1(bars[:2], RULE, H001_CLOSURES, 5)
+    with pytest.raises(ValueError):
+        aggregate(bars, 15, RULE, report)
+
+
+def test_fifty_thousand_m1_validate_and_aggregate_quickly():
+    # Contract plan: real 2018-2024 data is about 2.5 million M1. 500,000 synthetic bars took about
+    # 3.1 s to validate and 0.9 s to aggregate on the reference machine; this smaller run keeps a
+    # generous bound so a slower CI runner still passes while a quadratic regression fails.
+    # Review CORE-005-r1 F8: exactly 50,000 in-session M1 (closure minutes are skipped, not counted).
+    minute = datetime(2026, 3, 9, 0, 0, tzinfo=UTC)
+    bars = []
+    while len(bars) < 50_000:
+        if not in_closure(minute, H001_CLOSURES):
+            bars.append(_bar(minute))
+        minute += timedelta(minutes=1)
+    assert len(bars) == 50_000
+    began = perf_counter()
+    report = validate_m1(bars, RULE, H001_CLOSURES, 5)
+    result = aggregate(bars, 15, RULE, report)
+    elapsed = perf_counter() - began
+    assert report.defects == ()
+    assert sum(item.bar.m1_count for item in result) == len(bars)
+    assert elapsed < 30
+
+
+def test_a_time_repeated_after_a_step_back_is_a_duplicate():
+    # Review CORE-005-r1 F1: two overlapping downloads joined together repeat earlier times after
+    # one step back; only the first repeat was below its predecessor, the rest went unreported.
+    first = [_bar(datetime(2026, 3, 10, 13, minute, tzinfo=UTC)) for minute in range(6)]
+    overlap = [_bar(datetime(2026, 3, 10, 13, minute, tzinfo=UTC)) for minute in range(2, 6)]
+    report = validate_m1(first + overlap, RULE, H001_CLOSURES, 5)
+    codes = sorted((defect.code, defect.time_raw) for defect in report.defects)
+    assert codes == sorted(("duplicate_time", bar.time_raw) for bar in overlap)
+
+
+def test_a_slot_padded_by_a_duplicate_is_still_incomplete():
+    # Review CORE-005-r1 F2 (owner: tighten): fifteen M1 with one minute missing in session and one
+    # minute repeated used to pass as complete; "incomplete" now follows the missing minutes.
+    minutes = [*range(14), 13]  # 13:00..13:13 and 13:13 again; 13:14 is missing
+    bars = [_bar(datetime(2026, 3, 10, 13, minute, tzinfo=UTC)) for minute in minutes]
+    result = aggregate(bars, 15, RULE, validate_m1(bars, RULE, H001_CLOSURES, 5))
+    assert len(result) == 1
+    assert result[0].bar.m1_count == 15
+    assert result[0].flags == frozenset({"duplicate_time", "incomplete"})
+
+
+@pytest.mark.parametrize("at", [time(17, 0, 30), time(17, 0, 0, 1)])
+def test_calendar_times_with_seconds_are_refused(at):
+    # Review CORE-005-r1 F4 (owner: tighten): closures work on whole minutes, so a time with seconds
+    # was cut to the minute silently; it is now refused.
+    with pytest.raises(ValueError):
+        replace(H001_CLOSURES, daily_break=(at, time(18, 0)))
+    with pytest.raises(ValueError):
+        replace(H001_CLOSURES, weekend=((4, at), (6, time(18, 0))))
+
+
+def test_an_m1_bar_must_count_one_m1():
+    # Review CORE-005-r1 F5 (owner: tighten): an M1 bar claiming to hold two M1 passed validation.
+    bar = _bar(datetime(2026, 3, 10, 13, 0, tzinfo=UTC))
+    wrong = replace(bar, m1_count=2)
+    with pytest.raises(ValueError):
+        validate_m1([wrong], RULE, H001_CLOSURES, 5)
+    with pytest.raises(ValueError):
+        aggregate([wrong], 15, RULE, validate_m1([bar], RULE, H001_CLOSURES, 5))
+
+
+def test_a_repeated_bar_that_ends_a_real_gap_still_reports_the_gap():
+    # Review CORE-005-r2 F10: after the F1 fix a repeated time skipped the gap check, so a real gap
+    # closed by a repeated bar lost its unexpected_gap. Chunks joined newest first:
+    later = [_bar(datetime(2026, 3, 10, 13, minute, tzinfo=UTC)) for minute in range(30, 60)]
+    earlier = [_bar(datetime(2026, 3, 10, 13, minute, tzinfo=UTC)) for minute in [*range(11), *range(30, 36)]]
+    report = validate_m1(later + earlier, RULE, H001_CLOSURES, 5)
+    found = {(defect.code, defect.time_raw) for defect in report.defects}
+    at = int(datetime(2026, 3, 10, 13, 30, tzinfo=UTC).timestamp())
+    assert ("unexpected_gap", at) in found
+    assert ("duplicate_time", at) in found
+    assert ("time_not_increasing", int(datetime(2026, 3, 10, 13, 0, tzinfo=UTC).timestamp())) in found

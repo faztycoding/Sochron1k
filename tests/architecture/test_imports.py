@@ -7,7 +7,11 @@ FIX-001 adds the clock, randomness, process, console-stream and network names in
 _SIDE_EFFECTS to every pure package's check. Dynamic access such as
 getattr(time, "localtime")() is not detected. FIX-001 r3: the CORE-001 rules also
 run under their original name resolution, so every finding of the checker before
-FIX-001 is still reported.
+FIX-001 is still reported. CORE-005 AC-06 runs the same checker over sochron.core and
+sochron.data.snapshot: the latter may import sochron.core, sochron.timebase, itself and
+side-effect-free stdlib only, and neither may import the random module. CORE-005 v1.1
+also checks src/sochron/data/__init__.py under the snapshot import rules and bans float
+names and literals in sochron.data.snapshot, as in costs and risk.
 """
 
 import ast
@@ -34,6 +38,9 @@ def _allowed_import(name, package):
     if name.split(".")[0] in sys.stdlib_module_names:
         return name.split(".")[0] != "socket"
     if package == "sochron.risk" and _within(name, "sochron.costs"):
+        return True
+    # CORE-005 AC-06: data.snapshot may use timebase (docs/architecture.md section 8).
+    if package == "sochron.data.snapshot" and _within(name, "sochron.timebase"):
         return True
     return _within(name, "sochron.core") or _within(name, package)
 
@@ -595,6 +602,72 @@ def test_ac07_risk_import_boundaries_no_clock_io_random_or_float():
             continue
         findings.extend(f"{relative}: {violation}" for violation in violations)
     assert not findings, "AC-07: forbidden dependencies or side effects:\n" + "\n".join(findings)
+
+
+def _inspect_data_snapshot_source(source, package, current_package):
+    """CORE-005 AC-06: reuse the pure-package checks; also forbid any import of random."""
+    findings = _inspect_source(source, package, current_package)
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if _within(alias.name, "random"):
+                    findings.append(f"line {node.lineno}: forbidden random import")
+        if isinstance(node, ast.ImportFrom) and node.level == 0:
+            if _within(node.module or "", "random"):
+                findings.append(f"line {node.lineno}: forbidden random import")
+    return sorted(set(findings))
+
+
+def _inspect_core_source(source, current_package):
+    """CORE-005 AC-06 on sochron.core: the snapshot checker under the core package's rules."""
+    return _inspect_data_snapshot_source(source, "sochron.core", current_package)
+
+
+def _inspect_data_snapshot_float_source(source, current_package):
+    """CORE-005 v1.1 AC-06 (tests-r1 question 8): the snapshot checks plus the costs/risk float ban."""
+    findings = _inspect_data_snapshot_source(source, "sochron.data.snapshot", current_package)
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Name) and node.id == "float":
+            findings.append(f"line {node.lineno}: forbidden float name")
+        if isinstance(node, ast.Constant) and type(node.value) is float:
+            findings.append(f"line {node.lineno}: forbidden float literal")
+    return sorted(set(findings))
+
+
+def _inspect_data_package_source(source, current_package):
+    """CORE-005 v1.1 AC-06 (tests-r1 F10): sochron/data/__init__.py runs on every import of the
+    snapshot, so it may import only what the snapshot may (sochron.data.snapshot included)."""
+    return _inspect_data_snapshot_source(source, "sochron.data.snapshot", current_package)
+
+
+def test_ac06_core_and_data_snapshot_import_boundaries_no_clock_io_random_or_broker():
+    source_root = Path.cwd() / "src"
+    findings = []
+    checks = []
+    for package, inspect in (
+        ("sochron.core", _inspect_core_source),
+        ("sochron.data.snapshot", _inspect_data_snapshot_float_source),
+    ):
+        directory = source_root.joinpath(*package.split("."))
+        assert directory.is_dir(), f"AC-06: {directory} does not exist; implementation missing"
+        files = sorted(directory.rglob("*.py"))
+        assert files, f"AC-06: {directory} contains no Python source; implementation missing"
+        checks += [(path, inspect) for path in files]
+    # v1.1: the data package's own __init__.py, when present, runs before the snapshot does. A
+    # namespace package (no __init__.py) runs no code of its own, so it has nothing to check.
+    package_init = source_root / "sochron" / "data" / "__init__.py"
+    if package_init.is_file():
+        checks.append((package_init, _inspect_data_package_source))
+    for path, inspect in checks:
+        relative = path.relative_to(source_root)
+        current_package = ".".join(relative.parent.parts)
+        try:
+            violations = inspect(path.read_text(encoding="utf-8-sig"), current_package)
+        except SyntaxError as error:
+            findings.append(f"{relative}:{error.lineno}: invalid Python syntax: {error.msg}")
+            continue
+        findings.extend(f"{relative}: {violation}" for violation in violations)
+    assert not findings, "AC-06: forbidden dependencies or side effects:\n" + "\n".join(findings)
 
 
 # FIX-001 self-tests: synthetic sources go to the inspection function of every pure package.
@@ -1238,3 +1311,198 @@ def test_fix001_ac04_every_finding_of_the_checker_before_fix001_is_still_reporte
             missing += [f"{package} | {label}: lacks {finding!r}; got {findings}"
                         for finding in expected if finding not in findings]
     assert not missing, "AC-04: findings of the checker before FIX-001 lost:\n" + "\n".join(missing)
+
+
+# CORE-005 AC-06 self-tests for the data.snapshot checker. Sources are inspected as
+# sochron.data.snapshot (package and current package), so a relative import resolves there.
+# (label, source lines, exact findings); line 1 is _HEADER, so the first source line is 2.
+_SNAPSHOT_FORBIDDEN_IMPORTS = (
+    ("broker", ("import sochron.broker",), ("line 2: forbidden import sochron.broker",)),
+    ("broker adapter", ("from sochron.broker.mt5 import connect",),
+     ("line 2: forbidden import sochron.broker.mt5",)),
+    ("broker via the top package", ("from sochron import broker",),
+     ("line 2: forbidden import sochron.broker",)),
+    ("data.acquire", ("import sochron.data.acquire",),
+     ("line 2: forbidden import sochron.data.acquire",)),
+    ("data.acquire via the data package", ("from sochron.data import acquire",),
+     ("line 2: forbidden import sochron.data",)),
+    ("data.acquire by relative import", ("from ..acquire import pull_rates",),
+     ("line 2: forbidden import sochron.data.acquire",)),
+    ("execution", ("from sochron.execution import send",),
+     ("line 2: forbidden import sochron.execution",)),
+    ("journal", ("import sochron.journal",), ("line 2: forbidden import sochron.journal",)),
+    ("research", ("from sochron import research",),
+     ("line 2: forbidden import sochron.research",)),
+    ("MetaTrader5", ("import MetaTrader5",), ("line 2: forbidden import MetaTrader5",)),
+    ("MetaTrader5 aliased", ("import MetaTrader5 as mt5",),
+     ("line 2: forbidden import MetaTrader5",)),
+    ("a third-party package", ("import numpy",), ("line 2: forbidden import numpy",)),
+    ("costs, which the module map does not grant", ("from sochron.costs import H001_COSTS",),
+     ("line 2: forbidden import sochron.costs",)),
+    ("random, imported", ("import random",), ("line 2: forbidden random import",)),
+    ("random, from-imported", ("from random import choice",),
+     ("line 2: forbidden random import",)),
+    ("a clock", ("import time", "STAMP = time.time()",),
+     ("line 3: forbidden clock/I/O call time.time",)),
+    ("file I/O", ("from pathlib import Path", 'ROWS = Path("bars.parquet").read_bytes()',),
+     ("line 3: forbidden file I/O call .read_bytes",)),
+)
+_SNAPSHOT_ALLOWED_IMPORTS = (
+    ("core", ("import sochron.core", "from sochron.core import Bar", "from sochron import core")),
+    ("timebase", ("import sochron.timebase", "from sochron.timebase import bar_open, to_utc",
+                  "from sochron import timebase")),
+    ("its own package", ("from . import validate", "from .validate import validate_m1",
+                         "from sochron.data.snapshot.aggregate import aggregate")),
+    ("side-effect-free stdlib", ("from collections.abc import Mapping, Sequence",
+                                 "from dataclasses import dataclass, field",
+                                 "from datetime import UTC, date, datetime, time, timedelta",
+                                 "from decimal import Decimal", "from types import MappingProxyType",
+                                 "from typing import Literal", "from zoneinfo import ZoneInfo",
+                                 "import bisect", "import math")),
+)
+
+
+def _inspect_as_snapshot(source):
+    return _inspect_data_snapshot_source(source, "sochron.data.snapshot", "sochron.data.snapshot")
+
+
+def test_ac06_data_snapshot_checker_reports_forbidden_packages_and_admits_core_timebase_stdlib():
+    wrong = []
+    for label, lines, expected in _SNAPSHOT_FORBIDDEN_IMPORTS:
+        findings = _inspect_as_snapshot(_HEADER + "\n".join(lines) + "\n")
+        if findings != list(expected):
+            wrong.append(f"{label}: expected {list(expected)}, got {findings}")
+    for label, lines in _SNAPSHOT_ALLOWED_IMPORTS:
+        findings = _inspect_as_snapshot(_HEADER + "\n".join(lines) + "\n")
+        if findings:
+            wrong.append(f"{label}: legitimate import reported: {findings}")
+    # sochron.core keeps its own rule: it may import nothing from sochron, timebase included.
+    findings = _inspect_data_snapshot_source(
+        _HEADER + "from sochron.timebase import to_utc\n", "sochron.core", "sochron.core"
+    )
+    if findings != ["line 2: forbidden import sochron.timebase"]:
+        wrong.append(f"core importing timebase: got {findings}")
+    assert not wrong, "AC-06: snapshot import rules:\n" + "\n".join(wrong)
+
+
+def test_ac06_data_snapshot_checker_keeps_every_fix001_and_core001_rule():
+    wrong = []
+    for label, source, expected in _forbidden_cases():
+        findings = _inspect_as_snapshot(source)
+        wrong += [f"{label}: line {line} lacks {name}; got {findings}"
+                  for line, name in expected if not _reported(findings, line, name)]
+    for label, lines, expected in _SCOPED_CASES:
+        findings = _inspect_as_snapshot(_HEADER + "\n".join(lines) + "\n")
+        wrong += [f"{label}: line {line} lacks {name}; got {findings}"
+                  for line, name in expected if not _reported(findings, line, name)]
+    for label, lines in _LEGITIMATE_SOURCES:
+        findings = _inspect_as_snapshot(_HEADER + "\n".join(lines) + "\n")
+        if findings:
+            wrong.append(f"{label}: legitimate code reported: {findings}")
+    for label, lines, expected, absent in _BINDING_CASES:
+        findings = _inspect_as_snapshot(_HEADER + "\n".join(lines) + "\n")
+        wrong += [f"{label}: line {line} lacks {name}; got {findings}"
+                  for line, name in expected if not _reported(findings, line, name)]
+        wrong += [f"{label}: line {line} reports {name}; got {findings}"
+                  for line, name in absent if _reported(findings, line, name)]
+    for label, lines, common, _ in _ORIGINAL_CASES:
+        findings = _inspect_as_snapshot(_HEADER + "\n".join(lines) + "\n")
+        for finding in common:
+            if finding.endswith("relative import escapes its package"):
+                # Three dots stay inside the deeper sochron.data.snapshot (sochron.outside),
+                # which the same line reports as a forbidden import instead.
+                line = finding.partition(":")[0]
+                if not any(item.startswith(f"{line}: forbidden import ") for item in findings):
+                    wrong.append(f"{label}: {line} lacks a finding; got {findings}")
+            elif finding not in findings:
+                wrong.append(f"{label}: lacks {finding!r}; got {findings}")
+    assert not wrong, "AC-06: the snapshot checker lost a rule:\n" + "\n".join(wrong)
+
+
+# CORE-005 v1.1 AC-06 self-tests (owner 2026-10-24: tests-r1 question 8 and F10).
+# (label, source lines, exact findings); line 1 is _HEADER, so the first source line is 2.
+_SNAPSHOT_FLOAT_CASES = (
+    ("a float call", ('RATE = float("1.5")',), ("line 2: forbidden float name",)),
+    ("a float literal", ("SPREAD = 0.25",), ("line 2: forbidden float literal",)),
+    ("an exponent float literal", ("POINT = 1e-3",), ("line 2: forbidden float literal",)),
+    ("float as a return type, a float literal in the body",
+     ("def ratio(points: int) -> float:", "    return points / 1000.0"),
+     ("line 2: forbidden float name", "line 3: forbidden float literal")),
+    ("a float check next to planted random and file I/O",
+     ("import random", 'NOISE = isinstance(open("x").read(), float)'),
+     ("line 2: forbidden random import", "line 3: forbidden clock/I/O call open",
+      "line 3: forbidden float name")),
+    ("Decimal, int and str values are not float",
+     ("from decimal import Decimal", 'POINT = Decimal("0.001")', "DIGITS = 3", 'LABEL = "0.25"'),
+     ()),
+)
+# Inspected as src/sochron/data/__init__.py: package rules of sochron.data.snapshot, current
+# package sochron.data, so a relative import resolves inside sochron.data.
+_DATA_PACKAGE_CASES = (
+    ("a docstring only", (), ()),
+    ("re-exports from the snapshot", ("from .snapshot import aggregate, validate_m1",
+                                      "from sochron.data.snapshot import H001_CLOSURES",
+                                      "import sochron.data.snapshot"), ()),
+    ("data.acquire through the package", ("from . import acquire",),
+     ("line 2: forbidden import sochron.data",)),
+    ("data.acquire by a relative module", ("from .acquire import pull_rates",),
+     ("line 2: forbidden import sochron.data.acquire",)),
+    ("data.acquire by an absolute import", ("import sochron.data.acquire",),
+     ("line 2: forbidden import sochron.data.acquire",)),
+    ("broker", ("from sochron import broker",), ("line 2: forbidden import sochron.broker",)),
+    ("MetaTrader5", ("import MetaTrader5 as mt5",), ("line 2: forbidden import MetaTrader5",)),
+    ("random", ("import random",), ("line 2: forbidden random import",)),
+    ("file I/O at import", ('SEED = open("seed.txt").read()',),
+     ("line 2: forbidden clock/I/O call open",)),
+    ("a clock at import", ("import time", "LOADED = time.time()"),
+     ("line 3: forbidden clock/I/O call time.time",)),
+)
+
+
+def _synthetic(lines):
+    return _HEADER + "\n".join(lines) + "\n"
+
+
+def _float_only(findings):
+    return all(item.endswith((": forbidden float name", ": forbidden float literal")) for item in findings)
+
+
+def test_ac06_v11_snapshot_checker_bans_float_names_and_literals_and_keeps_every_rule():
+    wrong = []
+    for label, lines, expected in _SNAPSHOT_FLOAT_CASES:
+        findings = _inspect_data_snapshot_float_source(_synthetic(lines), "sochron.data.snapshot")
+        if findings != list(expected):
+            wrong.append(f"{label}: expected {list(expected)}, got {findings}")
+    # The float ban only adds float findings to what the snapshot checker reports.
+    sources = [(label, source) for label, source, _ in _forbidden_cases()]
+    for table in (_SCOPED_CASES, _LEGITIMATE_SOURCES, _BINDING_CASES, _ORIGINAL_CASES,
+                  _SNAPSHOT_FORBIDDEN_IMPORTS, _SNAPSHOT_ALLOWED_IMPORTS):
+        sources += [(row[0], _synthetic(row[1])) for row in table]
+    for label, source in sources:
+        base = _inspect_as_snapshot(source)
+        findings = _inspect_data_snapshot_float_source(source, "sochron.data.snapshot")
+        if not set(base) <= set(findings) or not _float_only(set(findings) - set(base)):
+            wrong.append(f"{label}: snapshot checker {base}; with the float ban {findings}")
+    # The FIX-001 float and random row is now reported in snapshot as in costs and risk.
+    for label, lines, _, money in _ORIGINAL_CASES:
+        findings = _inspect_data_snapshot_float_source(_synthetic(lines), "sochron.data.snapshot")
+        wrong += [f"{label}: lacks {finding!r}; got {findings}" for finding in money
+                  if finding not in findings]
+    assert not wrong, "AC-06: snapshot float ban:\n" + "\n".join(wrong)
+
+
+def test_ac06_v11_data_package_init_checker_reports_acquire_io_random_and_admits_the_snapshot():
+    wrong = []
+    for label, lines, expected in _DATA_PACKAGE_CASES:
+        findings = _inspect_data_package_source(_synthetic(lines), "sochron.data")
+        if findings != list(expected):
+            wrong.append(f"{label}: expected {list(expected)}, got {findings}")
+    for label, source, expected in _forbidden_cases():
+        findings = _inspect_data_package_source(source, "sochron.data")
+        wrong += [f"{label}: line {line} lacks {name}; got {findings}"
+                  for line, name in expected if not _reported(findings, line, name)]
+    for label, lines in _LEGITIMATE_SOURCES:
+        findings = _inspect_data_package_source(_synthetic(lines), "sochron.data")
+        if findings:
+            wrong.append(f"{label}: legitimate code reported: {findings}")
+    assert not wrong, "AC-06: data package __init__ rules:\n" + "\n".join(wrong)
