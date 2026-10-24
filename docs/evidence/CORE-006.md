@@ -55,5 +55,17 @@ Contract: `docs/contracts/CORE-006-strategy-h001.md` v1.1 (Tier Standard; เจ
 - **tests-r2 F6:** golden ล็อกการคำนวณ 1 − α แค่ที่ period ค่าตั้งต้น · ผู้ทำล็อกการอ่าน "1 − α จาก α ที่ปัดแล้ว" ด้วย unit test ที่ s = 62 และ (ตาม review r1 F4) ที่ f = 22, s = 78 ซึ่งครอบ EMA เร็วด้วย (ไม่ใช่ test ล็อก) เพื่อไม่ใช้ headless session เกินงบ 5
 - ผลจริงของ D3 (WARN flags ทำให้ข้ามไม้ราวหนึ่งวัน) ต้องวัดใน R1
 
+## หลัง merge (2026-10-24, GitHub REST API แบบไม่ล็อกอิน)
+- PR #17 `feat/CORE-006-strategy-h001` · Claude push ถึง `b7256cd` · เจ้าของกด "Update branch" บน GitHub → merge commit `8ead8af` (รวม `419eee3` ของ main ซึ่งไม่เปลี่ยนไฟล์: `git diff --stat b7256cd 8ead8af` ว่าง) · เจ้าของ merge เป็น `6fbed53` 10:20 +07 (03:20:04Z) · label `owner-approved-control-change` · `git diff --quiet b7256cd 6fbed53` → tree ของ main ตรงกับ `b7256cd` ทุกไฟล์
+
+| Run | Event / head | ผล |
+|-----|--------------|----|
+| `40057041807` ci | pull_request `b7256cd` | success |
+| `40057040644` control-gate | pull_request_target `b7256cd` (opened) | failure: event "opened" มาก่อน label (เหมือนทุก PR) |
+| `40057053910` control-gate | pull_request_target `b7256cd` (labeled) | success |
+| `40057582876` ci | pull_request `8ead8af` | success |
+| `40057581599` control-gate | pull_request_target `8ead8af` | success |
+| `40057873820` ci | push `6fbed53` (main) | success |
+
 ## Delivery state
-implemented และ verified ในเครื่อง (3093 passed at `52c8680`) · tests reviews r1–r2 ปิด · implementation review r1 (`docs/reviews/CORE-006-r1.md`, Ready for PR: yes, Low F1–F5) → แก้ครบ → re-check r2 (`docs/reviews/CORE-006-r2.md`, subagent context ใหม่): F1–F5 ปิด, F6 Low (เอกสารนี้) แก้ใน commit นี้ · push แล้ว รอเจ้าของเปิด PR และ CI · ยังไม่ merged, ไม่ deployed
+**merged** 2026-10-24 10:20 (PR #17 → `6fbed53`) · CI เขียวบน PR และ main · เดิม: implemented และ verified ในเครื่อง (3093 passed at `52c8680`) · tests reviews r1–r2 ปิด · implementation review r1 (`docs/reviews/CORE-006-r1.md`, Ready for PR: yes, Low F1–F5) → แก้ครบ → re-check r2 (`docs/reviews/CORE-006-r2.md`, subagent context ใหม่): F1–F5 ปิด, F6 Low (เอกสารนี้) แก้ใน commit นี้ · push แล้ว รอเจ้าของเปิด PR และ CI · ยังไม่ merged, ไม่ deployed

@@ -15,6 +15,15 @@ names and literals in sochron.data.snapshot, as in costs and risk. CORE-006 AC-0
 same checker over sochron.strategy: it may import sochron.core, sochron.timebase, itself and
 side-effect-free stdlib only, with no random module and no float names or literals. CORE-006
 tests r2 (review F4) narrows that stdlib to an explicit list, _STRATEGY_STDLIB, for strategy only.
+CORE-007 AC-06 runs the same checker over sochron.backtest: it may import sochron.core,
+sochron.timebase, sochron.strategy, sochron.costs, itself and the stdlib modules of
+_BACKTEST_STDLIB only, with no random module, no float names or literals, no zoneinfo import and
+no astimezone (time is converted only through sochron.timebase). Every earlier function and table
+is unchanged.
+CORE-007 tests r2 (review F6, contract v1.5) adds a second backtest checker,
+_inspect_backtest_zoneinfo_source: the round-1 backtest checks plus a finding for every import of
+a name ZoneInfo from any module (sochron.timebase internals included) and every other reference
+to the name ZoneInfo. The round-1 functions, tables and test are unchanged.
 """
 
 import ast
@@ -1808,3 +1817,364 @@ def test_ac06_r2_strategy_imports_only_listed_stdlib_modules_core_timebase_and_i
             continue
         findings.extend(f"{relative}: {violation}" for violation in violations)
     assert not findings, "AC-06: unlisted or forbidden imports or side effects:\n" + "\n".join(findings)
+
+
+# CORE-007 AC-06: sochron.backtest (docs/architecture.md section 8, row backtest; contract
+# docs/contracts/CORE-007-backtest.md v1.4, the time item of its input checks, r3 F38) may import
+# sochron.core, sochron.timebase, sochron.strategy, sochron.costs, itself and the side-effect-free
+# stdlib modules of _BACKTEST_STDLIB only: no data (data.snapshot included), risk, broker,
+# execution, journal or research, no MetaTrader5, no I/O, clock, randomness, process, console or
+# network, no float, no zoneinfo import and no astimezone (time is converted only through
+# sochron.timebase). Every function and table above stays as it was: the backtest checker runs the
+# snapshot checks (_inspect_source plus the random ban) unchanged, drops only the "forbidden import"
+# findings of the three granted packages, and adds the float, zoneinfo, astimezone and stdlib-list
+# findings. The stdlib list is the strategy list (CORE-006 tests r2, F4), kept under its own name.
+_BACKTEST_GRANTS = ("sochron.timebase", "sochron.strategy", "sochron.costs")
+_BACKTEST_STDLIB = frozenset({
+    "bisect", "collections", "collections.abc", "dataclasses", "datetime", "decimal", "enum",
+    "functools", "itertools", "operator", "types", "typing",
+})
+_IMPORT_FINDING = re.compile(r"line \d+: forbidden import (?P<module>\S+)")
+_BACKTEST_ADDED = (": forbidden random import", ": forbidden float name", ": forbidden float literal",
+                   ": forbidden zoneinfo import", ": forbidden astimezone use", ": forbidden stdlib import ")
+
+
+def _granted_to_backtest(finding):
+    """Whether a finding is only the import of sochron.timebase, sochron.strategy or sochron.costs."""
+    match = _IMPORT_FINDING.fullmatch(finding)
+    return bool(match) and any(_within(match["module"], grant) for grant in _BACKTEST_GRANTS)
+
+
+def _inspect_backtest_source(source, current_package):
+    """CORE-007 AC-06: the snapshot checks (random ban included) under the backtest package's rules
+    and grants, plus the float ban, one finding per zoneinfo import, per astimezone attribute or
+    "astimezone" string, and per absolute import of a stdlib module not in _BACKTEST_STDLIB."""
+    findings = [item for item in _inspect_data_snapshot_source(source, "sochron.backtest", current_package)
+                if not _granted_to_backtest(item)]
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Name) and node.id == "float":
+            findings.append(f"line {node.lineno}: forbidden float name")
+        if isinstance(node, ast.Constant) and type(node.value) is float:
+            findings.append(f"line {node.lineno}: forbidden float literal")
+        if isinstance(node, ast.Attribute) and node.attr == "astimezone":
+            findings.append(f"line {node.lineno}: forbidden astimezone use")
+        if isinstance(node, ast.Constant) and type(node.value) is str and node.value == "astimezone":
+            findings.append(f"line {node.lineno}: forbidden astimezone use")
+        if isinstance(node, ast.Import):
+            names = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.level == 0:
+            names = [node.module or ""]
+        else:
+            continue
+        for name in names:
+            if _within(name, "zoneinfo"):
+                findings.append(f"line {node.lineno}: forbidden zoneinfo import")
+            if name.split(".")[0] in sys.stdlib_module_names and name not in _BACKTEST_STDLIB:
+                findings.append(f"line {node.lineno}: forbidden stdlib import {name}")
+    return sorted(set(findings))
+
+
+def _inspect_as_backtest(source):
+    return _inspect_backtest_source(source, "sochron.backtest")
+
+
+# (label, source lines, exact findings); line 1 is _HEADER, so the first source line is 2.
+_BACKTEST_FORBIDDEN = (
+    ("data.snapshot", ("from sochron.data.snapshot import AggregatedBar",),
+     ("line 2: forbidden import sochron.data.snapshot",)),
+    ("data via the top package", ("from sochron import data",), ("line 2: forbidden import sochron.data",)),
+    ("data.acquire", ("import sochron.data.acquire",), ("line 2: forbidden import sochron.data.acquire",)),
+    ("risk", ("from sochron.risk import size_position",), ("line 2: forbidden import sochron.risk",)),
+    ("risk via the top package", ("from sochron import risk",), ("line 2: forbidden import sochron.risk",)),
+    ("broker", ("import sochron.broker",), ("line 2: forbidden import sochron.broker",)),
+    ("broker adapter", ("from sochron.broker.mt5 import connect",),
+     ("line 2: forbidden import sochron.broker.mt5",)),
+    ("execution", ("from sochron.execution import send",), ("line 2: forbidden import sochron.execution",)),
+    ("journal", ("import sochron.journal",), ("line 2: forbidden import sochron.journal",)),
+    ("research", ("from sochron import research",), ("line 2: forbidden import sochron.research",)),
+    ("a package that only shares a granted prefix", ("import sochron.costsx",),
+     ("line 2: forbidden import sochron.costsx",)),
+    ("MetaTrader5", ("import MetaTrader5 as mt5",), ("line 2: forbidden import MetaTrader5",)),
+    ("a third-party package", ("import numpy",), ("line 2: forbidden import numpy",)),
+    ("zoneinfo", ("import zoneinfo",),
+     ("line 2: forbidden stdlib import zoneinfo", "line 2: forbidden zoneinfo import")),
+    ("ZoneInfo, from-imported", ("from zoneinfo import ZoneInfo",),
+     ("line 2: forbidden stdlib import zoneinfo", "line 2: forbidden zoneinfo import")),
+    ("zoneinfo inside a function", ("def wall(moment):", "    from zoneinfo import ZoneInfo",
+                                    '    return ZoneInfo("America/New_York")'),
+     ("line 3: forbidden stdlib import zoneinfo", "line 3: forbidden zoneinfo import")),
+    ("an astimezone call", ("from datetime import UTC, datetime",
+                            "OPEN = datetime(2026, 3, 10, tzinfo=UTC).astimezone(UTC)"),
+     ("line 3: forbidden astimezone use",)),
+    ("astimezone in a function", ("def wall(moment, zone):", "    return moment.astimezone(zone)"),
+     ("line 3: forbidden astimezone use",)),
+    ("astimezone kept as a reference", ("from datetime import datetime", "CONVERT = datetime.astimezone"),
+     ("line 3: forbidden astimezone use",)),
+    ("astimezone by name", ("def wall(moment, zone):", '    return getattr(moment, "astimezone")(zone)'),
+     ("line 3: forbidden astimezone use",)),
+    ("random", ("import random",), ("line 2: forbidden random import", "line 2: forbidden stdlib import random")),
+    ("random, from-imported", ("from random import Random",),
+     ("line 2: forbidden random import", "line 2: forbidden stdlib import random")),
+    ("a clock", ("import time", "STAMP = time.time()"),
+     ("line 2: forbidden stdlib import time", "line 3: forbidden clock/I/O call time.time")),
+    ("the current date", ("from datetime import datetime", "NOW = datetime.now()"),
+     ("line 3: forbidden clock/I/O call datetime.datetime.now",)),
+    ("file I/O", ("from pathlib import Path", 'ROWS = Path("bars.parquet").read_bytes()'),
+     ("line 2: forbidden stdlib import pathlib", "line 3: forbidden file I/O call .read_bytes")),
+    ("console output", ('print("trade")',), ("line 2: forbidden clock/I/O call print",)),
+    ("the environment", ("import os", 'KEY = os.environ["MT5_LOGIN"]'),
+     ("line 2: forbidden stdlib import os", "line 3: forbidden environment/network access os.environ")),
+    ("a process", ("import subprocess",),
+     ("line 2: forbidden process import subprocess", "line 2: forbidden stdlib import subprocess")),
+    ("a socket", ("import socket",), ("line 2: forbidden import socket", "line 2: forbidden stdlib import socket")),
+    ("http", ("import http.client",),
+     ("line 2: forbidden network import http.client", "line 2: forbidden stdlib import http.client")),
+    ("logging", ("import logging",), ("line 2: forbidden stdlib import logging",)),
+    ("math is free of side effects but not listed", ("import math",), ("line 2: forbidden stdlib import math",)),
+    ("a float call", ('RATE = float("1.5")',), ("line 2: forbidden float name",)),
+    ("a float literal", ("SPREAD = 0.24",), ("line 2: forbidden float literal",)),
+    ("a float return type", ("def ratio(a, b) -> float:", "    return a / b"), ("line 2: forbidden float name",)),
+)
+_BACKTEST_ALLOWED = (
+    ("core", ("import sochron.core", "from sochron.core import Bar", "from sochron import core")),
+    ("timebase", ("import sochron.timebase", "from sochron.timebase import TimeRule, bar_open, to_utc, to_zone",
+                  "from sochron import timebase")),
+    ("strategy", ("import sochron.strategy", "from sochron.strategy import STRATEGY_VERSION, decide, indicators",
+                  "from sochron import strategy", "from sochron.strategy.h001 import decide")),
+    ("costs", ("import sochron.costs", "from sochron.costs import CONTEXT, check_volume, r_multiple, round_trip_cost",
+               "from sochron import costs", "from sochron.costs.charges import CostBreakdown")),
+    ("its own package", ("from . import fills", "from .fills import simulate_trade",
+                         "from sochron.backtest.engine import run")),
+    ("each listed stdlib module", tuple(f"import {name}" for name in sorted(_BACKTEST_STDLIB))),
+    ("from-imports of listed modules", (
+        "from collections.abc import Callable, Sequence", "from dataclasses import dataclass, field",
+        "from datetime import UTC, datetime, time, timedelta",
+        "from decimal import ROUND_HALF_EVEN, Context, Decimal, localcontext", "from typing import Literal",
+    )),
+    ("time through timebase, money in the costs context", (
+        "from datetime import time",
+        "from decimal import Decimal, localcontext",
+        "from sochron.costs import CONTEXT",
+        "from sochron.timebase import to_zone",
+        "ROLLOVER = time(17, 0)",
+        "def wall(moment):",
+        '    return to_zone(moment, "America/New_York")',
+        "def money(price, lots):",
+        "    with localcontext(CONTEXT):",
+        '        return price * Decimal("100") * lots',
+    )),
+)
+# The grants are for backtest only: (package, checker, an import it must still report).
+_BACKTEST_GRANTS_ELSEWHERE = (
+    ("sochron.timebase", lambda source: _inspect_source(source, "sochron.timebase", "sochron.timebase"),
+     ("sochron.strategy", "sochron.costs")),
+    ("sochron.core", lambda source: _inspect_core_source(source, "sochron.core"), ("sochron.strategy", "sochron.costs")),
+    ("sochron.costs", lambda source: _inspect_costs_source(source, "sochron.costs"), ("sochron.strategy",)),
+    ("sochron.risk", lambda source: _inspect_risk_source(source, "sochron.risk"), ("sochron.strategy",)),
+    ("sochron.data.snapshot", _inspect_as_snapshot, ("sochron.strategy", "sochron.costs")),
+    ("sochron.strategy", _inspect_as_strategy, ("sochron.costs",)),
+)
+
+
+def test_ac06_core007_backtest_imports_only_core_timebase_strategy_costs_and_listed_stdlib():
+    wrong = []
+    # The checker first: exact findings for forbidden sources, none for the granted imports.
+    for label, lines, expected in _BACKTEST_FORBIDDEN:
+        findings = _inspect_as_backtest(_synthetic(lines))
+        if findings != list(expected):
+            wrong.append(f"{label}: expected {list(expected)}, got {findings}")
+    for label, lines in _BACKTEST_ALLOWED:
+        findings = _inspect_as_backtest(_synthetic(lines))
+        if findings:
+            wrong.append(f"{label}: legitimate import reported: {findings}")
+    for package, inspect, modules in _BACKTEST_GRANTS_ELSEWHERE:
+        for module in modules:
+            findings = inspect(_synthetic((f"import {module}",)))
+            if f"line 2: forbidden import {module}" not in findings:
+                wrong.append(f"{package} importing {module}: got {findings}")
+    # Every FIX-001 and CORE-001 rule, and the float and random row, hold for backtest too: the
+    # findings of _inspect_source (less the three grants) all stay, and anything added is a
+    # random, float, zoneinfo, astimezone or stdlib-list finding.
+    sources = [(label, source) for label, source, _ in _forbidden_cases()]
+    for table in (_SCOPED_CASES, _LEGITIMATE_SOURCES, _BINDING_CASES, _ORIGINAL_CASES, _SNAPSHOT_FORBIDDEN_IMPORTS,
+                  _SNAPSHOT_ALLOWED_IMPORTS, _STRATEGY_FORBIDDEN, _STRATEGY_ALLOWED, _STRATEGY_UNLISTED,
+                  _STRATEGY_LISTED, _BACKTEST_FORBIDDEN, _BACKTEST_ALLOWED):
+        sources += [(row[0], _synthetic(row[1])) for row in table]
+    for label, source in sources:
+        base = [item for item in _inspect_source(source, "sochron.backtest", "sochron.backtest")
+                if not _granted_to_backtest(item)]
+        findings = _inspect_as_backtest(source)
+        added = set(findings) - set(base)
+        if not set(base) <= set(findings) or not all(any(kind in item for kind in _BACKTEST_ADDED) for item in added):
+            wrong.append(f"{label}: the CORE-001 checker {base}; the backtest checker {findings}")
+    for label, source, expected in _forbidden_cases():
+        findings = _inspect_as_backtest(source)
+        wrong += [f"{label}: line {line} lacks {name}; got {findings}"
+                  for line, name in expected if not _reported(findings, line, name)]
+    for label, lines, expected in _SCOPED_CASES:
+        findings = _inspect_as_backtest(_synthetic(lines))
+        wrong += [f"{label}: line {line} lacks {name}; got {findings}"
+                  for line, name in expected if not _reported(findings, line, name)]
+    for label, lines, expected, absent in _BINDING_CASES:
+        findings = _inspect_as_backtest(_synthetic(lines))
+        wrong += [f"{label}: line {line} lacks {name}; got {findings}"
+                  for line, name in expected if not _reported(findings, line, name)]
+        wrong += [f"{label}: line {line} reports {name}; got {findings}"
+                  for line, name in absent if _reported(findings, line, name)]
+    for label, lines, common, money in _ORIGINAL_CASES:
+        findings = _inspect_as_backtest(_synthetic(lines))
+        wrong += [f"{label}: lacks {finding!r}; got {findings}" for finding in common + money
+                  if finding not in findings]
+    assert not wrong, "AC-06: the backtest checker:\n" + "\n".join(wrong)
+
+    # Then the package itself, which must exist.
+    source_root = Path.cwd() / "src"
+    directory = source_root / "sochron" / "backtest"
+    assert directory.is_dir(), f"AC-06: {directory} does not exist; implementation missing"
+    files = sorted(directory.rglob("*.py"))
+    assert files, f"AC-06: {directory} contains no Python source; implementation missing"
+    findings = []
+    for path in files:
+        relative = path.relative_to(source_root)
+        current_package = ".".join(relative.parent.parts)
+        try:
+            violations = _inspect_backtest_source(path.read_text(encoding="utf-8-sig"), current_package)
+        except SyntaxError as error:
+            findings.append(f"{relative}:{error.lineno}: invalid Python syntax: {error.msg}")
+            continue
+        findings.extend(f"{relative}: {violation}" for violation in violations)
+    assert not findings, "AC-06: forbidden dependencies or side effects in sochron.backtest:\n" + "\n".join(findings)
+
+
+# CORE-007 tests r2 (review docs/reviews/CORE-007-tests-r1.md F6; contract v1.5, the time item of
+# "Input และการตรวจ" and AC-06): sochron.backtest may not name ZoneInfo at all, wherever it would
+# come from, sochron.timebase internals included. The contract builds the rollover instant T from
+# the tzinfo of timebase.to_zone's result: datetime.combine(day, rollover.at,
+# tzinfo=to_zone(...).tzinfo). _inspect_backtest_source and every table above stay as they were, so
+# the round-1 test keeps its meaning. The new checker runs every round-1 backtest check and adds
+# one finding per import statement that brings in a name ZoneInfo (from any module, at any
+# relative level, aliased or not, or another name imported as ZoneInfo) and one per line that
+# references the name: a bare name ZoneInfo, an attribute .ZoneInfo or the string "ZoneInfo".
+_ZONEINFO_NAME = "ZoneInfo"
+_ZONEINFO_ADDED = (": forbidden ZoneInfo import", ": forbidden ZoneInfo reference")
+
+
+def _inspect_backtest_zoneinfo_source(source, current_package):
+    """CORE-007 tests r2 (F6): _inspect_backtest_source plus the ZoneInfo import and reference
+    findings, wherever the statement or expression stands."""
+    findings = list(_inspect_backtest_source(source, current_package))
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            if any(_ZONEINFO_NAME in (alias.name.rpartition(".")[2], alias.asname) for alias in node.names):
+                findings.append(f"line {node.lineno}: forbidden ZoneInfo import")
+        elif ((isinstance(node, ast.Name) and node.id == _ZONEINFO_NAME)
+              or (isinstance(node, ast.Attribute) and node.attr == _ZONEINFO_NAME)
+              or (isinstance(node, ast.Constant) and type(node.value) is str and node.value == _ZONEINFO_NAME)):
+            findings.append(f"line {node.lineno}: forbidden ZoneInfo reference")
+    return sorted(set(findings))
+
+
+def _inspect_as_backtest_zoneinfo(source):
+    return _inspect_backtest_zoneinfo_source(source, "sochron.backtest")
+
+
+# (label, source lines, exact findings); line 1 is _HEADER, so the first source line is 2.
+_BACKTEST_ZONEINFO_FORBIDDEN = (
+    ("ZoneInfo from timebase internals for the rollover instant (review F6 probe)",
+     ("from datetime import datetime", "from sochron.timebase.convert import ZoneInfo",
+      "def rollover_instant(day, at, zone):", "    return datetime.combine(day, at, tzinfo=ZoneInfo(zone))"),
+     ("line 3: forbidden ZoneInfo import", "line 5: forbidden ZoneInfo reference")),
+    ("ZoneInfo from timebase internals, aliased", ("from sochron.timebase.convert import ZoneInfo as Zone",
+                                                   'TOKYO = Zone("Asia/Tokyo")'),
+     ("line 2: forbidden ZoneInfo import",)),
+    ("ZoneInfo from the timebase package", ("from sochron.timebase import ZoneInfo",),
+     ("line 2: forbidden ZoneInfo import",)),
+    ("ZoneInfo from timebase internals by a relative import", ("from ..timebase.sessions import ZoneInfo",),
+     ("line 2: forbidden ZoneInfo import",)),
+    ("ZoneInfo from timebase internals inside a function",
+     ("def rollover_instant(day, at, zone):", "    from datetime import datetime",
+      "    from sochron.timebase.convert import ZoneInfo",
+      "    return datetime.combine(day, at, tzinfo=ZoneInfo(zone))"),
+     ("line 4: forbidden ZoneInfo import", "line 5: forbidden ZoneInfo reference")),
+    ("ZoneInfo as an attribute of a timebase module", ("from sochron.timebase import convert",
+                                                       'NEW_YORK = convert.ZoneInfo("America/New_York")'),
+     ("line 3: forbidden ZoneInfo reference",)),
+    ("ZoneInfo by the full module path", ("import sochron.timebase.convert",
+                                          'NEW_YORK = sochron.timebase.convert.ZoneInfo("America/New_York")'),
+     ("line 3: forbidden ZoneInfo reference",)),
+    ("ZoneInfo by name", ("from sochron.timebase import convert", 'ZONE = getattr(convert, "ZoneInfo")'),
+     ("line 3: forbidden ZoneInfo reference",)),
+    ("ZoneInfo from zoneinfo", ("from zoneinfo import ZoneInfo",),
+     ("line 2: forbidden ZoneInfo import", "line 2: forbidden stdlib import zoneinfo",
+      "line 2: forbidden zoneinfo import")),
+    ("ZoneInfo as an attribute of zoneinfo", ("import zoneinfo", 'NEW_YORK = zoneinfo.ZoneInfo("America/New_York")'),
+     ("line 2: forbidden stdlib import zoneinfo", "line 2: forbidden zoneinfo import",
+      "line 3: forbidden ZoneInfo reference")),
+    ("a bare name ZoneInfo in an annotation", ("def wall(moment, zone: ZoneInfo):", "    return moment"),
+     ("line 2: forbidden ZoneInfo reference",)),
+    ("another name imported as ZoneInfo", ("from datetime import timezone as ZoneInfo",),
+     ("line 2: forbidden ZoneInfo import",)),
+)
+_BACKTEST_ZONEINFO_ALLOWED = (
+    ("T from the tzinfo of timebase.to_zone (contract v1.5)", (
+        "from datetime import datetime, time",
+        "from sochron.timebase import to_zone",
+        "ROLLOVER = time(17, 0)",
+        "def rollover_instant(day, moment, zone):",
+        "    return datetime.combine(day, ROLLOVER, tzinfo=to_zone(moment, zone).tzinfo)",
+    )),
+    ("the timebase functions the contract names", ("from sochron.timebase import bar_open, to_utc, to_zone",
+                                                   "import sochron.timebase", "from sochron import timebase")),
+    ("words and names that only contain ZoneInfo", (
+        '"""T uses the tzinfo of to_zone, never ZoneInfo."""',
+        'ZONE_INFO = "America/New_York"',
+        'NOTE = "no ZoneInfo here"',
+        "ZoneInfoText = ZONE_INFO",
+    )),
+)
+
+
+def test_ac06_r2_core007_backtest_never_names_zoneinfo():
+    wrong = []
+    # The checker first: exact findings for every way to reach ZoneInfo, none for the contract's form.
+    for label, lines, expected in _BACKTEST_ZONEINFO_FORBIDDEN:
+        findings = _inspect_as_backtest_zoneinfo(_synthetic(lines))
+        if findings != list(expected):
+            wrong.append(f"{label}: expected {list(expected)}, got {findings}")
+    for label, lines in _BACKTEST_ZONEINFO_ALLOWED:
+        findings = _inspect_as_backtest_zoneinfo(_synthetic(lines))
+        if findings:
+            wrong.append(f"{label}: legitimate source reported: {findings}")
+    # The new findings only add to the round-1 backtest checker: every round-1 finding stays, on
+    # every table, and anything added is a ZoneInfo finding.
+    sources = [(label, source) for label, source, _ in _forbidden_cases()]
+    for table in (_SCOPED_CASES, _LEGITIMATE_SOURCES, _BINDING_CASES, _ORIGINAL_CASES, _SNAPSHOT_FORBIDDEN_IMPORTS,
+                  _SNAPSHOT_ALLOWED_IMPORTS, _STRATEGY_FORBIDDEN, _STRATEGY_ALLOWED, _STRATEGY_UNLISTED,
+                  _STRATEGY_LISTED, _BACKTEST_FORBIDDEN, _BACKTEST_ALLOWED, _BACKTEST_ZONEINFO_FORBIDDEN,
+                  _BACKTEST_ZONEINFO_ALLOWED):
+        sources += [(row[0], _synthetic(row[1])) for row in table]
+    for label, source in sources:
+        base = _inspect_as_backtest(source)
+        findings = _inspect_as_backtest_zoneinfo(source)
+        added = set(findings) - set(base)
+        if not set(base) <= set(findings) or not all(item.endswith(_ZONEINFO_ADDED) for item in added):
+            wrong.append(f"{label}: the round-1 backtest checker {base}; with the ZoneInfo rule {findings}")
+    assert not wrong, "AC-06: the backtest ZoneInfo checker:\n" + "\n".join(wrong)
+
+    # Then the package itself, which must exist.
+    source_root = Path.cwd() / "src"
+    directory = source_root / "sochron" / "backtest"
+    assert directory.is_dir(), f"AC-06: {directory} does not exist; implementation missing"
+    files = sorted(directory.rglob("*.py"))
+    assert files, f"AC-06: {directory} contains no Python source; implementation missing"
+    findings = []
+    for path in files:
+        relative = path.relative_to(source_root)
+        current_package = ".".join(relative.parent.parts)
+        try:
+            violations = _inspect_backtest_zoneinfo_source(path.read_text(encoding="utf-8-sig"), current_package)
+        except SyntaxError as error:
+            findings.append(f"{relative}:{error.lineno}: invalid Python syntax: {error.msg}")
+            continue
+        findings.extend(f"{relative}: {violation}" for violation in violations)
+    assert not findings, "AC-06: ZoneInfo or other forbidden names in sochron.backtest:\n" + "\n".join(findings)
