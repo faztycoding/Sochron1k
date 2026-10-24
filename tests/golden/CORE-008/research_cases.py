@@ -920,3 +920,194 @@ EVALUATE_CASES_R2 = (
 # minute 0 -> minute 1, a hold in hs) and T2 ("stop" at its entry open, exit M1 303 = bar 101 minute 0 ->
 # minute 1, not in hs). Every entry time stays an M1 time, and summarize reads no exit time, so the
 # variant still matches the summary of its base (baseline step 1) and only step 2 can refuse it.
+
+
+# ======================================================== tests r3 (implementation review r1 F4)
+#
+# Appended by the round-3 test author (docs/reviews/CORE-008-r1.md F4); every statement above is
+# unchanged. Each value below was worked out by hand from contract v1.5, the arithmetic beside it.
+#
+# Contract, random-entry baseline step 4: eligible = every t in 0 ... len(m15) - 2, in increasing
+# order, with strategy.entry_blockers(rows[t], m15[t+1].bar.time_utc) empty, rows =
+# strategy.indicators(m15, params). The entry window (H001: 03:00-15:59 New York wall time, by the
+# minute; CORE-006 "outside_window") is judged at the open of bar t+1, where a random trade is filled
+# (step 7: entry_index = the first M1 of bar t+1), not at bar t's own open; the last bar is never
+# eligible.
+#
+# WINDOW series: 106 M15 bars u = 0..105 on flat prices (every M1 open = close = 2000.00, high
+# 2000.50, low 1999.50, as FLAT), so TR = 1.00, ATR = 1.00 from bar 9 on (n = 10), k x ATR = 3.0 x
+# 1.00 = 3 everywhere, and H001 has no signal. Bar u holds two M1, at minutes 0 and 5: M1 2u and
+# 2u + 1 (212 M1, the last at 2024-01-11T14:05Z). Both M1 of bar u and the M15 bar carry one spread
+# S_u = 200 for u <= 97 and S_u = 200 + 10 x (u - 97) for u >= 98 (210 at bar 98 ... 280 at bar 105);
+# no bar has a flag. Bars 0..99 open every 15 minutes from 2024-01-08T07:15Z (bar 97: 07:15 + 97 x 15
+# min = 07:15 + 24 h 15 min = 2024-01-09T07:30Z); bars 100..105 open after gaps. New York is UTC-5 in
+# January (EST):
+#     u   opens (UTC)        New York    in the window      gap before the bar
+#    96   2024-01-09T07:15   Tue 02:15   no
+#    97   2024-01-09T07:30   Tue 02:30   no
+#    98   2024-01-09T07:45   Tue 02:45   no
+#    99   2024-01-09T08:00   Tue 03:00   yes (first minute)
+#   100   2024-01-09T20:30   Tue 15:30   yes                12 h 30 min after bar 99 (missing hours)
+#   101   2024-01-09T20:45   Tue 15:45   yes
+#   102   2024-01-09T21:00   Tue 16:00   no (15:59 + 1 min)
+#   103   2024-01-10T15:00   Wed 10:00   yes                18 h after bar 102, across a day boundary
+#   104   2024-01-10T22:30   Wed 17:30   no                 7 h 30 min after bar 103 (missing hours)
+#   105   2024-01-11T14:00   Thu 09:00   yes                15 h 30 min after bar 104, across a day
+#                                                           boundary; the last bar
+#
+# The other blockers, for RUN_PARAMS (V-B: f 8, s 32, n 10, N 48, M 24, k 3.0):
+#   warmup: warm = t >= max(3s, N + 1, M + 1, 97, n + 1) = max(96, 49, 25, 97, 11) = 97, so bars 0..96
+#     are blocked whatever the window (and spread_unknown below 96);
+#   spread_unknown / spread_filter: from t = 96 the median of spread[t-96..t-1] is known; for t <= 105
+#     at least 89 of those 96 spreads are 200 (bars 9..97 at t = 105) and the others are at most 270,
+#     so the 48th and 49th smallest are 200, the median is 200 and spread_filter needs S_t > 3 x 200 =
+#     600: never (S_t <= 280);
+#   atr_zero: ATR = 1.00; data_flag: no flag.
+# So from bar 97 on (bar 105 included) the window is the only blocker.
+#
+# Eligible under the contract (t = 97..104, since len(m15) - 2 = 104; bar t+1 in the window):
+#   97 -> bar 98 at 02:45 no · 98 -> 99 at 03:00 yes · 99 -> 100 at 15:30 yes · 100 -> 101 at 15:45
+#   yes · 101 -> 102 at 16:00 no · 102 -> 103 at 10:00 yes · 103 -> 104 at 17:30 no · 104 -> 105 at
+#   09:00 yes  ->  (98, 99, 100, 102, 104), len(eligible) = 5.
+# The wrong rules give other sets (the test checks each as a premise of the fixture):
+#   bar t's own open: 97 (02:30) no, 98 (02:45) no, 99 (03:00) yes, 100 (15:30) yes, 101 (15:45) yes,
+#     102 (16:00) no, 103 (10:00) yes, 104 (17:30) no -> (99, 100, 101, 103): it loses 98 at the start
+#     edge (02:45 -> 03:00) and 102 and 104 before the overnight gaps, and it gains 101 at the end edge
+#     (15:45 -> 16:00) and 103 before the 17:30 gap;
+#   no window check: (97, 98, 99, 100, 101, 102, 103, 104), 8 bars;
+#   t up to len(m15) - 1: bar 105 is warm with no other blocker and opens at 09:00 (09:15 one bar
+#     later), inside the window whatever next open such a rule takes for it: 6 bars (or no bar t+1).
+WINDOW_BAR0 = "2024-01-08T07:15"
+WINDOW_GAP_OPENS = ("2024-01-09T20:30", "2024-01-09T20:45", "2024-01-09T21:00", "2024-01-10T15:00",
+                    "2024-01-10T22:30", "2024-01-11T14:00")
+
+
+def _window_open(u):
+    start = datetime.fromisoformat(WINDOW_BAR0).replace(tzinfo=UTC)
+    return (start + timedelta(minutes=15 * u)).strftime("%Y-%m-%dT%H:%M")
+
+
+WINDOW_BAR_OPENS = tuple(_window_open(u) for u in range(100)) + WINDOW_GAP_OPENS
+WINDOW_M1_COUNT = 212  # 106 bars x 2
+
+
+def window_spread(u):
+    """S_u: the spread of both M1 of bar u and of the M15 bar."""
+    return 200 if u <= 97 else 200 + 10 * (u - 97)
+
+
+def window_m1_rows():
+    """(stamp, open, high, low, close, spread) of the 212 M1 of the WINDOW series."""
+    rows = []
+    for u, opened in enumerate(WINDOW_BAR_OPENS):
+        start = datetime.fromisoformat(opened).replace(tzinfo=UTC)
+        for minute in (0, 5):
+            stamp = (start + timedelta(minutes=minute)).strftime("%Y-%m-%dT%H:%M")
+            rows.append((stamp, "2000.00", "2000.50", "1999.50", "2000.00", window_spread(u)))
+    return tuple(rows)
+
+
+WINDOW_DATASET = ("SYN-WIN1", "c" * 64, "2024-01-08T00:00:00", "2024-01-12T00:00:00", 212)
+WINDOW_IN = {96: False, 97: False, 98: False, 99: True, 100: True, 101: True, 102: False, 103: True,
+             104: False, 105: True}  # in_entry_window(open of bar u), from the table above
+WINDOW_INSIDE = "2024-01-09T14:00"  # 09:00 New York: an instant inside the window
+WINDOW_WARM_FROM = 97
+WINDOW_ELIGIBLE = (98, 99, 100, 102, 104)
+WINDOW_OWN_OPEN = (99, 100, 101, 103)
+WINDOW_NO_WINDOW = (97, 98, 99, 100, 101, 102, 103, 104)
+
+# Random trades. Every variant below is built by hand with simulate_trade (lots 0.02, risk_money 25,
+# model = H001_COSTS with swap_long 0, as FLAT): long trades on bars with spread 200 that leave by
+# exit_index one M1 after the entry ("signal", hold 1). So hs = (1, ..., 1) and every random trade has
+# h = 1: drawn at t, it enters at the open of M1 2u (bar u = t + 1, minute 0); planned = 2u + max(1,
+# 1) = 2u + 1 < 212, so exit_index = 2u + 1 (minute 5 of the same bar), a "signal" exit at its open.
+# Stop distance 3, never reached: long stop = fill ask - 3 = 2000.00 + S_u x 0.001 - 3 <= 1997.28 <
+# low 1999.50; short stop (an ask level) 2000.00 + 3 = 2003.00 > high + S_u x 0.001 <= 2000.78, and
+# no open + S_u x 0.001 reaches it. Gross 0 (entry and exit open 2000.00). Spread S_u x 0.001 x 100 x
+# 0.02 = 0.002 x S_u, paid at the buy (the entry M1 of a long, the exit M1 of a short, both S_u);
+# slippage 50 x 0.001 x 100 x 0.02 x 2 = 0.20; commission 0; swap 0 (both swaps 0, and no 17:00 New
+# York inside five minutes). r = -(0.002 x S_u + 0.20) / 25: the same for both sides and different for
+# every bar u, so the expectancy of a one-trade round names the bar drawn (t = u - 1).
+WINDOW_ENTRY_R = {
+    98: "-0.0248",   # S 210: -(0.42 + 0.20) / 25 = -0.62 / 25
+    99: "-0.0256",   # S 220: -(0.44 + 0.20) / 25 = -0.64 / 25
+    100: "-0.0264",  # S 230: -0.66 / 25
+    101: "-0.0272",  # S 240: -0.68 / 25
+    102: "-0.028",   # S 250: -0.70 / 25
+    103: "-0.0288",  # S 260: -0.72 / 25
+    104: "-0.0296",  # S 270: -0.74 / 25
+    105: "-0.0304",  # S 280: -0.76 / 25
+}
+
+# Test 1, K = 1. Variant: one long trade at M1 194 (bar 97, minute 0, S 200), exit_index 195, stop
+# distance 50.00: "signal", hold 1, r = -(0.40 + 0.20) / 25 = -0.024; hs = (1,), K = 1.
+WINDOW_VARIANT = (("long", 194, "50.00", 195),)
+# summarize: 1 trade, expectancy -0.024 / 1; cumulative 0 -> -0.024, so max_drawdown 0 - (-0.024) =
+# 0.024; net -0.60; long 1 at -0.024, short 0 (none); top 5 removed: 1 <= 5 trades -> None; 2024 only.
+WINDOW_SUMMARY = {
+    "trades": 1, "expectancy_r": "-0.024", "max_drawdown_r": "0.024", "net_money": "-0.60",
+    "long_trades": 1, "long_expectancy_r": "-0.024", "short_trades": 0, "short_expectancy_r": None,
+    "top5_removed_expectancy_r": None, "expectancy_by_year": ((2024, "-0.024"),), "ambiguous_trades": 0,
+    "flagged_trades": 0, "gap_fills": 0, "end_of_data_trades": 0,
+}
+# The fake random.Random returns these values in a cycle. The sizer gives lots 0.02 on every call, so
+# each round makes three randrange calls: n = len(pool) = len(eligible) = 5 (K = 1: one bar per
+# round), then 2 (the side), then len(hs) = 1 (h):
+#   round 5j + 0: randrange(5) -> 0 -> t 98;  randrange(2) -> 0 long;  randrange(1) -> 0 (h 1): enters
+#                 bar 99, r -0.0256
+#   round 5j + 1: -> 1 -> t 99,  -> 1 short: bar 100, r -0.0264
+#   round 5j + 2: -> 2 -> t 100, -> 0 long:  bar 101, r -0.0272
+#   round 5j + 3: -> 3 -> t 102, -> 1 short: bar 103, r -0.0288
+#   round 5j + 4: -> 4 -> t 104, -> 0 long:  bar 105, r -0.0304
+WINDOW_SCRIPT = (0, 0, 0, 1, 1, 0, 2, 0, 0, 3, 1, 0, 4, 0, 0)
+WINDOW_SCRIPT_N = (5, 2, 1)
+WINDOW_DRAWS = (98, 99, 100, 102, 104)  # t drawn in round i: WINDOW_DRAWS[i % 5]
+WINDOW_ROUND_EXPECTANCY = ("-0.0256", "-0.0264", "-0.0272", "-0.0288", "-0.0304")  # round i: [i % 5]
+# BaselineSummary: 1000 = 200 x 5 rounds; the sum in round order is 200 x (-0.0256 - 0.0264 - 0.0272 -
+# 0.0288 - 0.0304) = 200 x -0.1384 = -27.68, mean -27.68 / 1000 = -0.02768. Sorted, ranks 1-200 are
+# -0.0304, 201-400 -0.0288, 401-600 -0.0272, 601-800 -0.0264, 801-1000 -0.0256: P5 = rank ceil(0.05 x
+# 1000) = 50 -> -0.0304, P50 = rank 500 -> -0.0272, P95 = rank 950 -> -0.0256. Holds: variant (1) ->
+# mean 1, median 1; 1000 random trades of hold 1 -> mean 1000 / 1000 = 1, median (rank 500) 1.
+WINDOW_BASELINE = {
+    "runs": 1000, "trades_per_run": 1, "mean_r": "-0.02768", "p05_r": "-0.0304", "p50_r": "-0.0272",
+    "p95_r": "-0.0256", "variant_mean_hold_m1": "1", "variant_median_hold_m1": 1,
+    "baseline_mean_hold_m1": "1", "baseline_median_hold_m1": 1,
+}
+
+# Test 2, K = len(eligible) = 5, then K = 6. Variants: long trades at M1 0, 2, 4, 6, 8 (and 10), each
+# with exit_index one M1 later and stop distance 50.00, on bars 0..4 (and 5), S 200: "signal", hold 1,
+# r -0.024 each.
+WINDOW_VARIANT_5 = tuple(("long", 2 * u, "50.00", 2 * u + 1) for u in range(5))
+WINDOW_VARIANT_6 = tuple(("long", 2 * u, "50.00", 2 * u + 1) for u in range(6))
+# summarize of the 5 trades: expectancy -0.120 / 5 = -0.024; cumulative -0.024, -0.048, -0.072,
+# -0.096, -0.120 from 0 -> max_drawdown 0.120; net 5 x -0.60 = -3.00; long 5 at -0.024; short none;
+# top 5 removed: 5 <= 5 trades -> None; 2024 only.
+WINDOW_SUMMARY_5 = {
+    "trades": 5, "expectancy_r": "-0.024", "max_drawdown_r": "0.120", "net_money": "-3.00",
+    "long_trades": 5, "long_expectancy_r": "-0.024", "short_trades": 0, "short_expectancy_r": None,
+    "top5_removed_expectancy_r": None, "expectancy_by_year": ((2024, "-0.024"),), "ambiguous_trades": 0,
+    "flagged_trades": 0, "gap_fills": 0, "end_of_data_trades": 0,
+}
+# K = 5: hs = (1, 1, 1, 1, 1). The fake returns 0 on every call, so pool.pop(0) takes the smallest bar
+# left: t 98, 99, 100, 102, 104 (the whole eligible set; the pool is empty after the fifth bar), all
+# long, h = hs[0] = 1. randrange n per round: 5, 2, 5 (len(hs)), 4, 2, 5, 3, 2, 5, 2, 2, 5, 1, 2, 5.
+# Round expectancy: (-0.0256 - 0.0264 - 0.0272 - 0.0288 - 0.0304) / 5 = -0.1384 / 5 = -0.02768 in every
+# round; mean 1000 x -0.02768 / 1000 = -0.02768 = P5 = P50 = P95. Holds: variant 5 x 1 -> mean 1,
+# median rank ceil(2.5) = 3 -> 1; 5000 random trades of hold 1 -> mean 1, median 1.
+WINDOW_ALL_SCRIPT_N = (5, 2, 5, 4, 2, 5, 3, 2, 5, 2, 2, 5, 1, 2, 5)
+WINDOW_ALL_EXPECTANCY = "-0.02768"
+WINDOW_ALL_BASELINE = {
+    "runs": 1000, "trades_per_run": 5, "mean_r": "-0.02768", "p05_r": "-0.02768", "p50_r": "-0.02768",
+    "p95_r": "-0.02768", "variant_mean_hold_m1": "1", "variant_median_hold_m1": 1,
+    "baseline_mean_hold_m1": "1", "baseline_median_hold_m1": 1,
+}
+# K = 6 (bar 5 added): K > len(eligible) = 5 -> ResearchError before the started line (step 4), the
+# registry unchanged. Its summary, so that step 1 accepts the base: expectancy -0.144 / 6 = -0.024;
+# max_drawdown 0.144; net -3.60; long 6 at -0.024; top 5 removed: the five highest r are equal and ties
+# remove the earlier trades, leaving the sixth: -0.024 / 1 = -0.024; 2024 only.
+WINDOW_SUMMARY_6 = {
+    "trades": 6, "expectancy_r": "-0.024", "max_drawdown_r": "0.144", "net_money": "-3.60",
+    "long_trades": 6, "long_expectancy_r": "-0.024", "short_trades": 0, "short_expectancy_r": None,
+    "top5_removed_expectancy_r": "-0.024", "expectancy_by_year": ((2024, "-0.024"),),
+    "ambiguous_trades": 0, "flagged_trades": 0, "gap_fills": 0, "end_of_data_trades": 0,
+}
