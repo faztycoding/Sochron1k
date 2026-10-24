@@ -11,7 +11,7 @@ Contract: `docs/contracts/CORE-007-backtest.md` v1.5 (Tier Standard; อนุ�
 | AC-04 nights/triple ของ 4 ช่วงถือ (+ rollover คนละ zone/เวลา/วัน triple) และต้นทุน 2× พอดี | **PASS** | tests ล็อก AC-04 เขียว |
 | AC-05 ตัดข้อมูลที่ขอบแท่งแล้วไม้เดิมไม่เปลี่ยน, ทุกไม้ของ `run` = `simulate_trade` | **PASS** | tests ล็อก AC-05 + unit test บนข้อมูลสุ่มชุดเดียว 9 แบบ (3 variant × 3 ชุด sides; ไม่มี price gap หรือนาทีที่ขาด ซึ่ง golden และ oracle ของ review r1 ครอบไว้) |
 | AC-06 pure, import เฉพาะ core/timebase/strategy/costs + stdlib ตามรายการ, ไม่ import/อ้าง `zoneinfo`/`ZoneInfo`, ไม่เรียก astimezone | **PASS** | architecture 17 tests เขียว |
-| AC-07 ทั้ง suite ผ่าน skipped 0 | **PASS ในเครื่อง** · CI รอ run ของ PR | `3206 passed` ที่ `29eacf3` |
+| AC-07 ทั้ง suite ผ่าน skipped 0 | **PASS ในเครื่อง** · CI รอ run ของ PR | `3211 passed` ที่ `32984af` (หลังแก้ review r1) · ครั้งแรก `3206 passed` ที่ `29eacf3` |
 | ความเร็ว: M1 500,000 แท่งภายใน 60 วินาที | **PASS** | `run` 3.53 / 3.56 / 3.61 s (V-A/B/C) |
 
 ## สิ่งที่ส่งมอบ (ไฟล์)
@@ -44,6 +44,11 @@ Contract: `docs/contracts/CORE-007-backtest.md` v1.5 (Tier Standard; อนุ�
 | วางโค้ด → `timeout -k 10 900 uv run --offline pytest tests -q -p no:cacheprovider` | **3206 passed in 21.35s** (103 tests ล็อกของ CORE-007 เขียวรอบแรก) | 29eacf3 | 12:18 |
 | สคริปต์ scratch: M1 random walk 500,000 แท่ง (seed 20261024), M15 จาก `aggregate`, sizer คงที่ 0.02 lot | `run` V-A 3.53 s (304 ไม้), V-B 3.56 s (252 ไม้), V-C 3.61 s (252 ไม้) · aggregate 0.65–0.94 s | 29eacf3 | 12:19 |
 | `bash scripts/controls/red-flags.sh origin/main` | Pattern groups with hits: 0 · control files: tests ล็อก 3 ไฟล์ | 29eacf3 | 12:19 |
+| implementation review r1 (Claude session ใหม่, headless ที่ 4 จาก 6) | Ready for PR: yes · Low F1–F4 · oracle อิสระ: 760 runs, 9,000 ไม้, 30,258 กรณีนับคืน, cut sweep ไม่ตรง 0 | a74b9ae | 12:2x–13:00 |
+| แก้ F1 → `timeout -k 10 900 uv run --offline pytest tests -q -p no:cacheprovider` | regression ล้มก่อนแก้ (RawTimeOutOfRange) · 3207 passed | e2d5142 | 13:04 |
+| แก้ F2 → suite | regression 3 ข้อล้มก่อนแก้ (decimal.Overflow) · 3210 passed | ffcf289 | 13:06 |
+| เพิ่ม test F3 → mutant ใน scratch / โค้ดจริง | mutant: 1 failed, 3210 passed · โค้ดจริง: **3211 passed** | 32984af | 13:1x |
+| F4 ถ้อยคำ | grep ไม่พบถ้อยคำเดิม | 0b30638 | 13:1x |
 
 ## ข้อสังเกตสำหรับ R1 (ไม่ใช่ข้อบกพร่องของ backtest)
 - บนข้อมูล random walk 500,000 M1 ข้างบน V-C ได้ผลเท่ากับ V-B ทุกค่า · สคริปต์ scratch นับแล้ว: จาก 2,080 แท่งที่ V-B มีสัญญาณขณะ flat ไม่มีแท่งไหนที่ V-C ตัดสินต่างออกไป (ตัวกรอง TS > 0 ไม่เคยทำงาน เพราะ breakout เหนือ HH 96 แท่งมักมาพร้อม EMA16 > EMA64) · R1 ควรรายงานว่าตัวกรองของ V-C ทำงานกี่ครั้งบนข้อมูลจริง เพราะถ้าแทบไม่ทำงาน V-C จะกินงบ variant โดยไม่เพิ่มข้อมูล
@@ -55,4 +60,4 @@ Contract: `docs/contracts/CORE-007-backtest.md` v1.5 (Tier Standard; อนุ�
 - drawdown ระหว่างถือไม้ไม่อยู่ใน equity points (D10) · halt ของ risk ไม่ใช้ (D5)
 
 ## Delivery state
-implemented และ verified ในเครื่อง (3206 passed at `29eacf3`) · tests reviews r1–r2 ปิด · implementation review: รอ · ยังไม่ merged, ไม่ deployed
+implemented และ verified ในเครื่อง (3211 passed at `32984af`; commit หลังจากนั้นเป็นเอกสาร) · tests reviews r1–r2 ปิด · implementation review r1 Ready for PR: yes, F1–F4 แก้แล้ว → re-check r2 · ยังไม่ merged, ไม่ deployed

@@ -468,5 +468,17 @@ round-1 table) and the round-2 files:
   the V-B = V-C observation on random-walk data: `docs/evidence/CORE-007.md`.
 
 ## Findings response (implementation review)
+
+Review r1 (`docs/reviews/CORE-007-r1.md`, fresh session, headless 4 of 6): Ready for PR: yes, F1-F4 Low. The implementer
+accepted every finding with the reviewer's recommended fix, under the owner's delegation of 2026-10-24. Suite at review
+3206 → 3211 passed.
+
 | ID | Accept/Dispute | Commit | Evidence |
 |----|----------------|--------|----------|
+| F1 | accept | `e2d5142` | `run` refuses `time_raw` outside `[timebase.RAW_MIN, RAW_MAX_EXCLUSIVE)` with BacktestError before `to_utc` (M1 and M15). `test_raw_time_outside_the_timebase_range_is_a_backtest_error` failed before (RawTimeOutOfRange), passes after |
+| F2 | accept | `ffcf289` | `decimal.Overflow` in the fill code (`trade.simulate`), the entry stop price, the step-1 scan and the equity update → BacktestError from it; the sizer is not wrapped. Tests for `stop_distance` 1E+1000000 (long, short) and a starting equity of 9.999…E+999999 failed 3/3 before (decimal.Overflow), pass after |
+| F3 | accept | `32984af` | `test_a_stop_in_the_last_minute_of_a_bar_closes_in_that_bar` (constructed V-B breakout, stop touched only in minute 14 of bar D+1, bar D+2 flagged). The reviewer's mutant `range(first[t], end[t] - 1)` on a scratch copy: 1 failed (this test, data_flags), 3210 passed; real code passes |
+| F4 | accept | `0b30638` | Evidence and test comment: one random dataset in 9 configurations, no price gaps or missing minutes |
+
+The reviewer re-checks only these IDs in the next round (`docs/reviews/CORE-007-r2.md`), as a fresh-eyes-reviewer
+subagent to keep the headless budget (4 of 6 used).
