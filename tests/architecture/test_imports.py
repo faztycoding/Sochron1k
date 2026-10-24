@@ -24,6 +24,13 @@ CORE-007 tests r2 (review F6, contract v1.5) adds a second backtest checker,
 _inspect_backtest_zoneinfo_source: the round-1 backtest checks plus a finding for every import of
 a name ZoneInfo from any module (sochron.timebase internals included) and every other reference
 to the name ZoneInfo. The round-1 functions, tables and test are unchanged.
+CORE-008 AC-06 runs the same checker over sochron.research: it may import sochron.core,
+sochron.timebase, sochron.strategy, sochron.costs, sochron.backtest, itself and the stdlib modules
+of _RESEARCH_STDLIB only (no data package, risk, broker, execution, journal or MetaTrader5; no os,
+clock, float, network, process or console), draws randomness only from a seeded random.Random
+through randrange, does file I/O only in src/sochron/research/registry.py (binary reads and
+appends there) and never deletes, renames or truncates a file. Every earlier function, table and
+test is unchanged.
 """
 
 import ast
@@ -2178,3 +2185,369 @@ def test_ac06_r2_core007_backtest_never_names_zoneinfo():
             continue
         findings.extend(f"{relative}: {violation}" for violation in violations)
     assert not findings, "AC-06: ZoneInfo or other forbidden names in sochron.backtest:\n" + "\n".join(findings)
+
+
+# CORE-008 AC-06: sochron.research (docs/contracts/CORE-008-research.md v1.5, Invariants; the
+# contract narrows docs/architecture.md section 8, row research: no data package at all) may import
+# sochron.core, sochron.timebase, sochron.strategy, sochron.costs, sochron.backtest, itself and the
+# stdlib modules of _RESEARCH_STDLIB only: no data (data.snapshot included), risk, broker, execution
+# or journal, no MetaTrader5, no os, clock, float, network, process or console. Randomness only from
+# random.Random built with a seed, drawn with randrange: the module-level functions of random, an
+# unseeded Random and the other generator methods are findings. File I/O only in
+# src/sochron/research/registry.py, and there only open(path, "ab" or "rb"), path.open("ab" or "rb")
+# and path.read_bytes() with a literal mode (the contract appends with open(path, "ab") and reads
+# bytes); nothing in research deletes, renames or truncates a file. Every function and table above
+# stays as it was: the research checker runs _inspect_source unchanged, drops only the "forbidden
+# import" findings of the four granted packages and, in registry.py only, the I/O finding of each
+# allowed call on its own line, and adds its own findings.
+_RESEARCH_GRANTS = ("sochron.timebase", "sochron.strategy", "sochron.costs", "sochron.backtest")
+_RESEARCH_STDLIB = frozenset({
+    "bisect", "collections", "collections.abc", "dataclasses", "datetime", "decimal", "enum", "functools",
+    "hashlib", "itertools", "json", "operator", "pathlib", "random", "types", "typing",
+})
+_RESEARCH_RNG_METHODS = frozenset({
+    "random", "uniform", "triangular", "gauss", "normalvariate", "lognormvariate", "expovariate",
+    "vonmisesvariate", "gammavariate", "betavariate", "paretovariate", "weibullvariate", "binomialvariate",
+    "choice", "choices", "shuffle", "sample", "seed", "getrandbits", "randint", "randbytes", "getstate",
+    "setstate",
+})
+_RESEARCH_FILE_CHANGES = frozenset({"unlink", "rmdir", "truncate", "rename", "touch", "mkdir"})
+_RESEARCH_MODES = frozenset({"ab", "rb"})
+_RESEARCH_IO = (": forbidden clock/I/O call open", ": forbidden file I/O call .open",
+                ": forbidden file I/O call .read_bytes")
+_RESEARCH_ADDED = (": forbidden float name", ": forbidden float literal", ": forbidden stdlib import ",
+                   ": forbidden random use ", ": forbidden random import ", ": forbidden unseeded Random",
+                   ": forbidden random method ", ": forbidden file change ")
+
+
+def _granted_to_research(finding):
+    """Whether a finding is only the import of one of the four packages granted to sochron.research."""
+    match = _IMPORT_FINDING.fullmatch(finding)
+    return bool(match) and any(_within(match["module"], grant) for grant in _RESEARCH_GRANTS)
+
+
+def _research_mode(node, position):
+    """The mode of an open call when it is a str literal (positional or mode=), else None."""
+    mode = node.args[position] if len(node.args) > position else next(
+        (keyword.value for keyword in node.keywords if keyword.arg == "mode"), None)
+    return mode.value if isinstance(mode, ast.Constant) and type(mode.value) is str else None
+
+
+def _research_allowed_io(tree):
+    """(line, finding suffix) of each binary read or append registry.py may make."""
+    allowed = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Name) and func.id == "open" and _research_mode(node, 1) in _RESEARCH_MODES:
+            allowed.add((node.lineno, _RESEARCH_IO[0]))
+        elif isinstance(func, ast.Attribute) and func.attr == "open" and _research_mode(node, 0) in _RESEARCH_MODES:
+            allowed.add((node.lineno, _RESEARCH_IO[1]))
+        elif isinstance(func, ast.Attribute) and func.attr == "read_bytes" and not node.args and not node.keywords:
+            allowed.add((node.lineno, _RESEARCH_IO[2]))
+    return allowed
+
+
+def _inspect_research_source(source, current_package, registry=False):
+    """CORE-008 AC-06: _inspect_source under the research package's rules and grants (registry.py may
+    make the allowed binary reads and appends), plus the float ban, the random rules, the file-change
+    ban and one finding per absolute import of a stdlib module not in _RESEARCH_STDLIB."""
+    tree = ast.parse(source)
+    findings = [item for item in _inspect_source(source, "sochron.research", current_package)
+                if not _granted_to_research(item)]
+    if registry:
+        allowed = {f"line {line}{suffix}" for line, suffix in _research_allowed_io(tree)}
+        findings = [item for item in findings if item not in allowed]
+    modules, constructors = set(), set()  # names bound to the random module and to random.Random
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules.update(alias.asname or "random" for alias in node.names if alias.name == "random")
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module == "random":
+            constructors.update(alias.asname or "Random" for alias in node.names if alias.name == "Random")
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == "float":
+            findings.append(f"line {node.lineno}: forbidden float name")
+        if isinstance(node, ast.Constant) and type(node.value) is float:
+            findings.append(f"line {node.lineno}: forbidden float literal")
+        on_module = isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id in modules
+        if on_module and node.attr != "Random":
+            findings.append(f"line {node.lineno}: forbidden random use random.{node.attr}")
+        if isinstance(node, ast.Call):
+            func = node.func
+            from_module = isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) and func.value.id in modules
+            generator = (from_module and func.attr == "Random") or (isinstance(func, ast.Name) and func.id in constructors)
+            if generator and not node.args and not node.keywords:
+                findings.append(f"line {node.lineno}: forbidden unseeded Random")
+            if isinstance(func, ast.Attribute) and func.attr in _RESEARCH_RNG_METHODS and not from_module:
+                findings.append(f"line {node.lineno}: forbidden random method .{func.attr}")
+            if isinstance(func, ast.Attribute) and func.attr in _RESEARCH_FILE_CHANGES:
+                findings.append(f"line {node.lineno}: forbidden file change .{func.attr}")
+        if isinstance(node, ast.Import):
+            names = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.level == 0:
+            names = [node.module or ""]
+            if node.module == "random":
+                findings += [f"line {node.lineno}: forbidden random import random.{alias.name}"
+                             for alias in node.names if alias.name != "Random"]
+        else:
+            continue
+        for name in names:
+            if name.split(".")[0] in sys.stdlib_module_names and name not in _RESEARCH_STDLIB:
+                findings.append(f"line {node.lineno}: forbidden stdlib import {name}")
+    return sorted(set(findings))
+
+
+def _inspect_as_research(source):
+    return _inspect_research_source(source, "sochron.research")
+
+
+def _inspect_as_registry(source):
+    return _inspect_research_source(source, "sochron.research", registry=True)
+
+
+# (label, source lines, exact findings); line 1 is _HEADER, so the first source line is 2.
+_RESEARCH_FORBIDDEN = (
+    ("data.snapshot", ("from sochron.data.snapshot import AggregatedBar",),
+     ("line 2: forbidden import sochron.data.snapshot",)),
+    ("the data package", ("import sochron.data",), ("line 2: forbidden import sochron.data",)),
+    ("data via the top package", ("from sochron import data",), ("line 2: forbidden import sochron.data",)),
+    ("data.acquire", ("import sochron.data.acquire",), ("line 2: forbidden import sochron.data.acquire",)),
+    ("risk", ("from sochron.risk import size_position",), ("line 2: forbidden import sochron.risk",)),
+    ("risk via the top package", ("from sochron import risk",), ("line 2: forbidden import sochron.risk",)),
+    ("broker", ("import sochron.broker",), ("line 2: forbidden import sochron.broker",)),
+    ("broker adapter", ("from sochron.broker.mt5 import connect",),
+     ("line 2: forbidden import sochron.broker.mt5",)),
+    ("execution", ("from sochron.execution import send",), ("line 2: forbidden import sochron.execution",)),
+    ("journal", ("import sochron.journal",), ("line 2: forbidden import sochron.journal",)),
+    ("a package that only shares a granted prefix", ("import sochron.backtests",),
+     ("line 2: forbidden import sochron.backtests",)),
+    ("MetaTrader5", ("import MetaTrader5 as mt5",), ("line 2: forbidden import MetaTrader5",)),
+    ("a third-party package", ("import numpy",), ("line 2: forbidden import numpy",)),
+    ("os", ("import os",), ("line 2: forbidden stdlib import os",)),
+    ("os.path", ("import os.path",), ("line 2: forbidden stdlib import os.path",)),
+    ("os, from-imported", ("from os import path",), ("line 2: forbidden stdlib import os",)),
+    ("the environment", ("import os", 'KEY = os.environ["MT5_LOGIN"]'),
+     ("line 2: forbidden stdlib import os", "line 3: forbidden environment/network access os.environ")),
+    ("a clock", ("import time", "STAMP = time.time()"),
+     ("line 2: forbidden stdlib import time", "line 3: forbidden clock/I/O call time.time")),
+    ("the current date", ("from datetime import datetime", "NOW = datetime.now()"),
+     ("line 3: forbidden clock/I/O call datetime.datetime.now",)),
+    ("a binary read outside registry.py", ("from pathlib import Path", 'ROWS = Path("r.jsonl").read_bytes()'),
+     ("line 3: forbidden file I/O call .read_bytes",)),
+    ("an append outside registry.py", ('HANDLE = open("r.jsonl", "ab")',), ("line 2: forbidden clock/I/O call open",)),
+    ("console output", ('print("run")',), ("line 2: forbidden clock/I/O call print",)),
+    ("a console stream", ("import sys", 'sys.stdout.write("x")'),
+     ("line 2: forbidden stdlib import sys", "line 3: forbidden console stream access sys.stdout",
+      "line 3: forbidden console stream access sys.stdout.write")),
+    ("a process", ("import subprocess",),
+     ("line 2: forbidden process import subprocess", "line 2: forbidden stdlib import subprocess")),
+    ("a socket", ("import socket",), ("line 2: forbidden import socket", "line 2: forbidden stdlib import socket")),
+    ("http", ("import http.client",),
+     ("line 2: forbidden network import http.client", "line 2: forbidden stdlib import http.client")),
+    ("urllib", ("import urllib.request",), ("line 2: forbidden stdlib import urllib.request",)),
+    ("secrets", ("import secrets",),
+     ("line 2: forbidden randomness import secrets", "line 2: forbidden stdlib import secrets")),
+    ("logging", ("import logging",), ("line 2: forbidden stdlib import logging",)),
+    ("math is free of side effects but not listed", ("import math",), ("line 2: forbidden stdlib import math",)),
+    ("zoneinfo: time goes through sochron.timebase", ("from zoneinfo import ZoneInfo",),
+     ("line 2: forbidden stdlib import zoneinfo",)),
+    ("shutil", ("import shutil",), ("line 2: forbidden stdlib import shutil",)),
+    ("tempfile", ("import tempfile",), ("line 2: forbidden stdlib import tempfile",)),
+    ("a float call", ('RATE = float("1.5")',), ("line 2: forbidden float name",)),
+    ("a float literal", ("SPREAD = 0.24",), ("line 2: forbidden float literal",)),
+    ("a float return type", ("def ratio(a, b) -> float:", "    return a / b"), ("line 2: forbidden float name",)),
+    ("the module-level generator", ("import random", "DRAW = random.random()"),
+     ("line 3: forbidden random use random.random",)),
+    ("module-level randrange", ("import random", "def draw(n):", "    return random.randrange(n)"),
+     ("line 4: forbidden random use random.randrange",)),
+    ("seeding the module-level generator", ("import random", "random.seed(7)"),
+     ("line 3: forbidden random use random.seed",)),
+    ("module-level randrange, aliased", ("import random as rnd", "DRAW = rnd.randrange(10)"),
+     ("line 3: forbidden random use random.randrange",)),
+    ("randrange from-imported", ("from random import randrange",),
+     ("line 2: forbidden random import random.randrange",)),
+    ("choice from-imported, aliased", ("from random import choice as pick",),
+     ("line 2: forbidden random import random.choice",)),
+    ("an unseeded generator", ("import random", "RNG = random.Random()"), ("line 3: forbidden unseeded Random",)),
+    ("an unseeded generator, from-imported", ("from random import Random", "RNG = Random()"),
+     ("line 3: forbidden unseeded Random",)),
+    ("SystemRandom", ("import random", "RNG = random.SystemRandom()"),
+     ("line 3: forbidden random use random.SystemRandom", "line 3: forbidden randomness access random.SystemRandom")),
+    ("a float draw from a generator", ("def draw(rng):", "    return rng.random()"),
+     ("line 3: forbidden random method .random",)),
+    ("choice from a generator", ("def pick(rng, pool):", "    return rng.choice(pool)"),
+     ("line 3: forbidden random method .choice",)),
+    ("shuffle", ("def mix(rng, pool):", "    rng.shuffle(pool)"), ("line 3: forbidden random method .shuffle",)),
+    ("reseeding a generator", ("def again(rng):", "    rng.seed(1)"), ("line 3: forbidden random method .seed",)),
+    ("deleting a file", ("def drop(path):", "    path.unlink()"), ("line 3: forbidden file change .unlink",)),
+    ("truncating a file", ("def cut(handle):", "    handle.truncate(0)"), ("line 3: forbidden file change .truncate",)),
+    ("renaming a file", ("def move(path, other):", "    path.rename(other)"), ("line 3: forbidden file change .rename",)),
+)
+_RESEARCH_ALLOWED = (
+    ("core", ("import sochron.core", "from sochron.core import Bar", "from sochron import core")),
+    ("timebase", ("import sochron.timebase", "from sochron.timebase import TimeRule, bar_open, to_utc",
+                  "from sochron import timebase")),
+    ("strategy", ("import sochron.strategy", "from sochron.strategy import entry_blockers, indicators",
+                  "from sochron import strategy", "from sochron.strategy.params import H001Params")),
+    ("costs", ("import sochron.costs", "from sochron.costs import CONTEXT, CostModel", "from sochron import costs")),
+    ("backtest", ("import sochron.backtest", "from sochron.backtest import Result, SizedLots, run, simulate_trade",
+                  "from sochron import backtest", "from sochron.backtest.trade import simulate_trade")),
+    ("its own package", ("from . import registry", "from .registry import append_record",
+                         "from sochron.research.model import RunRecord")),
+    ("each listed stdlib module", tuple(f"import {name}" for name in sorted(_RESEARCH_STDLIB))),
+    ("from-imports of listed modules", (
+        "from bisect import bisect_right", "from collections.abc import Mapping, Sequence",
+        "from dataclasses import dataclass, fields, replace", "from datetime import UTC, datetime",
+        "from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal, localcontext", "from hashlib import sha256",
+        "from itertools import islice", "from json import dumps, loads", "from pathlib import Path",
+        "from random import Random", "from typing import Literal",
+    )),
+    ("a seeded generator and randrange", ("import random", "def generator(seed):", "    return random.Random(seed)",
+                                          "def draw(rng, pool):", "    return pool.pop(rng.randrange(len(pool)))")),
+    ("a seeded generator, from-imported", ("from random import Random", "RNG = Random(7)", "VALUE = RNG.randrange(10)")),
+    ("a path check without I/O", ("from pathlib import Path", "def is_registry(path: Path) -> bool:",
+                                  '    return path.name.endswith(".jsonl")')),
+    ("hashing canonical JSON", ("import hashlib", "import json", "def run_id(obj):",
+                                '    text = json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)',
+                                '    return hashlib.sha256(text.encode("ascii")).hexdigest()')),
+    ("Decimal in the costs context", ("from decimal import Decimal, localcontext", "from sochron.costs import CONTEXT",
+                                      "def mean(values):", "    with localcontext(CONTEXT):",
+                                      "        return sum(values, Decimal(0)) / len(values)")),
+    ("a field named seed is no generator method", ("def seed_of(record):", "    return record.seed")),
+)
+# Inspected as src/sochron/research/registry.py: (label, source lines, exact findings).
+_RESEARCH_REGISTRY_CASES = (
+    ("an append with open(path, 'ab')", ("def append(path, line):", '    with open(path, "ab") as handle:',
+                                         "        handle.write(line)", "        handle.flush()"), ()),
+    ("a binary read with read_bytes", ("def read(path):", "    return path.read_bytes()"), ()),
+    ("a binary read with open(path, 'rb')", ("def read(path):", '    with open(path, "rb") as handle:',
+                                             "        return handle.read()"), ()),
+    ("path.open('ab') and mode= forms", ("def append(path, line):", '    with path.open("ab") as handle:',
+                                         "        handle.write(line)", "def append_too(path, line):",
+                                         '    with open(path, mode="ab") as handle:', "        handle.write(line)",
+                                         "def read(path):", '    with path.open(mode="rb") as handle:',
+                                         "        return handle.read()"), ()),
+    ("a text append (CRLF on Windows)", ("def append(path, text):", '    with open(path, "a") as handle:',
+                                         "        handle.write(text)"), ("line 3: forbidden clock/I/O call open",)),
+    ("an overwrite", ("def write(path, line):", '    return open(path, "w")'), ("line 3: forbidden clock/I/O call open",)),
+    ("a binary overwrite", ("def write(path):", '    return open(path, "wb")'), ("line 3: forbidden clock/I/O call open",)),
+    ("read and write", ("def change(path):", '    return open(path, "r+b")'), ("line 3: forbidden clock/I/O call open",)),
+    ("the default text mode", ("def read(path):", "    return open(path)"), ("line 3: forbidden clock/I/O call open",)),
+    ("a mode that is no literal", ("def append(path, mode):", "    return open(path, mode)"),
+     ("line 3: forbidden clock/I/O call open",)),
+    ("open through another name", ("OPEN = open", "def append(path):", '    return OPEN(path, "ab")'),
+     ("line 4: forbidden clock/I/O call open",)),
+    ("path.open in text mode", ("def append(path):", '    return path.open("a")'),
+     ("line 3: forbidden file I/O call .open",)),
+    ("read_text", ("def read(path):", "    return path.read_text()"), ("line 3: forbidden file I/O call .read_text",)),
+    ("write_bytes", ("def write(path, data):", "    path.write_bytes(data)"),
+     ("line 3: forbidden file I/O call .write_bytes",)),
+    ("write_text", ("def write(path, text):", "    path.write_text(text)"),
+     ("line 3: forbidden file I/O call .write_text",)),
+    ("stat", ("def size(path):", "    return path.stat().st_size"), ("line 3: forbidden file I/O call .stat",)),
+    ("console output", ("def log(record):", "    print(record)"), ("line 3: forbidden clock/I/O call print",)),
+    ("deleting the registry", ("def drop(path):", "    path.unlink()"), ("line 3: forbidden file change .unlink",)),
+    ("truncating the registry", ("def cut(handle):", "    handle.truncate(0)"),
+     ("line 3: forbidden file change .truncate",)),
+    ("os", ("import os",), ("line 2: forbidden stdlib import os",)),
+)
+# The research grants are for research only: (package, checker, imports it must still report).
+_RESEARCH_GRANTS_ELSEWHERE = (
+    ("sochron.timebase", lambda source: _inspect_source(source, "sochron.timebase", "sochron.timebase"),
+     ("sochron.backtest", "sochron.research")),
+    ("sochron.core", lambda source: _inspect_core_source(source, "sochron.core"), ("sochron.backtest",)),
+    ("sochron.costs", lambda source: _inspect_costs_source(source, "sochron.costs"), ("sochron.backtest",)),
+    ("sochron.risk", lambda source: _inspect_risk_source(source, "sochron.risk"), ("sochron.backtest",)),
+    ("sochron.data.snapshot", _inspect_as_snapshot, ("sochron.backtest", "sochron.research")),
+    ("sochron.strategy", _inspect_as_listed_strategy, ("sochron.backtest", "sochron.costs", "sochron.research")),
+    ("sochron.backtest", _inspect_as_backtest_zoneinfo, ("sochron.research",)),
+)
+
+
+def test_ac06_core008_research_imports_only_its_grants_and_listed_stdlib_and_does_io_only_in_registry():
+    wrong = []
+    # The checker first: exact findings for forbidden sources, none for the granted ones.
+    for label, lines, expected in _RESEARCH_FORBIDDEN:
+        findings = _inspect_as_research(_synthetic(lines))
+        if findings != list(expected):
+            wrong.append(f"{label}: expected {list(expected)}, got {findings}")
+    for label, lines in _RESEARCH_ALLOWED:
+        for inspect in (_inspect_as_research, _inspect_as_registry):
+            findings = inspect(_synthetic(lines))
+            if findings:
+                wrong.append(f"{label}: legitimate source reported: {findings}")
+    for label, lines, expected in _RESEARCH_REGISTRY_CASES:
+        findings = _inspect_as_registry(_synthetic(lines))
+        if findings != list(expected):
+            wrong.append(f"registry.py, {label}: expected {list(expected)}, got {findings}")
+        if len(lines) > 1 and not _inspect_as_research(_synthetic(lines)):
+            wrong.append(f"outside registry.py, {label}: no finding")
+    for package, inspect, modules in _RESEARCH_GRANTS_ELSEWHERE:
+        for module in modules:
+            findings = inspect(_synthetic((f"import {module}",)))
+            if f"line 2: forbidden import {module}" not in findings:
+                wrong.append(f"{package} importing {module}: got {findings}")
+    # Every FIX-001 and CORE-001 rule holds for research too: the findings of _inspect_source (less the
+    # four grants) all stay, anything added is one of the research kinds, and registry.py only loses
+    # the I/O findings of its allowed calls.
+    sources = [(label, source) for label, source, _ in _forbidden_cases()]
+    for table in (_SCOPED_CASES, _LEGITIMATE_SOURCES, _BINDING_CASES, _ORIGINAL_CASES, _SNAPSHOT_FORBIDDEN_IMPORTS,
+                  _SNAPSHOT_ALLOWED_IMPORTS, _STRATEGY_FORBIDDEN, _STRATEGY_ALLOWED, _STRATEGY_UNLISTED,
+                  _STRATEGY_LISTED, _BACKTEST_FORBIDDEN, _BACKTEST_ALLOWED, _BACKTEST_ZONEINFO_FORBIDDEN,
+                  _BACKTEST_ZONEINFO_ALLOWED, _RESEARCH_FORBIDDEN, _RESEARCH_ALLOWED, _RESEARCH_REGISTRY_CASES):
+        sources += [(row[0], _synthetic(row[1])) for row in table]
+    for label, source in sources:
+        base = [item for item in _inspect_source(source, "sochron.research", "sochron.research")
+                if not _granted_to_research(item)]
+        findings = _inspect_as_research(source)
+        added = set(findings) - set(base)
+        if not set(base) <= set(findings) or not all(any(kind in item for kind in _RESEARCH_ADDED) for item in added):
+            wrong.append(f"{label}: the CORE-001 checker {base}; the research checker {findings}")
+        in_registry = _inspect_as_registry(source)
+        dropped = set(findings) - set(in_registry)
+        if not set(in_registry) <= set(findings) or not all(item.endswith(_RESEARCH_IO) for item in dropped):
+            wrong.append(f"{label}: outside registry.py {findings}; in registry.py {in_registry}")
+    for label, source, expected in _forbidden_cases():
+        findings = _inspect_as_research(source)
+        wrong += [f"{label}: line {line} lacks {name}; got {findings}"
+                  for line, name in expected if not _reported(findings, line, name)]
+    for label, lines, expected in _SCOPED_CASES:
+        findings = _inspect_as_research(_synthetic(lines))
+        wrong += [f"{label}: line {line} lacks {name}; got {findings}"
+                  for line, name in expected if not _reported(findings, line, name)]
+    for label, lines, expected, absent in _BINDING_CASES:
+        findings = _inspect_as_research(_synthetic(lines))
+        wrong += [f"{label}: line {line} lacks {name}; got {findings}"
+                  for line, name in expected if not _reported(findings, line, name)]
+        wrong += [f"{label}: line {line} reports {name}; got {findings}"
+                  for line, name in absent if _reported(findings, line, name)]
+    for label, lines, common, money in _ORIGINAL_CASES:
+        # research may import random (for random.Random), so only the float part of the costs/risk row
+        # applies; its "from random import choice" is covered by _RESEARCH_FORBIDDEN.
+        findings = _inspect_as_research(_synthetic(lines))
+        wrong += [f"{label}: lacks {finding!r}; got {findings}"
+                  for finding in common + tuple(item for item in money if ": forbidden float " in item)
+                  if finding not in findings]
+    assert not wrong, "AC-06: the research checker:\n" + "\n".join(wrong)
+
+    # Then the package itself, which must exist with its registry module.
+    source_root = Path.cwd() / "src"
+    directory = source_root / "sochron" / "research"
+    assert directory.is_dir(), f"AC-06: {directory} does not exist; implementation missing"
+    files = sorted(directory.rglob("*.py"))
+    assert files, f"AC-06: {directory} contains no Python source; implementation missing"
+    registry_file = directory / "registry.py"
+    assert registry_file.is_file(), f"AC-06: {registry_file} does not exist; implementation missing"
+    findings = []
+    for path in files:
+        relative = path.relative_to(source_root)
+        current_package = ".".join(relative.parent.parts)
+        try:
+            violations = _inspect_research_source(path.read_text(encoding="utf-8-sig"), current_package,
+                                                  registry=path == registry_file)
+        except SyntaxError as error:
+            findings.append(f"{relative}:{error.lineno}: invalid Python syntax: {error.msg}")
+            continue
+        findings.extend(f"{relative}: {violation}" for violation in violations)
+    assert not findings, "AC-06: forbidden dependencies or side effects in sochron.research:\n" + "\n".join(findings)

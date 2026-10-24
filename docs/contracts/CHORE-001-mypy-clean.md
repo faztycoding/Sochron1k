@@ -1,7 +1,7 @@
 # TASK CHORE-001 — ทำให้แผง Problems (mypy ใน VS Code) ไม่มี error ในแพ็กเกจ `sochron` บน main โดยไม่เปลี่ยนพฤติกรรม
 
 Version v1.1 (v1: strategy และ costs 11 ข้อ → v1.1 2026-10-24 13:4x: review r1 F2 พบ error อีก 21 ข้อใน risk และ data.snapshot ที่แผงจะแสดงเมื่อเปิดไฟล์ เจ้าของสั่ง "ทำให้เสร็จทั้งหมด" จึงขยายให้ครอบทั้งแพ็กเกจ) · Owner เจ้าของ repository · Parent คำขอของเจ้าของในแชท Claude 2026-10-24 ~13:2x ("แก้ problem ด้วย", "เอาให้เสร็จ") · Tier **Lite** · Branch `chore/CHORE-001-mypy-clean`
-Status: **approved by owner 2026-10-24** — เจ้าของสั่งให้แก้ Problems ในแชทโดยตรง และมอบอำนาจ "เอา recommanded ทุกอัน" ตั้งแต่ ~07:0x (Claude เขียน contract นี้ตามคำสั่งนั้น · veto ได้ก่อน merge)
+Status: **merged 2026-10-24 14:56 (PR #19 → main `3af8333`); CI ของ PR และของ main เขียว** (`docs/evidence/CHORE-001.md` หัวข้อ "หลัง merge") · เดิม: **approved by owner 2026-10-24** — เจ้าของสั่งให้แก้ Problems ในแชทโดยตรง และมอบอำนาจ "เอา recommanded ทุกอัน" ตั้งแต่ ~07:0x (Claude เขียน contract นี้ตามคำสั่งนั้น · veto ได้ก่อน merge)
 Hypothesis (research tasks): ไม่ใช่งานวิจัย
 
 ## Risk tier (Q1–Q6, one line each; unsure = yes)

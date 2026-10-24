@@ -64,7 +64,16 @@ def _exit(position: Position, row: IndicatorRow, params: H001Params, long_entry:
     return row.hh_m is not None and row.close > row.hh_m
 
 
-def _invalid(row: IndicatorRow, next_open_utc: datetime) -> tuple[str, ...]:
+def entry_blockers(row: IndicatorRow, next_open_utc: datetime) -> tuple[str, ...]:
+    """Why an entry at the open next_open_utc after row would be skipped, in contract order (empty = may enter).
+
+    The one invalidation check: decide uses it for its skip reasons and research uses it for the bars a
+    random entry may take (CORE-008 D1).
+    """
+    exact(row, IndicatorRow, "row")
+    exact(next_open_utc, datetime, "next_open_utc")
+    if next_open_utc.utcoffset() is None:
+        raise StrategyError("next_open_utc must be timezone-aware")
     reasons = []
     if not in_entry_window(next_open_utc, NY_ENTRY_WINDOW):
         reasons.append("outside_window")
@@ -111,11 +120,11 @@ def decide(
         return _decision("exit" if _exit(position, row, params, long_entry, short_entry) else "hold")
     if not (long_entry or short_entry):
         return _decision("none")
-    reasons = _invalid(row, next_open_utc)
+    reasons = entry_blockers(row, next_open_utc)  # looked up in this module at call time
     if reasons:
         return _decision("skip", reasons=reasons)
     atr = row.atr
-    if atr is None:  # not reached: _invalid reports atr_zero for a missing ATR, so the entry is a skip
+    if atr is None:  # not reached: entry_blockers reports atr_zero for a missing ATR, so the entry is a skip
         raise StrategyError("an entry needs a known ATR")
     with localcontext(CONTEXT):
         stop_distance = params.k * atr

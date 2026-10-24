@@ -5,7 +5,7 @@ bar. No I/O, no clock, no randomness and no MetaTrader5: the caller passes every
 open time of the next bar for the New York entry window.
 """
 
-from .h001 import Decision, Position, decide
+from .h001 import Decision, Position, decide, entry_blockers
 from .indicators import IndicatorRow, indicators
 from .params import H001_DEFAULTS, STRATEGY_ID, STRATEGY_VERSION, H001Params, StrategyError, Variant
 
@@ -20,5 +20,6 @@ __all__ = [
     "StrategyError",
     "Variant",
     "decide",
+    "entry_blockers",
     "indicators",
 ]

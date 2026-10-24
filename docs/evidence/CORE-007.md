@@ -62,5 +62,18 @@ Contract: `docs/contracts/CORE-007-backtest.md` v1.5 (Tier Standard; อนุ�
 - `simulate_trade` ไม่ตรวจ M1 หลังจุดที่ไม้ปิด (v1.5 ข้อ 3 เพื่อความเร็วของ CORE-008)
 - drawdown ระหว่างถือไม้ไม่อยู่ใน equity points (D10) · halt ของ risk ไม่ใช้ (D5)
 
+## หลัง merge (2026-10-24, GitHub REST API แบบไม่ล็อกอิน)
+- PR #18 `feat/CORE-007-backtest` · Claude push ถึง `8e24be4` · เจ้าของกด "Update branch" → `8e52171` (`git diff --stat 8e24be4 8e52171` ว่าง: ไม่เปลี่ยนไฟล์) · merge เป็น `6469ab0` 14:18 +07 (07:18:59Z) · label `owner-approved-control-change`
+- ตรวจซ้ำบน main ล่าสุด `3af8333` (หลัง CHORE-001 merge ด้วย) ใน worktree แยก: `uv run --offline pytest tests -q -p no:cacheprovider` → **3212 passed** · mypy ของ extension `-p sochron` → no issues found in 31 source files (14:59)
+
+| Run | Event / head | ผล |
+|-----|--------------|----|
+| `40072440625` ci | pull_request `8e24be4` | success |
+| `40072439130` control-gate | pull_request_target `8e24be4` (opened) | failure: event "opened" มาก่อน label (เหมือนทุก PR) |
+| `40072452494` control-gate | pull_request_target `8e24be4` (labeled) | success |
+| `40072626155` ci | pull_request `8e52171` | success |
+| `40072625820` control-gate | pull_request_target `8e52171` | success |
+| `40073650507` ci | push `6469ab0` (main) | success |
+
 ## Delivery state
-implemented และ verified ในเครื่อง (3212 passed at `cde8945`) · tests reviews r1–r2 ปิด · implementation review r1 (F1–F4) และ re-check r2 (F1–F4 ปิด, F5 แก้แล้ว) Ready for PR: yes · ยังไม่ merged, ไม่ deployed
+**merged** 2026-10-24 14:18 (PR #18 → `6469ab0`) · CI เขียวบน PR และ main · เดิม: implemented และ verified ในเครื่อง (3212 passed at `cde8945`) · tests reviews r1–r2 ปิด · implementation review r1 (F1–F4) และ re-check r2 (F1–F4 ปิด, F5 แก้แล้ว) Ready for PR: yes · ยังไม่ merged, ไม่ deployed
