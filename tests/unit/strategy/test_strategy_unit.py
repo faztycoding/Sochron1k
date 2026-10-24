@@ -58,6 +58,27 @@ def test_one_minus_alpha_is_computed_from_the_rounded_alpha():
         assert expected != rival
 
 
+def test_fast_and_slow_ema_use_one_minus_the_rounded_alpha():
+    # Review CORE-006-r1 F4: the s = 62 case above guards the slow EMA only. f = 22 is the one fast period
+    # where 1 - alpha and (f - 1)/(f + 1) differ in the 28th digit (s = 78 is another slow one).
+    params = H001Params("B", 22, 78, 20, Decimal("0.50"), 96, 48, Decimal("2.0"))
+    bars = _series(40, 7)
+    rows = indicators(bars, params)
+    for period, field in ((22, "ema_f"), (78, "ema_s")):
+        with localcontext(CONTEXT):
+            alpha = Decimal(2) / Decimal(period + 1)
+            keep = Decimal(1) - alpha
+            other = Decimal(period - 1) / Decimal(period + 1)
+            assert keep != other
+            expected = rival = bars[0].bar.close
+            for t, item in enumerate(bars):
+                if t:
+                    expected = alpha * item.bar.close + keep * expected
+                    rival = alpha * item.bar.close + other * rival
+                assert getattr(rows[t], field) == expected
+            assert expected != rival
+
+
 def test_sliding_windows_equal_brute_force():
     params = H001Params("B", 16, 64, 20, Decimal("0.50"), 96, 48, Decimal("2.0"))
     bars = _series(700, 11, flag_every=97, gap_spread_every=150)
