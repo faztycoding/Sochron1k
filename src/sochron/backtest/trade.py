@@ -182,11 +182,12 @@ def check_trade_values(stop_distance: Decimal, risk_money: Decimal, actual_risk:
         raise BacktestError("actual_risk must be None or positive")
 
 
-def check_flags(flags: frozenset[str], name: str) -> frozenset[str]:
-    exact(flags, frozenset, name)
-    for flag in flags:
+def check_flags(flags: object, name: str) -> frozenset[str]:
+    """The same frozenset when it is exactly a frozenset of exactly str; TypeError otherwise."""
+    checked = exact(flags, frozenset, name)
+    for flag in checked:
         exact(flag, str, f"a flag in {name}")
-    return flags
+    return checked
 
 
 def simulate_trade(

@@ -13,7 +13,7 @@ from decimal import Decimal, Overflow, localcontext
 
 from sochron.core import Bar
 from sochron.costs import CONTEXT, CostModel, check_volume
-from sochron.strategy import STRATEGY_VERSION, H001Params, decide, indicators
+from sochron.strategy import STRATEGY_VERSION, H001Params, Position, decide, indicators
 from sochron.timebase import RAW_MAX_EXCLUSIVE, RAW_MIN, TimeRule, bar_open, to_utc
 
 from .model import BACKTEST_VERSION, SIDES, BacktestError, Result, Rollover, Side, SizedLots, Sizer, Skip, Trade, exact, finite
@@ -30,10 +30,8 @@ def _m15_shape(m15: Sequence) -> list[tuple[Bar, frozenset[str]]]:
     """M15 bars by shape (D9): .bar exactly core.Bar, .flags a frozenset of str."""
     checked = []
     for index, item in enumerate(m15):
-        bar = getattr(item, "bar", None)
-        flags = getattr(item, "flags", None)
-        exact(bar, Bar, f"m15[{index}].bar")
-        check_flags(flags, f"m15[{index}].flags")
+        bar = exact(getattr(item, "bar", None), Bar, f"m15[{index}].bar")
+        flags = check_flags(getattr(item, "flags", None), f"m15[{index}].flags")
         checked.append((bar, flags))
     return checked
 
@@ -175,7 +173,7 @@ class _Run:
 
     def _decide(self, t: int) -> None:
         held = self.open
-        position = "flat" if held is None else held.side
+        position: Position = "flat" if held is None else held.side
         try:
             decision = decide(self.rows, t, position, self.bars15[t + 1][0].time_utc, self.params)
         except Overflow as error:
@@ -187,8 +185,11 @@ class _Run:
             self.skips.append(Skip(time_raw, decision.reasons))
         elif decision.action in ("enter_long", "enter_short"):
             side: Side = "long" if decision.action == "enter_long" else "short"
+            stop_distance = decision.stop_distance
+            if stop_distance is None:  # not reached: decide sets k x ATR on every entry (CORE-006)
+                raise BacktestError("decide returned an entry without a stop distance")
             if side in self.sides:
-                self._enter(t, side, decision.stop_distance, time_raw)
+                self._enter(t, side, stop_distance, time_raw)
 
     def _enter(self, t: int, side: Side, stop_distance: Decimal, time_raw: int) -> None:
         if self.equity <= 0:

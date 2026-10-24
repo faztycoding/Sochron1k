@@ -8,13 +8,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, time
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, TypeVar, cast
 
 from sochron.costs import CostBreakdown
 from sochron.timebase import to_zone
 
 BACKTEST_VERSION = "backtest-v1"
 
+T = TypeVar("T")
 Side = Literal["long", "short"]
 SIDES: frozenset[str] = frozenset({"long", "short"})
 ExitReason = Literal["signal", "stop", "end_of_data"]
@@ -26,10 +27,11 @@ class BacktestError(ValueError):
     """A value of the right type that the backtest contract does not allow."""
 
 
-def exact(value: object, kind: type, name: str) -> None:
-    """TypeError unless value is exactly of kind (no subclass, no bool for int)."""
+def exact(value: object, kind: type[T], name: str) -> T:
+    """TypeError unless value is exactly of kind (no subclass, no bool for int); returns the same object."""
     if type(value) is not kind:
         raise TypeError(f"{name} must be exactly {kind.__name__}, not {type(value).__name__}")
+    return cast(T, value)
 
 
 def exact_optional(value: object, kind: type, name: str) -> None:
