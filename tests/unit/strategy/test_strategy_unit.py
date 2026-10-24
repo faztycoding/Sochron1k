@@ -9,7 +9,7 @@ from time import perf_counter
 
 from sochron.core import Bar
 from sochron.data.snapshot import AggregatedBar
-from sochron.strategy import H001Params, decide, indicators
+from sochron.strategy import H001Params, IndicatorRow, decide, indicators
 from sochron.strategy.params import CONTEXT
 
 
@@ -91,3 +91,25 @@ def test_sixty_thousand_bars_run_quickly():
     for t in range(len(rows) - 1):
         decide(rows, t, "flat", bars[t + 1].bar.time_utc, params)
     assert perf_counter() - began < 30
+
+
+def _row(ts: Decimal | None, hh_n: Decimal | None = None) -> IndicatorRow:
+    """A warm row that passes every invalidation check, with the given trend score and entry channel."""
+    price = Decimal("2000.00")
+    return IndicatorRow(price, price, Decimal("4.00"), ts, hh_n, None, None, None, price, 200, Decimal(200), True,
+                        frozenset())
+
+
+IN_WINDOW = datetime(2026, 3, 10, 14, 0, tzinfo=UTC)  # 10:00 New York (EDT), inside the entry window
+
+
+def test_variant_a_short_threshold_mirrors_the_long_one_at_every_digit():
+    # Review CORE-006-r1 F1: H001Params accepts a theta with more than 28 significant digits; the short
+    # rule must compare against exactly -theta (D5), not -theta rounded to the module precision.
+    theta = Decimal("0.25000000000000000000000000006")
+    params = H001Params("A", 16, 64, 20, theta, 96, 48, Decimal("2.0"))
+    above = Decimal("0.2500000000000000000000000001")
+    long_rows = (_row(Decimal("0.25")), _row(above))
+    short_rows = (_row(Decimal("-0.25")), _row(Decimal("-0.2500000000000000000000000001")))
+    assert decide(long_rows, 1, "flat", IN_WINDOW, params).action == "enter_long"
+    assert decide(short_rows, 1, "flat", IN_WINDOW, params).action == "enter_short"

@@ -40,8 +40,7 @@ def _signals(row: IndicatorRow, previous: IndicatorRow | None, params: H001Param
         if ts is None or previous is None or previous.ts is None:
             return False, False
         theta = params.theta
-        with localcontext(CONTEXT):
-            negative_theta = -theta
+        negative_theta = theta.copy_negate()  # exact at any number of digits, so short mirrors long (D5)
         return (ts > theta and previous.ts <= theta), (ts < negative_theta and previous.ts >= negative_theta)
     long_breakout = row.hh_n is not None and row.close > row.hh_n
     short_breakout = row.ll_n is not None and row.close < row.ll_n
