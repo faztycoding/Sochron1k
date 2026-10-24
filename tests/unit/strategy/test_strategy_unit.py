@@ -2,7 +2,9 @@
 contract; these pin what the implementer relied on: the 1 - alpha reading of the EMA rule, the O(n)
 sliding windows against brute force, and speed on a realistic number of bars."""
 
+import importlib
 import random
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, localcontext
 from time import perf_counter
@@ -126,3 +128,25 @@ def test_naive_next_open_is_refused_for_every_position(position, breakout):
     rows = (_row(None), _row(None, hh_n=Decimal("1999.00") if breakout else None))
     with pytest.raises(StrategyError, match="timezone"):
         decide(rows, 1, position, datetime(2026, 3, 10, 13, 45), params)
+
+
+def test_flag_counter_drops_flags_that_left_the_lookback(monkeypatch):
+    # Review CORE-006-r1 F3: flags whose count fell to zero stayed in the Counter, and every row walked every
+    # key ever seen, so a flag vocabulary that grows with the series made indicators() quadratic. Counting
+    # keys (not timing) keeps this check deterministic on any runner.
+    sizes = []
+
+    class SizedCounter(Counter):
+        def update(self, *args, **kwargs):
+            super().update(*args, **kwargs)
+            sizes.append(len(self))
+
+    monkeypatch.setattr(importlib.import_module("sochron.strategy.indicators"), "Counter", SizedCounter)
+    params = H001Params("A", 16, 64, 20, Decimal("0.50"), 96, 48, Decimal("2.0"))
+    span = max(params.n, 96) + 1
+    bars = [AggregatedBar(item.bar, frozenset({f"defect_{t}"})) for t, item in enumerate(_series(600, 13))]
+    rows = indicators(bars, params)
+    assert len(sizes) > len(bars)
+    assert max(sizes) <= span + 1  # bar t joins before bar t - span leaves (600 before the fix)
+    for t, row in enumerate(rows):
+        assert row.lookback_flags == frozenset(f"defect_{i}" for i in range(max(0, t - span + 1), t + 1))

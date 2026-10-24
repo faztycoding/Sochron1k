@@ -142,8 +142,11 @@ def indicators(bars: Sequence[object], params: H001Params) -> tuple[IndicatorRow
                 median = (Decimal(spreads[_MEDIAN_SPAN // 2 - 1]) + Decimal(spreads[_MEDIAN_SPAN // 2])) / Decimal(2)
             flags.update(bar_flags - _IGNORED_FLAGS)
             if t >= span:
-                flags.subtract(items[t - span][1] - _IGNORED_FLAGS)
-            lookback = frozenset(flag for flag, count in flags.items() if count > 0)
+                for flag in items[t - span][1] - _IGNORED_FLAGS:
+                    flags[flag] -= 1
+                    if not flags[flag]:
+                        del flags[flag]  # keep only flags still in the lookback, so each row stays O(window)
+            lookback = frozenset(flags)
             rows.append(
                 IndicatorRow(ema_f, ema_s, atr_t, ts, hh_n, ll_n, hh_m, ll_m, close, bar.spread, median,
                              t >= warm_from, lookback)
