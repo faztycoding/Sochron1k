@@ -13,7 +13,7 @@ Contract: `docs/contracts/CORE-008-research.md` v1.5 (Tier Standard; อนุ�
 | AC-04 random-entry baseline: ลำดับการสุ่มตามขั้นตอน, seed จากฐาน, ข้อมูลราคานิ่งได้ −0.024 ทุกรอบ, คำนวณใน CONTEXT, ปฏิเสธเวลาที่ไม่ใช่ M1 | **PASS** | tests ล็อก AC-04 (r1 + r2) เขียว |
 | AC-05 neighbours และ evaluate 10 แถวที่ขอบเกณฑ์ทุกแถว, input ที่ขาด, input ไม่สอดคล้อง | **PASS** | tests ล็อก AC-05 (r1 + r2) เขียว |
 | AC-06 รายงานตรงแบบทุกบรรทัด, architecture (import และ I/O), `entry_blockers` | **PASS** | report + entry_blockers เขียว · architecture 18 tests เขียว |
-| AC-07 ทั้ง suite ผ่าน skipped 0 | **PASS ในเครื่อง** · CI รอ run ของ PR | `3343 passed` ที่ `23ba734` |
+| AC-07 ทั้ง suite ผ่าน skipped 0 | **PASS** · CI เขียวบน PR #20 และ main | `3343 passed` ที่ `23ba734` · 3353 ที่ `7ec8bc8` · CI run `40089715217` (PR), `40089777375` (main `2b8c97a`) · 3355 หลัง tests r3 (ในเครื่อง) |
 | ความเร็ว (unit test/หลักฐาน): baseline 1,000 รอบ × K = 100 × h ≈ 200 บน M1 100,000 แท่ง | **วัดแล้ว 72.3 วินาที** | ช้ากว่าสูตรที่ contract ประมาณราว 2.5 เท่า ดูหัวข้อ "ความเร็ว" |
 
 ## สิ่งที่ส่งมอบ (ไฟล์)
@@ -53,7 +53,7 @@ Contract: `docs/contracts/CORE-008-research.md` v1.5 (Tier Standard; อนุ�
 | implementation review r1 (Claude session ใหม่, headless ที่ 4 จาก 6, `docs/reviews/CORE-008-r1.md`) | **Ready for PR: yes** · Low F1–F5 · oracle อิสระ: baseline 76 กรณีตรงทุกค่า, งบ 7,100 ขั้นตรงทั้งหมด, registry fuzz 208,667 + 31,246 จุดถูกปฏิเสธถูกต้อง, evaluate 32,000 กรณี, report 10,664 registry · วัดความเร็วซ้ำได้ 70.7 s (≈ 4.43 µs/M1) ตรงกับข้างบน | 0722050 | 17:0x–17:4x |
 | แก้ F1 (ข้อความของ Decimal ไม่ขึ้นกับ `capitals` ของผู้เรียก) → suite | regression ล้มก่อนแก้ (registry อ่านไม่ได้: `'1e+4'`) · 3344 passed | dadf7ce | 17:5x |
 | แก้ F2 (JSON ซ้อนลึก → ResearchError) → suite | regression ล้มก่อนแก้ (RecursionError) · 3345 passed | a5d824c | 17:5x |
-| แก้ F3 (summarize ตรวจไม้ของ Result ที่สร้างเอง) → suite · mypy ของ extension | ก่อนแก้ล้ม 5/8 (InvalidOperation, AttributeError) · **3353 passed** · no issues in 42 source files | 9c6c2fb | 18:0x |
+| แก้ F3 (summarize ตรวจไม้ของ Result ที่สร้างเอง) → suite · mypy ของ extension | ก่อนแก้ล้ม 5/8 (InvalidOperation, AttributeError) · **3353 passed** · no issues in 42 source files | 9c6c2fb | 17:5x |
 
 ## ความเร็วและเวลาที่คาดของ R1
 - contract ประมาณ ≈ 1.5 µs ต่อ M1 + ≈ 47 µs ต่อไม้ (ผู้ตรวจ contract วัด) → ขนาดข้างบนควรใช้ ≈ 29 วินาที · วัดจริง 72.3 วินาที (≈ 2.5 เท่า) ในขณะที่อีก session ใช้ CPU อยู่ด้วย
@@ -72,5 +72,18 @@ Contract: `docs/contracts/CORE-008-research.md` v1.5 (Tier Standard; อนุ�
 - `docs/architecture.md` ข้อ 8 ให้ research import `data.snapshot` ได้ แต่ contract นี้ห้ามทั้งแพ็กเกจ `data` (tests ทำตาม contract) · R1 ต้องโหลด snapshot จากโมดูลอื่นนอก research หรือแก้ contract (ผู้ตรวจ tests r1 คำถามเปิดข้อ 7)
 - setup lock เทียบ equity แบบ string ของ record (ทางที่ผมเลือก) หรือแบบค่า (ผู้ตรวจ tests r2 F2)
 
+## หลัง merge (2026-10-24, GitHub REST API แบบไม่ล็อกอิน)
+- PR #20 `feat/CORE-008-research` · Claude push ถึง `7ec8bc8` (หลังแก้ F1–F3) · เจ้าของ merge เป็น `2b8c97a` 18:24 +07 (11:24:25Z) ก่อน tests r3 และ re-check r2 เสร็จ · label `owner-approved-control-change`
+- งานที่ตามมาใน branch `chore/CORE-008-followup` (จาก main `2b8c97a`): tests r3 (patch D-006 `31ffdd84…`, ผู้เขียน = Claude session ใหม่ headless ที่ 5 จาก 6) ล็อกว่าช่วงเวลาเข้าไม้ของ baseline ตัดสินที่ open ของแท่ง t+1 (F4) · apply 18:2x: detector 2 ไฟล์ตรง target, SHA256/blob 4 ค่าตรง handoff, `git apply -R --check` ผ่าน · suite **3355 passed** (18:29) · ผู้เขียนรายงานเองว่าใช้ตัวแปร `$m` ใน path ของ scratch ตอนวน mutant (ผิดกฎ literal path, ไม่ได้แตะ repo, ไม่ติด block)
+- re-check r2 (subagent `fresh-eyes-reviewer`, `docs/reviews/CORE-008-r2.md`, 18:3x–18:5x): **F1–F5 ปิด** (probe อิสระ, ซอร์สก่อนแก้ทำให้เกิดข้อบกพร่องเดิมทุกข้อ) · tests r3 เพิ่มอย่างเดียว, mutant ช่วงเวลาเข้าไม้ 4 ตัวถูกจับทุกตัว (ผู้ตรวจรันซ้ำด้วย literal path ได้ผลเดียวกับผู้เขียน) · ไม่มี finding ใหม่ · **Ready for PR: yes** · ผู้ตรวจติด guard 1 ครั้ง (`sed -i` กับตัวแปร `$F` ในไฟล์ probe ของตัวเอง) แล้วรันซ้ำด้วย literal path ตามข้อยกเว้นของเจ้าของ · commit `07e8724`
+- ข้อสังเกตที่ผู้ตรวจไม่ยื่นเป็น finding (เจ้าของตัดสินได้): `summarize` ไม่ตรวจค่าของ `side`, `ambiguous`, `exit_reason` ของไม้ที่สร้างเอง
+
+| Run | Event / head | ผล |
+|-----|--------------|----|
+| `40089715217` ci | pull_request `7ec8bc8` (ubuntu-24.04) | success |
+| `40089713005` control-gate | pull_request_target `7ec8bc8` (opened) | failure: event "opened" มาก่อน label (เหมือนทุก PR) |
+| `40089726717` control-gate | pull_request_target `7ec8bc8` (labeled) | success |
+| `40089777375` ci | push `2b8c97a` (main) | success |
+
 ## Delivery state
-**implemented** และ **verified ในเครื่อง** (3343 passed ที่ `23ba734`) · ถัดไป implementation review (Claude session ใหม่, headless ที่ 4 จาก 6) → แก้ findings → push → PR · ยังไม่ merged, ไม่ deployed
+**merged** 2026-10-24 18:24 (PR #20 → `2b8c97a`) · CI เขียวบน PR และ main · implementation review r1 Ready for PR: yes, F1–F3 แก้แล้วก่อน merge, F5 เอกสาร · F4 (tests r3) และ re-check r2 (F1–F5 ปิด, Ready for PR: yes) อยู่ใน PR ต่อเนื่องจาก `chore/CORE-008-followup` · ไม่ deployed (ไม่มีอะไรให้ deploy: เครื่องมือวิจัย)
