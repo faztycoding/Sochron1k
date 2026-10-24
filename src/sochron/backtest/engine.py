@@ -14,7 +14,7 @@ from decimal import Decimal, localcontext
 from sochron.core import Bar
 from sochron.costs import CONTEXT, CostModel, check_volume
 from sochron.strategy import STRATEGY_VERSION, H001Params, decide, indicators
-from sochron.timebase import TimeRule, bar_open, to_utc
+from sochron.timebase import RAW_MAX_EXCLUSIVE, RAW_MIN, TimeRule, bar_open, to_utc
 
 from .model import BACKTEST_VERSION, SIDES, BacktestError, Result, Rollover, Side, SizedLots, Sizer, Skip, Trade, exact, finite
 from .trade import Plan, check_flags, check_m1, simulate, stop_fill, stop_price
@@ -38,6 +38,12 @@ def _m15_shape(m15: Sequence) -> list[tuple[Bar, frozenset[str]]]:
     return checked
 
 
+def _check_time(bar: Bar, rule: TimeRule, name: str) -> None:
+    """time_utc read from time_raw by the rule; a raw time timebase cannot read is refused here too."""
+    if not RAW_MIN <= bar.time_raw < RAW_MAX_EXCLUSIVE or bar.time_utc != to_utc(bar.time_raw, rule):
+        raise BacktestError(f"{name} time_utc does not match its raw time under the rule")
+
+
 def _check_m15(bars15: list[tuple[Bar, frozenset[str]]], rule: TimeRule) -> None:
     """15 minutes, strictly increasing time, and time_utc read from time_raw by the rule (v1.5)."""
     for index, (bar, _) in enumerate(bars15):
@@ -45,16 +51,14 @@ def _check_m15(bars15: list[tuple[Bar, frozenset[str]]], rule: TimeRule) -> None
             raise BacktestError(f"m15[{index}] is not an M15 bar")
         if index and bar.time_raw <= bars15[index - 1][0].time_raw:
             raise BacktestError(f"m15[{index}] time is not after the bar before it")
-        if bar.time_utc != to_utc(bar.time_raw, rule):
-            raise BacktestError(f"m15[{index}] time_utc does not match its raw time under the rule")
+        _check_time(bar, rule, f"m15[{index}]")
 
 
 def _check_m1(m1: Sequence, rule: TimeRule) -> None:
     previous = None
     for index, bar in enumerate(m1):
         check_m1(bar, previous, f"m1[{index}]")
-        if bar.time_utc != to_utc(bar.time_raw, rule):
-            raise BacktestError(f"m1[{index}] time_utc does not match its raw time under the rule")
+        _check_time(bar, rule, f"m1[{index}]")
         previous = bar
 
 

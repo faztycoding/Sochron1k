@@ -3,6 +3,7 @@ contract; these pin what the implementer relied on: run's trades equal simulate_
 for every variant and side set, and run stays linear on a realistic number of bars."""
 
 import random
+from dataclasses import replace
 from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from time import perf_counter
@@ -10,10 +11,10 @@ from types import MappingProxyType
 
 import pytest
 
-from sochron.backtest import Rollover, SizedLots, run, simulate_trade
+from sochron.backtest import BacktestError, Rollover, SizedLots, run, simulate_trade
 from sochron.core import Bar
 from sochron.costs import H001_COSTS
-from sochron.data.snapshot import H001_CLOSURES, ValidationReport, aggregate
+from sochron.data.snapshot import H001_CLOSURES, AggregatedBar, ValidationReport, aggregate
 from sochron.strategy import H001_DEFAULTS, H001Params
 from sochron.timebase import bar_open, rule_for
 
@@ -97,3 +98,17 @@ def test_one_hundred_thousand_m1_run_quickly():
     result = run(m1, m15, H001_DEFAULTS["B"], H001_COSTS, _FixedSizer("0.02"), Decimal("10000"), RULE, ROLLOVER)
     assert perf_counter() - began < 30
     assert result.trades
+
+
+def test_raw_time_outside_the_timebase_range_is_a_backtest_error():
+    # Review CORE-007-r1 F1: a Bar accepts any int time_raw; run used to let timebase's RawTimeOutOfRange
+    # through instead of refusing the bar as a BacktestError like any other time_utc/time_raw mismatch.
+    m1 = _m1(60, seed=5)
+    m15 = _m15(m1)
+    sizer = _FixedSizer("0.02")
+    bad_m1 = (replace(m1[0], time_raw=0),) + m1[1:]
+    with pytest.raises(BacktestError):
+        run(bad_m1, m15, H001_DEFAULTS["B"], H001_COSTS, sizer, Decimal("10000"), RULE, ROLLOVER)
+    bad_m15 = (AggregatedBar(replace(m15[0].bar, time_raw=0), m15[0].flags),) + tuple(m15[1:])
+    with pytest.raises(BacktestError):
+        run(m1, bad_m15, H001_DEFAULTS["B"], H001_COSTS, sizer, Decimal("10000"), RULE, ROLLOVER)
