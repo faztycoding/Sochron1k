@@ -463,3 +463,68 @@ the runner can write.
 
 - The patched tests were never executed (BLOCKED above); no reference implementation exists; CI not run.
 - The patch was not applied (by instruction).
+
+## Apply and red (implementer, Claude)
+
+- Round 1 applied on 9f3bc63 and round 2 on 7523407, each as standalone `git apply --check`, `git apply`,
+  `git apply -R --check`. The post-run detector reported exactly the patch targets both times (three, then
+  two); every SHA256 and blob matched the tables above. Red: 104 failed / 3212 passed after round 1;
+  110 failed / 3212 passed after round 2, the six new tests each failing at `_kit` with "AC-0n:
+  sochron.research not implemented" (read one by one, as apply step 4 of round 2 asks).
+- Tests review r1 (`docs/reviews/CORE-008-tests-r1.md`, fresh session, headless 2 of 6): ready to commit
+  red, F1-F6 Low (additive coverage gaps). Red commit `7523407`. Round 2 (headless 3 of 6) answered F1-F6
+  but could not run its tests (the deny-rule block above). Re-check r2 (`docs/reviews/CORE-008-tests-r2.md`,
+  fresh-eyes-reviewer subagent, as for CORE-007 r2) ran them against the round-1 reviewer's independent
+  reference: 109 passed, the nine requested mutants all killed, r1 F1-F6 closed (F3 (b) residual), two new
+  Low findings answered in the implementer's unit tests below. Red commit `3e95c0f`.
+
+## Implementer notes (Claude, for the implementation review)
+
+- Implementation `23ba734`. `src/sochron/research/`:
+  - `model.py`: constants and budgets, the three errors, the exact-type and text helpers, `too_large`,
+    Dataset, Summary, BaselineSummary.
+  - `records.py`: RunRecord, its canonical form (`plain`, `canonical`, `line`, `run_id`), `identity`,
+    `setup`, `record_string`, the decoding of a line (`decode`) and of a file (`parse`), `check_pairing`.
+  - `registry.py`: `read_records` and `append_record`, the only file I/O (`path.read_bytes()` and
+    `open(path, "ab")` with one write and a flush).
+  - `stats.py`: `summarize`, `percentile`, `sum_in_order`, `mean_in_order`.
+  - `inputs.py`: what run_variant and random_entry_baseline share: the holdout guard, type and value
+    checks, the CORE-007 M1/M15 checks with ResearchError, the started record, the base checks
+    (`find_base`, `check_against_base`), the budgets (`check_budget`) and the failed line
+    (`record_failure`).
+  - `runner.py`, `baseline.py`, `robustness.py`, `evaluate.py`, `report.py`, `__init__.py`.
+  - `src/sochron/strategy/h001.py`: `entry_blockers` replaces `_invalid` (same body, plus the type and
+    timezone checks); `decide` calls it by its module-level name. Exported from `sochron.strategy`.
+- Choices where the contract leaves room:
+  1. Every comparison the contract makes "as record strings" (base fields, setup, identity, evaluate's
+     consistency, distinct params and datasets) compares the JSON values of the fields (`plain`), so
+     Decimal("1E+4") and Decimal("10000") differ. The setup lock of runner step 5 uses the same rule
+     (round-2 open question 2, tests review r2 F2; unit test
+     `test_the_setup_lock_compares_equity_as_its_record_string`).
+  2. run_variant and random_entry_baseline take a keyword argument named `registry` (the file path),
+     which hides the module name, so they import the module as `registry_module` and call
+     `registry_module.append_record` at call time; the F39 seam tests patch that same module attribute.
+  3. Summary and BaselineSummary also refuse values outside their domain (ResearchError): negative
+     counts, non-finite Decimals, years out of order or repeated. RunRecord additionally needs
+     `started_seq >= 1` and provenance names strictly increasing. Contract-faithful records always pass.
+  4. Sums in research that leave CONTEXT's exponent range are ResearchError ("too large"), like CORE-007
+     F2/F5; errors raised by backtest, strategy, costs, timebase and the sizer still pass through
+     unwrapped. The k x ATR guard in the baseline is not reachable through `strategy.indicators` in
+     practice and is not tested.
+  5. `percentile` computes the rank ceil(q x n) with exact integers (`q.as_integer_ratio()`), so no
+     Decimal context is involved (tests review r2 F1; unit test
+     `test_percentile_does_not_depend_on_the_caller_context`).
+  6. `.jsonl` is case-sensitive; `read_records` treats only FileNotFoundError as "no file yet" (a
+     directory is the OSError the platform raises); render_report takes the "ชุดข้อมูล" line from the
+     Evaluation's dataset and the setup line from the base record; the screen line keeps "H001"
+     literally (round-1 open question 2).
+  7. random_entry_baseline computes k x ATR[t] once per eligible bar (the same Decimal at every draw).
+- Unit tests `tests/unit/research/test_research_unit.py` (21): the flags of a random trade (round-1 open
+  question 4), a write that fails after open (open question 5), an exponent beyond Decimal in a line,
+  the Summary value checks, `robustness=None`, `.JSONL`, sums beyond the Decimal range, percentile and
+  the setup lock (review r2 F1, F2), and a baseline on the result of a real run_variant.
+- Suite 3343 passed at `23ba734`; the extension's mypy: no issues in 42 source files.
+- Speed (contract row): 1,000 rounds x K = 100 x h = 200 on 100,000 synthetic M1 took 72.3 s, about
+  4.5 us per M1 read with every cost included, about 2.5x the review's 1.5 us/M1 + 47 us/trade model.
+  The time is in `backtest.simulate_trade`, which checks every M1 it reads; research must use it. Details
+  and the R1 estimate: `docs/evidence/CORE-008.md`.
