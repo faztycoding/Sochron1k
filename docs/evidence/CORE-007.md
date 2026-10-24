@@ -11,7 +11,7 @@ Contract: `docs/contracts/CORE-007-backtest.md` v1.5 (Tier Standard; อนุ�
 | AC-04 nights/triple ของ 4 ช่วงถือ (+ rollover คนละ zone/เวลา/วัน triple) และต้นทุน 2× พอดี | **PASS** | tests ล็อก AC-04 เขียว |
 | AC-05 ตัดข้อมูลที่ขอบแท่งแล้วไม้เดิมไม่เปลี่ยน, ทุกไม้ของ `run` = `simulate_trade` | **PASS** | tests ล็อก AC-05 + unit test บนข้อมูลสุ่มชุดเดียว 9 แบบ (3 variant × 3 ชุด sides; ไม่มี price gap หรือนาทีที่ขาด ซึ่ง golden และ oracle ของ review r1 ครอบไว้) |
 | AC-06 pure, import เฉพาะ core/timebase/strategy/costs + stdlib ตามรายการ, ไม่ import/อ้าง `zoneinfo`/`ZoneInfo`, ไม่เรียก astimezone | **PASS** | architecture 17 tests เขียว |
-| AC-07 ทั้ง suite ผ่าน skipped 0 | **PASS ในเครื่อง** · CI รอ run ของ PR | `3211 passed` ที่ `32984af` (หลังแก้ review r1) · ครั้งแรก `3206 passed` ที่ `29eacf3` |
+| AC-07 ทั้ง suite ผ่าน skipped 0 | **PASS ในเครื่อง** · CI รอ run ของ PR | `3212 passed` ที่ `cde8945` (หลังแก้ review r1–r2 และ type) · ครั้งแรก `3206 passed` ที่ `29eacf3` |
 | ความเร็ว: M1 500,000 แท่งภายใน 60 วินาที | **PASS** | `run` 3.53 / 3.56 / 3.61 s (V-A/B/C) |
 
 ## สิ่งที่ส่งมอบ (ไฟล์)
@@ -49,6 +49,9 @@ Contract: `docs/contracts/CORE-007-backtest.md` v1.5 (Tier Standard; อนุ�
 | แก้ F2 → suite | regression 3 ข้อล้มก่อนแก้ (decimal.Overflow) · 3210 passed | ffcf289 | 13:06 |
 | เพิ่ม test F3 → mutant ใน scratch / โค้ดจริง | mutant: 1 failed, 3210 passed · โค้ดจริง: **3211 passed** | 32984af | 13:1x |
 | F4 ถ้อยคำ | grep ไม่พบถ้อยคำเดิม | 0b30638 | 13:1x |
+| re-check r2 (subagent `fresh-eyes-reviewer`, `docs/reviews/CORE-007-r2.md`) | F1–F4 ปิด · F5 Low ใหม่ (มีอยู่ก่อน: overflow ใน `indicators`/`decide` หลุดเป็น `decimal.Overflow`) · Ready for PR: yes | c203051 | 13:1x–13:33 |
+| แก้ F5 → suite | regression ล้มก่อนแก้ (decimal.Overflow) · **3212 passed** | 2910252 | 13:37 |
+| แก้ type ตามคำขอของเจ้าของ (แผง Problems) → mypy 1.15.0 ของ extension VS Code `-p sochron.backtest` | backtest ไม่มี error (11 ข้อที่เหลือเป็นของ strategy/costs แก้ใน CHORE-001) · suite **3212 passed** | cde8945 | 13:39 |
 
 ## ข้อสังเกตสำหรับ R1 (ไม่ใช่ข้อบกพร่องของ backtest)
 - บนข้อมูล random walk 500,000 M1 ข้างบน V-C ได้ผลเท่ากับ V-B ทุกค่า · สคริปต์ scratch นับแล้ว: จาก 2,080 แท่งที่ V-B มีสัญญาณขณะ flat ไม่มีแท่งไหนที่ V-C ตัดสินต่างออกไป (ตัวกรอง TS > 0 ไม่เคยทำงาน เพราะ breakout เหนือ HH 96 แท่งมักมาพร้อม EMA16 > EMA64) · R1 ควรรายงานว่าตัวกรองของ V-C ทำงานกี่ครั้งบนข้อมูลจริง เพราะถ้าแทบไม่ทำงาน V-C จะกินงบ variant โดยไม่เพิ่มข้อมูล
@@ -60,4 +63,4 @@ Contract: `docs/contracts/CORE-007-backtest.md` v1.5 (Tier Standard; อนุ�
 - drawdown ระหว่างถือไม้ไม่อยู่ใน equity points (D10) · halt ของ risk ไม่ใช้ (D5)
 
 ## Delivery state
-implemented และ verified ในเครื่อง (3211 passed at `32984af`; commit หลังจากนั้นเป็นเอกสาร) · tests reviews r1–r2 ปิด · implementation review r1 Ready for PR: yes, F1–F4 แก้แล้ว → re-check r2 · ยังไม่ merged, ไม่ deployed
+implemented และ verified ในเครื่อง (3212 passed at `cde8945`) · tests reviews r1–r2 ปิด · implementation review r1 (F1–F4) และ re-check r2 (F1–F4 ปิด, F5 แก้แล้ว) Ready for PR: yes · ยังไม่ merged, ไม่ deployed

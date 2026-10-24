@@ -482,3 +482,12 @@ accepted every finding with the reviewer's recommended fix, under the owner's de
 
 The reviewer re-checks only these IDs in the next round (`docs/reviews/CORE-007-r2.md`), as a fresh-eyes-reviewer
 subagent to keep the headless budget (4 of 6 used).
+
+Re-check r2: F1-F4 closed, Ready for PR: yes, one new Low finding (pre-existing).
+
+| ID | Accept/Dispute | Commit | Evidence |
+|----|----------------|--------|----------|
+| F5 | accept | `2910252` | `run` wraps `strategy.indicators` and `strategy.decide` like the fill code: `decimal.Overflow` → BacktestError. `test_m15_prices_too_large_for_the_strategy_arithmetic_are_a_backtest_error` (M15 highs 9E+999999 on bars 0-39) failed before (decimal.Overflow), passes after; suite 3212 passed |
+
+Also on this branch, at the owner's request to clear the VS Code Problems panel: `cde8945` types the exact-type helpers
+of `sochron.backtest` (no behaviour change; the extension's mypy reports no error in backtest).
