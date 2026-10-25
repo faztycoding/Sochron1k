@@ -234,3 +234,22 @@ Context: `docs/architecture.md` ข้อ 8 ให้ `research` import `data.sn
 2. แก้ contract และ architecture test ให้ `research` import `data.snapshot` ได้ (ตาม architecture.md เดิม) · ต้องมี patch ของ tests ล็อกและ review ใหม่
 Why (ทางที่แนะนำ): `research` อ่าน/เขียนไฟล์ที่เดียว (registry) อยู่แล้ว การโหลดข้อมูลแยกไปอยู่ชั้นประกอบทำให้ทดสอบและตรวจ holdout guard ง่าย · ไม่ต้องแก้ tests ที่ merge แล้ว
 Review when: ร่าง contract SLICE-R1
+
+## D-021 ENV-1 ผ่านได้ก่อนมี holdout · ลำดับการตัดบน VPS · ช่องทางเดียวที่ส่ง snapshot ก่อน cutoff มาเครื่องวิจัย — 2026-10-25 — proposed
+Context: architecture ข้อ 6.1 ด่าน ENV-1 เขียนว่า terminal, raw captures และ holdout "ย้ายไปแล้ว" แต่ AGENTS.md ห้ามตัด holdout ก่อน ENV-1 ผ่าน จึงยังไม่มี holdout ให้ย้าย · SPEC Q-08 ให้ระบุลำดับการตัดบน VPS ใน ENV-1 · ENV-001 ปิดทุกช่องทางไฟล์จาก VPS (drive redirection, clipboard แบบไฟล์, sync, share) แต่ R1 ต้องได้ snapshot ก่อน cutoff (train + validation ≈ 2.4 ล้านแท่ง M1) จากเครื่องที่ดึงข้อมูล (`docs/reviews/ENV-contracts-r1.md` F4, F6)
+Decision ที่เสนอ:
+1. **ความหมายของ ENV-1:** ผ่านเมื่อ ENV-001, SPIKE-002, ENV-002 ผ่านครบ **โดยยังไม่มี holdout** · ข้อ "ย้าย holdout ไปแล้ว" ของ 6.1 หมายถึงลำดับในข้อ 2 ซึ่งทำหลัง ENV-1 บน VPS เท่านั้น (แก้ถ้อยคำ 6.1 ตอนบันทึก ENV-1 ผ่าน) · raw captures ของ SPIKE-001 ใน repo เป็น metadata ไม่มีชุดราคา (`spikes/SPIKE-001/results/*.json`)
+2. **ลำดับการตัด (คำตอบ Q-08, contract ของ acquisition host บังคับ):** หลัง ENV-1 บน VPS เท่านั้น: ดึง M1 ด้วย `data.acquire` → validation (CORE-005) → แบ่งที่ `time_utc` 2025-01-01T00:00:00Z ภายใต้กฎเวลาที่ระบุ version → ส่วนตั้งแต่ cutoff เขียนลง vault นอก repo, บันทึก SHA-256 ในหลักฐาน, ปิดผนึกตาม D-019 → ส่วนก่อน cutoff เป็น snapshot + manifest (`period_end_utc` ≤ cutoff) → ส่งตามข้อ 3 → research host รัน `sochron.app.envcheck` ได้ PASS
+3. **ช่องทางส่ง snapshot ก่อน cutoff:**
+   - **(a) แนะนำ:** เจ้าของทำเองครั้งละครั้ง: บน VPS เปิด policy ของ drive redirection ชั่วคราว → เชื่อมด้วยไฟล์ .rdp ที่ redirect เฉพาะไดรฟ์เดียว (โฟลเดอร์ว่างบนเครื่องเจ้าของที่ map ด้วย `subst`) → คัดลอกเฉพาะไฟล์ที่อยู่ใน manifest ที่ `period_end_utc` ≤ cutoff → ตัดการเชื่อมต่อ → ปิด policy → รัน `host_report.py` บน VPS (PASS) และ envcheck บนเครื่องเจ้าของ (PASS) · บันทึกวันที่ รายการไฟล์ และ SHA-256 ในหลักฐาน · loader ของ R1 ตรวจ SHA-256 กับ manifest ก่อนใช้
+   - (b) ลิงก์ดาวน์โหลดหมดอายุจาก object storage ของผู้ให้บริการ · ไม่แนะนำ: เพิ่มบริการภายนอกและ credential
+   - (c) GitHub (release/LFS) · ห้าม: ข้อมูลตลาดห้ามอยู่ใน git (`.gitignore`, Handbook ch.19)
+Why: ทำตาม AGENTS.md (ไม่ตัด holdout ก่อน ENV-1) โดยไม่ทิ้งเงื่อนไขของ 6.1 · ช่องทางเดียวที่เปิดชั่วคราวมีคนเฝ้า มีรายการไฟล์และการตรวจซ้ำ จึงไม่ทำลายด่านหลังผ่าน
+Review when: ร่าง contract ของ acquisition host · เปลี่ยนผู้ให้บริการ VPS หรือวิธีเชื่อมต่อ
+
+## D-022 ใช้ MetaTrader5 5.0.6231, numpy 2.5.4 และ tzdata 2026.5 ใน environment ชั่วคราวบน VPS สำหรับ SPIKE-002 — 2026-10-25 — proposed
+Context: SPIKE-002 วัดซ้ำบน VPS แบบอ่านอย่างเดียว · D-009/D-010 อนุมัติแพ็กเกจเหล่านี้เฉพาะ SPIKE-001 และ architecture ข้อ 13a "การอนุมัติของ SPIKE ใช้ได้เฉพาะ spike" · AGENTS.md อนุญาตให้ SPIKE ใช้แพ็กเกจที่เจ้าของอนุมัติใน environment ชั่วคราวของ uv
+Decision ที่เสนอ: ADMIT สำหรับ SPIKE-002 เท่านั้น บน VPS: `MetaTrader5==5.0.6231`, `numpy==2.5.4` (dependency ของ MetaTrader5), `tzdata==2026.5` (probe ใช้ zoneinfo) ด้วยคำสั่ง `uv run --no-project --python 3.12.15 --with MetaTrader5==5.0.6231 --with numpy==2.5.4 --with tzdata==2026.5 python spikes/SPIKE-002/probe.py --server … --login-suffix … --valid-until …` · ไม่เข้า `pyproject.toml`/`uv.lock`
+Why: ชุดเดียวกับที่ SPIKE-001 รันผ่านแล้ว · OSV query 2026-10-25T08:49Z ไม่พบ advisory ของทั้งสามรุ่น (คำตอบว่าง `{}`)
+Conditions: หลักฐานของ SPIKE-002 แสดงรุ่นที่ import จริง · uv บน VPS บันทึกใน `docs/tooling/registry.md` (ENV-001 (ง)) · รุ่นใหม่ของ MetaTrader5 ต้อง admission ใหม่ · การใช้ MetaTrader5 ในโค้ดของโปรเจกต์ (`broker` adapter) ต้องผ่าน admission ระดับโปรเจกต์แยก
+Review when: SPIKE-002 จบ · advisory ใหม่ · ร่าง contract ของ `broker`/`data.acquire`
