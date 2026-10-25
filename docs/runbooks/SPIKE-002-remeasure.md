@@ -29,7 +29,7 @@ w32tm /query /status
 ## ขั้นที่ 3: ดึง commit ที่ตรวจแล้ว และรัน probe
 เปิด PowerShell **แบบธรรมดา (ไม่ใช่ Administrator)** ที่โฟลเดอร์ของ repo บน VPS:
 ```powershell
-git fetch origin
+git fetch origin spike/SPIKE-002-vps-remeasure
 git switch --detach <hash ที่ Claude ให้>
 git rev-parse --short HEAD
 git status --short
