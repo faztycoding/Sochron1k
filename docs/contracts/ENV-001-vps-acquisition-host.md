@@ -210,7 +210,7 @@ Windows client หรือ Server รุ่นเก่า · RAM ที่เ�
 | valid until | TBD (เจ้าของกรอก) |
 
 ## Budget
-2–3 sessions ของ Claude · เวลาเจ้าของตั้ง VPS และทดสอบ ≈ 2 ชั่วโมง · headless session ไม่เกิน 4 (ผู้เขียน tests, ผู้ตรวจ tests, ผู้ตรวจงาน, สำรอง) · 3 attempts ต่อปัญหาที่ไม่มีหลักฐานใหม่ · ค่า VPS ตาม Q-10
+2–3 sessions ของ Claude · เวลาเจ้าของตั้ง VPS และทดสอบ ≈ 2 ชั่วโมง · headless session ไม่เกิน 4 (ผู้เขียน tests, ผู้ตรวจ tests, ผู้ตรวจงาน, สำรอง) → **6** (เจ้าของขยาย 2026-10-25 19:3x ให้ tests r2 ตาม `docs/reviews/ENV-001-tests-r1.md` F1–F4: ผู้เขียนและผู้ตรวจของ patch เพิ่มเติม) · 3 attempts ต่อปัญหาที่ไม่มีหลักฐานใหม่ · ค่า VPS ตาม Q-10
 
 ## Recovery, compensation and checkpoint
 ยกเลิกหรือ rebuild VPS ที่ผู้ให้บริการ · ถ้ารหัส RDP หรือบัญชีรั่ว: เปลี่ยนรหัสผ่านของบัญชี Demo ที่ Exness, rebuild VPS, บันทึกใน `docs/failures/` · terminal บนเครื่องเจ้าของยังอยู่จนกว่า ENV-002
