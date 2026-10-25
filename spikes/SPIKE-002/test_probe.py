@@ -7,9 +7,11 @@ No terminal and no MetaTrader5 package are needed.
 from __future__ import annotations
 
 import ast
+import importlib
 import importlib.util
 import json
 import sys
+import types
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,10 +19,17 @@ from types import SimpleNamespace
 import pytest
 
 HERE = Path(__file__).resolve().parent
-_spec = importlib.util.spec_from_file_location("spike002_probe", HERE / "probe.py")
-probe = importlib.util.module_from_spec(_spec)
-sys.modules["spike002_probe"] = probe
-_spec.loader.exec_module(probe)
+
+
+def _load_probe(module_name):
+    spec = importlib.util.spec_from_file_location(module_name, HERE / "probe.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+probe = _load_probe("spike002_probe")
 
 UTC = timezone.utc
 DEMO, CONTEST, REAL_MODE = 0, 1, 2
@@ -250,7 +259,43 @@ def _with(flag, value):
     return args
 
 
-@pytest.mark.parametrize("argv", [
+class RecordingFinder:
+    """Makes `import MetaTrader5` succeed with an empty stand-in module, as on the VPS, and counts tries.
+
+    Without it the project environment has no MetaTrader5, so an early import fails and leaves no
+    trace in sys.modules (review r1 F5)."""
+
+    def __init__(self):
+        self.attempts = 0
+
+    def find_spec(self, name, path=None, target=None):
+        if name != "MetaTrader5":
+            return None
+        self.attempts += 1
+        return importlib.util.spec_from_loader(name, loader=self)
+
+    def create_module(self, spec):
+        return types.ModuleType(spec.name)
+
+    def exec_module(self, module):
+        return None
+
+
+@pytest.fixture
+def mt5_finder(monkeypatch):
+    finder = RecordingFinder()
+    monkeypatch.delitem(sys.modules, "MetaTrader5", raising=False)
+    monkeypatch.setattr(sys, "meta_path", [finder, *sys.meta_path])
+    yield finder
+    sys.modules.pop("MetaTrader5", None)
+
+
+def test_ac01_recording_finder_sees_an_import(mt5_finder):
+    importlib.import_module("MetaTrader5")
+    assert mt5_finder.attempts == 1
+
+
+BAD_ARGVS = [
     [],
     _without("--server"),
     _without("--login-suffix"),
@@ -264,14 +309,26 @@ def _with(flag, value):
     _with("--server", "  "),
     _with("--clock-sync", " "),
     _with("--valid-until", "2026-10-28T09:59:00+07:00"),  # expired at the Wednesday clock
-])
-def test_ac01_bad_or_missing_arguments_exit_2_without_importing_metatrader5(argv, monkeypatch, capsys):
-    monkeypatch.delitem(sys.modules, "MetaTrader5", raising=False)
+]
+
+
+@pytest.mark.parametrize("argv", BAD_ARGVS)
+def test_ac01_bad_or_missing_arguments_exit_2_without_importing_metatrader5(argv, mt5_finder, capsys):
     clock = Clock(WEDNESDAY)
     assert probe.main(argv, clock.now, clock.sleep) == 2
-    assert "MetaTrader5" not in sys.modules
+    assert mt5_finder.attempts == 0
     out = capsys.readouterr()
     assert out.out == "" and out.err.startswith("REFUSED (exit 2): ")
+
+
+def test_ac01_loading_the_probe_and_refusing_never_imports_metatrader5(mt5_finder, capsys):
+    # A fresh load under the finder also catches an import at module level (review r1 F5).
+    fresh = _load_probe("spike002_probe_fresh")
+    clock = Clock(WEDNESDAY)
+    for argv in BAD_ARGVS:
+        assert fresh.main(argv, clock.now, clock.sleep) == 2
+    assert mt5_finder.attempts == 0
+    sys.modules.pop("spike002_probe_fresh", None)
 
 
 @pytest.mark.parametrize("argv", [
