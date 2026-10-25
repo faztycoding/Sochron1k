@@ -22,8 +22,9 @@ Conventions the contract leaves to these tests (also in docs/handoff/ENV-001.md)
    the contract's types; Optional, Union and typing.Tuple spellings count as the same type.
 4. ALLOWED_UDP: the ports are fixed at {68, 546}; the rule names are taken from the module and are
    not asserted (the contract confirms them on Server 2022/2025 later). EXPECTED_UV is any non-empty
-   str. A wrong version is derived from the constant: last number + 1, or major.minor only (the form
-   .venv/pyvenv.cfg holds).
+   str. A wrong version is derived from the constant: last number + 1, major.minor only (the form
+   .venv/pyvenv.cfg holds), or the constant with "0" appended (a longer version that contains the
+   constant; python_env compares with ==).
 5. os: a caption that starts "Windows Server 2022"/"Windows Server 2025" with build 20348/26100
    passes. A client caption with build 26100 fails ("Windows 10 Pro" is what ProductName reports on
    Windows 11 24H2, which shares build 26100), and every other build fails.
@@ -34,19 +35,27 @@ Conventions the contract leaves to these tests (also in docs/handoff/ENV-001.md)
    unambiguous: a TCP/UDP rule whose local_ports is ("3389",) and whose scope fails gets
    "Set-NetFirewallRule" with "-RemoteAddress" and never "Disable-NetFirewallRule" (in the detail
    and in render); a non-3389 TCP/UDP rule and a rule of another protocol get
-   "Disable-NetFirewallRule". Rules that mix 3389 with other ports, a TCP rule without ports and a
-   protocol "Any" rule on 3389 are checked for FAIL and their Name only.
+   "Disable-NetFirewallRule -Name <its Name>" in the detail. A command is bound to a rule as
+   "<command> -Name <Name>", the Name optionally in ' or " quotes (one Name per command). When the
+   RDP rule's scope fails next to a rule that needs disabling (the Shadow rule on a fresh VPS), the
+   RDP rule gets "Set-NetFirewallRule -Name <its Name>" and never "Disable-NetFirewallRule -Name <its
+   Name>" (in the detail and in render). Rules that mix 3389 with other ports, a TCP rule without
+   ports and a protocol "Any" rule on 3389 are checked for FAIL and their Name only.
 8. A 3389 scope entry with host bits under a prefix ("192.0.2.10/24") is that prefix
    (ip_network(strict=False)); 0 entries fail like 5 do; a range "a-b" fails however narrow.
 9. Addresses: no Item.detail and no render output matches the AC-06 IPv4 pattern
    \b([0-9]{1,3}\.){3}[0-9]{1,3}\b (masks and 0.0.0.0 included), and none contains "2001:db8" or
-   "2001:0db8" (every IPv6 value here lies in 2001:db8::/32). The AC-06 IPv6 pattern itself is not
-   applied, because it also matches clock times.
+   "2001:0db8" (every IPv6 value here lies in 2001:db8::/32) or the network part "192.0.2",
+   "198.51.100" or "203.0.113" of the RFC 5737 networks used here, so a partly masked address such
+   as 198.51.100.x/24 fails too. The AC-06 IPv6 pattern itself is not applied, because it also
+   matches clock times.
 10. The last line is render(report).rstrip("\n").splitlines()[-1]; a trailing newline is allowed.
 11. "Only inside collect_facts" means lexically inside the top-level function collect_facts (nested
     functions included). A Windows-only module (winreg, ctypes, msvcrt, _winapi, nt) imported
-    anywhere else fails, also through importlib.import_module or __import__ with a literal name. The
-    script imports standard-library modules only (the contract's "stdlib only" rule).
+    anywhere else fails, also through import_module or __import__ with a literal name, called as a
+    bare name (after "from importlib import import_module") or as an attribute
+    (importlib.import_module, builtins.__import__). The script imports standard-library modules only
+    (the contract's "stdlib only" rule).
 12. secret_like_files_in_repo == 0 in the valid Facts stands for a repo whose only env-like file is
     .env.example: collect_facts leaves it out of the count, and evaluate only sees the count.
 """
@@ -102,6 +111,7 @@ FACT_ITEM = {
 WINDOWS_ONLY = frozenset({"winreg", "ctypes", "msvcrt", "_winapi", "nt"})
 IPV4_PATTERN = re.compile(r"\b([0-9]{1,3}\.){3}[0-9]{1,3}\b")  # the AC-06 IPv4 pattern
 IPV6_DOC_PREFIXES = ("2001:db8", "2001:0db8")
+IPV4_DOC_STEMS = ("192.0.2", "198.51.100", "203.0.113")  # the RFC 5737 networks used here
 DOC_NETWORKS = tuple(ipaddress.ip_network(net) for net in (
     "192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24", "2001:db8::/32",
 ))
@@ -281,6 +291,12 @@ def _expect(report, verdict, changed):
 def _last_line(text):
     assert isinstance(text, str)
     return text.rstrip("\n").splitlines()[-1]
+
+
+def _advises(text, command, name):
+    """`command -Name <name>` appears in text, the Name optionally in ' or " quotes."""
+    pattern = re.escape(command) + r"\s+-Name\s+['\"]?" + re.escape(name)
+    return re.search(pattern, text) is not None
 
 
 def _shape(annotation):
@@ -492,6 +508,10 @@ WRONG = {
     "python-env-python-major-minor-only": (
         "python_env",
         lambda hr, facts: replace(facts, python_version=_major_minor(hr.EXPECTED_PYTHON))),
+    "python-env-uv-longer-version": (
+        "python_env", lambda hr, facts: replace(facts, uv_version=hr.EXPECTED_UV + "0")),
+    "python-env-python-longer-version": (
+        "python_env", lambda hr, facts: replace(facts, python_version=hr.EXPECTED_PYTHON + "0")),
     "python-env-not-synced": ("python_env", _set(project_synced=False)),
     "git-credential-helper-manager": ("git", _set(git_credential_helpers=("manager",))),
     "git-remote-with-userinfo": ("git", _set(remote_has_userinfo=True)),
@@ -616,6 +636,8 @@ def test_ac02_inbound_rule_fails_and_the_detail_names_it(case):
         assert "Disable-NetFirewallRule" not in text
     elif advice == "disable":
         assert "Disable-NetFirewallRule" in detail
+        for name in failing:
+            assert _advises(detail, "Disable-NetFirewallRule", name), detail
     assert _last_line(text) == "HOST REPORT: FAIL"
 
 
@@ -633,6 +655,25 @@ def test_ac02_inbound_detail_names_every_failing_rule():
     detail = _item(report, "inbound").detail
     for name in ("FPS-SMB-In-TCP", "RemoteDesktop-Shadow-In-TCP", "Custom-DHCP-In"):
         assert name in detail
+
+
+def test_ac02_rdp_scope_next_to_a_rule_to_disable_is_never_advised_disable():
+    # A fresh VPS: the RDP rule keeps the Windows default scope Any and the Shadow rule is on.
+    hr = _hr("render")
+    shadow = "RemoteDesktop-Shadow-In-TCP"
+    facts = _with_changed_rule(_valid(hr), RDP_TCP, remote_addresses=("Any",))
+    facts = _with_rule(facts, _rule(hr, shadow, "TCP", ("Any",), ("Any",)))
+    report = hr.evaluate(facts)
+    _expect(report, "FAIL", {"inbound": "FAIL"})
+    detail = _item(report, "inbound").detail
+    text = hr.render(report)
+    for shown in (detail, text):
+        assert RDP_TCP in shown and shadow in shown
+        assert _advises(shown, "Set-NetFirewallRule", RDP_TCP), shown
+        assert not _advises(shown, "Disable-NetFirewallRule", RDP_TCP), shown
+    assert "-RemoteAddress" in detail
+    assert _advises(detail, "Disable-NetFirewallRule", shadow), detail
+    assert _last_line(text) == "HOST REPORT: FAIL"
 
 
 # ---------------------------------------------------------------- unreadable facts
@@ -691,6 +732,8 @@ def _assert_no_address(text):
     lowered = text.lower()
     for prefix in IPV6_DOC_PREFIXES:
         assert prefix not in lowered, text
+    for stem in IPV4_DOC_STEMS:
+        assert stem not in text, text
 
 
 def _address_case(hr, case):
@@ -733,8 +776,9 @@ def test_ac02_evaluate_and_render_are_repeatable():
 
 
 def _is_dynamic_import(func):
-    return (isinstance(func, ast.Name) and func.id == "__import__") or (
-        isinstance(func, ast.Attribute) and func.attr == "import_module"
+    names = ("__import__", "import_module")
+    return (isinstance(func, ast.Name) and func.id in names) or (
+        isinstance(func, ast.Attribute) and func.attr in names
     )
 
 
