@@ -1,7 +1,7 @@
 # TASK ENV-002 — แยก research host ออกจาก terminal และ holdout พร้อม synthetic excluded-period sentinel
 
 Version v1.5 (v1 ร่าง 2026-10-25 → v1.1 ตอบ `docs/reviews/ENV-contracts-r1.md`: research identity และ break-it test (F1), OneDrive (F3), ความหมายของ "ผ่าน data" และงานที่ส่งต่อ (F7), คำสั่งที่รันได้จริง (F8), นิยามที่ผู้เขียน tests ต้องใช้ (F9), ขอบเขตของ excluded_period (F11), การค้น sentinel ที่ไม่อ่านไฟล์ลับ (F12), terminal ที่ติดตั้งที่อื่น (F13), ความสอดคล้อง (F20) → v1.2 ตอบ `docs/reviews/ENV-contracts-r2.md`: การประเมิน holdout เป็นงานส่งต่อ (F7), ที่อยู่ของตัวสร้างแท่งปลอม (F9), เอกสารที่แก้ตอนบันทึก ENV-1 ผ่าน (F20), โฟลเดอร์รับไฟล์ของ D-021 (F29), shell folder/ขอบเขตของ hash/token (F30), ความเสี่ยงของ RDP ที่เปิดอยู่ (F32) → v1.3 ตอบ `docs/reviews/ENV-contracts-r3.md`: ขอบเขตการค้น token และไฟล์ cloud-only (F36), ขั้นตอนโหลด `synthetic.py` (F37), `ResearchRoots` ชุดเดียวของ R1 (F43 a), ป้ายเวอร์ชัน (F44) → v1.4 ตอบ `docs/reviews/ENV-contracts-r4.md` (ทุกข้อ Low): ไฟล์ cloud-only ใน repo/data dirs (F49), จุดที่ tests แทนและการดักการเปิดไฟล์ (F50) → v1.5 ตอบ `docs/reviews/ENV-contracts-r5.md` (Low): ไฟล์ที่อยู่ทั้งใต้ data dirs และ search_dirs (F51)) · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 6.1 ("ด่านก่อน SLICE-R1"), 9, 13a · D-017, D-019, D-020, D-021 (proposed) · Tier **High** · Branch `feat/ENV-002-research-host-separation`
-Status: **draft v1.5** (Claude ร่าง 2026-10-25 · review r5: พร้อมให้อนุมัติ, F49/F50 ปิด · ข้อ Low F51 ของ r5 แก้ใน v1.5 ให้ผู้ตรวจรอบถัดไปตรวจซ้ำ · รอเจ้าของอนุมัติ: High) · เริ่มได้หลัง ENV-001 และ SPIKE-002 ผ่าน
+Status: **approved by owner 2026-10-25 17:5x** (v1.5 · เจ้าของตอบ "อนุมัติทั้งหมด" ในแชท Claude: contract นี้, การตัดสิน (ก)–(ง) ตามที่แนะนำ และ D-021 · review r5 ว่าพร้อม · ข้อ Low F51 ของ r5 แก้ใน v1.5 ให้ผู้ตรวจรอบถัดไปตรวจซ้ำ) · เริ่มได้หลัง ENV-001 และ SPIKE-002 ผ่าน
 Hypothesis (research tasks): ไม่ใช่งานวิจัย
 
 ด่าน ENV-1: ENV-001 → SPIKE-002 → **ENV-002**
@@ -174,7 +174,7 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 ติดตั้ง MT5 ใหม่บนเครื่องเจ้าของได้ถ้าต้องย้อน (ENV-1 จะไม่ผ่านจนกว่าจะถอนอีกครั้ง) · ลบไฟล์ sentinel บน VPS ได้หลังบันทึกหลักฐาน (แล้วค่าที่ commit ใช้ไม่ได้: ต้องสร้างใหม่และ commit ใหม่) · revert PR
 
 ## DoR status / missing items / next action
-ขาด: การตัดสินของเจ้าของ (ก)–(ง) และ D-021, ENV-001 และ SPIKE-002 ผ่าน, valid until · ผู้ตรวจรอบถัดไปตรวจซ้ำ F51 · next: เจ้าของ
+ครบ: เจ้าของอนุมัติ (ก)–(ง) และ D-021 2026-10-25 17:5x · ขาด: ENV-001 และ SPIKE-002 ผ่าน, valid until · ผู้ตรวจรอบถัดไปตรวจซ้ำ F51 · next: หลัง ENV-001 และ SPIKE-002 ผ่าน (tests ของ ENV-002 เขียนได้ก่อน)
 
 ## Done scope
 operation: เครื่องเจ้าของเป็น research host ที่ตรวจได้ · ENV-1 ผ่านเมื่อ ENV-001, SPIKE-002 และ ENV-002 ผ่านครบ และเจ้าของบันทึกการตัดสินที่ D-021 และ SPIKE-002 AC-04 ต้องการ

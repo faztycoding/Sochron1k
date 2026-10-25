@@ -1,7 +1,7 @@
 # TASK ENV-001 — Windows VPS เป็น acquisition/execution host: เช่า, ทำให้ปลอดภัย และพิสูจน์ว่าปิดช่องทางรั่ว
 
 Version v1.5 (v1 ร่าง 2026-10-25 → v1.1 ตอบ `docs/reviews/ENV-contracts-r1.md`: ย้ายการวัดซ้ำไป SPIKE-002 (F2, F14, F19), firewall สองชั้น (F5), ช่องทางไฟล์ (F3, F4), API ของ host_report (F10), runbook (F15), แหล่งราคา (F16), ปิดบัง IP (F17), ความสอดคล้อง (F20) → v1.2 ตอบ `docs/reviews/ENV-contracts-r2.md`: schema ของ firewall rule (F21), `.env.example` (F22), ที่มาของแต่ละ fact (F23), AC-05 ไม่รอ SPIKE-002 (F24), uv ≥ 0.13.4 (F25), ค่าที่คาดของ uv/Python (F10), การโหลดสคริปต์ใน tests (F31), บันทึกผู้เขียน tests (F20) → v1.3 ตอบ `docs/reviews/ENV-contracts-r3.md`: ตัดสินทุก rule ขาเข้าและสถานะ profile จาก ActiveStore (F33), ชื่อ rule คือ `Name` ของ Windows (F34), ไม่ให้ `uv run` sync ก่อนตรวจ (F35), ขั้นตอนโหลดสคริปต์ (F37), รุ่น uv/Python (F38), ลำดับความสำคัญของ policy (F39), ค้น IPv6 (F40), clipboard แบบข้อความ (F43 c), แถว 1c (F44) → v1.4 ตอบ `docs/reviews/ENV-contracts-r4.md` (ทุกข้อ Low): พิสูจน์ `--no-sync` ด้วยการทดสอบ drift (F35), ป้ายเวอร์ชัน (F45), rule ของ 3389 ให้แก้ scope ไม่ใช่ปิด (F46), helper แบบ pure ของ JSON และลำดับ policy พร้อม unit test (F47), clipboard ตาม (ค) (F48), subnet แบบ mask → v1.5 ตอบ `docs/reviews/ENV-contracts-r5.md` (Low): ขอบเขตของ `policy_first` และการ map policy ของ clipboard (F52), ที่มาและขอบเขตของ fixture JSON (F53), ขั้นกู้คืนของ drift test) · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 6.1, 10 แถว 1c, 13a · Tier **High** · Branch `chore/ENV-001-vps-acquisition-host`
-Status: **draft v1.5** (Claude ร่าง 2026-10-25 · review r5: พร้อมให้อนุมัติ, ข้อ r4 ปิดครบ · ข้อ Low F52/F53 ของ r5 แก้ใน v1.5 ให้ผู้ตรวจรอบถัดไปตรวจซ้ำ · รอเจ้าของอนุมัติ: High และมีค่าใช้จ่าย จึงอนุมัติแทนไม่ได้)
+Status: **approved by owner 2026-10-25 17:5x** (v1.5 · เจ้าของตอบ "อนุมัติทั้งหมด" ในแชท Claude: contract นี้, การตัดสิน (ก)–(จ) ตามที่แนะนำ, D-021 และงบ Q-10 ไม่เกิน 40 USD/เดือน · review r5 ว่าพร้อม · ข้อ Low F52/F53 ของ r5 แก้ใน v1.5 ให้ผู้ตรวจรอบถัดไปตรวจซ้ำ) · เดิม: draft (Claude ร่าง 2026-10-25: High และมีค่าใช้จ่าย จึงอนุมัติแทนไม่ได้)
 Hypothesis (research tasks): ไม่ใช่งานวิจัย
 
 **ด่าน ENV-1** = ENV-001 (contract นี้: VPS ปลอดภัย) → SPIKE-002 (`docs/contracts/SPIKE-002-vps-remeasure.md`: วัดซ้ำบน VPS แบบอ่านอย่างเดียว) → ENV-002 (`docs/contracts/ENV-002-research-host-separation.md`: แยก research host + sentinel) · SPIKE-002 เริ่มได้เมื่อ ENV-001 ผ่านครบทุก AC (AC-05 เป็น checklist ของเจ้าของ ไม่รอผลของ SPIKE-002) · terminal บนเครื่องเจ้าของอยู่จนกว่า VPS ผ่าน ENV-001 และ SPIKE-002 · ความหมายของ "ENV-1 ผ่าน" ลำดับการตัด holdout และช่องทางส่ง snapshot อยู่ใน D-021 (proposed)
@@ -216,7 +216,7 @@ Windows client หรือ Server รุ่นเก่า · RAM ที่เ�
 ยกเลิกหรือ rebuild VPS ที่ผู้ให้บริการ · ถ้ารหัส RDP หรือบัญชีรั่ว: เปลี่ยนรหัสผ่านของบัญชี Demo ที่ Exness, rebuild VPS, บันทึกใน `docs/failures/` · terminal บนเครื่องเจ้าของยังอยู่จนกว่า ENV-002
 
 ## DoR status / missing items / next action
-ขาด: การตัดสินของเจ้าของ (ก)–(จ), valid until · ผู้ตรวจรอบถัดไป (ตอนตรวจ tests ของ AC-02) ตรวจซ้ำ F52/F53 · next: เจ้าของ
+ครบ: เจ้าของอนุมัติ (ก)–(จ) และ Q-10 2026-10-25 17:5x · ขาด: valid until (เจ้าของกรอกตอนตั้ง VPS) · ผู้ตรวจรอบถัดไป (ตอนตรวจ tests ของ AC-02) ตรวจซ้ำ F52/F53 · next: บันทึกผู้เขียน tests และผู้ตรวจใน PROGRESS → acceptance ของ AC-02 ผ่าน patch D-006 · เจ้าของเลือกผู้ให้บริการ VPS ตามสเปกและงบได้เลย
 
 ## Done scope
 operation: VPS ปลอดภัยและพิสูจน์แล้ว (ยังไม่มีการวัดด้วย MetaTrader5, ข้อมูลวิจัย หรือ holdout บนเครื่อง)

@@ -235,7 +235,7 @@ Context: `docs/architecture.md` ข้อ 8 ให้ `research` import `data.sn
 Why (ทางที่แนะนำ): `research` อ่าน/เขียนไฟล์ที่เดียว (registry) อยู่แล้ว การโหลดข้อมูลแยกไปอยู่ชั้นประกอบทำให้ทดสอบและตรวจ holdout guard ง่าย · ไม่ต้องแก้ tests ที่ merge แล้ว
 Review when: ร่าง contract SLICE-R1
 
-## D-021 ENV-1 ผ่านได้ก่อนมี holdout · ลำดับการตัดบน VPS · ช่องทางเดียวที่ส่ง snapshot ก่อน cutoff มาเครื่องวิจัย — 2026-10-25 — proposed
+## D-021 ENV-1 ผ่านได้ก่อนมี holdout · ลำดับการตัดบน VPS · ช่องทางเดียวที่ส่ง snapshot ก่อน cutoff มาเครื่องวิจัย — 2026-10-25 — accepted: ทางที่แนะนำ ช่องทาง (a) (เจ้าของ 17:5x "อนุมัติทั้งหมด" ในแชท Claude หลัง contract review r5)
 Context: architecture ข้อ 6.1 ด่าน ENV-1 เขียนว่า terminal, raw captures และ holdout "ย้ายไปแล้ว" แต่ AGENTS.md ห้ามตัด holdout ก่อน ENV-1 ผ่าน จึงยังไม่มี holdout ให้ย้าย · SPEC Q-08 ให้ระบุลำดับการตัดบน VPS ใน ENV-1 · ENV-001 ปิดทุกช่องทางไฟล์จาก VPS (drive redirection, clipboard แบบไฟล์, sync, share) แต่ R1 ต้องได้ snapshot ก่อน cutoff (train + validation ≈ 2.4 ล้านแท่ง M1) จากเครื่องที่ดึงข้อมูล (`docs/reviews/ENV-contracts-r1.md` F4, F6)
 Decision ที่เสนอ:
 1. **ความหมายของ ENV-1:** ผ่านเมื่อ ENV-001, SPIKE-002, ENV-002 ผ่านครบ **โดยยังไม่มี holdout** · ข้อ "ย้าย holdout ไปแล้ว" ของ 6.1 หมายถึงลำดับในข้อ 2 ซึ่งทำหลัง ENV-1 บน VPS เท่านั้น (แก้ถ้อยคำ 6.1 ตอนบันทึก ENV-1 ผ่าน) · raw captures ของ SPIKE-001 ใน repo เป็น metadata ไม่มีชุดราคา (`spikes/SPIKE-001/results/*.json`)
@@ -248,7 +248,7 @@ Decision ที่เสนอ:
 Why: ทำตาม AGENTS.md (ไม่ตัด holdout ก่อน ENV-1) โดยไม่ทิ้งเงื่อนไขของ 6.1 · ช่องทางเดียวที่เปิดชั่วคราวมีคนเฝ้า มีรายการไฟล์และการตรวจซ้ำ จึงไม่ทำลายด่านหลังผ่าน
 Review when: ร่าง contract ของ acquisition host · เปลี่ยนผู้ให้บริการ VPS หรือวิธีเชื่อมต่อ
 
-## D-022 ใช้ MetaTrader5 5.0.6231, numpy 2.5.4 และ tzdata 2026.5 ใน environment ชั่วคราวบน VPS สำหรับ SPIKE-002 — 2026-10-25 — proposed
+## D-022 ใช้ MetaTrader5 5.0.6231, numpy 2.5.4 และ tzdata 2026.5 ใน environment ชั่วคราวบน VPS สำหรับ SPIKE-002 — 2026-10-25 — accepted (เจ้าของ 17:5x "อนุมัติทั้งหมด" ในแชท Claude) · OSV ตรวจซ้ำในวันอนุมัติ 2026-10-25T09:56Z: ไม่พบ advisory ของทั้งสามแพ็กเกจ
 Context: SPIKE-002 วัดซ้ำบน VPS แบบอ่านอย่างเดียว · D-009/D-010 อนุมัติแพ็กเกจเหล่านี้เฉพาะ SPIKE-001 และ architecture ข้อ 13a "การอนุมัติของ SPIKE ใช้ได้เฉพาะ spike" · AGENTS.md อนุญาตให้ SPIKE ใช้แพ็กเกจที่เจ้าของอนุมัติใน environment ชั่วคราวของ uv
 Decision ที่เสนอ: ADMIT สำหรับ SPIKE-002 เท่านั้น บน VPS: `MetaTrader5==5.0.6231`, `numpy==2.5.4` (dependency ของ MetaTrader5), `tzdata==2026.5` (probe ใช้ zoneinfo) ด้วยคำสั่ง `uv run --no-project --python 3.12.15 --with MetaTrader5==5.0.6231 --with numpy==2.5.4 --with tzdata==2026.5 python spikes/SPIKE-002/probe.py --server … --login-suffix … --valid-until … --clock-sync …` (argument ครบตาม SPIKE-002) · ไม่เข้า `pyproject.toml`/`uv.lock`
 Why: ชุดเดียวกับที่ SPIKE-001 รันผ่านแล้ว · OSV query 2026-10-25T08:49Z ไม่พบ advisory ของทั้งสามรุ่น (คำตอบว่าง `{}`)

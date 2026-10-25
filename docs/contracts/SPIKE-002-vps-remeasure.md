@@ -1,7 +1,7 @@
 # TASK SPIKE-002 — วัดซ้ำบน VPS แบบอ่านอย่างเดียว: การเชื่อมต่อ, identity, spec ของ XAUUSDm, ความหมายของเวลา และความลึกของข้อมูล
 
 Version v1.2 (v1 แยกจาก ENV-001 v1 ตาม `docs/reviews/ENV-contracts-r1.md` F2 ทาง (b), F14, F15, F18, F19 → v1.1 ตอบ `docs/reviews/ENV-contracts-r2.md`: ความสดของ tick แยกจาก offset และค่าความคลาดเคลื่อน (F26), `first_tick_utc` (F27), ช่องทางผล/clock sync/trade_allowed/exit code/runbook/รุ่นแพ็กเกจ/red flag (F28), เงื่อนไขเริ่ม (F24) → v1.2 ตอบ `docs/reviews/ENV-contracts-r3.md`: ส่งนาฬิกาและ sleep เข้าไปได้ใน tests (F41), `account_info().trade_allowed` (F42)) · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 12 U1/U2/U3 ("host ใหม่ (VPS) ต้องวัดซ้ำใน ENV-1"), ข้อ 13a "เปลี่ยน dependency/host" · ต่อจาก SPIKE-001 · Tier **Standard** · Branch `spike/SPIKE-002-vps-remeasure`
-Status: **draft v1.2** (Claude ร่าง 2026-10-25 · review r4: พร้อมให้อนุมัติ (F41/F42 ปิด, ป้ายเวอร์ชัน F45 แก้แล้ว) · รอเจ้าของอนุมัติ พร้อม D-022 แพ็กเกจของ probe) · เริ่มได้เมื่อ ENV-001 ผ่านครบทุก AC
+Status: **approved by owner 2026-10-25 17:5x** (v1.2 · เจ้าของตอบ "อนุมัติทั้งหมด" ในแชท Claude: contract นี้, การตัดสิน (ก)–(ค) ตามที่แนะนำ และ D-022 · review r4 และ r5 ว่าพร้อม) · เดิม: draft (Claude ร่าง 2026-10-25 พร้อม D-022 แพ็กเกจของ probe) · เริ่มได้เมื่อ ENV-001 ผ่านครบทุก AC
 Hypothesis (research tasks): ไม่ใช่งานวิจัย
 
 ส่วนหนึ่งของด่าน ENV-1: ENV-001 → **SPIKE-002** → ENV-002
@@ -114,7 +114,7 @@ valid-until ผ่านไปแล้ว · server หรือเลข 4 ต
 ไม่มีผลข้างเคียง · ลบ environment ชั่วคราวได้ (`uv cache clean`) · ถ้าบัญชีไม่ตรงหรือไม่ใช่ Demo probe หยุดเอง
 
 ## DoR status / missing items / next action
-ขาด: การตัดสินของเจ้าของ (ก)–(ค), ENV-001 ผ่าน · next: เจ้าของอนุมัติพร้อม D-022
+ครบ: เจ้าของอนุมัติ (ก)–(ค) และ D-022 2026-10-25 17:5x · ขาด: ENV-001 ผ่าน (ก่อนรันบน VPS), valid until · next: Claude เขียน probe + unit tests ได้ก่อน ENV-001 ผ่าน (รันบน VPS หลัง ENV-001 ผ่านเท่านั้น)
 
 ## Done scope
 implementation (probe + tests) และหลักฐานการวัดบน VPS
