@@ -21,6 +21,7 @@ precision, which the owner accepted with the contract.
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import platform
@@ -31,7 +32,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from importlib import metadata
-from typing import Callable
+from typing import Any, Callable
 
 SYMBOL = "XAUUSDm"
 UTC = timezone.utc
@@ -148,7 +149,7 @@ def check_account(info: object, demo_mode: object, auth: Authorization) -> None:
 
 
 # ---- time: freshness and offset, judged separately (architecture 13a) -------------------------
-def take_samples(mt5: object, now: Callable[[], datetime], sleep: Callable[[float], object],
+def take_samples(mt5: Any, now: Callable[[], datetime], sleep: Callable[[float], object],
                  samples: int = SAMPLES, interval: float = INTERVAL_S) -> list[Sample]:
     out = []
     for i in range(samples):
@@ -182,11 +183,12 @@ def whole_seconds(ms: int | None) -> int | None:
 
 def offset_class_s(offsets: list[int | None], is_open: bool) -> int | None:
     """Nearest multiple of 3600 s when every sample lies within TOLERANCE_MS of it, else None."""
-    if not is_open or not offsets or any(o is None for o in offsets):
+    known = [o for o in offsets if o is not None]
+    if not is_open or not known or len(known) != len(offsets):
         return None
-    hours = (offsets[0] + HOUR_MS // 2) // HOUR_MS
+    hours = (known[0] + HOUR_MS // 2) // HOUR_MS
     target = hours * HOUR_MS
-    if all(abs(o - target) <= TOLERANCE_MS for o in offsets):
+    if all(abs(o - target) <= TOLERANCE_MS for o in known):
         return hours * 3600
     return None
 
@@ -214,7 +216,7 @@ def identity(info: object, term: object) -> dict:
     }
 
 
-def symbol_spec(mt5: object) -> dict:
+def symbol_spec(mt5: Any) -> dict:
     sym = mt5.symbol_info(SYMBOL)
     return {field: (getattr(sym, field, None) if sym is not None else None) for field in SPEC_FIELDS}
 
@@ -229,7 +231,7 @@ def _months_before_cutoff():
         yield start, min(datetime(y, m, 1, tzinfo=UTC), CUTOFF_UTC)
 
 
-def first_m1_utc(mt5: object, maxbars: object) -> str | None:
+def first_m1_utc(mt5: Any, maxbars: object) -> str | None:
     """Day of the first M1 bar before the cutoff (raw time read as UTC: rule version "1", offset 0).
 
     UNKNOWN when maxbars is not Unlimited or a month request failed before the first data;
@@ -249,7 +251,7 @@ def first_m1_utc(mt5: object, maxbars: object) -> str | None:
     return None
 
 
-def first_tick_utc(mt5: object) -> str | None:
+def first_tick_utc(mt5: Any) -> str | None:
     """Day of the first tick at or after 2005-01-01: the one accepted post-cutoff value, day only."""
     ticks = mt5.copy_ticks_from(SYMBOL, TICK_SEARCH_FROM, 1, mt5.COPY_TICKS_ALL)
     if ticks is None:
@@ -271,7 +273,7 @@ def package_versions() -> dict:
 
 
 # ---- orchestration ----------------------------------------------------------------------------
-def run(mt5: object, auth: Authorization, clock_sync: str, now: Callable[[], datetime] = utc_now,
+def run(mt5: Any, auth: Authorization, clock_sync: str, now: Callable[[], datetime] = utc_now,
         sleep: Callable[[float], object] = time.sleep) -> tuple[int, dict | None, str]:
     started = now()
     try:
@@ -323,7 +325,7 @@ def main(argv: list[str] | None = None, now: Callable[[], datetime] = utc_now,
         print(f"REFUSED (exit 2): {exc}", file=sys.stderr)
         return 2
     try:
-        import MetaTrader5 as mt5  # only after the argument and expiry checks
+        mt5 = importlib.import_module("MetaTrader5")  # only after the argument and expiry checks
     except ModuleNotFoundError:
         print("REFUSED (exit 3): MetaTrader5 is not installed in this environment (see D-022)",
               file=sys.stderr)
