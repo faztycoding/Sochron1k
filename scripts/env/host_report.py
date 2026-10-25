@@ -15,6 +15,7 @@ import base64
 import ipaddress
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -33,6 +34,13 @@ ALLOWED_UDP = {68: "CoreNet-DHCP-In", 546: "CoreNet-DHCPV6-In"}
 IGNORED_PROTOCOLS = frozenset({"ICMPv4", "ICMPv6", "2", "41"})  # as Get-NetFirewallPortFilter returns them
 MIN_IPV4_PREFIX = 24
 MIN_IPV6_PREFIX = 48
+# Contract v1.6 (review r1 F10): IPv6 forms that carry IPv4 (mapped, compatible, NAT64) must be at
+# least as narrow as an IPv4 /24, i.e. /120.
+IPV4_IN_IPV6_BLOCKS = tuple(ipaddress.ip_network(n) for n in ("::ffff:0:0/96", "::/96", "64:ff9b::/96"))
+MIN_IPV4_IN_IPV6_PREFIX = 120
+WINDOWS_PATH = re.compile(r"[A-Za-z]:\\[^}\s]*")
+IPV4_LOOKALIKE = re.compile(r"\b([0-9]{1,3}\.){3}[0-9]{1,3}\b")
+IPV6_LOOKALIKE = re.compile(r"\b[0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{0,4}){2,7}")
 
 PASS, FAIL, UNKNOWN = "PASS", "FAIL", "UNKNOWN"
 RDP_PORT = "3389"
@@ -71,6 +79,7 @@ FIREWALL_SCRIPT = r"""
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $rs = @(Get-NetFirewallRule -PolicyStore ActiveStore -Direction Inbound -Action Allow -Enabled True)
+if (@($rs | Group-Object InstanceID | Where-Object Count -gt 1).Count) { throw 'duplicate rule InstanceID' }
 $ports = @{}
 foreach ($f in @($rs | Get-NetFirewallPortFilter)) { $ports[$f.InstanceID] = $f }
 $addresses = @{}
@@ -206,10 +215,39 @@ def effective_helpers(values: list[str]) -> tuple[str, ...]:
 
 
 def parse_git_helpers(stdout: str) -> tuple[str, ...]:
-    """`git config --show-origin --get-all credential.helper`: "<origin>\\t<value>" per line."""
-    values = [line.split("\t", 1)[1].strip() if "\t" in line else line.strip()
-              for line in stdout.splitlines() if line.strip()]
-    return effective_helpers(values)
+    """`git config --show-origin --get-regexp "^credential\\..*helper$"` (contract v1.6).
+
+    Each line is "<origin>\\t<key> <value>"; an empty value prints the key and a space. Keys are
+    the plain credential.helper and URL-scoped credential.<url>.helper. The reset rule is applied
+    per key (an empty value clears that key's earlier helpers), which never clears more than git
+    does; every helper still in effect for any key is returned."""
+    per_key: dict[str, list[str]] = {}
+    for line in stdout.splitlines():
+        if not line.strip():
+            continue
+        entry = line.split("\t", 1)[1] if "\t" in line else line
+        key, _, value = entry.partition(" ")
+        per_key.setdefault(key.lower(), []).append(value.strip())
+    return tuple(helper for values in per_key.values() for helper in effective_helpers(values))
+
+
+def helpers_from_git(returncode: int | None, stdout: str) -> tuple[str, ...] | None:
+    """`git config --get-regexp` exits 1 when no key matches; any other failure is unknown."""
+    if returncode == 0:
+        return parse_git_helpers(stdout)
+    if returncode == 1 and not stdout.strip():
+        return ()
+    return None
+
+
+def helper_kinds(helpers: tuple[str, ...]) -> str:
+    """Names the helpers without printing their values (a value can hold a path or a token)."""
+    known = ("manager", "store", "cache", "wincred", "osxkeychain", "libsecret")
+    kinds = []
+    for helper in helpers:
+        word = helper.split()[0].rsplit("/", 1)[-1].rsplit("\\", 1)[-1].lower() if helper.split() else ""
+        kinds.append(next((k for k in known if word.startswith(k) or word == f"git-credential-{k}"), "other"))
+    return ", ".join(kinds)
 
 
 def url_has_userinfo(url: str) -> bool:
@@ -219,17 +257,14 @@ def url_has_userinfo(url: str) -> bool:
     return "@" in head
 
 
-def remote_has_userinfo_in_config(config_text: str) -> bool:
-    in_remote = False
-    for raw in config_text.splitlines():
-        line = raw.strip()
-        if line.startswith("["):
-            in_remote = line.lower().startswith("[remote ")
-            continue
-        key, sep, value = line.partition("=")
-        if in_remote and sep and key.strip().lower() in ("url", "pushurl") and url_has_userinfo(value.strip()):
-            return True
-    return False
+def any_userinfo(urls: list[str]) -> bool:
+    """URLs as `git remote get-url --all` and `--push --all` print them (insteadOf applied)."""
+    return any(url_has_userinfo(url.strip()) for url in urls if url.strip())
+
+
+def synced_from_uv(returncode: int | None) -> bool | None:
+    """`uv sync --locked --check --offline`: 0 in sync, any other exit not in sync, None not run."""
+    return None if returncode is None else returncode == 0
 
 
 def is_secret_like(name: str) -> bool:
@@ -240,8 +275,15 @@ def is_secret_like(name: str) -> bool:
     return lowered == ".env" or lowered.startswith(".env.") or lowered.endswith(SECRET_SUFFIXES)
 
 
+def _raise(error: OSError) -> None:
+    raise error
+
+
 def _walk_names(root: Path):
-    for directory, subdirs, files in os.walk(root):
+    """Every folder must be listable: a missing root or an unreadable folder raises (UNKNOWN)."""
+    if not root.is_dir():
+        raise NotADirectoryError(str(root))
+    for directory, subdirs, files in os.walk(root, onerror=_raise):
         subdirs[:] = [d for d in subdirs if d not in SKIP_DIRS]
         yield directory, subdirs, files
 
@@ -355,17 +397,19 @@ def _minimum(value: int | None, minimum: int, describe) -> tuple[str, str]:
 def _firewall(f: Facts) -> tuple[str, str]:
     if f.firewall_profiles is None:
         return UNKNOWN, "could not be read"
-    by_name = {p.name: p for p in f.firewall_profiles}
     failures = []
+    names = [p.name for p in f.firewall_profiles]
     for name in PROFILE_NAMES:
-        profile = by_name.get(name)
-        if profile is None:
-            failures.append(f"profile {name} missing")
+        if names.count(name) != 1:
+            failures.append(f"profile {name} appears {names.count(name)} times (must be once)")
+    for profile in f.firewall_profiles:  # every entry is judged, duplicates and extras included
+        if profile.name not in PROFILE_NAMES:
+            failures.append(f"unexpected profile {profile.name}")
             continue
         if profile.enabled != "True":
-            failures.append(f"{name} enabled={profile.enabled} (must be True)")
+            failures.append(f"{profile.name} enabled={profile.enabled} (must be True)")
         if profile.default_inbound_action not in ("Block", "NotConfigured"):
-            failures.append(f"{name} default inbound action {profile.default_inbound_action} (must be Block)")
+            failures.append(f"{profile.name} default inbound action {profile.default_inbound_action} (must be Block)")
     if failures:
         fix = "Set-NetFirewallProfile -Profile Domain,Private,Public -Enabled True -DefaultInboundAction Block"
         return FAIL, "; ".join(failures) + f" -> {fix}"
@@ -396,35 +440,69 @@ def _scope_problems(scope: tuple[str, ...]) -> tuple[list[str], list[str]]:
         prefixes.append(f"/{network.prefixlen}")
         if network.prefixlen < limit:
             problems.append(f"IPv{network.version} /{network.prefixlen} is wider than /{limit}")
+        if "/" in entry and "." in entry.split("/", 1)[1] and not _is_netmask(entry.split("/", 1)[1]):
+            problems.append("scope mask is not a netmask")  # a hostmask (contract v1.6)
+        if network.version == 6 and network.prefixlen < MIN_IPV4_IN_IPV6_PREFIX and any(
+                network.overlaps(block) for block in IPV4_IN_IPV6_BLOCKS):
+            problems.append(f"IPv6 /{network.prefixlen} covers IPv4-mapped space (must be /120 or narrower)")
     return problems, prefixes
+
+
+def _is_netmask(text: str) -> bool:
+    """True for a dotted netmask (ones then zeros), False for a hostmask or anything else."""
+    try:
+        value = int(ipaddress.IPv4Address(text))
+    except ValueError:
+        return False
+    inverted = ~value & 0xFFFFFFFF
+    return inverted & (inverted + 1) == 0
+
+
+def _shown_name(name: str) -> tuple[str, bool]:
+    """The rule Name as printed: paths and address lookalikes are masked (review r1 F7)."""
+    masked = WINDOWS_PATH.sub("<path>", name)
+    masked = IPV4_LOOKALIKE.sub("x.x.x.x", masked)
+    masked = IPV6_LOOKALIKE.sub("x:x::x", masked)
+    return masked, masked != name
+
+
+def _fix(name: str, verb: str, args: str = "", note: str = "") -> str:
+    """One PowerShell command for the owner, or a plain instruction when the Name is masked."""
+    shown, masked = _shown_name(name)
+    if masked:
+        return (f"{verb} the rule shown as {_quote(shown)} on the VPS "
+                "(its full Name holds a path or an address and is not printed)")
+    command = f"{verb} -Name {_quote(name)}{args}"
+    return f"{command}  # {note}" if note else command
 
 
 def _judge_rule(rule: Rule, allowed_udp_ports: dict[str, str]) -> tuple[str | None, str]:
     """(problem or None, scope summary) for one enabled inbound allow rule."""
     protocol, ports = rule.protocol, rule.local_ports
+    label = _quote(_shown_name(rule.name)[0])
     keep_rdp = RDP_PORT in ports  # never advise disabling a rule that carries 3389 (contract F46)
     if protocol not in ("TCP", "UDP"):
         if keep_rdp:
-            fix = f"Set-NetFirewallRule -Name {_quote(rule.name)} -Protocol TCP (keep RDP)"
+            fix = _fix(rule.name, "Set-NetFirewallRule", " -Protocol TCP", "keeps RDP")
         else:
-            fix = f"Disable-NetFirewallRule -Name {_quote(rule.name)}"
-        return f"{_quote(rule.name)} protocol {protocol} is not allowed -> {fix}", ""
+            fix = _fix(rule.name, "Disable-NetFirewallRule")
+        return f"{label} protocol {protocol} is not allowed -> {fix}", ""
     allowed_port = allowed_udp_ports.get(rule.name)
     if ports == (RDP_PORT,):
         problems, prefixes = _scope_problems(rule.remote_addresses)
         summary = f"{protocol} 3389 scope {len(rule.remote_addresses)} entries ({', '.join(prefixes) or 'none'})"
         if problems:
-            fix = f"Set-NetFirewallRule -Name {_quote(rule.name)} -RemoteAddress <your allowlist>"
-            return f"{_quote(rule.name)} {protocol} 3389: {'; '.join(problems)} -> {fix}", summary
+            fix = _fix(rule.name, "Set-NetFirewallRule", " -RemoteAddress <your allowlist>")
+            return f"{label} {protocol} 3389: {'; '.join(problems)} -> {fix}", summary
         return None, summary
     if protocol == "UDP" and allowed_port is not None and ports == (allowed_port,):
         return None, ""
     shown = ", ".join(ports) if ports else "none"
     if keep_rdp:
-        fix = f"Set-NetFirewallRule -Name {_quote(rule.name)} -LocalPort 3389 (keep RDP; remove the other ports)"
+        fix = _fix(rule.name, "Set-NetFirewallRule", " -LocalPort 3389", "keeps RDP; removes the other ports")
     else:
-        fix = f"Disable-NetFirewallRule -Name {_quote(rule.name)}"
-    return f"{_quote(rule.name)} {protocol} ports {shown} are not allowed -> {fix}", ""
+        fix = _fix(rule.name, "Disable-NetFirewallRule")
+    return f"{label} {protocol} ports {shown} are not allowed -> {fix}", ""
 
 
 def _inbound(f: Facts) -> tuple[str, str]:
@@ -442,10 +520,14 @@ def _inbound(f: Facts) -> tuple[str, str]:
             failures.append(problem)
         elif summary:
             summaries.append(summary)
+    rdp_ok = any(s.startswith("TCP 3389") for s in summaries)
+    warning = "" if rdp_ok else ("; no passing TCP 3389 rule yet: keep this RDP session open and fix the RDP "
+                                 "rule first (runbook step 2)")
     if failures:
-        return FAIL, "; ".join(failures)
+        gpo = "; a rule set by Group Policy is changed in the policy, then run again"
+        return FAIL, "; ".join(failures) + gpo + warning
     shown = "; ".join(summaries) if summaries else "no 3389 rule"
-    return PASS, f"{judged} rules judged, {ignored} ignored (ICMP/IGMP/IPv6); {shown}"
+    return PASS, f"{judged} rules judged, {ignored} ignored (ICMP/IGMP/IPv6); {shown}{warning}"
 
 
 def _flag(value: bool | None, ok: str, bad: str) -> tuple[str, str]:
@@ -485,8 +567,10 @@ def _python_env(f: Facts) -> tuple[str, str]:
 def _git(f: Facts) -> tuple[str, str]:
     failures = []
     if f.git_credential_helpers:
-        failures.append("credential.helper set: " + ", ".join(f.git_credential_helpers)
-                        + " -> git config --global credential.helper \"\"")
+        failures.append(f"{len(f.git_credential_helpers)} credential helper(s) in effect "
+                        f"({helper_kinds(f.git_credential_helpers)}; values not shown) -> "
+                        "git config --global credential.helper --% \"\"  # and remove any credential.<url>.helper "
+                        "listed by: git config --show-origin --get-regexp \"^credential\\..*helper$\"")
     if f.remote_has_userinfo is True:
         failures.append("a remote URL carries user information -> clone again over HTTPS without it")
     unknown = f.git_credential_helpers is None or f.remote_has_userinfo is None
@@ -673,19 +757,24 @@ def collect_facts(repo: Path) -> Facts:
 
     def project_synced():
         done = _run(["uv", "sync", "--locked", "--check", "--offline"], cwd=repo, timeout=180)
-        return None if done is None else done.returncode == 0
+        return synced_from_uv(None if done is None else done.returncode)
 
     def credential_helpers():
-        done = _run(["git", "config", "--show-origin", "--get-all", "credential.helper"], cwd=repo)
-        if done is None or done.returncode not in (0, 1):
-            return None
-        return parse_git_helpers(done.stdout) if done.returncode == 0 else ()
+        done = _run(["git", "config", "--show-origin", "--get-regexp", r"^credential\..*helper$"], cwd=repo)
+        return None if done is None else helpers_from_git(done.returncode, done.stdout)
 
     def userinfo():
-        config = repo / ".git" / "config"
-        if not config.is_file():
+        names = _run(["git", "remote"], cwd=repo)
+        if names is None or names.returncode != 0:
             return None
-        return remote_has_userinfo_in_config(config.read_text(encoding="utf-8", errors="replace"))
+        urls: list[str] = []
+        for name in names.stdout.split():
+            for extra in ([], ["--push"]):
+                done = _run(["git", "remote", "get-url", *extra, "--all", name], cwd=repo)
+                if done is None or done.returncode != 0:
+                    return None
+                urls.extend(done.stdout.splitlines())
+        return any_userinfo(urls)
 
     rules, profiles = guarded(firewall) or (None, None)
     return Facts(

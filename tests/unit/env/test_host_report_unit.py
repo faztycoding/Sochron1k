@@ -155,29 +155,71 @@ def test_uv_version_parse():
     assert hr.parse_uv_version("error: no such command") is None
 
 
+# `git config --show-origin --get-regexp "^credential\..*helper$"` lines (contract v1.6, review r1 F1)
+SYSTEM = "file:C:/Program Files/Git/etc/gitconfig\tcredential.helper manager\n"
+GLOBAL_RESET = "file:C:/Users/owner/.gitconfig\tcredential.helper \n"
+URL_HELPER = "file:C:/Users/owner/.gitconfig\tcredential.https://github.com.helper !gh auth git-credential\n"
+
+
 def test_git_helpers_follow_the_reset_rule():
-    system = "file:C:/Program Files/Git/etc/gitconfig\tmanager\n"
-    assert hr.parse_git_helpers(system) == ("manager",)
-    assert hr.parse_git_helpers(system + "file:C:/Users/owner/.gitconfig\t\n") == ()
+    assert hr.parse_git_helpers(SYSTEM) == ("manager",)
+    assert hr.parse_git_helpers(SYSTEM + GLOBAL_RESET) == ()
     assert hr.parse_git_helpers("") == ()
 
 
-@pytest.mark.parametrize("config, expected", [
-    ('[remote "origin"]\n\turl = https://github.com/faztycoding/Sochron1k.git\n', False),
-    ('[remote "origin"]\n\turl = https://someone@github.com/faztycoding/Sochron1k.git\n', True),
-    ('[remote "origin"]\n\turl = git@github.com:faztycoding/Sochron1k.git\n', True),
-    ('[remote "origin"]\n\turl = https://github.com/x/y.git\n\tpushurl = https://u:p@github.com/x/y.git\n', True),
-    ('[core]\n\turl = https://u@example.invalid/\n', False),  # not a remote section
+def test_reset_clears_only_earlier_helpers_of_the_same_key():
+    # M10: a reset must not clear helpers that come after it, nor helpers of another key.
+    store = "file:C:/Users/owner/.gitconfig\tcredential.helper store\n"
+    assert hr.parse_git_helpers(SYSTEM + GLOBAL_RESET + store) == ("store",)
+    assert hr.parse_git_helpers(URL_HELPER + GLOBAL_RESET) == ("!gh auth git-credential",)
+
+
+def test_url_scoped_helper_is_found():
+    # F1 (a): `gh auth setup-git` writes credential.https://github.com.helper.
+    assert hr.parse_git_helpers(SYSTEM + GLOBAL_RESET + URL_HELPER) == ("!gh auth git-credential",)
+
+
+@pytest.mark.parametrize("returncode, stdout, expected", [
+    (0, SYSTEM, ("manager",)), (1, "", ()), (1, "error text", None), (128, "", None), (None, "", None),
 ])
-def test_remote_userinfo(config, expected):
-    assert hr.remote_has_userinfo_in_config(config) is expected
+def test_git_exit_codes(returncode, stdout, expected):
+    # M20: only "no key matched" (exit 1, nothing printed) means no helper.
+    assert hr.helpers_from_git(returncode, stdout) == expected
+
+
+@pytest.mark.parametrize("returncode, expected", [(0, True), (1, False), (2, False), (None, None)])
+def test_uv_check_exit_codes(returncode, expected):
+    # M21: uv that cannot run is unknown, never in sync.
+    assert hr.synced_from_uv(returncode) is expected
+
+
+@pytest.mark.parametrize("urls, expected", [
+    (["https://github.com/faztycoding/Sochron1k.git"], False),
+    (["https://someone@github.com/faztycoding/Sochron1k.git"], True),
+    (["git@github.com:faztycoding/Sochron1k.git"], True),
+    (["https://github.com/x/y.git", "https://u:p@github.com/x/y.git"], True),  # a push URL or a second remote
+    ([], False),
+])
+def test_remote_userinfo(urls, expected):
+    # URLs as `git remote get-url --all` and `--push --all` print them: insteadOf is already applied (F1 b).
+    assert hr.any_userinfo(urls) is expected
+
+
+def test_git_detail_names_kinds_not_values():
+    # F7 (a): a helper value can hold a path or an inline token.
+    secret = "!f() { echo password=hunter2; }; f"
+    facts = replace(valid_facts(), git_credential_helpers=("store --file C:/Users/owner/.git-credentials", secret))
+    text = detail(hr.evaluate(facts), "git")
+    assert "2 credential helper(s)" in text and "store, other" in text
+    assert "hunter2" not in text and ":/Users" not in text
+    assert 'git config --global credential.helper --% ""' in text  # F2: works in Windows PowerShell 5.1
 
 
 # ---- secrets and holdout (tests review r1 Q1) --------------------------------------------------------
 @pytest.mark.parametrize("name, expected", [
     (".env.example", False), (".ENV.EXAMPLE", False), (".env", True), (".env.local", True), (".ENV", True),
     ("id.key", True), ("cert.pem", True), ("store.PFX", True), ("vps.rdp", True), ("env.txt", False),
-    ("README.md", False),
+    ("README.md", False), (".env.example.bak", True),  # M23: only the exact name is exempt
 ])
 def test_secret_like_names(name, expected):
     assert hr.is_secret_like(name) is expected
@@ -196,6 +238,33 @@ def test_counting_skips_git_and_venv(tmp_path):
     assert hr.has_holdout_dir(tmp_path) is False
     (tmp_path / "data" / "Holdout").mkdir(parents=True)
     assert hr.has_holdout_dir(tmp_path) is True
+
+
+def test_other_dot_folders_are_searched(tmp_path):
+    # M22: only .git and .venv are skipped.
+    for folder in (".ssh", ".vscode"):
+        (tmp_path / folder).mkdir()
+        (tmp_path / folder / "id.key").write_text("x")
+    assert hr.count_secret_like(tmp_path) == 2
+
+
+def test_walk_cannot_pass_by_skipping(tmp_path, monkeypatch):
+    # F8: a missing root or a folder that cannot be listed is an error (UNKNOWN), not zero.
+    with pytest.raises(OSError):
+        hr.count_secret_like(tmp_path / "no-such-folder")
+    with pytest.raises(OSError):
+        hr.has_holdout_dir(tmp_path / "no-such-folder")
+    seen = {}
+
+    def walk(root, onerror=None):
+        seen["onerror"] = onerror
+        onerror(PermissionError("listing denied"))
+        return iter(())
+
+    monkeypatch.setattr(hr.os, "walk", walk)
+    with pytest.raises(PermissionError):
+        hr.count_secret_like(tmp_path)
+    assert seen["onerror"] is not None
 
 
 # ---- advice (tests review r1 F1, Q4) -----------------------------------------------------------------
@@ -223,6 +292,67 @@ def test_names_are_single_quoted_for_powershell():
     text = detail(hr.evaluate(valid_facts((RDP, guid, odd))), "inbound")
     assert "Disable-NetFirewallRule -Name '{6f1d2c3b-0000-4000-8000-00000000a001}'" in text
     assert "Disable-NetFirewallRule -Name 'Bob''s rule'" in text
+
+
+def test_advice_notes_are_powershell_comments():
+    # F17: "(keep RDP)" after a command was a parse error or ran as a command in PowerShell 5.1.
+    mixed_ports = rule("Custom-Mixed-In-TCP", "TCP", ("3389", "445"), ("192.0.2.10",))
+    any_protocol = rule("Custom-AnyProtocol-In", "Any", ("3389",), ("192.0.2.10",))
+    text = detail(hr.evaluate(valid_facts((RDP, mixed_ports, any_protocol))), "inbound")
+    assert "-LocalPort 3389  # keeps RDP" in text and "-Protocol TCP  # keeps RDP" in text
+    assert "(keep" not in text
+    assert "Group Policy" in text
+
+
+def test_names_with_paths_or_addresses_are_masked():
+    # F7 (b): Query User rules carry program paths; a provider Name can carry an address.
+    query_user = rule("TCP Query User{5A0E}C:\\users\\owner\\app.exe", "TCP", ("445",), ("Any",))
+    provider = rule("Allow-mgmt-203.0.113.5", "TCP", ("5985",), ("Any",))
+    report = hr.evaluate(valid_facts((RDP, query_user, provider)))
+    text = hr.render(report)
+    assert ":\\" not in text and "owner" not in text and IPV4.search(text) is None
+    assert "'TCP Query User{5A0E}<path>'" in text and "'Allow-mgmt-x.x.x.x'" in text
+    assert "is not printed" in text
+
+
+@pytest.mark.parametrize("scope, ok", [
+    (("::ffff:192.0.2.0/120",), True),
+    (("::ffff:0:0/96",), False),  # every IPv4 address, written as mapped IPv6
+    (("64:ff9b::/96",), False),  # NAT64
+    (("::/64",), False),  # covers the IPv4-compatible and mapped blocks
+    (("2001:db8:1234::/48",), True),
+    (("203.0.113.0/255.255.255.0",), True),
+    (("203.0.113.0/0.0.0.255",), False),  # a hostmask, read by Python as /24
+])
+def test_scope_forms_of_contract_v1_6(scope, ok):
+    # F10 (owner, 2026-10-25): mapped, compatible and NAT64 IPv6 need /120; masks must be netmasks.
+    report = hr.evaluate(valid_facts((replace(RDP, remote_addresses=scope),)))
+    status = next(i.status for i in report.items if i.name == "inbound")
+    assert status == ("PASS" if ok else "FAIL")
+
+
+def test_warning_when_no_tcp_3389_rule_passes():
+    # F3: before any Disable advice is followed, RDP itself must be fixed.
+    open_rdp = replace(RDP, remote_addresses=("Any",))
+    assert "no passing TCP 3389 rule" in detail(hr.evaluate(valid_facts((open_rdp, SHADOW))), "inbound")
+    assert "no passing TCP 3389 rule" not in detail(hr.evaluate(valid_facts()), "inbound")
+
+
+@pytest.mark.parametrize("profiles", [
+    (("Domain", "False"), ("Private", "True"), ("Public", "True"), ("Domain", "True")),  # M33: duplicate
+    (("Domain", "True"), ("Private", "True"), ("Public", "False"), ("Public", "True")),
+    (("Domain", "True"), ("Private", "True"), ("Public", "True"), ("Extra", "False")),
+])
+def test_every_profile_entry_is_judged(profiles):
+    # F6: the last entry of a name must not hide an earlier disabled one; extras fail too.
+    facts = replace(valid_facts(), firewall_profiles=tuple(
+        hr.Profile(name=n, enabled=e, default_inbound_action="Block") for n, e in profiles))
+    assert next(i.status for i in hr.evaluate(facts).items if i.name == "firewall") == "FAIL"
+
+
+def test_firewall_script_refuses_duplicate_instance_ids():
+    # F5: a duplicate InstanceID could pair a rule with another rule's filters; the script throws (UNKNOWN).
+    assert "duplicate rule InstanceID" in hr.FIREWALL_SCRIPT
 
 
 def test_versions_compare_exactly():
