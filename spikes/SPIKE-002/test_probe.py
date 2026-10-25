@@ -79,7 +79,8 @@ class ScriptedTerminal:
 
     def __init__(self, acct=None, *, clock=None, init_ok=True, shift_s=0, jitter_ms=(0, 300, -400, 150, -100),
                  stale=False, maxbars=probe.UNLIMITED_MAXBARS, fail_m1_before=None, tick_missing=False,
-                 first_tick=FIRST_TICK, terminal_allowed=False, portable=False):
+                 first_tick=FIRST_TICK, terminal_allowed=False, portable=False, first_m1=FIRST_M1,
+                 empty_reply="late"):
         self.acct = account() if acct is None else acct
         self.clock = clock or Clock(WEDNESDAY)
         self.init_ok = init_ok
@@ -92,6 +93,8 @@ class ScriptedTerminal:
         self.first_tick = first_tick
         self.terminal_allowed = terminal_allowed
         self.portable = portable
+        self.first_m1 = first_m1
+        self.empty_reply = empty_reply
         self.calls: list[str] = []
         self.range_calls: list[tuple[datetime, datetime]] = []
         self._tick_index = 0
@@ -146,9 +149,13 @@ class ScriptedTerminal:
         if self.fail_m1_before is not None and start < self.fail_m1_before:
             return None
         lo, hi = int(start.timestamp()), int(end.timestamp())
-        first = int(FIRST_M1.timestamp())
-        inside = [t for t in range(max(lo, first), hi, 60)][:5]
-        return Rates(inside or [int(LATE_BAR.timestamp())])
+        first = int(self.first_m1.timestamp())
+        # date_to treated as inclusive (MQL5 CopyRates semantics), so a bar at the cutoff comes back.
+        inside = [t for t in range(max(lo, first), hi + 1, 60)][:5]
+        if inside:
+            return Rates(inside)
+        # An empty range: SPIKE-001 saw the terminal return its earliest bar; "empty" returns nothing.
+        return Rates([]) if self.empty_reply == "empty" else Rates([max(first, int(LATE_BAR.timestamp()))])
 
     def copy_ticks_from(self, symbol, start, count, flags):
         self.calls.append("copy_ticks_from")
@@ -393,6 +400,22 @@ def test_ac05_m1_search_never_reaches_the_cutoff():
     assert term.range_calls[0][0] == datetime(2005, 1, 1, tzinfo=UTC)
     assert all(end <= probe.CUTOFF_UTC for _, end in term.range_calls)
     assert term.range_calls[-1][0] == datetime(2014, 1, 1, tzinfo=UTC)  # stops at the first data
+
+
+@pytest.mark.parametrize("first_m1, empty_reply", [
+    (LATE_BAR, "late"),  # history not loaded back before 2025 (SPIKE-001 runs 2-3)
+    (LATE_BAR, "empty"),
+    (datetime(2025, 1, 1, 0, 0, tzinfo=UTC), "late"),  # a bar exactly at the cutoff
+    (datetime(2025, 1, 2, 0, 0, tzinfo=UTC), "empty"),
+])
+def test_ac05_no_m1_before_the_cutoff_reads_null_and_never_asks_past_it(first_m1, empty_reply):
+    # Review r1 F1: the 2014 history stopped the search long before 2025, so nothing guarded the cutoff.
+    term = ScriptedTerminal(first_m1=first_m1, empty_reply=empty_reply)
+    assert probe.first_m1_utc(term, probe.UNLIMITED_MAXBARS) is None
+    assert len(term.range_calls) == 240  # 2005-01 .. 2024-12, one request per month
+    assert all(start < probe.CUTOFF_UTC for start, _ in term.range_calls)
+    assert all(end <= probe.CUTOFF_UTC for _, end in term.range_calls)
+    assert term.range_calls[-1] == (datetime(2024, 12, 1, tzinfo=UTC), probe.CUTOFF_UTC)
 
 
 def test_ac05_out_of_range_bar_is_not_taken_as_data():
