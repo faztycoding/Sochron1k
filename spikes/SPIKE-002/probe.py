@@ -13,9 +13,10 @@ Success: one JSON object on stdout, exit 0. Refusal: one line on stderr, exit 2 
 authorization or account (checked before any symbol or history call), exit 3 when the terminal
 cannot be used (initialize failed, not logged in, MetaTrader5 missing).
 
-Post-cutoff rule (contract Invariants): the M1 search never asks for a range at or after
-CUTOFF_UTC, no tick timestamp, price or count is reported, and the only post-cutoff value is
-first_tick_utc at day precision, which the owner accepted with the contract.
+Post-cutoff rule (contract Invariants): every M1 request starts before CUTOFF_UTC and ends at or
+before it, and bars at or after the cutoff are dropped (date_to may be inclusive); no tick
+timestamp, price or count is reported, and the only post-cutoff value is first_tick_utc at day
+precision, which the owner accepted with the contract.
 """
 from __future__ import annotations
 

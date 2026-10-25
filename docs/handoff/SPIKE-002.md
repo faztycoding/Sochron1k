@@ -10,8 +10,11 @@ Tier: Standard. Implementer: Claude (this session). Reviewer: a fresh Claude ses
 - AC-02 to AC-05 (VPS part) are UNKNOWN until the owner's run. AC-01, the unit part of AC-04, the AC-05 key list and AC-06 (call surface) are covered by unit tests.
 
 ## Checks
-- `uv run --offline pytest spikes/SPIKE-002 -q -p no:cacheprovider` → see the commit message for the count and time.
-- `bash scripts/controls/red-flags.sh main` → see the commit message.
+| Command | Result | Commit | Time (+07) |
+|---|---|---|---|
+| `uv run --offline pytest spikes/SPIKE-002 -q -p no:cacheprovider` | 53 passed | `4f4932f` | 2026-10-25 18:3x |
+| `bash scripts/controls/red-flags.sh main` | Pattern groups with hits: 0 | `4f4932f` | 2026-10-25 18:3x |
+| Fixes for review r1: see "Findings response" below | | | |
 
 ## Conventions fixed where the contract leaves room
 1. **Refusals print one line on stderr:** `REFUSED (exit N): <reason>`. stdout stays empty. Only a success prints the JSON, on stdout.
@@ -37,7 +40,7 @@ Tier: Standard. Implementer: Claude (this session). Reviewer: a fresh Claude ses
      - `"UNKNOWN"` when `maxbars` ≠ 100,000,000, the value SPIKE-001 runs 2–4 recorded for "Unlimited". No range is requested in that case.
      - `"UNKNOWN"` when a month request fails before the first data.
      - `null` when no M1 bar exists before 2025-01-01.
-   - Search: month by month from 2005-01 up to 2025-01-01 (exclusive). It never requests a range at or after the cutoff, and it stops at the first month with in-range bars.
+   - Search: month by month from 2005-01 up to 2025-01-01. Every request starts before the cutoff and ends at or before it, so a request ends at the cutoff instant. Bars at or after the cutoff are dropped, because `date_to` may be inclusive. The search stops at the first month with in-range bars.
    - An out-of-range bar is dropped. SPIKE-001 round 2 saw an empty early range return a 2026 bar.
    - The raw time is read as UTC under rule version "1" (offset 0).
 10. **`first_tick_utc`:** `copy_ticks_from(XAUUSDm, 2005-01-01, 1, COPY_TICKS_ALL)` gives the date only.
@@ -49,6 +52,21 @@ Tier: Standard. Implementer: Claude (this session). Reviewer: a fresh Claude ses
     - Both spikes keep the file name `test_probe.py`, as the contract states.
     - Collecting `spikes/SPIKE-001` and `spikes/SPIKE-002` in one pytest run hits pytest's same-basename rule. Run each directory alone, as AC-06 does.
 14. **Naming in the tests:** they avoid the words that `red-flags.sh` reads as placeholders in code, and the names of order functions. `spikes/` is not a test path for that scanner.
+
+## Findings response (review r1, `docs/reviews/SPIKE-002-r1.md`)
+
+Mutants were re-run on each fix against the committed tests, in new scratch folders under
+`scratchpad/s2fix/mut-*` (nothing deleted, as the owner chose on 2026-10-25 after guard-bash blocked an `rm -rf` of an old scratch folder).
+
+| ID | Accept/Dispute | Commit | Evidence (command → result) |
+|----|----------------|--------|-----------------------------|
+| F1 | accept | `d654016` | Four cases with no M1 before the cutoff (history after it, empty replies, a bar exactly at 2025-01-01 with an inclusive `date_to`). Each gives `null` after exactly 240 requests, every start before and every end at or before the cutoff. Mutants M07, M07b and M12 now fail 4 tests each; the new M13 (bar at the cutoff kept) fails 1. `pytest spikes/SPIKE-002` → 57 passed. |
+| F2 | accept | `f22a6a1` | **Before the run:** Claude pushes the branch and gives the owner the reviewed hash. **On the VPS:** `git fetch origin`, then `git switch --detach <hash>`, then `git rev-parse --short HEAD`, which must match, and `git status --short`, which must print nothing. Step 3 uses a normal PowerShell window. The owner pastes the hash with the result, and runs `git switch main` afterwards. **Runbook additions:** what a `can't open file` line means, and a rerun row for `first_tick_utc`. |
+| F3 | accept | `182d2d7` | An "unrecognized arguments" refusal now gives a fixed text with no values. The new tests (a stray login, `--account <login>`, `--password …`) failed 3/3 before the fix and pass after. An abbreviated `--login 123458107` is refused without echo. The other argparse messages hold option names only. → 61 passed. |
+| F4 | accept | `c8fa0d9` | Account refusals never contain the full login, and a wrong-account refusal shows `****<last 4>`. New case: login 810712345 with suffix 8107 → exit 2. M09c fails 2 tests and M22 fails 1. → 62 passed. |
+| F5 | accept | `1b8b2dc` | **New check:** a meta_path finder serves an empty stand-in MetaTrader5 and counts every try. Bad-argument refusals must make 0 tries. **Module-level imports:** a fresh load of the probe under the finder catches them. **Control:** a test proves the finder sees an import. M02b fails, and all 8 mutants of this round are killed. → 64 passed. |
+| F6 | answered (owner's standing delegation: recommended option; owner may veto) | this commit (handoff only) | **No contract change, because AC-05's exact keys stay.** `docs/evidence/SPIKE-002.md` will mark each `H001_COSTS` input as re-measured or carried over. `swap_mode` (points, SPIKE-001 run 4 `"swap_mode": 1`) and the `spread` fallback (240) are carried over from SPIKE-001, not re-measured. `swap_rollover3days` uses MT5 day numbers (Sunday = 0); it is converted to Python's weekday (Monday = 0) before it is compared with `triple_swap_weekday` (3 → 2 = Wednesday). The alternative was a contract revision adding `swap_mode` and `spread` to the field list. |
+| F7 | accept | this commit | **Probe docstring and handoff:** the boundary wording now says requests end at the cutoff instant and bars at or after it are dropped. **Check lines:** the table now names the commit and time. |
 
 ## Not tested
 - **Behaviour of the real terminal:** run only by the owner on the VPS. This covers:
