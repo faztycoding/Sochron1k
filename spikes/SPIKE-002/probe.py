@@ -84,6 +84,9 @@ class Unavailable(Exception):
 
 class _ArgumentParser(argparse.ArgumentParser):
     def error(self, message: str):  # argparse would print usage and exit; refuse instead
+        # argparse quotes unknown tokens, which may hold a full login; the owner pastes this line back.
+        if message.startswith("unrecognized arguments"):
+            raise Refused("arguments: unrecognized arguments (values not shown); use the runbook command")
         raise Refused(f"arguments: {message}")
 
 

@@ -269,6 +269,31 @@ def test_ac01_bad_or_missing_arguments_exit_2_without_importing_metatrader5(argv
     assert out.out == "" and out.err.startswith("REFUSED (exit 2): ")
 
 
+@pytest.mark.parametrize("argv", [
+    GOOD_ARGS + ["123458107"],  # a stray full login
+    GOOD_ARGS + ["--account", "123458107"],  # an unknown flag carrying it
+    GOOD_ARGS + ["--password", "typed-by-mistake"],
+])
+def test_ac01_refusal_never_repeats_what_was_typed(argv, monkeypatch, capsys):
+    # Review r1 F3: argparse quotes unknown tokens, and the owner pastes the refusal line back.
+    monkeypatch.delitem(sys.modules, "MetaTrader5", raising=False)
+    clock = Clock(WEDNESDAY)
+    assert probe.main(argv, clock.now, clock.sleep) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("REFUSED (exit 2): arguments:")
+    assert "123458107" not in err and "typed-by-mistake" not in err
+
+
+def test_ac01_abbreviated_flag_with_a_full_login_is_refused_without_echo(monkeypatch, capsys):
+    monkeypatch.delitem(sys.modules, "MetaTrader5", raising=False)
+    clock = Clock(WEDNESDAY)
+    argv = _with("--login-suffix", "123458107")
+    argv[argv.index("--login-suffix")] = "--login"  # argparse accepts the abbreviation
+    assert probe.main(argv, clock.now, clock.sleep) == 2
+    err = capsys.readouterr().err
+    assert "exactly 4 digits" in err and "123458107" not in err
+
+
 def test_ac01_no_authorization_value_is_built_in():
     source = (HERE / "probe.py").read_text(encoding="utf-8")
     assert "Exness" not in source and SUFFIX not in source
