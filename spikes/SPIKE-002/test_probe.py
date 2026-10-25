@@ -186,6 +186,7 @@ def run_ok(term):
 @pytest.mark.parametrize("acct, reason", [
     (account(server="Exness-MT5Real1"), "not the authorized server"),
     (account(login=123450001), "not the authorized account"),
+    (account(login=810712345), "not the authorized account"),  # the suffix digits, but not at the end
     (account(trade_mode=CONTEST), "is not Demo"),
     (account(trade_mode=REAL_MODE), "is not Demo"),
     (account(trade_allowed=True), "investor password"),
@@ -197,6 +198,10 @@ def test_ac01_wrong_account_stops_before_any_other_read(acct, reason):
     assert code == 2 and report is None
     assert reason in message
     assert term.calls == ["initialize", "account_info", "shutdown"]
+    login = str(acct.login)
+    assert login not in message  # review r1 F4: the owner pastes this line back
+    if reason == "not the authorized account":
+        assert "****" + login[-4:] in message
 
 
 def test_ac01_account_flag_decides_not_the_terminal_flag():
