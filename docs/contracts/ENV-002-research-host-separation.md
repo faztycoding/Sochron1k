@@ -1,7 +1,7 @@
 # TASK ENV-002 — แยก research host ออกจาก terminal และ holdout พร้อม synthetic excluded-period sentinel
 
-Version v1.1 (v1 ร่าง 2026-10-25 → v1.1 ตอบ `docs/reviews/ENV-contracts-r1.md`: research identity และ break-it test (F1), OneDrive (F3), ความหมายของ "ผ่าน data" และงานที่ส่งต่อ (F7), คำสั่งที่รันได้จริง (F8), นิยามที่ผู้เขียน tests ต้องใช้ (F9), ขอบเขตของ excluded_period (F11), การค้น sentinel ที่ไม่อ่านไฟล์ลับ (F12), terminal ที่ติดตั้งที่อื่น (F13), ความสอดคล้อง (F20)) · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 6.1 ("ด่านก่อน SLICE-R1"), 9, 13a · D-017, D-019, D-020, D-021 (proposed) · Tier **High** · Branch `feat/ENV-002-research-host-separation`
-Status: **draft v1.1** (Claude ร่าง 2026-10-25 · รอ contract review r2 แล้วเจ้าของอนุมัติ: High) · เริ่มได้หลัง ENV-001 และ SPIKE-002 ผ่าน
+Version v1.1 (v1 ร่าง 2026-10-25 → v1.1 ตอบ `docs/reviews/ENV-contracts-r1.md`: research identity และ break-it test (F1), OneDrive (F3), ความหมายของ "ผ่าน data" และงานที่ส่งต่อ (F7), คำสั่งที่รันได้จริง (F8), นิยามที่ผู้เขียน tests ต้องใช้ (F9), ขอบเขตของ excluded_period (F11), การค้น sentinel ที่ไม่อ่านไฟล์ลับ (F12), terminal ที่ติดตั้งที่อื่น (F13), ความสอดคล้อง (F20) → v1.2 ตอบ `docs/reviews/ENV-contracts-r2.md`: การประเมิน holdout เป็นงานส่งต่อ (F7), ที่อยู่ของตัวสร้างแท่งปลอม (F9), เอกสารที่แก้ตอนบันทึก ENV-1 ผ่าน (F20), โฟลเดอร์รับไฟล์ของ D-021 (F29), shell folder/ขอบเขตของ hash/token (F30), ความเสี่ยงของ RDP ที่เปิดอยู่ (F32)) · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 6.1 ("ด่านก่อน SLICE-R1"), 9, 13a · D-017, D-019, D-020, D-021 (proposed) · Tier **High** · Branch `feat/ENV-002-research-host-separation`
+Status: **draft v1.2** (Claude ร่าง 2026-10-25 · รอ contract review r3 แล้วเจ้าของอนุมัติ: High) · เริ่มได้หลัง ENV-001 และ SPIKE-002 ผ่าน
 Hypothesis (research tasks): ไม่ใช่งานวิจัย
 
 ด่าน ENV-1: ENV-001 → SPIKE-002 → **ENV-002**
@@ -17,7 +17,7 @@ Hypothesis (research tasks): ไม่ใช่งานวิจัย
 **High** ตาม Q1, Q4
 
 ## นิยาม
-- **research identity** = บัญชีผู้ใช้ Windows ของเจ้าของบนเครื่องเจ้าของ (research host) รวมทุกโปรเซสที่ agent (Claude Code, Codex) เปิด · การเข้า VPS ผ่าน RDP แบบ interactive ของเจ้าของเป็น **ประตูของคน** ไม่ใช่สิทธิ์ของ research identity: รหัสผ่าน RDP ต้องไม่ถูกบันทึกบนเครื่องนี้
+- **research identity** = บัญชีผู้ใช้ Windows ของเจ้าของบนเครื่องเจ้าของ (research host) รวมทุกโปรเซสที่ agent (Claude Code, Codex) เปิด · การเข้า VPS ผ่าน RDP แบบ interactive ของเจ้าของเป็น **ประตูของคน**: รหัสผ่าน RDP ต้องไม่ถูกบันทึกบนเครื่องนี้ และ **ขณะที่หน้าต่าง RDP เปิดอยู่ โปรเซสของ research identity มองเห็นและส่ง input เข้าหน้าต่างนั้นได้** (โปรเซสผู้ใช้เดียวกัน, session เดียวกัน, integrity ระดับเดียวกัน) จึงต้องเปิด RDP เฉพาะเมื่อไม่มี session ของ agent รันอยู่ (decision (ค))
 - **ช่วงที่ตัดออก** = ข้อมูลตลาดตั้งแต่ `HOLDOUT_CUTOFF_UTC` (2025-01-01 00:00 UTC) · `period_end_utc` เป็นจุดสิ้นสุดแบบไม่รวม ความหมายเดียวกับ `research.Dataset`
 - **"อ่านหรือดึงไม่ได้ ทั้งโดยตรงและผ่าน data" ที่ ENV-1** (architecture ข้อ 6.1) = (1) โดยตรง: research identity ไม่มีไฟล์ช่วงที่ตัดออก ไม่มี share/drive ไป VPS ไม่มีพอร์ตอื่นนอกจาก RDP และไม่มี credential ของ VPS (break-it test, AC-03) (2) ดึงจากโบรกเกอร์: ไม่มี terminal และ `MetaTrader5` บนเครื่องนี้ (3) ผ่านโค้ด: `research` ปฏิเสธแท่งของช่วงนั้น (`HoldoutRefused`) และ `research`/`backtest`/`strategy` import `data.acquire`, `broker`, `app` ไม่ได้ · loader ของ R1 ที่ยังไม่มีเป็นงานส่งต่อ (หัวข้อ "งานที่ส่งต่อ")
 
@@ -34,7 +34,7 @@ Hypothesis (research tasks): ไม่ใช่งานวิจัย
 ## Scope
 - In scope: `src/sochron/app/__init__.py`, `src/sochron/app/envcheck.py` · `scripts/env/make_sentinel.py` (stdlib เท่านั้น, รันบน VPS) · unit tests `tests/unit/app/**` · runbook `docs/runbooks/ENV-002-research-host.md` · `docs/evidence/ENV-002-sentinel.json` (ค่าของ sentinel ที่ commit: ชื่อ, ขนาด, SHA-256, token, vault path, เวลาสร้าง) · หลักฐาน · โดยผู้เขียน tests ผ่าน patch D-006: `tests/acceptance/ENV-002/**`, `tests/architecture/**`
 - Exclusions: รูปแบบ snapshot/manifest เต็มและ loader ของ R1 (SLICE-R1) · การดึงข้อมูล การตัดและย้าย holdout (D-021, contract ของ acquisition host) · `data.acquire`, `broker` · แก้ `research`, `backtest`, `strategy`, `data`
-- Allowed files/modules: ข้างบน + `docs/evidence/ENV-002.md`, `docs/handoff/ENV-002.md`, `PROGRESS.md` · หลัง ENV-1 ผ่าน: บันทึก "ENV-1 ผ่าน" (วันที่, commit ของ 3 งาน) ใน PROGRESS และ `docs/architecture.md` ข้อ 6.1 ("ระยะนี้") · การแก้บรรทัด Phase ใน `AGENTS.md` เป็น patch D-006 แยกให้เจ้าของ
+- Allowed files/modules: ข้างบน + `docs/evidence/ENV-002.md`, `docs/handoff/ENV-002.md`, `PROGRESS.md` · หลัง ENV-1 ผ่าน (ตอนบันทึก "ENV-1 ผ่าน": วันที่, commit ของ 3 งาน) แก้ได้เฉพาะ: `docs/architecture.md` ข้อ 6.1 ("ระยะนี้" และ bullet ด่าน ENV-1 ตาม D-021 ข้อ 1), ข้อ 7 ประโยคขอบเขต research/holdout ("ระยะนี้ที่ยังใช้เครื่องเดียว…"), ข้อ 9 แถว holdout, และแถว Q-08 ของ `SPEC.md` (ชี้ไป D-021) · การแก้บรรทัด Phase ใน `AGENTS.md` เป็น patch D-006 แยกให้เจ้าของ
 - Must not touch: `src/sochron/{core,timebase,data,strategy,costs,risk,backtest,research}/**`, `pyproject.toml`, `uv.lock`, `.github/**`, `.claude/**`, `scripts/controls/**`, `AGENTS.md`, `CLAUDE.md`, `spikes/**`
 
 ## Inputs / outputs / errors (contract)
@@ -47,8 +47,9 @@ sochron.app.envcheck   (stdlib · Windows-only API ผ่าน ctypes/winreg �
       search_dirs (Downloads, Desktop, Documents จาก shell folder จริง + %OneDrive%, %OneDriveConsumer%, %OneDriveCommercial% ถ้ามี)
   Facts (frozen): ผลอ่านจาก OS ที่ evaluate ใช้ (เส้นทางที่มีอยู่, รายการ drive ระยะไกล, Uninstall entries, โปรเซส, find_spec)
   collect(roots) -> Facts          # Windows: ctypes เฉพาะ GetDriveTypeW, WNetOpenEnumW/WNetEnumResourceW/WNetCloseEnum (RESOURCE_CONNECTED),
-                                   #   CreateToolhelp32Snapshot/Process32FirstW/Process32NextW/CloseHandle · winreg อ่านอย่างเดียว (Uninstall keys)
-                                   #   · os.listdrives · ไม่มี subprocess, socket, http · ไม่เขียน ไม่ลบไฟล์
+                                   #   CreateToolhelp32Snapshot/Process32FirstW/Process32NextW/CloseHandle, shell32.SHGetKnownFolderPath + ole32.CoTaskMemFree
+                                   #   (Downloads, Desktop, Documents ที่ OneDrive อาจย้าย) · winreg อ่านอย่างเดียวเฉพาะ Uninstall keys (HKLM, HKCU, WOW6432Node)
+                                   #   · os.listdrives, os.environ (APPDATA, USERPROFILE, ProgramFiles*, OneDrive*) · ไม่มี subprocess, socket, http · ไม่เขียน ไม่ลบไฟล์
   evaluate(facts, roots, sentinel | None) -> Report     # อ่าน manifest JSON และไฟล์ที่ต้องค้น sentinel ตามกฎข้างล่าง
   research_host_report(*, roots=None, sentinel=None) -> Report       # = evaluate(collect(roots), roots, sentinel)
   require_research_host(*, roots=None, sentinel=None) -> Report      # ResearchHostError(ValueError) เมื่อ verdict ไม่ใช่ PASS พร้อมชื่อ item
@@ -69,10 +70,13 @@ Items:
                     นอก data dirs แต่ใต้ repo: เฉพาะ `*.hcc`, `*.hc`, `*.tkc` (cache ของ MT5) = FAIL · CSV/parquet อื่นใต้ repo ไม่ตรวจที่นี่
                     (การตรวจ hash และเวลาจริงของไฟล์เป็นงานของ loader ใน SLICE-R1)
   network_shares    FAIL เมื่อมี drive ชนิด DRIVE_REMOTE หรือ resource ที่ต่ออยู่จาก WNetOpenEnumW
-  sentinel          ไม่ให้ Sentinel = UNKNOWN · FAIL เมื่อ: vault_path มีอยู่บนเครื่องนี้ · มีไฟล์ชื่อตรง sentinel ใน repo, data dirs, search_dirs
-                    · มีไฟล์ `.json` ขนาดเท่า size พอดีที่ SHA-256 ตรง · มีไฟล์ข้อความ (`.json`, `.csv`, `.txt`, `.md`) ใต้ repo หรือ data dirs ที่มี token
-                    ห้ามเปิดเด็ดขาด: `.env*`, `*.key`, `*.pem`, `*.pfx`, `*.rdp`, ทุกอย่างใต้โฟลเดอร์ที่มี `terminal64.exe` และใต้ `%APPDATA%\MetaQuotes`
-                    · ข้าม `docs/evidence/ENV-002-sentinel.json` (ไฟล์ค่าที่ commit มี token อยู่แล้ว)
+  sentinel          ไม่ให้ Sentinel = UNKNOWN · FAIL เมื่อ: vault_path มีอยู่บนเครื่องนี้ · ใน repo, data dirs และ search_dirs (ชุดเดียวกันทั้งสามการค้น):
+                    มีไฟล์ชื่อตรง sentinel · มีไฟล์ `.json` ขนาดเท่า size พอดีที่ SHA-256 ตรง · มีไฟล์ข้อความ (`.json`, `.csv`, `.txt`, `.md`) ใต้ repo
+                    หรือ data dirs ที่มี token
+                    ห้ามเปิดเด็ดขาด: `.env` และ `.env.*` (รวม `.env.example`), `*.key`, `*.pem`, `*.pfx`, `*.rdp`, ทุกอย่างใต้โฟลเดอร์ที่มี
+                    `terminal64.exe` และใต้ `%APPDATA%\MetaQuotes`
+                    · ข้ามไฟล์เดียว: `docs/evidence/ENV-002-sentinel.json` · กฎของ repo: มีเพียงไฟล์นั้นที่เก็บ token · หลักฐาน, handoff, review
+                    และ PROGRESS อ้าง sentinel ด้วยชื่อ, ขนาด และ SHA-256 เท่านั้น (ไฟล์อื่นที่มี token = FAIL ตามที่ตั้งใจ)
   ค่าที่อ่านไม่ได้ (สิทธิ์, API ล้ม) = UNKNOWN ของ item นั้น
 
 scripts/env/make_sentinel.py   (stdlib เท่านั้น · เจ้าของรันบน VPS ในโฟลเดอร์ vault)
@@ -80,14 +84,17 @@ scripts/env/make_sentinel.py   (stdlib เท่านั้น · เจ้า�
       "bars": [M1 ปลอม 60 แท่งตั้งแต่ 2025-01-02T00:00:00Z: time_utc, open/high/low/close เป็นข้อความ, spread]}
   พิมพ์ JSON ของค่าที่ต้อง commit: name, size, sha256, token, vault_path, created_utc (เจ้าของคัดลอกเป็นข้อความ ไม่คัดลอกไฟล์)
 
-tests/unit/app/ (ของผู้ทำ) และ tests/acceptance/ENV-002/ (ผู้เขียน tests) ใช้ตัวสร้างเดียวกัน:
-  synthetic_bars(start: datetime, count: int) -> list[core.Bar]    # time_raw/time_utc สอดคล้องกันตาม timebase.rule_for("Exness-MT5Trial14")
-  (อยู่ใน `sochron.app.envcheck` หรือ helper ของ tests: ผู้เขียน tests เลือกและบันทึกใน handoff)
+ตัวสร้างแท่งปลอม (ข้อมูลปลอมอยู่ใต้ tests/ เท่านั้นตาม AGENTS.md):
+  tests/acceptance/ENV-002/synthetic.py (ผู้เขียน tests, ล็อก): synthetic_bars(start: datetime, count: int) -> list[core.Bar]
+      # M1 ติดกัน, time_raw/time_utc สอดคล้องกันตาม timebase.rule_for("Exness-MT5Trial14"), ราคาคงที่ที่ผ่านการตรวจ OHLC
+  tests ทั้งสองที่ (acceptance และ tests/unit/app/) โหลดไฟล์นั้นด้วย importlib.util.spec_from_file_location (repo ไม่มี conftest
+  และ pythonpath มีแค่ src) · `make_sentinel.py` เขียนแท่งปลอมของตัวเองด้วย stdlib (ไม่ import sochron)
 ```
 
 ## งานที่ส่งต่อ (acceptance ที่ contract ถัดไปต้องยก)
 - **SLICE-R1:** loader ของ snapshot (ใน `app`, D-020) ปฏิเสธแท่งของ sentinel และ manifest ที่จบหลัง cutoff ก่อนส่งให้ `research` · จุดเริ่มของ R1 เรียก `require_research_host(sentinel=<docs/evidence/ENV-002-sentinel.json>)` และบันทึก verdict คู่กับการรัน · ไม่ PASS = ไม่รัน
-- **Acquisition host (หลัง ENV-1):** `data.acquire` และการประเมิน holdout รันเมื่อ `host_report.py --role acquisition` เป็น PASS เท่านั้น · select บน holdout ใช้รายการที่ freeze (D-014, D-017) · ลำดับการตัด holdout และช่องทางส่ง snapshot ตาม D-021
+- **SLICE-R1 (ต่อ):** loader อ่าน snapshot จาก data dirs เท่านั้น (รวมโฟลเดอร์รับไฟล์ `<repo>/data/transfer/` ของ D-021) จึงอยู่ในขอบเขตของ `excluded_period` เสมอ
+- **Acquisition host (หลัง ENV-1):** `data.acquire` และการประเมิน holdout รันเมื่อ `host_report.py --role acquisition` เป็น PASS เท่านั้น · select บน holdout ใช้รายการที่ freeze (D-014, D-017) · ลำดับการตัด holdout และช่องทางส่ง snapshot ตาม D-021 · **การประเมิน holdout ต้องมีการแก้ guard ของ `research` (ตอนนี้ปฏิเสธทุกแท่งตั้งแต่ cutoff โดยไม่มี role หรือข้อยกเว้น) ผ่าน contract และ review ของตัวเอง:** ENV-1 ไม่ได้ให้สิทธิ์นี้
 
 ## Invariants
 - ตัวตรวจอ่านเฉพาะ: การมีอยู่ของ path, รายการ drive/resource/โปรเซส/Uninstall entry จาก OS, manifest JSON ใน data dirs และไฟล์ที่ต้องค้น sentinel ตามกฎ · ไม่อ่าน .env, Credential Manager, `cmdkey`, ไฟล์ .rdp หรือเนื้อหาโฟลเดอร์ของ terminal (AGENTS.md)
@@ -97,7 +104,7 @@ tests/unit/app/ (ของผู้ทำ) และ tests/acceptance/ENV-002/ (
 - UNKNOWN ไม่ถือว่าผ่าน · R1 เริ่มได้เมื่อ `require_research_host` คืน PASS เท่านั้น
 
 ## Negative cases
-terminal ติดตั้งอยู่ (Program Files, portable ใต้ profile, Uninstall entry, โปรเซสรันอยู่) · มี `%APPDATA%\MetaQuotes` · `MetaTrader5` import ได้ · มีโฟลเดอร์ holdout · parquet ใน data dir ที่ manifest จบหลัง cutoff / ตรง cutoff (PASS) / ไม่มี manifest / manifest เสีย / manifest ของโฟลเดอร์ที่ไม่มีชื่อไฟล์นั้น · CSV รายงานนอก data dirs (ไม่ตรวจ: PASS) · `.tkc` ใต้ repo · mapped drive หรือ UNC ที่ต่ออยู่ · ไฟล์ที่ hash ตรง sentinel บน Desktop หรือ OneDrive · สำเนาที่เปลี่ยนชื่อแต่มี token · vault path มีบนเครื่องนี้ · ไม่ให้ sentinel (UNKNOWN) · อ่านไม่ได้เพราะสิทธิ์ (UNKNOWN) · `.env` อยู่ข้างสำเนา sentinel (ต้องไม่ถูกเปิด) · แท่งปลอมของช่วงที่ตัดออกเข้า `run_variant`/`random_entry_baseline` (`HoldoutRefused`, registry ไม่เปลี่ยน)
+terminal ติดตั้งอยู่ (Program Files, portable ใต้ profile, Uninstall entry, โปรเซสรันอยู่) · มี `%APPDATA%\MetaQuotes` · `MetaTrader5` import ได้ · มีโฟลเดอร์ holdout · parquet ใน data dir ที่ manifest จบหลัง cutoff / ตรง cutoff (PASS) / ไม่มี manifest / manifest เสีย / manifest ของโฟลเดอร์ที่ไม่มีชื่อไฟล์นั้น · CSV รายงานนอก data dirs (ไม่ตรวจ: PASS) · `.tkc` ใต้ repo · mapped drive หรือ UNC ที่ต่ออยู่ · ไฟล์ที่ hash ตรง sentinel บน Desktop หรือ OneDrive (รวม Desktop ที่ OneDrive ย้ายไป) · สำเนาที่เปลี่ยนชื่อแต่มี token · ไฟล์ใน repo นอกเหนือ `ENV-002-sentinel.json` ที่มี token (FAIL) · manifest ที่จบหลัง cutoff ในโฟลเดอร์ที่ส่งด้วย `--data-dir` หรือใน `<repo>/data/transfer/` (FAIL) · vault path มีบนเครื่องนี้ · ไม่ให้ sentinel (UNKNOWN) · อ่านไม่ได้เพราะสิทธิ์ (UNKNOWN) · `.env` อยู่ข้างสำเนา sentinel (ต้องไม่ถูกเปิด) · แท่งปลอมของช่วงที่ตัดออกเข้า `run_variant`/`random_entry_baseline` (`HoldoutRefused`, registry ไม่เปลี่ยน)
 
 ## Acceptance (Given–When–Then, Thai; ≤ 7)
 - AC-01 Given เครื่องเจ้าของหลังทำตาม runbook (ถอน terminal, ลบ `%APPDATA%\MetaQuotes`, ไม่มี mapped drive ไป VPS) When เจ้าของรันคำสั่ง CLI ของ contract พร้อม `--sentinel-file docs/evidence/ENV-002-sentinel.json` Then ทุก item เป็น PASS และบรรทัดสุดท้าย `RESEARCH HOST: PASS`
@@ -121,7 +128,7 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 | ภัย | ทางเข้า | การป้องกัน | ที่เหลือ (ระบุตรงๆ) |
 |---|---|---|---|
 | research identity ดึงช่วง holdout จากโบรกเกอร์ | terminal + `MetaTrader5` บนเครื่องนี้ | ถอน terminal, ลบ `%APPDATA%\MetaQuotes`, item `terminal_*`, `mt5_package` ก่อนทุก R1 | ติดตั้งใหม่ได้เสมอ: envcheck ก่อนทุก R1 จับแบบติดตั้งปกติ, portable ใต้ profile ≤ 3 ระดับ, Uninstall entry และโปรเซส · portable ที่อื่นและไม่รันอยู่ยังหลุดได้ |
-| research identity เข้า VPS | share, WinRM, SSH, credential ที่บันทึก | firewall ของ ENV-001 (เปิดแค่ RDP จาก IP เจ้าของ) · break-it test จากเครื่องนี้ (AC-03) · ไม่บันทึกรหัส RDP | RDP แบบ interactive ของเจ้าของเป็นประตูของคน: agent ใช้ GUI ไม่ได้และไม่มีรหัส |
+| research identity เข้า VPS | share, WinRM, SSH, credential ที่บันทึก | firewall ของ ENV-001 (เปิดแค่ RDP จาก IP เจ้าของ) · break-it test จากเครื่องนี้ (AC-03) · ไม่บันทึกรหัส RDP | **ขณะหน้าต่าง RDP ของเจ้าของเปิดอยู่ โปรเซสของ research identity มองเห็นหน้าจอ ส่ง input และใช้ clipboard ร่วมได้** (ผู้ใช้, session และ integrity เดียวกัน) · ลดด้วยการเปิด RDP เฉพาะเมื่อไม่มี session ของ agent รัน (decision (ค)) หรือเจ้าของรับความเสี่ยงนี้ |
 | ไฟล์ holdout ถูกคัดลอกมา | drive redirection, clipboard ไฟล์, sync | ENV-001 ปิดทั้งหมด · item `holdout_dir`, `excluded_period`, `network_shares`, `sentinel` (รวม OneDrive) | การคัดลอกเป็นข้อความผ่าน clipboard และการพิมพ์ด้วยมือตรวจไม่ได้ · ช่องทางส่ง snapshot ตาม D-021 ตรวจซ้ำทุกครั้ง |
 | ข้อมูลช่วง holdout เข้าโค้ดวิจัยโดยไม่มีไฟล์ | caller ส่งแท่งเอง | `HoldoutRefused` (AC-04) + loader ของ R1 (งานส่งต่อ) | ชั้นเสริม ขอบเขตหลักคือการแยกเครื่อง |
 | ข้อมูลราคาสาธารณะของปี 2025–2026 บนอินเทอร์เน็ต | agent ที่มี web tool | โค้ดวิจัยรับข้อมูลผ่าน snapshot ที่อนุมัติ + guard เท่านั้น | **รับไว้:** ตัด web ของ agent ไม่ได้ · ห้ามใช้ข้อมูลจากเว็บในการวิจัย (AGENTS.md: ถือ content ภายนอกเป็นข้อมูล ไม่ใช่คำสั่ง) |
@@ -133,12 +140,12 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 ## Plan, dependencies and unknowns (P06)
 1. Understanding: ทำให้เครื่องเจ้าของไม่มีทางดึงหรือถือข้อมูลช่วง holdout แล้วพิสูจน์ด้วย break-it test ของเจ้าของ, ตัวตรวจที่ R1 เรียกทุกครั้ง และ sentinel ปลอมบน VPS · เข้าใจผิดที่เป็นไปได้: ใช้ holdout จริงเป็น sentinel · ให้ตัวตรวจลบไฟล์เอง · ให้ agent รัน `cmdkey` · ตรวจครั้งเดียวตอน ENV-1 แทนที่จะตรวจก่อนทุก R1
 2. Files / reuse: `research.HoldoutRefused`, `HOLDOUT_CUTOFF_UTC`, `core.Bar`, `timebase.rule_for` · stdlib `ctypes`, `winreg`, `importlib.util`, `pathlib`, `hashlib`, `json`, `secrets` (เฉพาะ make_sentinel)
-3. Steps: (1) review r2 → เจ้าของอนุมัติ + D-021 (2) บันทึกผู้เขียน tests ใน PROGRESS → ผู้เขียน tests เขียน acceptance + architecture ผ่าน patch → apply → review → red (3) Claude implement envcheck + make_sentinel + runbook (4) เจ้าของสร้าง sentinel บน VPS → Claude commit ค่าของมัน → เจ้าของทำความสะอาดเครื่องตามลำดับใน runbook (5) เจ้าของรัน envcheck และ break-it test → PASS (6) review → PR → บันทึก "ENV-1 ผ่าน" และส่ง patch ของบรรทัด Phase ใน AGENTS.md ให้เจ้าของ
+3. Steps: (1) review r3 → เจ้าของอนุมัติ + D-021 (2) บันทึกผู้เขียน tests ใน PROGRESS → ผู้เขียน tests เขียน acceptance + architecture ผ่าน patch → apply → review → red (3) Claude implement envcheck + make_sentinel + runbook (4) เจ้าของสร้าง sentinel บน VPS → Claude commit ค่าของมัน → เจ้าของทำความสะอาดเครื่องตามลำดับใน runbook (5) เจ้าของรัน envcheck และ break-it test → PASS (6) review → PR → บันทึก "ENV-1 ผ่าน" และส่ง patch ของบรรทัด Phase ใน AGENTS.md ให้เจ้าของ
 4. Risks: OneDrive ย้าย Desktop/Documents (อ่าน shell folder จริง) · การค้นในโฟลเดอร์ใหญ่ช้า (กรองด้วยนามสกุลและขนาดก่อน) · ชื่อ policy/API ต่างตามรุ่น Windows
 5. Decisions needed from the owner:
    - (ก) อนุมัติ contract นี้ (High)
    - (ข) การทำความสะอาดเครื่อง · **แนะนำ:** หลัง ENV-001 และ SPIKE-002 ผ่าน ถอน MT5 terminal, ลบ `%APPDATA%\MetaQuotes` ทั้งโฟลเดอร์ (มี config ของบัญชีด้วย), ยกเลิกการบันทึกรหัส RDP ของ VPS (ถ้าเคยบันทึก) และตรวจ `cmdkey /list` ด้วยตัวเอง
-   - (ค) รับความเสี่ยงที่เหลือสองแถว (ข้อมูลราคาบนอินเทอร์เน็ต, ความรู้ของ model) · **แนะนำ:** รับ พร้อมกฎว่าห้ามใช้ข้อมูลจากเว็บในการวิจัย
+   - (ค) ความเสี่ยงที่เหลือ · **แนะนำ:** (1) รับเรื่องข้อมูลราคาบนอินเทอร์เน็ตและความรู้ของ model พร้อมกฎว่าห้ามใช้ข้อมูลจากเว็บในการวิจัย (2) เปิด RDP ไป VPS เฉพาะเมื่อไม่มี session ของ Claude Code หรือ Codex รันอยู่ (ปิดหน้าต่าง agent ก่อน) แทนการรับความเสี่ยงที่ agent มองเห็นและควบคุมหน้าต่าง RDP
    - (ง) ที่อยู่ของ envcheck · **แนะนำ:** แพ็กเกจใหม่ `sochron.app` (SLICE-R1 เรียกจาก `app` ตาม D-020)
 
 ## Authorization (filled by the owner)
@@ -156,7 +163,7 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 ติดตั้ง MT5 ใหม่บนเครื่องเจ้าของได้ถ้าต้องย้อน (ENV-1 จะไม่ผ่านจนกว่าจะถอนอีกครั้ง) · ลบไฟล์ sentinel บน VPS ได้หลังบันทึกหลักฐาน (แล้วค่าที่ commit ใช้ไม่ได้: ต้องสร้างใหม่และ commit ใหม่) · revert PR
 
 ## DoR status / missing items / next action
-ขาด: review r2, การตัดสินของเจ้าของ (ก)–(ง) และ D-021, ENV-001 และ SPIKE-002 ผ่าน, valid until · next: review r2
+ขาด: review r3, การตัดสินของเจ้าของ (ก)–(ง) และ D-021, ENV-001 และ SPIKE-002 ผ่าน, valid until · next: review r3
 
 ## Done scope
 operation: เครื่องเจ้าของเป็น research host ที่ตรวจได้ · ENV-1 ผ่านเมื่อ ENV-001, SPIKE-002 และ ENV-002 ผ่านครบ และเจ้าของบันทึกการตัดสินที่ D-021 และ SPIKE-002 AC-04 ต้องการ
