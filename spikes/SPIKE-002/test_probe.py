@@ -335,6 +335,10 @@ def test_ac01_loading_the_probe_and_refusing_never_imports_metatrader5(mt5_finde
     GOOD_ARGS + ["123458107"],  # a stray full login
     GOOD_ARGS + ["--account", "123458107"],  # an unknown flag carrying it
     GOOD_ARGS + ["--password", "typed-by-mistake"],
+    GOOD_ARGS + ["--help=123458107"],  # review r2 F8: argparse quoted these too
+    GOOD_ARGS + ["--he=123458107"],
+    GOOD_ARGS + ["--=123458107"],
+    ["--help"],  # no help screen: every unexpected argument is a refusal
 ])
 def test_ac01_refusal_never_repeats_what_was_typed(argv, monkeypatch, capsys):
     # Review r1 F3: argparse quotes unknown tokens, and the owner pastes the refusal line back.

@@ -86,10 +86,11 @@ class Unavailable(Exception):
 
 class _ArgumentParser(argparse.ArgumentParser):
     def error(self, message: str):  # argparse would print usage and exit; refuse instead
-        # argparse quotes unknown tokens, which may hold a full login; the owner pastes this line back.
-        if message.startswith("unrecognized arguments"):
-            raise Refused("arguments: unrecognized arguments (values not shown); use the runbook command")
-        raise Refused(f"arguments: {message}")
+        # Only messages made of option names are shown. Others can quote what was typed (a full
+        # login, say), and the owner pastes this line back (review r1 F3, r2 F8).
+        if message.startswith("the following arguments are required") or message.endswith("expected one argument"):
+            raise Refused(f"arguments: {message}")
+        raise Refused("arguments: not accepted (values not shown); use the runbook command")
 
 
 def utc_now() -> datetime:
@@ -101,7 +102,7 @@ def epoch_ms(moment: datetime) -> int:
 
 
 def parse_arguments(argv: list[str] | None) -> tuple[Authorization, str]:
-    parser = _ArgumentParser(prog="probe.py", description="SPIKE-002 read-only re-measure")
+    parser = _ArgumentParser(prog="probe.py", description="SPIKE-002 read-only re-measure", add_help=False)
     parser.add_argument("--server", required=True)
     parser.add_argument("--login-suffix", required=True)
     parser.add_argument("--valid-until", required=True)
