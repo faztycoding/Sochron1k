@@ -14,7 +14,12 @@ Tier: Standard. Implementer: Claude (this session). Reviewer: a fresh Claude ses
 |---|---|---|---|
 | `uv run --offline pytest spikes/SPIKE-002 -q -p no:cacheprovider` | 53 passed | `4f4932f` | 2026-10-25 18:3x |
 | `bash scripts/controls/red-flags.sh main` | Pattern groups with hits: 0 | `4f4932f` | 2026-10-25 18:3x |
-| Fixes for review r1: see "Findings response" below | | | |
+| Fixes for review r1 (per-fix counts in "Findings response") | 57 / 61 / 62 / 64 passed | `d654016`..`e077fa6` | 2026-10-25 19:0x–19:2x |
+| `uv run --offline pytest spikes/SPIKE-002 -q -p no:cacheprovider` | 68 passed | `36dcb22` (code head after review r2) | 2026-10-25 19:41:36 |
+| `uv run --offline pytest tests -q -p no:cacheprovider` | 3355 passed, 0 skipped | `36dcb22` | 2026-10-25 19:41:36–19:42:01 |
+| `bash scripts/controls/red-flags.sh main` | Pattern groups with hits: 0 | `36dcb22` | 2026-10-25 19:42 |
+| bundled mypy 1.15 (editor) on `probe.py` and `test_probe.py` | no issues | `36dcb22` | 2026-10-25 19:42:09 |
+| The commit after `36dcb22` changes this handoff and the r2 review file only. | | | |
 
 ## Conventions fixed where the contract leaves room
 1. **Refusals print one line on stderr:** `REFUSED (exit N): <reason>`. stdout stays empty. Only a success prints the JSON, on stdout.
@@ -75,8 +80,16 @@ Mutants were re-run on each fix against the committed tests, in new scratch fold
   - the shape of `symbol_info_tick` on a closed market.
 - The D-022 environment (`uv run --no-project …`). The unit tests run in the project environment, where `MetaTrader5` and `numpy` are "not installed".
 
+## Findings response (review r2, `docs/reviews/SPIKE-002-r2.md`: every r1 finding closed; code and runbook ready for the VPS run)
+
+| ID | Accept/Dispute | Commit | Evidence (command → result) |
+|----|----------------|--------|-----------------------------|
+| F8 | accept | `dd82371` | Only argparse messages made of option names are shown ("the following arguments are required", "expected one argument"); every other argparse error gives a fixed text. `--help` is off (`add_help=False`), so it is refused with exit 2. New cases `--help=<login>`, `--he=<login>`, `--=<login>` and `--help` failed 4/4 before and pass after. → 68 passed. |
+| F9 | accept (question answered with the reviewer's one-line fix) | `36dcb22` | Step 3 runs `git fetch origin spike/SPIKE-002-vps-remeasure`, which brings the reviewed commit into a single-branch or shallow clone too. |
+| F10 | accept | the commit after `36dcb22` | The checks table has times and a line for the final code head `36dcb22`; "Next" below lists the push and the hash hand-over. |
+
 ## Next
-1. A fresh-session review of this branch, against the contract and the diff only, written to `docs/reviews/SPIKE-002-r1.md`.
-2. After ENV-001 passes, the owner sends the login suffix and valid-until. Claude records them in the contract's Authorization table. The owner then follows the runbook and pastes the JSON.
-3. Claude saves the result and writes `docs/evidence/SPIKE-002.md`. That covers AC-02 to AC-05, plus a DECISIONS entry if the build or the offset differs.
-4. PR.
+1. Re-check F8–F10 at the next review, which is the evidence review after the VPS run. The SPIKE-002 headless budget (2: reviewer and spare) is used by r1 and r2, so that review needs the owner's approval of one more session.
+2. Before the VPS run: Claude pushes `spike/SPIKE-002-vps-remeasure` (D-006) and gives the owner the reviewed head's hash. After ENV-001 passes, the owner sends the login suffix and valid-until, and Claude records them in the contract's Authorization table.
+3. The owner follows the runbook and pastes the hash and the JSON. Claude saves the result and writes `docs/evidence/SPIKE-002.md`. That covers AC-02 to AC-05, with the F6 rule for AC-03, plus a DECISIONS entry if the build or the offset differs.
+4. Evidence review, then PR.
