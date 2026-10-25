@@ -1,7 +1,7 @@
 # TASK SPIKE-002 — วัดซ้ำบน VPS แบบอ่านอย่างเดียว: การเชื่อมต่อ, identity, spec ของ XAUUSDm, ความหมายของเวลา และความลึกของข้อมูล
 
-Version v1.1 (v1 แยกจาก ENV-001 v1 ตาม `docs/reviews/ENV-contracts-r1.md` F2 ทาง (b), F14, F15, F18, F19 → v1.1 ตอบ `docs/reviews/ENV-contracts-r2.md`: ความสดของ tick แยกจาก offset และค่าความคลาดเคลื่อน (F26), `first_tick_utc` (F27), ช่องทางผล/clock sync/trade_allowed/exit code/runbook/รุ่นแพ็กเกจ/red flag (F28), เงื่อนไขเริ่ม (F24) → v1.2 ตอบ `docs/reviews/ENV-contracts-r3.md`: ส่งนาฬิกาและ sleep เข้าไปได้ใน tests (F41), `account_info().trade_allowed` (F42)) · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 12 U1/U2/U3 ("host ใหม่ (VPS) ต้องวัดซ้ำใน ENV-1"), ข้อ 13a "เปลี่ยน dependency/host" · ต่อจาก SPIKE-001 · Tier **Standard** · Branch `spike/SPIKE-002-vps-remeasure`
-Status: **draft v1.2** (Claude ร่าง 2026-10-25 · review r3 ว่าพร้อมให้อนุมัติ, ข้อ Low F41/F42 แก้แล้ว รอ review r4 ยืนยัน แล้วเจ้าของอนุมัติ พร้อม D-022 แพ็กเกจของ probe) · เริ่มได้เมื่อ ENV-001 ผ่านครบทุก AC
+Version v1.2 (v1 แยกจาก ENV-001 v1 ตาม `docs/reviews/ENV-contracts-r1.md` F2 ทาง (b), F14, F15, F18, F19 → v1.1 ตอบ `docs/reviews/ENV-contracts-r2.md`: ความสดของ tick แยกจาก offset และค่าความคลาดเคลื่อน (F26), `first_tick_utc` (F27), ช่องทางผล/clock sync/trade_allowed/exit code/runbook/รุ่นแพ็กเกจ/red flag (F28), เงื่อนไขเริ่ม (F24) → v1.2 ตอบ `docs/reviews/ENV-contracts-r3.md`: ส่งนาฬิกาและ sleep เข้าไปได้ใน tests (F41), `account_info().trade_allowed` (F42)) · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 12 U1/U2/U3 ("host ใหม่ (VPS) ต้องวัดซ้ำใน ENV-1"), ข้อ 13a "เปลี่ยน dependency/host" · ต่อจาก SPIKE-001 · Tier **Standard** · Branch `spike/SPIKE-002-vps-remeasure`
+Status: **draft v1.2** (Claude ร่าง 2026-10-25 · review r4: พร้อมให้อนุมัติ (F41/F42 ปิด, ป้ายเวอร์ชัน F45 แก้แล้ว) · รอเจ้าของอนุมัติ พร้อม D-022 แพ็กเกจของ probe) · เริ่มได้เมื่อ ENV-001 ผ่านครบทุก AC
 Hypothesis (research tasks): ไม่ใช่งานวิจัย
 
 ส่วนหนึ่งของด่าน ENV-1: ENV-001 → **SPIKE-002** → ENV-002
@@ -92,7 +92,7 @@ valid-until ผ่านไปแล้ว · server หรือเลข 4 ต
 ## Plan, dependencies and unknowns (P06)
 1. Understanding: ทำซ้ำการวัดของ SPIKE-001 บนเครื่องที่จะใช้จริง ด้วย probe ที่รับ authorization ใหม่และไม่ส่งข้อมูลหลัง cutoff กลับมา · เข้าใจผิดที่เป็นไปได้: แก้ probe ของ SPIKE-001 แทนการทำ probe ใหม่ · รันวันหยุดแล้วได้ offset ผิด · ยอมรับ build ใหม่โดยไม่ตัดสิน
 2. Files / reuse: สำเนาของ `spikes/SPIKE-001/probe.py` (ส่วน initialize, mask_login, spec, การหาวันแรก) · ตัดโหมด census ของปี 2025–2026 ออก
-3. Steps: (1) review r4 → เจ้าของอนุมัติ + D-022 (Claude ตรวจ advisory ของสามแพ็กเกจที่ OSV อีกครั้งในวันที่ขออนุมัติ) (2) Claude เขียน probe + unit tests (3) หลัง ENV-001 ผ่าน เจ้าของรันบน VPS ตามเงื่อนไข AC-04/AC-05 (4) หลักฐาน + การตัดสินเรื่องกฎเวลาถ้าต้องใช้ (5) ผู้ตรวจ session ใหม่ → PR
+3. Steps: (1) เจ้าของอนุมัติ + D-022 (Claude ตรวจ advisory ของสามแพ็กเกจที่ OSV อีกครั้งในวันที่ขออนุมัติ) (2) Claude เขียน probe + unit tests (3) หลัง ENV-001 ผ่าน เจ้าของรันบน VPS ตามเงื่อนไข AC-04/AC-05 (4) หลักฐาน + การตัดสินเรื่องกฎเวลาถ้าต้องใช้ (5) ผู้ตรวจ session ใหม่ → PR
 4. Risks: terminal บน VPS อัปเดต build เอง (คาดว่าเกิด) · PyPI มี MetaTrader5 รุ่นใหม่ (ต้อง admission ใหม่ถ้าจะใช้)
 5. Decisions needed from the owner:
    - (ก) อนุมัติ contract นี้ และ D-022 (MetaTrader5 5.0.6231, numpy 2.5.4, tzdata 2026.5 ใน environment ชั่วคราวบน VPS สำหรับ SPIKE-002 เท่านั้น) · **แนะนำ:** อนุมัติ
@@ -114,7 +114,7 @@ valid-until ผ่านไปแล้ว · server หรือเลข 4 ต
 ไม่มีผลข้างเคียง · ลบ environment ชั่วคราวได้ (`uv cache clean`) · ถ้าบัญชีไม่ตรงหรือไม่ใช่ Demo probe หยุดเอง
 
 ## DoR status / missing items / next action
-ขาด: review r4 (ยืนยัน F41/F42), การตัดสินของเจ้าของ (ก)–(ค), ENV-001 ผ่าน · next: review r4
+ขาด: การตัดสินของเจ้าของ (ก)–(ค), ENV-001 ผ่าน · next: เจ้าของอนุมัติพร้อม D-022
 
 ## Done scope
 implementation (probe + tests) และหลักฐานการวัดบน VPS

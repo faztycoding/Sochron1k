@@ -1,7 +1,7 @@
 # TASK ENV-001 — Windows VPS เป็น acquisition/execution host: เช่า, ทำให้ปลอดภัย และพิสูจน์ว่าปิดช่องทางรั่ว
 
-Version v1.2 (v1 ร่าง 2026-10-25 → v1.1 ตอบ `docs/reviews/ENV-contracts-r1.md`: ย้ายการวัดซ้ำไป SPIKE-002 (F2, F14, F19), firewall สองชั้น (F5), ช่องทางไฟล์ (F3, F4), API ของ host_report (F10), runbook (F15), แหล่งราคา (F16), ปิดบัง IP (F17), ความสอดคล้อง (F20) → v1.2 ตอบ `docs/reviews/ENV-contracts-r2.md`: schema ของ firewall rule (F21), `.env.example` (F22), ที่มาของแต่ละ fact (F23), AC-05 ไม่รอ SPIKE-002 (F24), uv ≥ 0.13.4 (F25), ค่าที่คาดของ uv/Python (F10), การโหลดสคริปต์ใน tests (F31), บันทึกผู้เขียน tests (F20) → v1.3 ตอบ `docs/reviews/ENV-contracts-r3.md`: ตัดสินทุก rule ขาเข้าและสถานะ profile จาก ActiveStore (F33), ชื่อ rule คือ `Name` ของ Windows (F34), ไม่ให้ `uv run` sync ก่อนตรวจ (F35), ขั้นตอนโหลดสคริปต์ (F37), รุ่น uv/Python (F38), ลำดับความสำคัญของ policy (F39), ค้น IPv6 (F40), clipboard แบบข้อความ (F43 c), แถว 1c (F44)) · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 6.1, 10 แถว 1c, 13a · Tier **High** · Branch `chore/ENV-001-vps-acquisition-host`
-Status: **draft v1.3** (Claude ร่าง 2026-10-25 · รอ contract review r4 แล้วเจ้าของอนุมัติ: High และมีค่าใช้จ่าย จึงอนุมัติแทนไม่ได้)
+Version v1.4 (v1 ร่าง 2026-10-25 → v1.1 ตอบ `docs/reviews/ENV-contracts-r1.md`: ย้ายการวัดซ้ำไป SPIKE-002 (F2, F14, F19), firewall สองชั้น (F5), ช่องทางไฟล์ (F3, F4), API ของ host_report (F10), runbook (F15), แหล่งราคา (F16), ปิดบัง IP (F17), ความสอดคล้อง (F20) → v1.2 ตอบ `docs/reviews/ENV-contracts-r2.md`: schema ของ firewall rule (F21), `.env.example` (F22), ที่มาของแต่ละ fact (F23), AC-05 ไม่รอ SPIKE-002 (F24), uv ≥ 0.13.4 (F25), ค่าที่คาดของ uv/Python (F10), การโหลดสคริปต์ใน tests (F31), บันทึกผู้เขียน tests (F20) → v1.3 ตอบ `docs/reviews/ENV-contracts-r3.md`: ตัดสินทุก rule ขาเข้าและสถานะ profile จาก ActiveStore (F33), ชื่อ rule คือ `Name` ของ Windows (F34), ไม่ให้ `uv run` sync ก่อนตรวจ (F35), ขั้นตอนโหลดสคริปต์ (F37), รุ่น uv/Python (F38), ลำดับความสำคัญของ policy (F39), ค้น IPv6 (F40), clipboard แบบข้อความ (F43 c), แถว 1c (F44) → v1.4 ตอบ `docs/reviews/ENV-contracts-r4.md` (ทุกข้อ Low): พิสูจน์ `--no-sync` ด้วยการทดสอบ drift (F35), ป้ายเวอร์ชัน (F45), rule ของ 3389 ให้แก้ scope ไม่ใช่ปิด (F46), helper แบบ pure ของ JSON และลำดับ policy พร้อม unit test (F47), clipboard ตาม (ค) (F48), subnet แบบ mask) · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 6.1, 10 แถว 1c, 13a · Tier **High** · Branch `chore/ENV-001-vps-acquisition-host`
+Status: **draft v1.4** (Claude ร่าง 2026-10-25 · review r4: พร้อมให้อนุมัติ, ข้อ Low ที่เหลือแก้ใน v1.4 รอ review r5 ยืนยัน · รอเจ้าของอนุมัติ: High และมีค่าใช้จ่าย จึงอนุมัติแทนไม่ได้)
 Hypothesis (research tasks): ไม่ใช่งานวิจัย
 
 **ด่าน ENV-1** = ENV-001 (contract นี้: VPS ปลอดภัย) → SPIKE-002 (`docs/contracts/SPIKE-002-vps-remeasure.md`: วัดซ้ำบน VPS แบบอ่านอย่างเดียว) → ENV-002 (`docs/contracts/ENV-002-research-host-separation.md`: แยก research host + sentinel) · SPIKE-002 เริ่มได้เมื่อ ENV-001 ผ่านครบทุก AC (AC-05 เป็น checklist ของเจ้าของ ไม่รอผลของ SPIKE-002) · terminal บนเครื่องเจ้าของอยู่จนกว่า VPS ผ่าน ENV-001 และ SPIKE-002 · ความหมายของ "ENV-1 ผ่าน" ลำดับการตัด holdout และช่องทางส่ง snapshot อยู่ใน D-021 (proposed)
@@ -19,7 +19,7 @@ Hypothesis (research tasks): ไม่ใช่งานวิจัย
 ## Goal / user outcome (Thai)
 เจ้าของมี Windows VPS ของตัวเองที่:
 - เข้าได้ทาง RDP จาก IP ของเจ้าของเท่านั้น โดยกั้นสองชั้น (firewall ของผู้ให้บริการ และ firewall ของ Windows) มี NLA และ lockout · พอร์ตอื่นปิดทั้งหมด พิสูจน์จากภายนอก
-- คัดลอก**ไฟล์**จาก VPS มาเครื่องเจ้าของไม่ได้ (ปิด drive redirection, จำกัด clipboard เป็นข้อความ, ไม่มีโปรแกรม sync เช่น OneDrive) · ช่องทางเดียวที่ส่ง snapshot ก่อน cutoff มาได้คือขั้นตอนใน D-021 ที่เจ้าของทำเองแล้วตรวจซ้ำ
+- คัดลอก**ไฟล์**จาก VPS มาเครื่องเจ้าของไม่ได้ (ปิด drive redirection, clipboard เป็นข้อความเท่านั้นหรือปิดตาม (ค), ไม่มีโปรแกรม sync เช่น OneDrive) · ช่องทางเดียวที่ส่ง snapshot ก่อน cutoff มาได้คือขั้นตอนใน D-021 ที่เจ้าของทำเองแล้วตรวจซ้ำ
 - มี MT5 terminal จากเว็บของ Exness ที่เจ้าของ login เองด้วยรหัสผ่านแบบ investor (อ่านอย่างเดียว) และมี Python ของโปรเจกต์กับสำเนา repo ที่ไม่มีสิทธิ์ push
 
 ## VPS ที่ต้องเช่า (คำแนะนำ)
@@ -62,7 +62,8 @@ scripts/env/host_report.py  (stdlib เท่านั้น · Windows-only imp
     Rule (frozen): name: str (property `Name` ของ Windows), protocol: str ("TCP", "UDP", "ICMPv4", "ICMPv6", "Any", หรือเลขเช่น "2", "41"),
       profiles: str (เช่น "Any", "Domain, Private"),
       local_ports: tuple[str, ...]   (ตามที่ Windows คืน: "3389", "Any", ช่วง "a-b", คำอย่าง "RPC", "IPHTTPSIn", "Teredo"),
-      remote_addresses: tuple[str, ...]   (ตามที่ Windows คืน: "Any", host, CIDR, ช่วง "a-b", คำอย่าง "Internet", "LocalSubnet")
+      remote_addresses: tuple[str, ...]   (ตามที่ Windows คืน: "Any", host, CIDR หรือ subnet แบบ mask เช่น "a.b.c.0/255.255.255.0", ช่วง "a-b",
+          คำอย่าง "Internet", "LocalSubnet" · แปลง host/subnet ด้วย `ipaddress.ip_network(value, strict=False)` ซึ่งรับทั้ง /nn และแบบ mask)
     Profile (frozen): name: str ("Domain", "Private", "Public"), enabled: str, default_inbound_action: str
     (ทุก field เป็น str หรือ tuple ของ str: ไม่มี annotation แบบ `| "Any"` ที่ประเมินตอนรันไม่ได้)
   collect_facts(repo: Path) -> Facts    # Windows เท่านั้น · ที่มาของแต่ละ fact (ตายตัว, อ่านอย่างเดียว, ไม่เปิด socket, ไม่เขียนไฟล์):
@@ -74,10 +75,15 @@ scripts/env/host_report.py  (stdlib เท่านั้น · Windows-only imp
         + profiles        (1) `Get-NetFirewallRule -PolicyStore ActiveStore -Direction Inbound -Action Allow -Enabled True` (ทุก protocol)
                           ต่อกับ `Get-NetFirewallPortFilter`/`Get-NetFirewallAddressFilter` (2) `Get-NetFirewallProfile -PolicyStore ActiveStore`
                         · ActiveStore คือชุดที่มีผลจริง รวม rule จาก Group Policy · แปลงทุก enum ด้วย `.ToString()` และห่อพอร์ต/ที่อยู่ด้วย `@()`
-                          ก่อน `ConvertTo-Json` (Windows PowerShell 5.1 เขียน enum เป็นตัวเลข: ตรวจบนเครื่องเจ้าของ 2026-10-25 ได้ Enabled 1,
-                          Action 2, Profile 0, DefaultInboundAction 4) · ชื่อ property และค่า enum ไม่ขึ้นกับภาษาของระบบ
+                          ก่อน `ConvertTo-Json -Depth 4 -Compress` (Windows PowerShell 5.1 เขียน enum เป็นตัวเลข: ตรวจบนเครื่องเจ้าของ 2026-10-25
+                          ได้ Enabled 1, Action 2, Profile 0, DefaultInboundAction 4 · ค่าตั้งต้น -Depth 2 ทำให้ array ชั้นลึกกลายเป็นข้อความ)
+                          · ชื่อ property และค่า enum ไม่ขึ้นกับภาษาของระบบ
+                        · แปลงผลด้วย helper แบบ pure `parse_firewall_json(text) -> tuple[tuple[Rule, ...] | None, tuple[Profile, ...] | None]`
+                          (ค่า enum ที่เป็นตัวเลข, JSON เสีย หรือขาด field = None ของชุดนั้น → UNKNOWN · พอร์ตที่มาเป็นค่าเดี่ยว "68" = ("68",))
       nla_required      ค่า `UserAuthentication` (1 = True): ถ้ามีใน HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services ใช้ค่านั้น
                         ไม่เช่นนั้นใช้ HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp (policy มาก่อนเสมอ)
+                        · ตัดสินด้วย helper แบบ pure `policy_first(policy: int | None, winstation: int | None) -> bool | None`
+                          (มี policy ใช้ policy == 1 · ไม่มี policy ใช้ winstation == 1 · ไม่มีทั้งคู่ = None) ใช้ร่วมกับสาม fact ข้างล่าง
       lockout_threshold subprocess `net accounts` แล้วอ่านบรรทัด "Lockout threshold" (ระบบที่ไม่ใช่ภาษาอังกฤษ = None → UNKNOWN)
       drive_redirection ค่า `fDisableCdm` (1 = True) ลำดับเดียวกับ nla_required: key ของ Policies ก่อน แล้วจึง RDP-Tcp
       clipboard         ค่า `fDisableClip` (1 = True) หรือ policy จำกัด clipboard จาก server ไป client เป็นข้อความ ลำดับเดียวกัน: Policies ก่อน
@@ -110,8 +116,12 @@ scripts/env/host_report.py  (stdlib เท่านั้น · Windows-only imp
                          · local_ports มี "Any", ช่วง หรือคำ (เช่น Teredo, IPHTTPSIn, RPC) = FAIL
                          · rule ของ 3389 (TCP และ UDP): remote_addresses 1–4 รายการ แต่ละรายการเป็น host เดียว หรือ prefix IPv4 ≥ /24 หรือ IPv6 ≥ /48
                            · "Any", คำ (Internet, LocalSubnet, …) และช่วง "a-b" = FAIL
-                         · detail ของ FAIL แสดง `Name` ของ rule ที่ไม่ผ่าน (ไม่แสดงที่อยู่) ให้เจ้าของปิดด้วย `Disable-NetFirewallRule -Name <Name>`
-                           แล้วรันซ้ำ เช่น "RemoteDesktop-Shadow-In-TCP", rule ของ WinRM และ rule ของแอป (UWP) ที่ protocol เป็น Any · runbook บันทึกรายการที่ปิด
+                         · detail ของ FAIL แสดง `Name` ของ rule ที่ไม่ผ่าน (ไม่แสดงที่อยู่) พร้อมคำแนะนำ:
+                           rule ของ 3389 ที่ scope ไม่ผ่าน → `Set-NetFirewallRule -Name <Name> -RemoteAddress <allowlist>` **ห้ามแนะนำให้ปิด**
+                           (ปิดแล้ว RDP ชั้น Windows ปิด ต้องกู้ผ่าน console ของผู้ให้บริการ)
+                           rule อื่น → `Disable-NetFirewallRule -Name <Name>` เช่น "RemoteDesktop-Shadow-In-TCP", rule ของ WinRM, rule ของแอป (UWP)
+                           ที่ protocol เป็น Any · rule จาก Group Policy แก้ที่ policy · แล้วรันซ้ำ · runbook บันทึกรายการที่แก้และปิด
+                           และจำกัด scope ของ rule RDP ก่อนรัน host_report ครั้งแรก
       nla                nla_required is True
       lockout            1 ≤ lockout_threshold ≤ 10
       drive_redirection  drive_redirection_disabled is True
@@ -130,6 +140,8 @@ scripts/env/host_report.py  (stdlib เท่านั้น · Windows-only imp
       module = importlib.util.module_from_spec(spec); sys.modules["host_report"] = module; spec.loader.exec_module(module)
       (ลงทะเบียนใน sys.modules ก่อน exec เพราะ dataclasses ต้องหาโมดูลของ class เมื่อ annotation เป็นข้อความ)
   Fakes ของ AC-02 สร้างชื่อ rule, รุ่น uv และรุ่น Python จาก host_report.ALLOWED_UDP, EXPECTED_UV, EXPECTED_PYTHON ไม่เขียนค่าตรงๆ
+  Unit tests ของ Claude (tests/unit/env/) ทดสอบ parse_firewall_json ด้วยตัวอย่าง JSON ที่เก็บจากเครื่องเจ้าของ (แทนที่อยู่ด้วยค่าตัวอย่าง
+      ของ RFC 5737/3849) และ policy_first ครบสี่กรณี
 ```
 
 ## Invariants
@@ -143,10 +155,10 @@ scripts/env/host_report.py  (stdlib เท่านั้น · Windows-only imp
 Windows client หรือ Server รุ่นเก่า · RAM ที่เห็นต่ำกว่า 3.5 GiB · ดิสก์ว่างต่ำกว่า 30 GB · rule ขาเข้าเปิดพอร์ตอื่น (เช่น 445, 5985) · RDP rule เป็น "Any" (ค่าตั้งต้นของ Windows), `0.0.0.0/0`, "Internet" หรือช่วงกว้าง · `RemoteDesktop-Shadow-In-TCP` เปิดอยู่ (พอร์ต Any) · rule ที่ protocol เป็น "Any" (เช่นจาก `New-NetFirewallRule` ที่ไม่ระบุ protocol หรือ rule ของแอป UWP) · rule จาก Group Policy (เห็นเฉพาะใน ActiveStore) · profile ใดถูกปิด หรือ DefaultInboundAction เป็น Allow · rule UDP 68 ที่ชื่อไม่ใช่ `CoreNet-DHCP-In` · rule ของ Core Networking (`CoreNet-DHCP-In`, `CoreNet-DHCPV6-In`, ICMPv6) เปิดอยู่ตามค่าตั้งต้น (ผ่าน) · `.env.example` ใต้ repo (ผ่าน) · NLA ปิด หรือ policy `UserAuthentication` = 0 ทั้งที่ค่าใน RDP-Tcp เป็น 1 (policy ชนะ) · ไม่มี lockout หรือ threshold > 10 · drive redirection เปิด · clipboard ส่งไฟล์ได้ · OneDrive รันอยู่ · uv/Python ไม่ตรงรุ่น หรือยังไม่ sync (pyproject.toml หรือ uv.lock ไม่ตรงกับ environment: host_report ต้องไม่ sync ให้เอง) · credential.helper=manager (ค่าตั้งต้นของ Git for Windows) · remote URL มี userinfo · มีไฟล์ `.env` หรือ `.rdp` ใต้ repo · อ่านค่าใดไม่ได้ (UNKNOWN) · การทดสอบจากภายนอกเปิด 3389 ได้จากเครือข่ายที่ไม่อยู่ใน allowlist · IP บ้านอยู่หลัง CGNAT
 
 ## Acceptance (Given–When–Then, Thai; ≤ 7)
-- AC-01 Given VPS ที่เจ้าของตั้งตาม runbook When เจ้าของรัน `host_report.py --role acquisition` บน VPS Then ทุก item เป็น PASS ตามเกณฑ์ในหัวข้อ contract (รวม `firewall` และ `inbound` ขณะที่ rule DHCP ของ Core Networking ยังเปิดอยู่) และบรรทัดสุดท้าย `HOST REPORT: PASS` โดยรายงานไม่มี IPv4/IPv6 เต็ม และ `uv.lock` กับ `.venv` ไม่เปลี่ยนหลังรัน (เทียบ SHA-256 ของ `uv.lock` ก่อนและหลัง)
-- AC-02 Given `Facts` ปลอมที่ผิดทีละ item (รวม: RDP scope "Any", `0.0.0.0/0`, "Internet", ช่วงกว้าง; rule Shadow พอร์ต Any; TCP 445; rule ที่ protocol "Any"; rule UDP 68 ที่ชื่ออื่น; profile Public ปิด; DefaultInboundAction "Allow"; NLA ปิด; lockout 0; clipboard ส่งไฟล์ได้; OneDrive รัน; credential.helper=manager; ไฟล์ `.env` 1 ไฟล์; ค่า None) และ `Facts` ที่ถูกต้องรวม rule ของ Core Networking (ชื่อจาก `ALLOWED_UDP`, ICMPv6, "2", "41"), profile ทั้งสามเปิดและ Block และ `.env.example` When `evaluate` และ `render` Then item ที่ผิดเป็น FAIL (หรือ UNKNOWN สำหรับ None) ตามลำดับผลรวม, Facts ที่ถูกต้องได้ PASS, ข้อความไม่มี IPv4/IPv6 เต็ม และ tests รันบน Linux ได้โดยไม่ import โมดูลของ Windows
+- AC-01 Given VPS ที่เจ้าของตั้งตาม runbook When เจ้าของรัน `host_report.py --role acquisition` บน VPS Then ทุก item เป็น PASS ตามเกณฑ์ในหัวข้อ contract (รวม `firewall` และ `inbound` ขณะที่ rule DHCP ของ Core Networking ยังเปิดอยู่) และบรรทัดสุดท้าย `HOST REPORT: PASS` โดยรายงานไม่มี IPv4/IPv6 เต็ม · แล้วทดสอบ drift ตาม runbook: เปลี่ยนรุ่นที่ pin ของ dependency หนึ่งบรรทัดใน `pyproject.toml` ของ clone บน VPS แล้วรัน host_report → `python_env` เป็น FAIL และ SHA-256 ของ `uv.lock` เท่าเดิม (พิสูจน์ว่า `--no-sync` ไม่ sync และไม่ relock: ถ้า sync ผลจะเป็น PASS) → `git checkout -- pyproject.toml` และ `git status` สะอาด
+- AC-02 Given `Facts` ปลอมที่ผิดทีละ item (รวม: RDP scope "Any", `0.0.0.0/0`, "Internet", ช่วงกว้าง; rule Shadow พอร์ต Any; TCP 445; rule ที่ protocol "Any"; rule UDP 68 ที่ชื่ออื่น; profile Public ปิด; DefaultInboundAction "Allow"; NLA ปิด; lockout 0; clipboard ส่งไฟล์ได้; OneDrive รัน; credential.helper=manager; ไฟล์ `.env` 1 ไฟล์; ค่า None) และ `Facts` ที่ถูกต้องรวม rule ของ Core Networking (ชื่อจาก `ALLOWED_UDP`, ICMPv6, "2", "41"), profile ทั้งสามเปิดและ Block, scope ของ 3389 แบบ /24 ที่เขียนเป็น mask และ `.env.example` When `evaluate` และ `render` Then item ที่ผิดเป็น FAIL (หรือ UNKNOWN สำหรับ None) ตามลำดับผลรวม, Facts ที่ถูกต้องได้ PASS, ข้อความไม่มี IPv4/IPv6 เต็ม และ tests รันบน Linux ได้โดยไม่ import โมดูลของ Windows
 - AC-03 Given VPS หลัง AC-01 When เจ้าของทดสอบจากภายนอกตาม runbook Then จากเครือข่ายที่ไม่อยู่ใน allowlist (เช่น hotspot มือถือ) `Test-NetConnection <vps> -Port 3389` ล้ม · จาก IP ของเจ้าของ 3389 เปิด และ 22, 80, 443, 445, 5985, 5986 ล้มทั้งหมด · รายการ rule ของ firewall ผู้ให้บริการ (ปิดบัง IP) และผลเทียบ IP ของ router กับ IP สาธารณะ (ตรวจ CGNAT) อยู่ในหลักฐาน · ถ้าเป็น CGNAT ใช้ทางเลือก VPN แล้วทดสอบซ้ำ
-- AC-04 Given RDP session ปกติ When เจ้าของคัดลอกไฟล์ทดสอบใน Explorer ของ VPS แล้ววางบนเครื่องตัวเอง และเปิด `\\tsclient` บน VPS Then วางไฟล์ไม่ได้ (ข้อความยังคัดลอกได้) และ `\\tsclient` ใช้ไม่ได้ · runbook มีขั้นตอนส่ง snapshot ตาม D-021 พร้อมการรัน `host_report.py` และตัวตรวจของ ENV-002 ซ้ำหลังส่งทุกครั้ง
+- AC-04 Given RDP session ปกติ When เจ้าของคัดลอกไฟล์ทดสอบใน Explorer ของ VPS แล้ววางบนเครื่องตัวเอง และเปิด `\\tsclient` บน VPS Then วางไฟล์ไม่ได้ (ข้อความยังคัดลอกได้เมื่อ (ค) เลือกแบบข้อความ) และ `\\tsclient` ใช้ไม่ได้ · runbook มีขั้นตอนส่ง snapshot ตาม D-021 พร้อมการรัน `host_report.py` และตัวตรวจของ ENV-002 ซ้ำหลังส่งทุกครั้ง
 - AC-05 Given terminal บน VPS When เจ้าของทำ checklist ของ runbook Then หลักฐานบันทึกคำยืนยันของเจ้าของทีละข้อ: ติดตั้งจากเว็บของ Exness, login ด้วยรหัส investor, Max bars ตั้งเป็น Unlimited, `w32tm /resync` สำเร็จ, uv (รุ่นตาม (ง)) และ Python ติดตั้งแบบออนไลน์ (`uv python install 3.12.15` แล้ว `uv sync --locked --python 3.12.15`) ก่อนคำสั่ง offline ใดๆ, flag `--check` และ `--no-sync` มีในรุ่นที่ติดตั้ง (ผลของ `--help` ในหลักฐาน) (การพิสูจน์ด้วยระบบว่า `trade_allowed` เป็น false อยู่ใน SPIKE-002 AC-02 ไม่ใช่เงื่อนไขของ AC นี้)
 - AC-06 Given หลักฐานทั้งหมดของงาน When ค้นด้วย `grep -n -E` สามรูปแบบ: `\b[0-9]{7,}\b`, `\b([0-9]{1,3}\.){3}[0-9]{1,3}\b` และ IPv6 `\b[0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{0,4}){2,7}` (เวลาแบบมีวินาทีก็ติดด้วย) Then ทุก hit ถูกตรวจว่าไม่ใช่เลขบัญชีหรือ IP เต็ม (รายการ hit และเหตุผลอยู่ในหลักฐาน) และไม่มีรหัสผ่าน
 - AC-07 Given ทั้งงาน When `bash scripts/controls/red-flags.sh main` และ `uv run --offline pytest tests -q -p no:cacheprovider` Then กลุ่ม "Order or account mutation surface" ว่าง, suite ผ่าน skipped 0 และ CI เขียว
@@ -175,7 +187,7 @@ Windows client หรือ Server รุ่นเก่า · RAM ที่เ�
 ## Plan, dependencies and unknowns (P06)
 1. Understanding: เช่า VPS แล้วทำให้เป็นเครื่องที่ปลอดภัยพอถือ terminal/holdout/runner และพิสูจน์จากภายนอกว่าเข้าได้แค่ RDP จากเจ้าของและส่งไฟล์ออกมาไม่ได้ · เข้าใจผิดที่เป็นไปได้: ใช้ MQL5 virtual hosting (รันได้แค่โปรแกรม MQL ไม่ใช่ Python) · ตั้ง allowlist ที่ผู้ให้บริการอย่างเดียวแล้วคิดว่า Windows เห็น (ไม่เห็น: ต้องสองชั้น) · ปล่อย clipboard เปิดเพราะคิดว่าส่งได้แค่ข้อความ (ส่งไฟล์ได้)
 2. Files / reuse: รูปแบบหลักฐานของ SPIKE-001 · ใหม่: `scripts/env/host_report.py`, runbook
-3. Steps: (1) contract review r4 → เจ้าของอนุมัติ + งบ (Q-10) + D-021 (2) บันทึกผู้เขียน tests และผู้ตรวจ (Codex หรือ Claude session ใหม่) ใน PROGRESS → ผู้เขียน tests เขียน acceptance ของ AC-02 ผ่าน patch → review → red (3) Claude เขียน `host_report.py` + unit tests + runbook (4) เจ้าของเช่าและตั้ง VPS ตาม runbook (5) เจ้าของส่งรุ่น uv ที่ติดตั้งกลับมา → Claude ตั้ง `EXPECTED_UV` และแถวใน registry → เจ้าของรัน host_report, ทดสอบจากภายนอก, ทดสอบช่องทางไฟล์, checklist ของ terminal แล้วส่งผลกลับ (6) หลักฐาน → ผู้ตรวจ session ใหม่ → PR · แล้ว SPIKE-002
+3. Steps: (1) contract review r5 (ยืนยันข้อ Low) → เจ้าของอนุมัติ + งบ (Q-10) + D-021 (2) บันทึกผู้เขียน tests และผู้ตรวจ (Codex หรือ Claude session ใหม่) ใน PROGRESS → ผู้เขียน tests เขียน acceptance ของ AC-02 ผ่าน patch → review → red (3) Claude เขียน `host_report.py` + unit tests + runbook (4) เจ้าของเช่าและตั้ง VPS ตาม runbook (5) เจ้าของส่งรุ่น uv ที่ติดตั้งกลับมา → Claude ตั้ง `EXPECTED_UV` และแถวใน registry → เจ้าของรัน host_report, ทดสอบจากภายนอก, ทดสอบช่องทางไฟล์, checklist ของ terminal แล้วส่งผลกลับ (6) หลักฐาน → ผู้ตรวจ session ใหม่ → PR · แล้ว SPIKE-002
 4. Risks: ชื่อ policy ของ clipboard ต่างตามรุ่น Windows (runbook ใช้ "จำกัดเป็นข้อความ" เป็นหลักเพราะ D-021 ข้อ 4 ส่งผลกลับเป็นข้อความ) · ราคาเปลี่ยน · `netsh` แสดงผลตามภาษาของระบบ (ให้ใช้ PowerShell `Get-NetFirewallRule`/`Get-NetFirewallAddressFilter` ซึ่งคืนชื่อ property คงที่ และแปลง enum เป็นข้อความก่อน JSON) · Windows Server แบบ Desktop Experience อาจมี rule ของแอป (UWP) ที่ protocol เป็น Any เปิดอยู่: host_report แสดงชื่อแล้วเจ้าของปิด · การอัปเดตแอปอาจเปิด rule กลับมา: host_report รอบถัดไปจะ FAIL ดังๆ ไม่ผ่านเงียบ
 5. Decisions needed from the owner:
    - (ก) อนุมัติ contract นี้ (High) และงบรายเดือนใน Q-10 · **แนะนำ:** Windows Server 2025, 2–4 vCPU, 8 GB, SSD 80–100 GB, รายเดือน
@@ -199,7 +211,7 @@ Windows client หรือ Server รุ่นเก่า · RAM ที่เ�
 ยกเลิกหรือ rebuild VPS ที่ผู้ให้บริการ · ถ้ารหัส RDP หรือบัญชีรั่ว: เปลี่ยนรหัสผ่านของบัญชี Demo ที่ Exness, rebuild VPS, บันทึกใน `docs/failures/` · terminal บนเครื่องเจ้าของยังอยู่จนกว่า ENV-002
 
 ## DoR status / missing items / next action
-ขาด: contract review r4, การตัดสินของเจ้าของ (ก)–(จ), valid until · next: review r4 → เจ้าของ
+ขาด: contract review r5 (ยืนยัน F35, F45–F48), การตัดสินของเจ้าของ (ก)–(จ), valid until · next: review r5 → เจ้าของ
 
 ## Done scope
 operation: VPS ปลอดภัยและพิสูจน์แล้ว (ยังไม่มีการวัดด้วย MetaTrader5, ข้อมูลวิจัย หรือ holdout บนเครื่อง)
