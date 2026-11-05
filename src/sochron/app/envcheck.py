@@ -54,7 +54,8 @@ DRIVE_REMOTE = 4
 TH32CS_SNAPPROCESS = 0x2
 RESOURCE_CONNECTED = 0x1
 RESOURCETYPE_ANY = 0x0
-NO_ERROR, ERROR_MORE_DATA, ERROR_NO_MORE_ITEMS, ERROR_NO_NETWORK = 0, 234, 259, 1222
+NO_ERROR, ERROR_NO_MORE_FILES, ERROR_MORE_DATA, ERROR_NO_MORE_ITEMS, ERROR_NO_NETWORK = 0, 18, 234, 259, 1222
+WINDOWS_ABSOLUTE = re.compile(r"[A-Za-z]:[\\/].*|\\\\[^\\/]+[\\/].+")  # a drive or UNC path, judged on any OS
 FOLDER_IDS = {  # KNOWNFOLDERID values
     "Downloads": "374DE290-123F-4565-9164-39C4925E467B",
     "Desktop": "B4BFCC3A-DB2C-424C-B029-7FE99A87C641",
@@ -140,6 +141,34 @@ def _summary(findings: list[str]) -> str:
     return shown + (f"; and {len(findings) - SHOWN} more" if len(findings) > SHOWN else "")
 
 
+def _kind(path) -> str:
+    """'dir', 'missing' or 'unreadable' for a root, by os.stat only (v1.9 F5: a refused stat is no crash)."""
+    try:
+        mode = os.stat(path).st_mode
+    except (FileNotFoundError, NotADirectoryError):
+        return "missing"
+    except (OSError, ValueError):
+        return "unreadable"
+    return "dir" if mode & 0o170000 == 0o040000 else "missing"
+
+
+def _exists(path) -> bool | None:
+    """True, False, or None when it cannot be told (os.path.exists answers False then; v1.9 F5)."""
+    try:
+        os.stat(path)
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    except (OSError, ValueError):
+        return None
+    return True
+
+
+def _below_terminal(root: Path) -> bool:
+    """Whether a folder above root holds terminal64.exe (v1.9 F6), by stat of that one name, never listing.
+    A stat that fails for another reason than "not there" counts as a terminal: nothing below is opened."""
+    return any(_exists(ancestor / TERMINAL) is not False for ancestor in Path(root).parents)
+
+
 def is_cloud_only(path) -> bool:
     """A cloud-only file (OneDrive Files On-Demand): opening it would download it, so only os.stat is used."""
     return bool(getattr(os.stat(path), "st_file_attributes", 0) & RECALL_ATTRIBUTES)
@@ -173,7 +202,7 @@ def parse_manifest(data: bytes):
     """(listed names in lower case, period end) of a manifest, or None when it is broken."""
     try:
         document = json.loads(data.decode("utf-8"))
-    except (UnicodeDecodeError, ValueError):
+    except (UnicodeDecodeError, ValueError, RecursionError):  # v1.9 F5: a crafted deep manifest is broken
         return None
     if not isinstance(document, dict):
         return None
@@ -207,38 +236,56 @@ class _Search:
         self.excluded: tuple[list[str], list[str]] = ([], [])
         self.found: tuple[list[str], list[str]] = ([], [])
         self.manifests: dict[str, object] = {}
+        self.counts = {"roots": 0, "folders listed": 0, "files examined": 0, "reparse points skipped": 0}
         self.plan = self._plan(roots)
         self.prune = {key for _, key, _ in self.plan} | {self.metaquotes}
 
     # -- what is walked, and under which rules
     def _plan(self, roots: ResearchRoots) -> list[tuple[Path, str, str]]:
-        plan: list[tuple[Path, str, str]] = []
+        """Every data dir is its own root with the data rules (r1 F1); the repository follows the data rules
+        when a data dir contains it. A search dir under the repository or a data dir is walked with them
+        (contract v1.5); one under another search dir is walked with that one."""
         repo_key = _norm(self.repo)
-        if self.repo.is_dir():
-            plan.append((self.repo, repo_key, "repo"))
-        else:
-            self._unlisted("repo", self.repo, "the repository folder was not found")
         data: list[tuple[Path, str]] = []
         for folder in roots.data_dirs:
             folder, key = Path(folder), _norm(folder)
             if _within(key, self.metaquotes):
                 self._unlisted("data", folder, "is under %APPDATA%\\MetaQuotes, which is never listed")
-            elif folder.is_dir():
+                continue
+            kind = _kind(folder)
+            if kind == "unreadable":
+                self._unlisted("data", folder, "could not be read")
+            elif kind == "missing":
+                if key != self.default_data:  # v1.6 Q5: a missing <repo>/data has nothing to check
+                    self.excluded[1].append(f"data dir {folder} does not exist")
+            elif all(key != other for _, other in data):
                 data.append((folder, key))
-            elif key != self.default_data:  # v1.6 Q5: a missing <repo>/data has nothing to check
-                self.excluded[1].append(f"data dir {folder} does not exist")
-        kept: list[tuple[Path, str, str]] = []
-        for folder, key in data:
-            inside = any(key != other and _within(key, other) for _, other in data)
-            if not inside and all(key != other for _, other, _ in kept):
-                kept.append((folder, key, "data"))
-        plan += kept
-        # A search dir under the repository or a data dir follows their rules (contract v1.5), so it is
-        # walked with them; one under another search dir is walked with that one.
+        plan: list[tuple[Path, str, str]] = []
+        repo_area = "data" if any(_within(repo_key, other) for _, other in data) else "repo"
+        if _within(repo_key, self.metaquotes):
+            self._unlisted("repo", self.repo, "is under %APPDATA%\\MetaQuotes, which is never listed")
+        else:
+            kind = _kind(self.repo)
+            if kind == "dir":
+                plan.append((self.repo, repo_key, repo_area))
+            else:
+                self._unlisted("repo", self.repo, "the repository folder was not found" if kind == "missing"
+                               else "could not be read")
+        plan += [(folder, key, "data") for folder, key in data if key != repo_key]
         covered = [key for _, key, _ in plan]
-        candidates = [(Path(folder), _norm(folder)) for folder in roots.search_dirs]
-        candidates = [(folder, key) for folder, key in candidates
-                      if folder.is_dir() and not any(_within(key, other) for other in covered)]
+        candidates: list[tuple[Path, str]] = []
+        for folder in roots.search_dirs:
+            folder, key = Path(folder), _norm(folder)
+            if any(_within(key, other) for other in covered):
+                continue
+            if _within(key, self.metaquotes):
+                self._unlisted("search", folder, "is under %APPDATA%\\MetaQuotes, which is never listed")
+                continue
+            kind = _kind(folder)
+            if kind == "dir":
+                candidates.append((folder, key))
+            else:  # v1.9 F5: a search dir that is missing or unreadable searched nothing
+                self._unlisted("search", folder, "does not exist" if kind == "missing" else "could not be read")
         searched: list[tuple[Path, str, str]] = []
         for folder, key in candidates:
             nested = any(key != other and _within(key, other) for _, other in candidates)
@@ -257,16 +304,24 @@ class _Search:
     # -- the walk
     def run(self) -> None:
         sentinel = self.sentinel
-        if sentinel is not None and sentinel.vault_path and os.path.exists(sentinel.vault_path):
-            self.found[0].append("the VPS vault path exists on this machine")
+        if sentinel is not None:
+            if not sentinel.vault_path or not sentinel.name:  # v1.9 F7: an empty value switches a rule off
+                self.found[1].append("the sentinel has an empty name or vault_path")
+            else:
+                exists = _exists(sentinel.vault_path)
+                if exists is None:
+                    self.found[1].append("the VPS vault path could not be checked on this machine")
+                elif exists:
+                    self.found[0].append("the VPS vault path exists on this machine")
         for root, _, area in self.plan:
             if area == "search" and sentinel is None:
                 continue  # only the sentinel rules read the search dirs
-            for folder, files, folders, beside in self._walk(root, area):
-                self._visit(area, folder, files, folders, beside)
+            self.counts["roots"] += 1
+            for folder, files, folders, reparse, beside in self._walk(root, area):
+                self._visit(area, files, folders, reparse, beside)
 
     def _walk(self, root: Path, area: str):
-        stack = [(root, False)]
+        stack = [(root, _below_terminal(root))]  # v1.9 F6: a root below a terminal folder is never opened
         while stack:
             folder, beside = stack.pop()
             try:
@@ -275,30 +330,39 @@ class _Search:
             except OSError:
                 self._unlisted(area, folder)
                 continue
-            files, folders = [], []
+            self.counts["folders listed"] += 1
+            files, folders, reparse = [], [], []
             for entry in entries:
                 try:
                     if entry.is_junction() or entry.is_symlink():
-                        continue  # v1.7 F8: reparse points are not entered
-                    if entry.is_dir(follow_symlinks=False):
+                        reparse.append(entry)  # v1.7 F8: not entered; v1.9 F2: the name rules still see it
+                    elif entry.is_dir(follow_symlinks=False):
                         folders.append(entry)
                     elif entry.is_file(follow_symlinks=False):
                         files.append(entry)
                 except OSError:
-                    self._unlisted(area, Path(entry.path))
-            here = beside or any(entry.name.lower() == TERMINAL for entry in files)
-            yield folder, files, folders, here
+                    self._unlisted(area, Path(entry.path), "could not be read")
+            here = beside or any(entry.name.lower() == TERMINAL for entry in files + reparse)
+            yield folder, files, folders, reparse, here
             for entry in folders:
                 if _norm(entry.path) not in self.prune:
                     stack.append((Path(entry.path), here))
 
-    def _visit(self, area: str, folder: Path, files: list, folders: list, beside: bool) -> None:
+    def _visit(self, area: str, files: list, folders: list, reparse: list, beside: bool) -> None:
+        sentinel = self.sentinel
         if area != "search":
-            for entry in folders:
+            for entry in folders + reparse:
                 if entry.name.lower() == "holdout":
                     self.holdout[0].append(f"{entry.path} is a holdout folder")
+        for entry in reparse:
+            self.counts["reparse points skipped"] += 1
+            if sentinel is not None and entry.name.lower() == sentinel.name.lower():
+                self.found[0].append(f"{entry.path} has the sentinel's name")
+            if area != "search":  # v1.9 F3 (a): research code could read through it
+                self._unlisted(area, Path(entry.path), "is a junction or symbolic link, not entered")
         by_name = {entry.name.lower(): entry for entry in files}
         for entry in files:
+            self.counts["files examined"] += 1
             self._file(area, entry, beside, by_name)
 
     # -- one file
@@ -324,12 +388,14 @@ class _Search:
                 self.found[1].append(f"{path} could not be read")
             elif size == sentinel.size:
                 self._compare(path, closed, size, token=False)
-        elif suffix in TEXT_SUFFIXES and _norm(path) != self.excused:
+        elif suffix in TEXT_SUFFIXES:
             size = self._size(entry)
             if size is None:
                 self.found[1].append(f"{path} could not be read")
-            else:
+            elif _norm(path) != self.excused:
                 self._compare(path, closed, size, token=True)
+            elif suffix == ".json" and size == sentinel.size:  # v1.9 F7: excused from rule (4) only
+                self._compare(path, closed, size, token=False)
 
     @staticmethod
     def _size(entry) -> int | None:
@@ -367,22 +433,25 @@ class _Search:
 
     # -- excluded_period in the data dirs
     def _data_file(self, entry, beside: bool, by_name: dict) -> None:
+        """Every manifest that covers the file must pass (v1.9 F8: per-file and folder manifest alike)."""
         path = Path(entry.path)
-        manifest = by_name.get(f"{entry.name}.manifest.json".lower()) or by_name.get("manifest.json")
-        if manifest is None:
+        manifests = [found for found in (by_name.get(f"{entry.name}.manifest.json".lower()), by_name.get("manifest.json"))
+                     if found is not None]
+        if not manifests:
             self.excluded[0].append(f"{path} has no manifest")
-            return
-        parsed = self._manifest(manifest, beside)
-        if parsed is _UNREADABLE:
-            self.excluded[1].append(f"{path}: its manifest {manifest.path} could not be read")
-        elif parsed is None:
-            self.excluded[0].append(f"{path}: its manifest {manifest.path} is broken")
-        else:
-            names, period_end = parsed
-            if entry.name.lower() not in names:
-                self.excluded[0].append(f"{path} is not listed in {manifest.path}")
-            elif period_end > HOLDOUT_CUTOFF_UTC:
-                self.excluded[0].append(f"{path} ends {period_end.strftime(TIME_FORMAT)}, after the cutoff")
+        for manifest in manifests:
+            parsed = self._manifest(manifest, beside)
+            if parsed is _UNREADABLE:
+                self.excluded[1].append(f"{path}: its manifest {manifest.path} could not be read")
+            elif parsed is None:
+                self.excluded[0].append(f"{path}: its manifest {manifest.path} is broken")
+            else:
+                names, period_end = parsed
+                if entry.name.lower() not in names:
+                    self.excluded[0].append(f"{path} is not listed in {manifest.path}")
+                elif period_end > HOLDOUT_CUTOFF_UTC:
+                    self.excluded[0].append(f"{path} ends {period_end.strftime(TIME_FORMAT)} in {manifest.path}, "
+                                            "after the cutoff")
 
     def _manifest(self, entry, beside: bool):
         key = _norm(entry.path)
@@ -404,15 +473,24 @@ class _Search:
 
     # -- the three items
     def items(self) -> tuple[Item, Item, Item]:
+        """The three searching items; each detail ends with what was searched (v1.9 F9)."""
         cutoff = HOLDOUT_CUTOFF_UTC.strftime(TIME_FORMAT)
-        holdout = Item("holdout_dir", *_status(*self.holdout, "no holdout folder in the repository or the data dirs"))
-        excluded = Item("excluded_period", *_status(
-            *self.excluded, f"every data file has a manifest that ends by {cutoff}; no MT5 cache in the repository"))
-        if self.sentinel is None:
-            sentinel = Item("sentinel", UNKNOWN, "no sentinel given (--sentinel-file)")
+        counts = " (searched: " + ", ".join(f"{name} {value}" for name, value in self.counts.items()) + ")"
+
+        def item(name: str, findings: tuple[list[str], list[str]], ok: str) -> Item:
+            status, detail = _status(*findings, ok)
+            return Item(name, status, detail + counts)
+
+        holdout = item("holdout_dir", self.holdout, "no holdout folder in the repository or the data dirs")
+        excluded = item("excluded_period", self.excluded,
+                        f"every data file has a manifest that ends by {cutoff}; no MT5 cache in the repository")
+        sentinel = self.sentinel
+        if sentinel is None:
+            found = Item("sentinel", UNKNOWN, "no sentinel given (--sentinel-file)" + counts)
         else:
-            sentinel = Item("sentinel", *_status(*self.found, "no copy, name, token or vault path of the sentinel found"))
-        return holdout, excluded, sentinel
+            checked = f"{sentinel.name}, {sentinel.size} bytes, SHA-256 {sentinel.sha256}"
+            found = item("sentinel", self.found, f"no copy, name, token or vault path of {checked} found")
+        return holdout, excluded, found
 
 
 # ---- evaluate ------------------------------------------------------------------------------------------
@@ -475,30 +553,34 @@ def evaluate(facts: Facts, roots: ResearchRoots, sentinel: Sentinel | None) -> R
 
 # ---- collect (Windows) ---------------------------------------------------------------------------------
 def _list_folders(folder: Path):
-    """The plain subfolders and the file names of a folder; reparse points are not entered."""
+    """(plain subfolders, file names, reparse points) of a folder; reparse points are never entered."""
     with os.scandir(folder) as listing:
         entries = list(listing)
-    folders, names = [], []
+    folders, names, reparse = [], [], []
     for entry in entries:
         if entry.is_junction() or entry.is_symlink():
-            continue
-        if entry.is_dir(follow_symlinks=False):
+            reparse.append(entry)
+        elif entry.is_dir(follow_symlinks=False):
             folders.append(entry)
         else:
             names.append(entry.name)
-    return folders, names
+    return folders, names, reparse
 
 
 def _find_terminal64(root: Path, levels: int, skip: tuple[str, ...], prune: set[str]) -> list[str]:
-    """terminal64.exe at levels 0..levels below root; folders that refuse listing are skipped (v1.8)."""
+    """terminal64.exe at levels 0..levels below root. The root must be listable (v1.9 F5); folders below it
+    that refuse listing are skipped (v1.8). A reparse point named terminal64.exe is reported (v1.9 F2)."""
     found, stack = [], [(root, 0)]
     while stack:
         folder, level = stack.pop()
         try:
-            folders, names = _list_folders(folder)
+            folders, names, reparse = _list_folders(folder)
         except OSError:
+            if level == 0:
+                raise
             continue
         found += [str(folder / name) for name in names if name.lower() == TERMINAL]
+        found += [entry.path for entry in reparse if entry.name.lower() == TERMINAL]
         if level < levels:
             stack += [(Path(entry.path), level + 1) for entry in folders
                       if entry.name.lower() not in skip and _norm(entry.path) not in prune]
@@ -510,20 +592,22 @@ def find_terminal_paths(program_files, user_profile, appdata) -> tuple[str, ...]
 
     Program Files*\\MetaTrader* folders, terminal64.exe at levels 0-2 of each Program Files* folder, and
     terminal64.exe at levels 0-3 of the user profile outside .git, .venv, node_modules and
-    %APPDATA%\\MetaQuotes (never listed). Names compare without case."""
+    %APPDATA%\\MetaQuotes (never listed). Names compare without case. A root that is missing or cannot be
+    listed raises, so collect gives None (v1.9 F5); a reparse point is named but not entered (v1.9 F2)."""
+    roots = [Path(item) for item in program_files]
+    if not roots:
+        raise OSError("no Program Files folder to search")
     found: list[str] = []
-    for root in (Path(item) for item in program_files):
-        if not root.is_dir():
-            continue
-        try:
-            folders, _ = _list_folders(root)
-        except OSError:
-            continue
-        found += [entry.path for entry in folders if entry.name.lower().startswith("metatrader")]
+    for root in roots:
+        if _kind(root) != "dir":
+            raise OSError(f"{root} is not a readable folder")
+        folders, _, reparse = _list_folders(root)
+        found += [entry.path for entry in folders + reparse if entry.name.lower().startswith("metatrader")]
         found += _find_terminal64(root, PROGRAM_FILES_LEVELS, (), set())
     profile = Path(user_profile)
-    if profile.is_dir():
-        found += _find_terminal64(profile, PROFILE_LEVELS, TERMINAL_SKIP, {_norm(Path(appdata) / "MetaQuotes")})
+    if _kind(profile) != "dir":
+        raise OSError(f"{profile} is not a readable folder")
+    found += _find_terminal64(profile, PROFILE_LEVELS, TERMINAL_SKIP, {_norm(Path(appdata) / "MetaQuotes")})
     unique: dict[str, str] = {}
     for path in found:
         unique.setdefault(_norm(path), path)
@@ -575,10 +659,14 @@ def _process_names() -> tuple[str, ...]:
     try:
         entry = _PROCESSENTRY32W()
         entry.dwSize = ctypes.sizeof(entry)
-        more = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
-        while more:
+        if not kernel32.Process32FirstW(snapshot, ctypes.byref(entry)):  # v1.9 F4: a failure is no empty list
+            raise ctypes.WinError(ctypes.get_last_error())
+        names.append(entry.szExeFile)
+        while kernel32.Process32NextW(snapshot, ctypes.byref(entry)):
             names.append(entry.szExeFile)
-            more = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
+        error = ctypes.get_last_error()
+        if error != ERROR_NO_MORE_FILES:
+            raise ctypes.WinError(error)
     finally:
         kernel32.CloseHandle(snapshot)
     return tuple(names)
@@ -698,13 +786,16 @@ def default_roots(extra_data_dirs=()) -> ResearchRoots:
                             if env.get(name))
     shell = []
     for name in FOLDER_IDS:
-        folder = None
-        if sys.platform == "win32":
-            try:
-                folder = _known_folder(name)
-            except (OSError, ValueError, AttributeError):
-                folder = None
-        shell.append(folder or profile / name)
+        if sys.platform != "win32":
+            shell.append(profile / name)
+            continue
+        try:  # v1.9 F5: on Windows a failed shell-folder call stops the check, never guesses the folder
+            folder = _known_folder(name)
+        except (OSError, ValueError, AttributeError) as error:
+            raise OSError(f"the {name} shell folder could not be read ({type(error).__name__})") from error
+        if folder is None:
+            raise OSError(f"the {name} shell folder could not be read")
+        shell.append(folder)
     onedrive = [Path(env[name]) for name in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial") if env.get(name)]
     return ResearchRoots(repo=repo, data_dirs=(repo / "data", *(Path(item) for item in extra_data_dirs)),
                          program_files=program_files, appdata=appdata, user_profile=profile,
@@ -718,8 +809,12 @@ def research_host_report(*, roots: ResearchRoots | None = None, sentinel: Sentin
 
 
 def require_research_host(*, roots: ResearchRoots | None = None, sentinel: Sentinel | None = None) -> Report:
-    """The gate R1 calls before every run: the PASS report, or ResearchHostError naming each other item."""
-    report = research_host_report(roots=roots, sentinel=sentinel)
+    """The gate R1 calls before every run: the PASS report, or ResearchHostError naming each other item.
+    A check that cannot run at all (the roots cannot be read) is a ResearchHostError too (v1.9 F5)."""
+    try:
+        report = research_host_report(roots=roots, sentinel=sentinel)
+    except OSError as error:
+        raise ResearchHostError(f"research host check could not run: {error}") from error
     if report.verdict != PASS:
         others = ", ".join(f"{item.name} {item.status}" for item in report.items if item.status != PASS)
         raise ResearchHostError(f"research host check is {report.verdict}: {others}")
@@ -733,7 +828,7 @@ def load_sentinel(path) -> tuple[Sentinel | None, str | None]:
         if is_cloud_only(path):
             return None, f"the sentinel file {path} is cloud-only and was not opened"
         values = json.loads(path.read_bytes().decode("utf-8"))
-    except (OSError, UnicodeDecodeError, ValueError) as error:
+    except (OSError, UnicodeDecodeError, ValueError, RecursionError) as error:
         return None, f"the sentinel file {path} could not be read ({type(error).__name__})"
     if not isinstance(values, dict) or set(values) != set(SENTINEL_KEYS):
         return None, f"the sentinel file {path} does not hold exactly {', '.join(SENTINEL_KEYS)}"
@@ -742,6 +837,14 @@ def load_sentinel(path) -> tuple[Sentinel | None, str | None]:
         return None, f"the sentinel file {path} has values of the wrong type"
     if not HEX32.fullmatch(values["token"]) or not HEX64.fullmatch(values["sha256"]):
         return None, f"the sentinel file {path} has a malformed token or sha256"
+    # v1.9 F7: values that would switch a rule off are refused
+    if values["name"] != f"SENTINEL-ENV002-{values['token'][:8]}.json":
+        return None, f"the sentinel file {path} names another file than its token's sentinel"
+    vault = values["vault_path"]
+    if not (os.path.isabs(vault) or WINDOWS_ABSOLUTE.fullmatch(vault)):
+        return None, f"the sentinel file {path} has no absolute vault_path"
+    if not TIME_PATTERN.fullmatch(values["created_utc"]):
+        return None, f"the sentinel file {path} has a created_utc that is not {TIME_FORMAT}"
     return Sentinel(**values), None
 
 
@@ -767,9 +870,13 @@ def main(argv=None) -> int:
         sentinel, note = None, "no --sentinel-file given"
     else:
         sentinel, note = load_sentinel(args.sentinel_file)
-    report = research_host_report(roots=default_roots(tuple(args.data_dir)), sentinel=sentinel)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="replace")
+    try:
+        report = research_host_report(roots=default_roots(tuple(args.data_dir)), sentinel=sentinel)
+    except OSError as error:  # v1.9 F5: the check could not run; never a traceback or a PASS
+        print(f"# ENV-002 research host check\n\nnote: the check could not run: {error}\n\nRESEARCH HOST: {UNKNOWN}")
+        return 1
     print(render(report, note), end="")
     return 0 if report.verdict == PASS else 1
 

@@ -38,6 +38,7 @@ def test_terminal_paths_follow_the_levels_and_names(tmp_path):
     }
     (program_files / "MetaTrader 5").mkdir(parents=True)
     (program_files / "metatrader 4 portable").mkdir(parents=True)
+    (tmp_path / "Program Files (x86)").mkdir()  # v1.9 F5: every root must exist
     for path in expected - {program_files / "MetaTrader 5", program_files / "metatrader 4 portable"}:
         touch(path)
     for path in (program_files / "a" / "b" / "c" / "terminal64.exe",  # level 3 of Program Files
@@ -65,7 +66,9 @@ def test_terminal_search_never_lists_metaquotes_and_skips_refused_folders(tmp_pa
         return real_scandir(path)
 
     monkeypatch.setattr(os, "scandir", scandir)
-    found = ec.find_terminal_paths((), profile, appdata)
+    program_files = tmp_path / "Program Files"
+    program_files.mkdir()
+    found = ec.find_terminal_paths((program_files,), profile, appdata)
     assert [Path(path) for path in found] == [profile / "Desktop" / "terminal64.exe"]  # v1.8: no UNKNOWN
     assert not any(path.startswith(ec._norm(appdata / "MetaQuotes")) for path in listed)
 
@@ -100,7 +103,7 @@ class _Listing(list):
         return False
 
 
-def test_a_junction_is_not_entered(tmp_path, monkeypatch):
+def test_a_junction_is_not_entered_and_under_the_repo_is_unknown(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     junction = repo / "My Music"
     touch(junction / "copy.txt", f"{TOKEN}\n".encode())
@@ -120,7 +123,7 @@ def test_a_junction_is_not_entered(tmp_path, monkeypatch):
     sentinel = ec.Sentinel(name="SENTINEL-ENV002-01234567.json", size=10, sha256="0" * 64, token=TOKEN,
                            vault_path=str(tmp_path / "vault"), created_utc="2026-11-05T00:00:00Z")
     found = {item.name: item.status for item in ec.evaluate(_facts(), roots, sentinel).items}
-    assert found["sentinel"] == ec.PASS
+    assert found["sentinel"] == ec.UNKNOWN  # v1.9 F3 (a): research code could read through it
 
 
 def _facts(**changes):
