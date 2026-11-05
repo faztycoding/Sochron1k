@@ -7,7 +7,7 @@ Contract: `docs/contracts/ENV-001-vps-acquisition-host.md` (v1.6) · ผู้�
 - ส่งผลกลับเป็น**ข้อความ** และ**ปิดบัง IP ทุกครั้ง**ก่อนวาง (เขียนเป็น `x.x.x.x`) · ไม่ส่งไฟล์ ไม่ส่งรหัสผ่าน ไม่ส่งเลขบัญชีเต็ม
 - ปิดหน้าต่าง Claude Code และ Codex บนเครื่องคุณก่อนเปิด RDP ไป VPS (ENV-002 (ค))
 - คำสั่งที่ขึ้นต้นด้วย `PS>` รันใน PowerShell ไม่ต้องพิมพ์ `PS>` · แต่ละขั้นบอกว่าต้องเปิดแบบ **Administrator** หรือแบบธรรมดา
-- **กฎกันล็อกตัวเอง:** ก่อนเปลี่ยน firewall, ปิด rule ใดๆ หรือ restart ให้เปิด RDP session ที่สองจากบ้านให้ได้ก่อนเสมอ และอย่าปิด session แรกจนกว่า session ใหม่จะเข้าได้ · ถ้าเข้าไม่ได้ ใช้ console ของผู้ให้บริการแก้
+- **กฎกันล็อกตัวเอง:** ก่อนเปลี่ยน firewall, ปิด rule ใดๆ หรือ restart ให้เปิด RDP session ที่สองจากบ้านให้ได้ก่อนเสมอ และอย่าปิด session แรกจนกว่า session ใหม่จะเข้าได้ · ถ้าเข้าไม่ได้ ใช้ console ของผู้ให้บริการแก้ · Windows Server ให้บัญชีหนึ่งมี session เดียว: ถ้าใช้บัญชีเดิมแล้ว session ใหม่เข้าได้ หน้าต่างแรกจะขึ้นว่าถูกตัดการเชื่อม ซึ่งเป็นเรื่องปกติ · ถ้า session ใหม่เข้าไม่ได้ หน้าต่างแรกจะยังอยู่ ให้แก้จากหน้าต่างนั้น
 
 ## 0. เช่า VPS
 - **สเปก:** Windows Server 2025 (64-bit, license รวมในราคา), 2–4 vCPU, RAM 8 GB, SSD 80–100 GB, IP คงที่, จ่ายรายเดือน · งบไม่เกิน 40 USD/เดือน (SPEC Q-10)
@@ -138,7 +138,7 @@ PS> net accounts /lockoutthreshold:5 /lockoutduration:30 /lockoutwindow:30
 2. บน VPS สร้างไฟล์ `test.txt` บน Desktop → คลิกขวา Copy → บนเครื่องคุณ คลิกขวา Paste บน Desktop → **ต้องวางไม่ได้**
 3. บน VPS เปิด Notepad พิมพ์ข้อความ → Copy → วางบนเครื่องคุณ → **ต้องวางได้** (ถ้าเลือกปิด clipboard ทั้งหมดในขั้นที่ 3 ข้อความจะวางไม่ได้ ซึ่งถูกต้องเช่นกัน)
 4. บน VPS เปิด File Explorer พิมพ์ `\\tsclient` ในช่อง address → **ต้องไม่มีไดรฟ์** และใน "This PC" ต้องไม่มีไดรฟ์ของเครื่องคุณ
-5. บน VPS: `Get-Printer | Select-Object Name, Type` → **ต้องไม่มี printer ที่มาจากเครื่องคุณ** (ชื่อมักลงท้ายด้วย "(redirected …)")
+5. บน VPS: `Get-Printer | Select-Object Name, Type` → **ต้องไม่มี printer ที่มาจากเครื่องคุณ** (ชื่อมักลงท้ายด้วย "(redirected …)") · ถ้า `Get-Printer` ขึ้นว่าติดต่อ Print Spooler ไม่ได้ ให้บันทึกว่า **"spooler off"** (ไม่มีช่องทาง printer)
 6. ตัดการเชื่อม แล้วกลับไปเอาติ๊ก Drives และ Printers ออกใน mstsc
 7. **ส่งให้ Claude:** ผลทุกข้อพร้อมเวลา และยืนยันว่าข้อ 1 ติ๊ก Drives ไว้จริง
 
