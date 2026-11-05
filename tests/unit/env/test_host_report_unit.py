@@ -351,6 +351,20 @@ def test_names_with_paths_or_addresses_are_masked():
     assert "is not printed" in text
 
 
+def test_paths_are_masked_to_the_end_of_the_name():
+    # Review r2 F20: a path with a space (Program Files, a user name with a space) or a UNC path.
+    names = ("TCP Query User{5A0E}C:\\Program Files\\probe app\\app.exe",
+             "UDP Query User{5A0F}C:\\Users\\First Last\\app.exe",
+             "Allow-unc-\\\\fileserver\\docs\\app.exe")
+    rules = [rule(name, "TCP", ("445",), ("Any",)) for name in names]
+    text = detail(hr.evaluate(valid_facts((RDP, *rules))), "inbound")
+    assert "\\" not in text
+    for leak in ("Program", "probe app", "Users", "Last", "fileserver", "docs"):
+        assert leak not in text
+    for shown in ("'TCP Query User{5A0E}<path>'", "'UDP Query User{5A0F}<path>'", "'Allow-unc-<path>'"):
+        assert shown in text
+
+
 @pytest.mark.parametrize("scope, ok", [
     (("::ffff:192.0.2.0/120",), True),
     (("::ffff:0:0/96",), False),  # every IPv4 address, written as mapped IPv6
