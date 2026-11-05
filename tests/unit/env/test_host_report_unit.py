@@ -1,4 +1,4 @@
-"""Implementer's unit tests for scripts/env/host_report.py (ENV-001 v1.6).
+"""Implementer's unit tests for scripts/env/host_report.py (ENV-001 v1.8).
 
 They cover what the contract gives to unit tests and the locked AC-02 tests cannot reach:
 parse_firewall_json on the captured sample (review r5 F53), policy_first's four cases and the
@@ -240,6 +240,7 @@ def test_uv_check_exit_codes(returncode, expected):
     # Contract v1.7 (review r2 F23 a): anything but https:// can push with a key git finds outside the URL.
     (["ssh://github.com/x/y.git"], True), (["github.com:x/y.git"], True), (["git://github.com/x/y.git"], True),
     (["file:///C:/repos/y.git"], True), (["http://github.com/x/y.git"], True), (["C:/repos/y.git"], True),
+    (["https:github.com/x/y.git"], True),  # review r3: git reads this as scp-like SSH to a host named "https"
     ([], False),
 ])
 def test_remote_urls(urls, expected):

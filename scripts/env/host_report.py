@@ -1,6 +1,6 @@
 """ENV-001 host report: a read-only check of the acquisition/execution VPS.
 
-Contract: docs/contracts/ENV-001-vps-acquisition-host.md (v1.6). Standard library only.
+Contract: docs/contracts/ENV-001-vps-acquisition-host.md (v1.8). Standard library only.
 collect_facts reads the Windows facts; every Windows-only module is imported inside it, so the
 module also imports on Linux, where evaluate and render (both pure) are tested.
 
@@ -639,7 +639,8 @@ def _git(f: Facts) -> tuple[str, str]:
                         "git config --show-origin --get-regexp \"^credential\\..*helper$\" lists, in the file it "
                         "names, except the empty global one -> git config --global credential.helper --% \"\"")
     unknown = f.git_credential_helpers is None or f.remote_has_userinfo is None
-    return _known_status(failures, unknown, "no credential helper; remote URLs without user information")
+    return _known_status(failures, unknown,
+                         "no credential helper or http extraheader; remote URLs are https:// without user information")
 
 
 def _count(value: int | None, what: str) -> tuple[str, str]:
@@ -700,7 +701,7 @@ def _run(command: list[str], cwd: Path | None = None, timeout: int = 60) -> subp
         return None
 
 
-# The git and uv sources (contract v1.6). They take the runner, so unit tests can call them with
+# The git and uv sources (contract v1.7). They take the runner, so unit tests can call them with
 # their own (review r2 F21); collect_facts uses _run. A runner result of None means the program did not run.
 Runner = Callable[..., subprocess.CompletedProcess | None]
 
