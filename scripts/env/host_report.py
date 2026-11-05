@@ -207,6 +207,7 @@ def parse_uv_version(text: str) -> str | None:
 
 
 NO_VALUE = "<no value>"  # a helper key written without "=" (review r2 F18 case C)
+EXTRAHEADER = "<http extraheader>"  # one http.<url>.extraheader entry in git_credential_helpers (contract v1.7)
 
 
 def effective_helpers(values: list[str]) -> tuple[str, ...]:
@@ -266,6 +267,19 @@ def helpers_from_git(returncode: int | None, stdout: str) -> tuple[str, ...] | N
     return None
 
 
+def extraheaders_from_git(returncode: int | None, stdout: str) -> tuple[str, ...] | None:
+    """`git config --show-origin -z --get-regexp "^http\\..*extraheader$"` (contract v1.7, review r2 F23 b).
+
+    An extraheader can carry a token that git sends with every request, so every entry, empty ones
+    included, is one EXTRAHEADER credential source; values are never kept."""
+    if returncode == 0:
+        entries = config_entries(stdout, "http.", ".extraheader")
+        return None if entries is None else tuple(EXTRAHEADER for _ in entries)
+    if returncode == 1 and not stdout.strip():
+        return ()
+    return None
+
+
 def helper_kinds(helpers: tuple[str, ...]) -> str:
     """Names the helpers without printing their values (a value can hold a path or a token)."""
     known = ("manager", "store", "cache", "wincred", "osxkeychain", "libsecret")
@@ -283,9 +297,15 @@ def url_has_userinfo(url: str) -> bool:
     return "@" in head
 
 
-def any_userinfo(urls: list[str]) -> bool:
+def url_is_safe(url: str) -> bool:
+    """https:// without user information (contract v1.7, review r2 F23 a): ssh, scp-like, git, file,
+    http and plain paths can push with a key or a helper that git finds outside the URL."""
+    return url.lower().startswith("https://") and not url_has_userinfo(url)
+
+
+def any_unsafe_url(urls: list[str]) -> bool:
     """URLs as `git remote get-url --all` and `--push --all` print them (insteadOf applied)."""
-    return any(url_has_userinfo(url.strip()) for url in urls if url.strip())
+    return any(not url_is_safe(url.strip()) for url in urls if url.strip())
 
 
 def synced_from_uv(returncode: int | None) -> bool | None:
@@ -601,10 +621,17 @@ def _git(f: Facts) -> tuple[str, str]:
     # rest of the line to git, so nothing may follow it (review r2 F19).
     failures = []
     if f.remote_has_userinfo is True:
-        failures.append("a remote URL carries user information -> clone again over HTTPS without it")
-    if f.git_credential_helpers:
-        failures.append(f"{len(f.git_credential_helpers)} credential helper(s) in effect "
-                        f"({helper_kinds(f.git_credential_helpers)}; values not shown); also remove any "
+        failures.append("a remote URL is not https:// or carries user information -> clone again over HTTPS "
+                        "without user information")
+    found = f.git_credential_helpers or ()
+    helpers = tuple(h for h in found if h != EXTRAHEADER)
+    headers = len(found) - len(helpers)
+    if headers:
+        failures.append(f"{headers} http extraheader(s) in effect (values not shown) -> remove each key that "
+                        "git config --show-origin --get-regexp \"^http\\..*extraheader$\" lists, in the file it names")
+    if helpers:
+        failures.append(f"{len(helpers)} credential helper(s) in effect "
+                        f"({helper_kinds(helpers)}; values not shown); also remove any "
                         "credential.<url>.helper that git config --show-origin --get-regexp "
                         "\"^credential\\..*helper$\" lists -> git config --global credential.helper --% \"\"")
     unknown = f.git_credential_helpers is None or f.remote_has_userinfo is None
@@ -675,11 +702,18 @@ Runner = Callable[..., subprocess.CompletedProcess | None]
 
 
 def credential_helpers(repo: Path, run: Runner = _run) -> tuple[str, ...] | None:
-    done = run(["git", "config", "--show-origin", "-z", "--get-regexp", r"^credential\..*helper$"], cwd=repo)
-    return None if done is None else helpers_from_git(done.returncode, done.stdout)
+    """Helpers in effect plus one EXTRAHEADER per http.<url>.extraheader entry (contract v1.7)."""
+    helpers = run(["git", "config", "--show-origin", "-z", "--get-regexp", r"^credential\..*helper$"], cwd=repo)
+    headers = run(["git", "config", "--show-origin", "-z", "--get-regexp", r"^http\..*extraheader$"], cwd=repo)
+    if helpers is None or headers is None:
+        return None
+    found = helpers_from_git(helpers.returncode, helpers.stdout)
+    extra = extraheaders_from_git(headers.returncode, headers.stdout)
+    return None if found is None or extra is None else found + extra
 
 
 def remote_userinfo(repo: Path, run: Runner = _run) -> bool | None:
+    """True when any fetch or push URL of any remote is not https:// or carries user information."""
     names = run(["git", "remote"], cwd=repo)
     if names is None or names.returncode != 0:
         return None
@@ -690,7 +724,7 @@ def remote_userinfo(repo: Path, run: Runner = _run) -> bool | None:
             if done is None or done.returncode != 0:
                 return None
             urls.extend(done.stdout.splitlines())
-    return any_userinfo(urls)
+    return any_unsafe_url(urls)
 
 
 def project_synced(repo: Path, run: Runner = _run) -> bool | None:

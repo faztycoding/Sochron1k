@@ -233,14 +233,32 @@ def test_uv_check_exit_codes(returncode, expected):
 
 @pytest.mark.parametrize("urls, expected", [
     (["https://github.com/faztycoding/Sochron1k.git"], False),
+    (["HTTPS://github.com/x/y.git"], False),  # the scheme is not case-sensitive
     (["https://someone@github.com/faztycoding/Sochron1k.git"], True),
     (["git@github.com:faztycoding/Sochron1k.git"], True),
     (["https://github.com/x/y.git", "https://u:p@github.com/x/y.git"], True),  # a push URL or a second remote
+    # Contract v1.7 (review r2 F23 a): anything but https:// can push with a key git finds outside the URL.
+    (["ssh://github.com/x/y.git"], True), (["github.com:x/y.git"], True), (["git://github.com/x/y.git"], True),
+    (["file:///C:/repos/y.git"], True), (["http://github.com/x/y.git"], True), (["C:/repos/y.git"], True),
     ([], False),
 ])
-def test_remote_userinfo(urls, expected):
+def test_remote_urls(urls, expected):
     # URLs as `git remote get-url --all` and `--push --all` print them: insteadOf is already applied (F1 b).
-    assert hr.any_userinfo(urls) is expected
+    assert hr.any_unsafe_url(urls) is expected
+
+
+HEADER = entry("http.https://github.com/.extraheader", "AUTHORIZATION: basic eA==")
+
+
+@pytest.mark.parametrize("returncode, stdout, expected", [
+    (0, HEADER, (hr.EXTRAHEADER,)),
+    (0, HEADER + entry("http.extraheader", ""), (hr.EXTRAHEADER, hr.EXTRAHEADER)),  # an empty value counts too
+    (1, "", ()), (1, "error text", None), (128, "", None), (None, "", None),
+    (0, SYSTEM, None),  # a key the command does not ask for
+])
+def test_extraheaders_count_as_credentials(returncode, stdout, expected):
+    # Contract v1.7 (review r2 F23 b): an extraheader can carry a token git sends with every request.
+    assert hr.extraheaders_from_git(returncode, stdout) == expected
 
 
 # ---- git and uv calls through a runner (review r2 F21 a) -------------------------------------------
@@ -257,6 +275,7 @@ class FakeRun:
 
 
 HELPERS_COMMAND = ("git", "config", "--show-origin", "-z", "--get-regexp", "^credential\\..*helper$")
+HEADERS_COMMAND = ("git", "config", "--show-origin", "-z", "--get-regexp", "^http\\..*extraheader$")
 UV_CHECK = ("uv", "sync", "--locked", "--check", "--offline")
 CLEAN_URL, USER_URL = "https://github.com/x/y.git\n", "https://u@github.com/x/y.git\n"
 
@@ -270,17 +289,32 @@ def remotes(origin=(0, CLEAN_URL), origin_push=(0, CLEAN_URL), backup=(0, CLEAN_
             get_url("origin", True): origin_push, get_url("backup"): backup, get_url("backup", True): backup_push}
 
 
-def test_credential_helpers_runs_the_contract_command(tmp_path):
-    run = FakeRun({HELPERS_COMMAND: (0, SYSTEM)})
+def test_credential_helpers_runs_the_contract_commands(tmp_path):
+    run = FakeRun({HELPERS_COMMAND: (0, SYSTEM), HEADERS_COMMAND: (1, "")})
     assert hr.credential_helpers(tmp_path, run=run) == ("manager",)
-    assert run.calls == [(HELPERS_COMMAND, tmp_path)]  # N02: never `--get-all credential.helper`
-    assert hr.credential_helpers(tmp_path, run=FakeRun({HELPERS_COMMAND: None})) is None  # M20b
+    # N02: never `--get-all credential.helper`; v1.7 adds the extraheader command.
+    assert run.calls == [(HELPERS_COMMAND, tmp_path), (HEADERS_COMMAND, tmp_path)]
+
+
+@pytest.mark.parametrize("helpers, headers, expected", [
+    ((1, ""), (1, ""), ()),
+    ((1, ""), (0, HEADER), (hr.EXTRAHEADER,)),  # F23 b: an extraheader alone
+    ((0, SYSTEM), (0, HEADER), ("manager", hr.EXTRAHEADER)),
+    (None, (1, ""), None),  # M20b: git could not run
+    ((1, ""), None, None),
+    ((1, ""), (128, ""), None),
+    ((0, LINE_FORM), (1, ""), None),
+])
+def test_credential_sources_are_combined(helpers, headers, expected, tmp_path):
+    run = FakeRun({HELPERS_COMMAND: helpers, HEADERS_COMMAND: headers})
+    assert hr.credential_helpers(tmp_path, run=run) == expected
 
 
 @pytest.mark.parametrize("answers, expected", [
     (remotes(), False),
     (remotes(backup=(0, USER_URL)), True),  # M24a: user information on the second remote only
     (remotes(backup_push=(0, USER_URL)), True),  # M24b: on a push URL only
+    (remotes(origin_push=(0, "ssh://github.com/x/y.git\n")), True),  # F23 a: an SSH push URL
     (remotes(backup=(2, "")), None),  # M24c: a remote whose get-url fails
     (remotes(backup=None), None),  # git could not run
     ({("git", "remote"): (128, "")}, None),
@@ -315,13 +349,25 @@ def test_git_detail_names_kinds_not_values():
     assert 'git config --global credential.helper --% ""' in text  # F2: works in Windows PowerShell 5.1
 
 
-@pytest.mark.parametrize("userinfo", [False, True])
-def test_git_advice_ends_with_the_command(userinfo):
+@pytest.mark.parametrize("helpers, userinfo", [
+    (("manager",), False), (("manager",), True), (("manager", "<http extraheader>"), True),
+])
+def test_git_advice_ends_with_the_command(helpers, userinfo):
     # Review r2 F19: after `--%` PowerShell passes the rest of the line to git, so nothing may follow it.
-    facts = replace(valid_facts(), git_credential_helpers=("manager",), remote_has_userinfo=userinfo)
+    facts = replace(valid_facts(), git_credential_helpers=helpers, remote_has_userinfo=userinfo)
     text = detail(hr.evaluate(facts), "git")
     assert text.endswith(' -> git config --global credential.helper --% ""')
     assert text.count("--%") == 1
+
+
+def test_extraheaders_and_remote_urls_have_their_own_advice():
+    # Contract v1.7 (review r2 F23): counted apart from helpers, values never shown.
+    facts = replace(valid_facts(), git_credential_helpers=(hr.EXTRAHEADER, hr.EXTRAHEADER), remote_has_userinfo=True)
+    report = hr.evaluate(facts)
+    text = detail(report, "git")
+    assert next(item.status for item in report.items if item.name == "git") == "FAIL"
+    assert "2 http extraheader(s) in effect" in text and "credential helper(s)" not in text and "--%" not in text
+    assert "not https://" in text
 
 
 # ---- secrets and holdout (tests review r1 Q1) --------------------------------------------------------

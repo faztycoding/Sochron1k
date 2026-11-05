@@ -1,6 +1,6 @@
 # Runbook ENV-001: เช่าและตั้ง Windows VPS ให้ปลอดภัย
 
-Contract: `docs/contracts/ENV-001-vps-acquisition-host.md` (v1.6) · ผู้ทำ: เจ้าของ · ใช้เวลา ≈ 2–3 ชั่วโมง
+Contract: `docs/contracts/ENV-001-vps-acquisition-host.md` (v1.7) · ผู้ทำ: เจ้าของ · ใช้เวลา ≈ 2–3 ชั่วโมง
 
 กติกาตลอดทั้ง runbook:
 - **คุณ**รันทุกคำสั่งบน VPS · Claude ไม่เข้าถึง VPS
@@ -77,7 +77,7 @@ PS> net accounts /lockoutthreshold:5 /lockoutduration:30 /lockoutwindow:30
    PS> git clone https://github.com/faztycoding/Sochron1k.git C:\Sochron1k
    PS> cd C:\Sochron1k
    ```
-   บรรทัดแรกล้างตัวจัดการรหัสของ Git (VPS ต้องไม่มี credential ของ GitHub) · ต้องพิมพ์ `--%` ตามนี้ เพราะ PowerShell 5.1 ทิ้ง `""` ถ้าไม่มี `--%` · บรรทัดที่สองต้องจบด้วยบรรทัด `credential.helper` ที่ไม่มีค่า (ของไฟล์ global) · clone ผ่าน HTTPS โดยไม่ใส่ชื่อผู้ใช้ใน URL
+   บรรทัดแรกล้างตัวจัดการรหัสของ Git (VPS ต้องไม่มี credential ของ GitHub) · ต้องพิมพ์ `--%` ตามนี้ เพราะ PowerShell 5.1 ทิ้ง `""` ถ้าไม่มี `--%` · บรรทัดที่สองต้องจบด้วยบรรทัด `credential.helper` ที่ไม่มีค่า (ของไฟล์ global) · clone ผ่าน HTTPS โดยไม่ใส่ชื่อผู้ใช้ใน URL · **ห้ามตั้ง SSH ไป GitHub (key ใน `~/.ssh`), `insteadOf` ไป URL ที่ไม่ใช่ https หรือ `http.extraheader` บน VPS** (host_report จะ FAIL)
 
 ## 5. uv และ Python (PowerShell ธรรมดา ที่ `C:\Sochron1k`)
 1. ติดตั้ง uv รุ่น 0.13.x ล่าสุดที่ ≥ 0.13.4 (วันที่เขียน: **0.13.5**) จากตัวติดตั้งทางการ:
