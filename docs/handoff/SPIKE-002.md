@@ -84,12 +84,22 @@ Mutants were re-run on each fix against the committed tests, in new scratch fold
 
 | ID | Accept/Dispute | Commit | Evidence (command → result) |
 |----|----------------|--------|-----------------------------|
-| F8 | accept | `dd82371` | Only argparse messages made of option names are shown ("the following arguments are required", "expected one argument"); every other argparse error gives a fixed text. `--help` is off (`add_help=False`), so it is refused with exit 2. New cases `--help=<login>`, `--he=<login>`, `--=<login>` and `--help` failed 4/4 before and pass after. → 68 passed. |
+| F8 | accept | `dd82371` | Only argparse messages that end with "the following arguments are required: …" or "expected one argument" are shown; every other argparse error gives a fixed text. These are option-name messages for every input except the one r3 F11 constructs (extra words whose last one ends with "expected one argument"). `--help` is off (`add_help=False`), so it is refused with exit 2. New cases `--help=<login>`, `--he=<login>`, `--=<login>` and `--help` failed 4/4 before and pass after. → 68 passed. |
 | F9 | accept (question answered with the reviewer's one-line fix) | `36dcb22` | Step 3 runs `git fetch origin spike/SPIKE-002-vps-remeasure`, which brings the reviewed commit into a single-branch or shallow clone too. |
 | F10 | accept | the commit after `36dcb22` | The checks table has times and a line for the final code head `36dcb22`; "Next" below lists the push and the hash hand-over. |
 
+## Findings response (review r3, `docs/reviews/SPIKE-002-r3.md`: F8–F10 closed; `5d494ac` fit for the VPS run)
+
+The owner delegated every decision to the recommended option on 2026-11-05 13:4x ("อนุมัติตาม recommended ไปเลย"; veto before merge). That delegation covers this review session and the evidence review after the run, beyond the contract's budget of 2.
+
+| ID | Accept/Dispute | Commit | Evidence (command → result) |
+|----|----------------|--------|-----------------------------|
+| F11 | accept as a Low residual (r3's recommended timing): the probe is unchanged | this commit (docs only) | r3 shows the trigger needs extra typed words ending in the exact phrase "expected one argument", which the runbook command cannot produce. The exit code stays 2 and nothing reaches the terminal. The runbook's check before pasting (`runbook:53`) still applies. Changing the probe now would move the reviewed hash and need another re-check before the run. Changing it after the run would make the PR's probe differ from the evidence's. The F8 row above is narrowed to match. Follow-up after the PR: match the message whole and pin the two option-name messages with a test (r3's fix sketch: 71 passed). |
+
+The reviewed probe at `5d494ac` has SHA-256 `2002ffd515d72c91ac2cf385361ea70acd965cb37a05f5577b217b1be9382ca5` (blob `2b74fc92…`). The evidence must record this value. The r2 value `55f4545a…` belongs to `e077fa6`. The hash handed to the owner is the pushed head, which touches neither `spikes/SPIKE-002/` nor the runbook after `5d494ac` (only this handoff and the r3 file).
+
 ## Next
-1. Re-check F8–F10 at the next review, which is the evidence review after the VPS run. The SPIKE-002 headless budget (2: reviewer and spare) is used by r1 and r2, so that review needs the owner's approval of one more session.
+1. The evidence review after the VPS run re-checks F11's record (covered by the delegation above).
 2. Before the VPS run: Claude pushes `spike/SPIKE-002-vps-remeasure` (D-006) and gives the owner the reviewed head's hash. After ENV-001 passes, the owner sends the login suffix and valid-until, and Claude records them in the contract's Authorization table.
 3. The owner follows the runbook and pastes the hash and the JSON. Claude saves the result and writes `docs/evidence/SPIKE-002.md`. That covers AC-02 to AC-05, with the F6 rule for AC-03, plus a DECISIONS entry if the build or the offset differs.
 4. Evidence review, then PR.
