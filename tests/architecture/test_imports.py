@@ -31,6 +31,12 @@ clock, float, network, process or console), draws randomness only from a seeded 
 through randrange, does file I/O only in src/sochron/research/registry.py (binary reads and
 appends there) and never deletes, renames or truncates a file. Every earlier function, table and
 test is unchanged.
+ENV-002 AC-06 runs every research, backtest and strategy checker over imports of sochron.app,
+sochron.broker and sochron.data.acquire, scans the three packages and src/sochron/__init__.py for them,
+and imports the three packages in a fresh interpreter to see that none of the three is loaded. It also
+gives sochron.app.envcheck its own checker: no process, network or file-writing module or call, ctypes and
+winreg only for the functions the contract lists, and nothing Windows-only at import time. Every earlier
+function, table and test is unchanged.
 """
 
 import ast
@@ -2551,3 +2557,781 @@ def test_ac06_core008_research_imports_only_its_grants_and_listed_stdlib_and_doe
             continue
         findings.extend(f"{relative}: {violation}" for violation in violations)
     assert not findings, "AC-06: forbidden dependencies or side effects in sochron.research:\n" + "\n".join(findings)
+
+
+# ENV-002 AC-06 (docs/contracts/ENV-002-research-host-separation.md v1.6): sochron.research,
+# sochron.backtest and sochron.strategy may not import sochron.data.acquire, sochron.broker or
+# sochron.app (ENV-002 adds the research-host check in sochron.app.envcheck). Their checkers above
+# already report every package they are not granted; the first test pins each import form of the
+# three packages for every checker of the three packages, the second runs those checkers over the
+# real sources and src/sochron/__init__.py (which runs on every import of them), and the third imports
+# the three packages in a fresh interpreter and reads sys.modules. Every function, table and test
+# above stays as it was.
+_ENV002_BLOCKED = ("sochron.app", "sochron.broker", "sochron.data.acquire")
+_ENV002_DYNAMIC = "dynamic import prevents static boundary verification"
+# (label, source lines, the finding every checker must report); line 1 is _HEADER.
+_ENV002_BLOCKED_IMPORTS = (
+    ("import sochron.app", ("import sochron.app",), "line 2: forbidden import sochron.app"),
+    ("import sochron.app.envcheck", ("import sochron.app.envcheck",), "line 2: forbidden import sochron.app.envcheck"),
+    ("import sochron.app.envcheck as host", ("import sochron.app.envcheck as host",),
+     "line 2: forbidden import sochron.app.envcheck"),
+    ("from sochron import app", ("from sochron import app",), "line 2: forbidden import sochron.app"),
+    ("from sochron.app import envcheck", ("from sochron.app import envcheck",), "line 2: forbidden import sochron.app"),
+    ("from sochron.app.envcheck import require_research_host",
+     ("from sochron.app.envcheck import require_research_host",), "line 2: forbidden import sochron.app.envcheck"),
+    ("the gate imported in a function body",
+     ("def gate():", "    from sochron.app.envcheck import require_research_host", "    return require_research_host()"),
+     "line 3: forbidden import sochron.app.envcheck"),
+    ("from ..app import envcheck", ("from ..app import envcheck",), "line 2: forbidden import sochron.app"),
+    ("from .. import app", ("from .. import app",), "line 2: forbidden import sochron.app"),
+    ("import sochron.broker", ("import sochron.broker",), "line 2: forbidden import sochron.broker"),
+    ("from sochron import broker", ("from sochron import broker",), "line 2: forbidden import sochron.broker"),
+    ("from sochron.broker.mt5 import connect", ("from sochron.broker.mt5 import connect",),
+     "line 2: forbidden import sochron.broker.mt5"),
+    ("from ..broker import mt5", ("from ..broker import mt5",), "line 2: forbidden import sochron.broker"),
+    ("import sochron.data.acquire", ("import sochron.data.acquire",), "line 2: forbidden import sochron.data.acquire"),
+    ("from sochron.data.acquire import fetch_m1", ("from sochron.data.acquire import fetch_m1",),
+     "line 2: forbidden import sochron.data.acquire"),
+    ("from sochron.data import acquire", ("from sochron.data import acquire",), "line 2: forbidden import sochron.data"),
+    ("from ..data.acquire import fetch_m1", ("from ..data.acquire import fetch_m1",),
+     "line 2: forbidden import sochron.data.acquire"),
+    ("the gate by importlib", ("import importlib", 'GATE = importlib.import_module("sochron.app.envcheck")'),
+     f"line 3: {_ENV002_DYNAMIC}"),
+    ("the gate by __import__", ('GATE = __import__("sochron.app.envcheck")',), f"line 2: {_ENV002_DYNAMIC}"),
+)
+# (package, checker) for every checker the three packages run under.
+_ENV002_CHECKERS = (
+    ("sochron.strategy", _inspect_as_strategy),
+    ("sochron.strategy (listed stdlib)", _inspect_as_listed_strategy),
+    ("sochron.backtest", _inspect_as_backtest),
+    ("sochron.backtest (no ZoneInfo)", _inspect_as_backtest_zoneinfo),
+    ("sochron.research", _inspect_as_research),
+    ("sochron.research registry.py", _inspect_as_registry),
+)
+
+
+def _env002_boundary_findings(findings):
+    """The findings that name an import of app, broker, data.acquire or the data package, or a dynamic import."""
+    kept = []
+    for finding in findings:
+        match = _IMPORT_FINDING.fullmatch(finding)
+        named = match["module"] if match else ""
+        if (any(_within(named, blocked) for blocked in _ENV002_BLOCKED) or named == "sochron.data"
+                or finding.endswith(_ENV002_DYNAMIC)):
+            kept.append(finding)
+    return kept
+
+
+def test_ac06_env002_checkers_report_app_broker_and_data_acquire_imports():
+    wrong = []
+    for label, lines, expected in _ENV002_BLOCKED_IMPORTS:
+        for package, inspect in _ENV002_CHECKERS:
+            findings = inspect(_synthetic(lines))
+            if expected not in findings:
+                wrong.append(f"{package} | {label}: {expected!r} missing; got {findings}")
+    assert not wrong, "AC-06: a checker misses an import of app, broker or data.acquire:\n" + "\n".join(wrong)
+
+
+def test_ac06_env002_research_backtest_strategy_sources_do_not_import_app_broker_or_data_acquire():
+    source_root = Path.cwd() / "src"
+    checks = []
+    for package, inspect in (("strategy", _inspect_strategy_listed_source), ("backtest", _inspect_backtest_zoneinfo_source),
+                             ("research", None)):
+        directory = source_root / "sochron" / package
+        assert directory.is_dir(), f"AC-06: {directory} does not exist; implementation missing"
+        checks += [(path, inspect) for path in sorted(directory.rglob("*.py"))]
+    findings = []
+    for path, inspect in checks:
+        relative = path.relative_to(source_root)
+        current_package = ".".join(relative.parent.parts)
+        source = path.read_text(encoding="utf-8-sig")
+        if inspect is None:
+            found = _inspect_research_source(source, current_package, registry=path.name == "registry.py")
+        else:
+            found = inspect(source, current_package)
+        findings += [f"{relative}: {item}" for item in _env002_boundary_findings(found)]
+    # src/sochron/__init__.py runs on every import of the three packages: no blocked import there either.
+    top = source_root / "sochron" / "__init__.py"
+    if top.is_file():
+        found = _inspect_source(top.read_text(encoding="utf-8-sig"), "sochron.core", "sochron")
+        findings += [f"sochron/__init__.py: {item}" for item in _env002_boundary_findings(found)
+                     if not item.endswith("forbidden import sochron.data")]
+    assert not findings, "AC-06: research, backtest or strategy imports app, broker or data.acquire:\n" + "\n".join(findings)
+
+
+def test_ac06_env002_importing_research_backtest_strategy_loads_no_app_broker_or_data_acquire():
+    import json
+    import subprocess
+
+    source_root = Path.cwd() / "src"
+    assert (source_root / "sochron").is_dir(), f"AC-06: {source_root / 'sochron'} does not exist"
+    code = "\n".join((
+        "import json, sys",
+        f"sys.path.insert(0, {str(source_root)!r})",
+        "import sochron.research, sochron.backtest, sochron.strategy",
+        f"blocked = {_ENV002_BLOCKED!r}",
+        "print(json.dumps(sorted(name for name in sys.modules",
+        "                        if any(name == item or name.startswith(item + '.') for item in blocked))))",
+    ))
+    done = subprocess.run([sys.executable, "-I", "-B", "-c", code], capture_output=True, text=True, timeout=120,
+                          check=False)
+    assert done.returncode == 0, f"AC-06: importing the three packages failed: {done.stderr}"
+    loaded = json.loads(done.stdout)
+    assert loaded == [], f"AC-06: importing research, backtest and strategy loaded {loaded}"
+
+
+# ENV-002 AC-06: sochron.app.envcheck uses no subprocess, socket or http, writes and deletes no files,
+# and uses ctypes and winreg only for the functions the contract lists. It is not a pure package (it
+# reads the OS, os.environ and files), so it gets its own checker. The checker resolves names through
+# every import in the module (any scope, conservatively) and through plain aliases (name = value, a
+# walrus), then reports, each with its line:
+#   - an import of a process, network or file-writing stdlib module (_ENVCHECK_DENIED_MODULES), of a
+#     third-party module, or of a sochron package other than the pure ones, sochron.app and the
+#     module itself; a wildcard import;
+#   - os functions that change files or start processes (_ENVCHECK_OS_DENIED, os.exec*, os.spawn*,
+#     os.posix_spawn*); os.open whose flags are not built from read-only O_ names; open, io.open,
+#     codecs.open, os.fdopen, io.FileIO and Path.open with a write mode or a mode that is no literal;
+#     the Path methods that write, delete, rename or create (_ENVCHECK_FILE_CHANGES, and .replace with
+#     one argument);
+#   - ctypes: a library loaded other than kernel32, mpr, shell32 or ole32 by name (ctypes.windll.X,
+#     ctypes.oledll.X, ctypes.WinDLL("X"), ctypes.OleDLL("X")), any other loader or function-pointer
+#     factory (_ENVCHECK_CTYPES_DENIED), a library function other than the contract's
+#     (_ENVCHECK_WIN32), and a library, loader, ctypes, winreg, os or open that escapes the check
+#     (anything but attribute access, a call where that is the use, getattr/hasattr with a literal
+#     name, or a plain alias);
+#   - winreg members other than the read-only ones (_ENVCHECK_WINREG), an OpenKey access mask with an
+#     int literal other than 0, and a registry path literal ("SOFTWARE\..." or "SYSTEM\...") other
+#     than the two Uninstall keys;
+#   - Windows-only access at import time (winreg, ctypes.windll/oledll/WinDLL/OleDLL or a library
+#     outside a function body), which would break the import on Linux;
+#   - dynamic code: __import__, importlib.import_module or reload, module_from_spec, exec_module,
+#     load_module, eval, exec, compile, and getattr of a checked module with a name that is no literal.
+# Like the checkers above it is an AST check, not a proof about arbitrary execution. Contract v1.6 Q12
+# accepts its limits: it admits only the forms it can follow (a library opened by its literal name and
+# called as <handle>.<Function>, errors read with ctypes.get_last_error()) and refuses the rest on purpose.
+_ENVCHECK_DENIED_MODULES = frozenset({
+    "subprocess", "socket", "http", "urllib", "ssl", "ftplib", "smtplib", "poplib", "imaplib", "nntplib", "telnetlib",
+    "xmlrpc", "socketserver", "asyncio", "selectors", "select", "multiprocessing", "concurrent", "pty", "webbrowser",
+    "wsgiref", "shutil", "tempfile", "zipfile", "tarfile", "gzip", "bz2", "lzma", "sqlite3", "dbm", "shelve",
+    "logging", "fileinput", "mmap", "runpy", "code", "_winapi", "nt", "posix", "_posixsubprocess", "_socket", "_ssl",
+    "_ctypes", "_io", "_overlapped", "_multiprocessing", "_asyncio",
+})
+_ENVCHECK_SOCHRON = ("sochron.core", "sochron.timebase", "sochron.costs", "sochron.risk", "sochron.strategy",
+                     "sochron.backtest", "sochron.research", "sochron.data.snapshot")
+_ENVCHECK_WIN32 = {
+    "kernel32": frozenset({"GetDriveTypeW", "CreateToolhelp32Snapshot", "Process32FirstW", "Process32NextW",
+                           "CloseHandle"}),
+    "mpr": frozenset({"WNetOpenEnumW", "WNetEnumResourceW", "WNetCloseEnum"}),
+    "shell32": frozenset({"SHGetKnownFolderPath"}),
+    "ole32": frozenset({"CoTaskMemFree"}),
+}
+_ENVCHECK_CTYPES_DENIED = frozenset({"CDLL", "cdll", "PyDLL", "pydll", "pythonapi", "LibraryLoader", "CFUNCTYPE",
+                                     "WINFUNCTYPE", "PYFUNCTYPE", "util", "macholib", "_dlopen"})
+_ENVCHECK_WINREG = frozenset({
+    "HKEY_LOCAL_MACHINE", "HKEY_CURRENT_USER", "KEY_READ", "KEY_QUERY_VALUE", "KEY_ENUMERATE_SUB_KEYS",
+    "KEY_WOW64_32KEY", "KEY_WOW64_64KEY", "OpenKey", "OpenKeyEx", "EnumKey", "EnumValue", "QueryValue",
+    "QueryValueEx", "QueryInfoKey", "CloseKey", "HKEYType", "error", "REG_SZ", "REG_EXPAND_SZ",
+})
+_ENVCHECK_UNINSTALL = ("software\\microsoft\\windows\\currentversion\\uninstall",
+                       "software\\wow6432node\\microsoft\\windows\\currentversion\\uninstall")
+_ENVCHECK_OS_DENIED = frozenset({
+    "system", "popen", "startfile", "fork", "forkpty", "kill", "killpg", "remove", "unlink", "rmdir", "removedirs",
+    "rename", "renames", "replace", "mkdir", "makedirs", "truncate", "ftruncate", "chmod", "lchmod", "fchmod",
+    "chown", "lchown", "fchown", "link", "symlink", "utime", "mkfifo", "mknod", "write", "writev", "pwrite",
+    "pwritev", "sendfile",
+})
+_ENVCHECK_OS_FAMILIES = ("exec", "spawn", "posix_spawn")
+_ENVCHECK_READ_FLAGS = frozenset({"O_RDONLY", "O_BINARY", "O_NOINHERIT", "O_CLOEXEC", "O_SEQUENTIAL", "O_RANDOM",
+                                  "O_NOFOLLOW", "O_NONBLOCK", "O_NOATIME", "O_DIRECTORY", "O_NOCTTY"})
+_ENVCHECK_FILE_CHANGES = frozenset({"write_text", "write_bytes", "unlink", "rmdir", "rename", "touch", "mkdir",
+                                    "chmod", "lchmod", "symlink_to", "hardlink_to", "link_to", "truncate"})
+_ENVCHECK_OPEN_MODE_SECOND = frozenset({"builtins.open", "io.open", "codecs.open", "os.fdopen", "io.FileIO",
+                                        "pathlib.Path.open"})
+_ENVCHECK_DYNAMIC = frozenset({"builtins.__import__", "importlib.import_module", "importlib.reload",
+                               "importlib.__import__", "importlib.util.module_from_spec", "builtins.eval",
+                               "builtins.exec", "builtins.compile"})
+_ENVCHECK_BUILTINS = frozenset({"open", "__import__", "eval", "exec", "compile", "getattr", "hasattr"})
+# Resolved names that may only be reached as an attribute receiver, a plain alias or getattr/hasattr
+# with a literal name (modules, loaders, libraries), or only be called (the rest).
+_ENVCHECK_HELD = frozenset({"ctypes", "winreg", "os", "ctypes.windll", "ctypes.oledll"})
+_ENVCHECK_CALLED = frozenset({"ctypes.WinDLL", "ctypes.OleDLL"}) | _ENVCHECK_OPEN_MODE_SECOND | _ENVCHECK_DYNAMIC
+_ENVCHECK_TRACKED = ("ctypes", "winreg", "os", "io", "codecs", "builtins", "importlib", "pathlib", "dll:")
+_ENVCHECK_IMPORT_TIME = "Windows-only access at import time"
+
+
+def _envcheck_library(name):
+    """'dll:<name>' for a library the contract lists (any case, an optional .dll and directory), else None."""
+    base = name.replace("/", "\\").rsplit("\\", 1)[-1].lower()
+    base = base[:-4] if base.endswith(".dll") else base
+    return f"dll:{base}" if base in _ENVCHECK_WIN32 else None
+
+
+def _envcheck_literal(node):
+    return isinstance(node, ast.Constant) and type(node.value) is str
+
+
+def _envcheck_member(parent, attribute):
+    """The resolved name of parent.attribute, a library for ctypes.windll.X and ctypes.oledll.X."""
+    if parent in ("ctypes.windll", "ctypes.oledll"):
+        return _envcheck_library(attribute) or f"{parent}.{attribute}"
+    return f"{parent}.{attribute}"
+
+
+def _envcheck_resolve(node, bindings):
+    """The resolved name of a Name, Attribute or Call node, or None."""
+    if isinstance(node, ast.Name):
+        if node.id in bindings:
+            return bindings[node.id]
+        return f"builtins.{node.id}" if node.id in _ENVCHECK_BUILTINS else None
+    if isinstance(node, ast.Attribute):
+        parent = _envcheck_resolve(node.value, bindings)
+        return None if parent is None else _envcheck_member(parent, node.attr)
+    if isinstance(node, ast.Call):
+        called = _envcheck_resolve(node.func, bindings)
+        if called in ("ctypes.WinDLL", "ctypes.OleDLL") and node.args and _envcheck_literal(node.args[0]):
+            return _envcheck_library(node.args[0].value)
+        if called in ("builtins.getattr", "builtins.hasattr") and len(node.args) >= 2 and _envcheck_literal(node.args[1]):
+            target = _envcheck_resolve(node.args[0], bindings)
+            if called == "builtins.getattr" and target is not None:
+                return _envcheck_member(target, node.args[1].value)
+    return None
+
+
+def _envcheck_bindings(tree, current_package):
+    """Every name bound by an import (any scope) or by a plain alias of a tracked name, to a fixed point."""
+    bindings = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.asname:
+                    bindings[alias.asname] = alias.name
+                else:
+                    bindings[alias.name.split(".")[0]] = alias.name.split(".")[0]
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if node.level:
+                try:
+                    module = resolve_name("." * node.level + module, current_package)
+                except ImportError:
+                    continue
+            for alias in node.names:
+                if alias.name != "*":
+                    bindings[alias.asname or alias.name] = f"{module}.{alias.name}"
+    for _ in range(20):
+        changed = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign) and all(isinstance(target, ast.Name) for target in node.targets):
+                targets, value = [target.id for target in node.targets], node.value
+            elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)) and isinstance(node.target, ast.Name) and node.value:
+                targets, value = [node.target.id], node.value
+            else:
+                continue
+            resolved = _envcheck_resolve(value, bindings)
+            if resolved and resolved.startswith(_ENVCHECK_TRACKED):
+                for name in targets:
+                    if name not in bindings:
+                        bindings[name] = resolved
+                        changed = True
+        if not changed:
+            break
+    return bindings
+
+
+def _envcheck_runtime(tree):
+    """The nodes inside a function or lambda body: they run when called, not when the module is imported."""
+    runtime = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for statement in node.body:
+                runtime.update(ast.walk(statement))
+        elif isinstance(node, ast.Lambda):
+            runtime.update(ast.walk(node.body))
+    return runtime
+
+
+def _envcheck_windows_only(resolved):
+    return (resolved.startswith(("winreg", "dll:", "ctypes.windll", "ctypes.oledll"))
+            or resolved in ("ctypes.WinDLL", "ctypes.OleDLL"))
+
+
+def _envcheck_member_findings(resolved):
+    """The rule a resolved name breaks by itself, or None."""
+    if resolved.startswith("dll:"):
+        library, _, rest = resolved[4:].partition(".")
+        function = rest.split(".")[0]
+        if function and function not in _ENVCHECK_WIN32[library]:
+            return f"forbidden Win32 function {library}.{function}"
+        return None
+    parts = resolved.split(".")
+    if parts[0] == "ctypes" and len(parts) > 2 and parts[1] in ("windll", "oledll"):
+        return f"forbidden Win32 library {'.'.join(parts[:3])}"
+    if parts[0] == "ctypes" and len(parts) > 1 and parts[1] in _ENVCHECK_CTYPES_DENIED:
+        return f"forbidden ctypes use ctypes.{parts[1]}"
+    if parts[0] == "winreg" and len(parts) > 1 and parts[1] not in _ENVCHECK_WINREG:
+        return f"forbidden winreg use winreg.{parts[1]}"
+    if parts[0] == "os" and len(parts) > 1 and (parts[1] in _ENVCHECK_OS_DENIED
+                                                or parts[1].startswith(_ENVCHECK_OS_FAMILIES)):
+        return f"forbidden file change or process os.{parts[1]}"
+    return None
+
+
+def _envcheck_escapes(node, resolved, parents):
+    """Whether a held or call-only name is used in any way other than the ones the checker can follow."""
+    held = resolved in _ENVCHECK_HELD or (resolved.startswith("dll:") and "." not in resolved)
+    if not held and resolved not in _ENVCHECK_CALLED:
+        return False
+    parent = parents.get(node)
+    if isinstance(parent, ast.Call) and parent.func is node:
+        return held
+    if not held:
+        return True
+    if isinstance(parent, ast.Attribute) and parent.value is node:
+        return False
+    if isinstance(parent, (ast.Assign, ast.AnnAssign, ast.NamedExpr)) and parent.value is node:
+        targets = parent.targets if isinstance(parent, ast.Assign) else [parent.target]
+        return not all(isinstance(target, ast.Name) for target in targets)
+    if (isinstance(parent, ast.Call) and isinstance(parent.func, ast.Name) and parent.func.id in ("getattr", "hasattr")
+            and parent.args and parent.args[0] is node):
+        return False
+    return True
+
+
+def _envcheck_mode(node, position):
+    """The mode argument of an open call: None when absent, else the node."""
+    if len(node.args) > position:
+        return node.args[position]
+    return next((keyword.value for keyword in node.keywords if keyword.arg == "mode"), None)
+
+
+def _envcheck_read_flags(node, bindings):
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+        return _envcheck_read_flags(node.left, bindings) and _envcheck_read_flags(node.right, bindings)
+    if isinstance(node, ast.Constant) and type(node.value) is int:
+        return node.value == 0
+    if (isinstance(node, ast.Call) and _envcheck_resolve(node.func, bindings) == "builtins.getattr" and len(node.args) == 3
+            and _envcheck_resolve(node.args[0], bindings) == "os" and _envcheck_literal(node.args[1])
+            and isinstance(node.args[2], ast.Constant) and node.args[2].value == 0):
+        return node.args[1].value in _ENVCHECK_READ_FLAGS
+    resolved = _envcheck_resolve(node, bindings) or ""
+    return resolved.startswith("os.") and resolved[3:] in _ENVCHECK_READ_FLAGS
+
+
+def _envcheck_import_findings(node, current_package, runtime):
+    findings = []
+    if isinstance(node, ast.Import):
+        modules = [alias.name for alias in node.names]
+        members = []
+    else:
+        module = node.module or ""
+        if node.level:
+            try:
+                module = resolve_name("." * node.level + module, current_package)
+            except ImportError:
+                return ["relative import escapes its package"]
+        if any(alias.name == "*" for alias in node.names):
+            findings.append("wildcard import prevents static verification")
+        members = [f"{module}.{alias.name}" for alias in node.names if alias.name != "*"]
+        modules = members if module in ("sochron", "sochron.app") else [module]
+    for name in modules:
+        top = name.split(".")[0]
+        if top in sys.stdlib_module_names:
+            if top in _ENVCHECK_DENIED_MODULES:
+                findings.append(f"forbidden import {name}")
+            elif top == "winreg" and node not in runtime:
+                findings.append(_ENVCHECK_IMPORT_TIME)
+        elif top == "sochron":
+            allowed = name in ("sochron", "sochron.app", "sochron.app.envcheck") or any(
+                _within(name, package) for package in _ENVCHECK_SOCHRON)
+            if not allowed:
+                findings.append(f"forbidden import {name}")
+        else:
+            findings.append(f"forbidden import {name}")
+    for member in members:
+        broken = _envcheck_member_findings(member)
+        if broken:
+            findings.append(broken)
+        if _envcheck_windows_only(_envcheck_member(*member.rsplit(".", 1))) and node not in runtime:
+            findings.append(_ENVCHECK_IMPORT_TIME)
+    return findings
+
+
+def _inspect_envcheck_source(source, current_package="sochron.app"):
+    """ENV-002 AC-06: the findings of the envcheck checker described above, sorted and unique."""
+    tree = ast.parse(source)
+    bindings = _envcheck_bindings(tree, current_package)
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    runtime = _envcheck_runtime(tree)
+    findings = set()
+
+    def report(node, message):
+        findings.add(f"line {node.lineno}: {message}")
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            for message in _envcheck_import_findings(node, current_package, runtime):
+                report(node, message)
+            continue
+        if isinstance(node, ast.Constant) and type(node.value) is str:
+            key = node.value.replace("/", "\\").lower()
+            if key.startswith(("software\\", "system\\")) and key.rstrip("\\") not in _ENVCHECK_UNINSTALL:
+                report(node, f"forbidden registry key {node.value}")
+            continue
+        if isinstance(node, ast.Name) and not isinstance(node.ctx, ast.Load):
+            continue
+        if not isinstance(node, (ast.Name, ast.Attribute, ast.Call)):
+            continue
+        resolved = _envcheck_resolve(node, bindings)
+        if isinstance(node, ast.Call):
+            _envcheck_call(node, resolved, bindings, report)
+        if not resolved:
+            continue
+        broken = _envcheck_member_findings(resolved)
+        if broken:
+            report(node, broken)
+        if _envcheck_escapes(node, resolved, parents):
+            report(node, f"{resolved} escapes the static check")
+        if _envcheck_windows_only(resolved) and node not in runtime:
+            report(node, _ENVCHECK_IMPORT_TIME)
+    return sorted(findings)
+
+
+def _envcheck_call(node, resolved, bindings, report):
+    """The rules on a call: open modes, os.open flags, library names, file-changing methods, dynamic code."""
+    called = _envcheck_resolve(node.func, bindings)
+    func = node.func
+    if called in ("ctypes.WinDLL", "ctypes.OleDLL") and resolved is None:
+        name = node.args[0].value if node.args and _envcheck_literal(node.args[0]) else "that is no literal"
+        report(node, f"forbidden Win32 library {called}({name!r})")
+    mode = None
+    if called in _ENVCHECK_OPEN_MODE_SECOND:
+        mode = _envcheck_mode(node, 1)
+    elif isinstance(func, ast.Attribute) and func.attr == "open" and called != "os.open":
+        mode = _envcheck_mode(node, 0)  # path.open(mode) on any receiver the checker does not resolve as above
+    if mode is not None:
+        if not _envcheck_literal(mode):
+            report(node, "forbidden open with a mode that is no literal")
+        elif set(mode.value) & set("wax+"):
+            report(node, f"forbidden write open mode {mode.value!r}")
+    if called == "os.open":
+        flags = node.args[1] if len(node.args) > 1 else next(
+            (keyword.value for keyword in node.keywords if keyword.arg == "flags"), None)
+        if flags is None or not _envcheck_read_flags(flags, bindings):
+            report(node, "forbidden os.open flags")
+    if called in ("winreg.OpenKey", "winreg.OpenKeyEx"):
+        access = node.args[3] if len(node.args) > 3 else next(
+            (keyword.value for keyword in node.keywords if keyword.arg == "access"), None)
+        if access is not None and any(isinstance(item, ast.Constant) and type(item.value) is int and item.value != 0
+                                      for item in ast.walk(access)):
+            report(node, "forbidden winreg access mask")
+    if isinstance(func, ast.Attribute):
+        if func.attr in _ENVCHECK_FILE_CHANGES or (func.attr == "replace" and len(node.args) == 1 and not node.keywords):
+            report(node, f"forbidden file change .{func.attr}")
+        if func.attr in ("exec_module", "load_module"):
+            report(node, "dynamic code prevents static verification")
+    if called in _ENVCHECK_DYNAMIC:
+        report(node, "dynamic code prevents static verification")
+    if called in ("builtins.getattr", "builtins.hasattr") and node.args:
+        target = _envcheck_resolve(node.args[0], bindings)
+        if target and target.startswith(_ENVCHECK_TRACKED) and (len(node.args) < 2 or not _envcheck_literal(node.args[1])):
+            report(node, f"dynamic attribute of {target} prevents static verification")
+        elif target and target.startswith(_ENVCHECK_TRACKED):
+            broken = _envcheck_member_findings(_envcheck_member(target, node.args[1].value))
+            if broken:
+                report(node, broken)
+
+
+# (label, source lines) that the envcheck checker must accept; line 1 is _HEADER.
+_ENVCHECK_ALLOWED = (
+    ("an envcheck as the contract describes it", (
+        "import argparse",
+        "import ctypes",
+        "import hashlib",
+        "import importlib.util",
+        "import json",
+        "import os",
+        "import sys",
+        "from ctypes import wintypes",
+        "from dataclasses import dataclass",
+        "from datetime import UTC, datetime",
+        "from pathlib import Path",
+        "from sochron.research import HOLDOUT_CUTOFF_UTC",
+        r"UNINSTALL = r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'",
+        r"WOW_UNINSTALL = 'SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\'",
+        "RECALL = 0x00400000 | 0x00040000",
+        "class PROCESSENTRY32W(ctypes.Structure):",
+        "    _fields_ = [('dwSize', wintypes.DWORD), ('szExeFile', ctypes.c_wchar * 260)]",
+        "@dataclass(frozen=True)",
+        "class Item:",
+        "    name: str",
+        "    status: str",
+        "    detail: str",
+        "def is_cloud_only(path):",
+        "    return bool(getattr(os.stat(path), 'st_file_attributes', 0) & RECALL)",
+        "def _drives():",
+        "    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)",
+        "    kernel32.GetDriveTypeW.argtypes = (wintypes.LPCWSTR,)",
+        "    kernel32.GetDriveTypeW.restype = wintypes.UINT",
+        "    drives = getattr(os, 'listdrives', None)",
+        "    if not hasattr(os, 'listdrives'):",
+        "        raise ctypes.WinError(ctypes.get_last_error())",
+        "    return [d for d in drives() if kernel32.GetDriveTypeW(d) == 4]",
+        "def _resources():",
+        "    mpr = ctypes.WinDLL('mpr.dll', use_last_error=True)",
+        "    handle = wintypes.HANDLE()",
+        "    if mpr.WNetOpenEnumW(1, 0, 0, None, ctypes.byref(handle)):",
+        "        return None",
+        "    buffer = ctypes.create_string_buffer(16384)",
+        "    try:",
+        "        return mpr.WNetEnumResourceW(handle, ctypes.byref(wintypes.DWORD(-1)), buffer, None)",
+        "    finally:",
+        "        mpr.WNetCloseEnum(handle)",
+        "def _processes():",
+        "    k = ctypes.windll.kernel32",
+        "    snapshot = k.CreateToolhelp32Snapshot(2, 0)",
+        "    entry = PROCESSENTRY32W()",
+        "    entry.dwSize = ctypes.sizeof(entry)",
+        "    names = []",
+        "    ok = k.Process32FirstW(snapshot, ctypes.byref(entry))",
+        "    while ok:",
+        "        names.append(entry.szExeFile)",
+        "        ok = k.Process32NextW(snapshot, ctypes.byref(entry))",
+        "    k.CloseHandle(snapshot)",
+        "    return names",
+        "def _known_folder(guid):",
+        "    shell32 = ctypes.oledll.shell32",
+        "    path = ctypes.c_wchar_p()",
+        "    shell32.SHGetKnownFolderPath(ctypes.byref(guid), 0, None, ctypes.byref(path))",
+        "    try:",
+        "        return path.value",
+        "    finally:",
+        "        ctypes.windll.ole32.CoTaskMemFree(path)",
+        "def _uninstall_names():",
+        "    import winreg",
+        "    names = []",
+        "    for root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):",
+        "        for sub, flag in ((UNINSTALL, winreg.KEY_WOW64_64KEY), (WOW_UNINSTALL, 0)):",
+        "            with winreg.OpenKey(root, sub, 0, winreg.KEY_READ | flag) as key:",
+        "                for index in range(winreg.QueryInfoKey(key)[0]):",
+        "                    with winreg.OpenKeyEx(key, winreg.EnumKey(key, index)) as child:",
+        "                        names.append(winreg.QueryValueEx(child, 'DisplayName')[0])",
+        "    return names",
+        "def collect(roots):",
+        "    spec = importlib.util.find_spec('MetaTrader5')",
+        "    appdata = os.environ.get('APPDATA')",
+        "    return (spec is not None, appdata, _drives(), _resources(), _processes(), _uninstall_names())",
+        "def _manifest(path):",
+        "    with open(path, 'rb') as handle:",
+        "        return json.loads(handle.read())",
+        "def _digest(path):",
+        "    with path.open('rb') as handle:",
+        "        return hashlib.file_digest(handle, 'sha256').hexdigest()",
+        "def _text(path):",
+        "    return Path(path).read_bytes(), Path(path).read_text(encoding='utf-8'), open(path, encoding='utf-8')",
+        "def _raw(path):",
+        "    fd = os.open(path, os.O_RDONLY | getattr(os, 'O_BINARY', 0))",
+        "    return os.read(fd, 10), os.close(fd)",
+        "def _walk(root):",
+        "    for folder, dirs, files in os.walk(root):",
+        "        dirs[:] = [d for d in dirs if d.lower() != 'metaquotes']",
+        r"        yield folder, [name.replace('/', '\\') for name in files], os.path.join(folder, 'x')",
+        "    for entry in os.scandir(root):",
+        "        yield entry.stat().st_size, entry.name",
+        "def main(argv=None):",
+        "    parser = argparse.ArgumentParser(prog='envcheck')",
+        "    parser.add_argument('--role', required=True)",
+        "    args = parser.parse_args(argv)",
+        "    print('RESEARCH HOST: PASS', datetime.now(UTC).isoformat(), HOLDOUT_CUTOFF_UTC, args.role)",
+        r"    sys.stdout.write('done\n')",
+        "    return 0",
+        "if __name__ == '__main__':",
+        "    raise SystemExit(main())",
+    )),
+    ("the package __init__ re-exports the gate", ("from .envcheck import require_research_host",
+                                                  "from . import envcheck")),
+    ("a walrus and an annotated alias of a library", (
+        "import ctypes",
+        "def drive_type(letter):",
+        "    if (k := ctypes.WinDLL('KERNEL32.DLL')) is None:",
+        "        return None",
+        "    fn: object = k.GetDriveTypeW",
+        "    return fn(letter)",
+    )),
+)
+_ENVCHECK_OS = "forbidden file change or process os."
+# (label, source lines, exact findings); line 1 is _HEADER, so the first source line is 2.
+_ENVCHECK_FORBIDDEN = (
+    ("subprocess", ("import subprocess",), ("line 2: forbidden import subprocess",)),
+    ("socket", ("import socket",), ("line 2: forbidden import socket",)),
+    ("http.client", ("import http.client",), ("line 2: forbidden import http.client",)),
+    ("urllib.request", ("from urllib.request import urlopen",), ("line 2: forbidden import urllib.request",)),
+    ("shutil", ("import shutil",), ("line 2: forbidden import shutil",)),
+    ("tempfile", ("import tempfile",), ("line 2: forbidden import tempfile",)),
+    ("asyncio", ("import asyncio",), ("line 2: forbidden import asyncio",)),
+    ("_winapi", ("import _winapi",), ("line 2: forbidden import _winapi",)),
+    ("nt", ("import nt",), ("line 2: forbidden import nt",)),
+    ("MetaTrader5", ("import MetaTrader5",), ("line 2: forbidden import MetaTrader5",)),
+    ("a third-party package", ("import psutil",), ("line 2: forbidden import psutil",)),
+    ("broker", ("from sochron.broker import mt5",), ("line 2: forbidden import sochron.broker",)),
+    ("data.acquire", ("import sochron.data.acquire",), ("line 2: forbidden import sochron.data.acquire",)),
+    ("a sibling module of app", ("from . import loader",), ("line 2: forbidden import sochron.app.loader",)),
+    ("wildcard", ("from os import *",), ("line 2: wildcard import prevents static verification",)),
+    ("os.system", ("import os", "def run():", "    os.system('net use')"), (f"line 4: {_ENVCHECK_OS}system",)),
+    ("os.remove", ("import os", "def drop(path):", "    os.remove(path)"), (f"line 4: {_ENVCHECK_OS}remove",)),
+    ("os.unlink", ("import os", "def drop(path):", "    os.unlink(path)"),
+     ("line 4: forbidden file change .unlink", f"line 4: {_ENVCHECK_OS}unlink")),
+    ("os.rename", ("import os", "def move(a, b):", "    os.rename(a, b)"),
+     ("line 4: forbidden file change .rename", f"line 4: {_ENVCHECK_OS}rename")),
+    ("os.replace", ("import os", "def move(a, b):", "    os.replace(a, b)"), (f"line 4: {_ENVCHECK_OS}replace",)),
+    ("os.makedirs", ("import os", "def make(path):", "    os.makedirs(path)"), (f"line 4: {_ENVCHECK_OS}makedirs",)),
+    ("os.startfile", ("import os", "def launch(path):", "    os.startfile(path)"), (f"line 4: {_ENVCHECK_OS}startfile",)),
+    ("os.execv", ("import os", "def launch(path):", "    os.execv(path, [path])"), (f"line 4: {_ENVCHECK_OS}execv",)),
+    ("os.spawnl", ("import os", "def launch(path):", "    os.spawnl(os.P_WAIT, path)"), (f"line 4: {_ENVCHECK_OS}spawnl",)),
+    ("os.posix_spawn", ("import os", "def launch(path):", "    os.posix_spawn(path, [path], {})"),
+     (f"line 4: {_ENVCHECK_OS}posix_spawn",)),
+    ("os.write", ("import os", "def put(fd):", "    os.write(fd, b'x')"), (f"line 4: {_ENVCHECK_OS}write",)),
+    ("from os import remove", ("from os import remove",), (f"line 2: {_ENVCHECK_OS}remove",)),
+    ("os.open for writing", ("import os", "def put(path):", "    return os.open(path, os.O_WRONLY | os.O_CREAT)"),
+     ("line 4: forbidden os.open flags",)),
+    ("os.open with a variable", ("import os", "def put(path, flags):", "    return os.open(path, flags)"),
+     ("line 4: forbidden os.open flags",)),
+    ("open for writing", ("def put(path):", "    return open(path, 'w')"), ("line 3: forbidden write open mode 'w'",)),
+    ("open for appending", ("def put(path):", "    return open(path, mode='ab')"),
+     ("line 3: forbidden write open mode 'ab'",)),
+    ("open read-write", ("def put(path):", "    return open(path, 'r+b')"), ("line 3: forbidden write open mode 'r+b'",)),
+    ("open exclusive", ("def put(path):", "    return open(path, 'x')"), ("line 3: forbidden write open mode 'x'",)),
+    ("open with a variable mode", ("def put(path, mode):", "    return open(path, mode)"),
+     ("line 3: forbidden open with a mode that is no literal",)),
+    ("io.open for writing", ("import io", "def put(path):", "    return io.open(path, 'w')"),
+     ("line 4: forbidden write open mode 'w'",)),
+    ("codecs.open for writing", ("import codecs", "def put(path):", "    return codecs.open(path, 'w', 'utf-8')"),
+     ("line 4: forbidden write open mode 'w'",)),
+    ("Path.open for writing", ("from pathlib import Path", "def put(path):", "    return Path(path).open('w')"),
+     ("line 4: forbidden write open mode 'w'",)),
+    ("Path.open through the class", ("from pathlib import Path", "def put(path):", "    return Path.open(path, 'a')"),
+     ("line 4: forbidden write open mode 'a'",)),
+    ("open through another name", ("OPEN = open", "def put(path):", "    return OPEN(path, 'w')"),
+     ("line 2: builtins.open escapes the static check", "line 4: forbidden write open mode 'w'")),
+    ("write_text", ("def put(path):", "    path.write_text('x')"), ("line 3: forbidden file change .write_text",)),
+    ("write_bytes", ("def put(path):", "    path.write_bytes(b'x')"), ("line 3: forbidden file change .write_bytes",)),
+    ("unlink", ("def drop(path):", "    path.unlink(missing_ok=True)"), ("line 3: forbidden file change .unlink",)),
+    ("rmdir", ("def drop(path):", "    path.rmdir()"), ("line 3: forbidden file change .rmdir",)),
+    ("rename", ("def move(path, other):", "    path.rename(other)"), ("line 3: forbidden file change .rename",)),
+    ("Path.replace", ("def move(path, other):", "    path.replace(other)"), ("line 3: forbidden file change .replace",)),
+    ("touch", ("def make(path):", "    path.touch()"), ("line 3: forbidden file change .touch",)),
+    ("mkdir", ("def make(path):", "    path.mkdir(parents=True)"), ("line 3: forbidden file change .mkdir",)),
+    ("chmod", ("def lock(path):", "    path.chmod(0o444)"), ("line 3: forbidden file change .chmod",)),
+    ("truncate", ("def cut(handle):", "    handle.truncate(0)"), ("line 3: forbidden file change .truncate",)),
+    ("advapi32 through WinDLL", ("import ctypes", "def creds():", "    return ctypes.WinDLL('advapi32').CredEnumerateW"),
+     ("line 4: forbidden Win32 library ctypes.WinDLL('advapi32')",)),
+    ("advapi32 through windll", ("import ctypes", "def creds():", "    return ctypes.windll.advapi32.CredReadW"),
+     ("line 4: forbidden Win32 library ctypes.windll.advapi32",)),
+    ("a library name that is no literal", ("import ctypes", "def load(name):", "    return ctypes.WinDLL(name)"),
+     ("line 4: forbidden Win32 library ctypes.WinDLL('that is no literal')",)),
+    ("kernel32 DeleteFileW", ("import ctypes", "def drop(path):", "    ctypes.windll.kernel32.DeleteFileW(path)"),
+     ("line 4: forbidden Win32 function kernel32.DeleteFileW",)),
+    ("kernel32 CreateFileW through an alias", ("import ctypes", "def make(path):", "    k = ctypes.WinDLL('kernel32')",
+                                               "    return k.CreateFileW(path, 0x40000000, 0, None, 2, 0, None)"),
+     ("line 5: forbidden Win32 function kernel32.CreateFileW",)),
+    ("kernel32 GetLastError (ctypes.get_last_error is the listed way)",
+     ("import ctypes", "def last():", "    return ctypes.windll.kernel32.GetLastError()"),
+     ("line 4: forbidden Win32 function kernel32.GetLastError",)),
+    ("shell32 ShellExecuteW", ("import ctypes", "def launch(path):",
+                               "    ctypes.windll.shell32.ShellExecuteW(None, 'open', path, None, None, 1)"),
+     ("line 4: forbidden Win32 function shell32.ShellExecuteW",)),
+    ("LoadLibrary", ("import ctypes", "def load():", "    return ctypes.windll.LoadLibrary('ws2_32')"),
+     ("line 4: forbidden Win32 library ctypes.windll.LoadLibrary",)),
+    ("CDLL", ("import ctypes", "def load():", "    return ctypes.CDLL('libc.so.6')"),
+     ("line 4: forbidden ctypes use ctypes.CDLL",)),
+    ("cdll", ("import ctypes", "def load():", "    return ctypes.cdll.msvcrt"), ("line 4: forbidden ctypes use ctypes.cdll",)),
+    ("WINFUNCTYPE", ("import ctypes", "PROTOTYPE = ctypes.WINFUNCTYPE(ctypes.c_int)"),
+     ("line 3: forbidden ctypes use ctypes.WINFUNCTYPE",)),
+    ("ctypes.util", ("import ctypes.util", "def find():", "    return ctypes.util.find_library('c')"),
+     ("line 4: forbidden ctypes use ctypes.util",)),
+    ("from ctypes import CDLL", ("from ctypes import CDLL",), ("line 2: forbidden ctypes use ctypes.CDLL",)),
+    ("a library passed as an argument", ("import ctypes", "def load(call):", "    return call(ctypes.WinDLL('kernel32'))"),
+     ("line 4: dll:kernel32 escapes the static check",)),
+    ("a library returned", ("import ctypes", "def kernel():", "    return ctypes.windll.kernel32"),
+     ("line 4: dll:kernel32 escapes the static check",)),
+    ("ctypes passed on", ("import ctypes", "def load(make):", "    return make(ctypes)"),
+     ("line 4: ctypes escapes the static check",)),
+    ("getattr of a library with a variable name", ("import ctypes", "def call(name):", "    k = ctypes.windll.kernel32",
+                                                   "    return getattr(k, name)()"),
+     ("line 5: dynamic attribute of dll:kernel32 prevents static verification",)),
+    ("getattr of a library with a literal name", ("import ctypes", "def drop(path):", "    k = ctypes.windll.kernel32",
+                                                  "    return getattr(k, 'DeleteFileW')(path)"),
+     ("line 5: forbidden Win32 function kernel32.DeleteFileW",)),
+    ("windll at import time", ("import ctypes", "KERNEL32 = ctypes.windll.kernel32"),
+     (f"line 3: {_ENVCHECK_IMPORT_TIME}",)),
+    ("from ctypes import windll at import time", ("from ctypes import windll",), (f"line 2: {_ENVCHECK_IMPORT_TIME}",)),
+    ("winreg at import time", ("import winreg",), (f"line 2: {_ENVCHECK_IMPORT_TIME}",)),
+    ("winreg SetValueEx", ("def put():", "    import winreg", "    winreg.SetValueEx(None, 'x', 0, 1, 'y')"),
+     ("line 4: forbidden winreg use winreg.SetValueEx",)),
+    ("winreg CreateKey", ("def put():", "    import winreg", "    return winreg.CreateKey(winreg.HKEY_CURRENT_USER, 'x')"),
+     ("line 4: forbidden winreg use winreg.CreateKey",)),
+    ("winreg DeleteKey", ("def drop():", "    import winreg", "    winreg.DeleteKey(winreg.HKEY_CURRENT_USER, 'x')"),
+     ("line 4: forbidden winreg use winreg.DeleteKey",)),
+    ("winreg ConnectRegistry", ("def remote():", "    import winreg",
+                                r"    return winreg.ConnectRegistry(r'\\vps', winreg.HKEY_LOCAL_MACHINE)"),
+     ("line 4: forbidden winreg use winreg.ConnectRegistry",)),
+    ("winreg HKEY_USERS", ("def read():", "    import winreg", "    return winreg.HKEY_USERS"),
+     ("line 4: forbidden winreg use winreg.HKEY_USERS",)),
+    ("winreg KEY_WRITE", ("def read(root, sub):", "    import winreg",
+                          "    return winreg.OpenKey(root, sub, 0, winreg.KEY_WRITE)"),
+     ("line 4: forbidden winreg use winreg.KEY_WRITE",)),
+    ("winreg a numeric access mask", ("def read(root, sub):", "    import winreg",
+                                      "    return winreg.OpenKey(root, sub, 0, 0x20006)"),
+     ("line 4: forbidden winreg access mask",)),
+    ("from winreg import SetValue", ("def put():", "    from winreg import SetValue", "    return SetValue"),
+     ("line 3: forbidden winreg use winreg.SetValue", "line 4: forbidden winreg use winreg.SetValue")),
+    ("winreg passed on", ("def read(call):", "    import winreg", "    return call(winreg)"),
+     ("line 4: winreg escapes the static check",)),
+    ("a registry path other than Uninstall",
+     (r"SHELL = r'Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders'",),
+     (r"line 2: forbidden registry key Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders",)),
+    ("a SYSTEM registry path", (r"PORTS = r'SYSTEM\CurrentControlSet\Services\Tcpip'",),
+     (r"line 2: forbidden registry key SYSTEM\CurrentControlSet\Services\Tcpip",)),
+    ("__import__", ("def load():", "    return __import__('subprocess')"),
+     ("line 3: dynamic code prevents static verification",)),
+    ("importlib.import_module", ("import importlib", "def load():", "    return importlib.import_module('socket')"),
+     ("line 4: dynamic code prevents static verification",)),
+    ("exec_module", ("import importlib.util", "def load(spec):",
+                     "    spec.loader.exec_module(importlib.util.module_from_spec(spec))"),
+     ("line 4: dynamic code prevents static verification",)),
+    ("eval", ("def run(text):", "    return eval(text)"), ("line 3: dynamic code prevents static verification",)),
+    ("exec", ("def run(text):", "    exec(text)"), ("line 3: dynamic code prevents static verification",)),
+    ("getattr of os with a variable name", ("import os", "def call(name, path):", "    return getattr(os, name)(path)"),
+     ("line 4: dynamic attribute of os prevents static verification",)),
+    ("getattr of os with a literal name", ("import os", "def drop(path):", "    return getattr(os, 'remove')(path)"),
+     (f"line 4: {_ENVCHECK_OS}remove",)),
+    ("os passed on", ("import os", "def call(make):", "    return make(os)"), ("line 4: os escapes the static check",)),
+)
+
+
+def test_ac06_env002_envcheck_uses_no_process_network_or_file_change_and_only_the_listed_win32_calls():
+    wrong = []
+    # The checker first: exact findings for forbidden sources, none for the sources the contract allows.
+    for label, lines, expected in _ENVCHECK_FORBIDDEN:
+        findings = _inspect_envcheck_source(_synthetic(lines))
+        if findings != list(expected):
+            wrong.append(f"{label}: expected {list(expected)}, got {findings}")
+    for label, lines in _ENVCHECK_ALLOWED:
+        findings = _inspect_envcheck_source(_synthetic(lines))
+        if findings:
+            wrong.append(f"{label}: legitimate source reported: {findings}")
+    assert not wrong, "AC-06: the envcheck checker:\n" + "\n".join(wrong)
+
+    # Then the module itself, which must exist, and the package __init__ that runs before it.
+    source_root = Path.cwd() / "src"
+    module = source_root / "sochron" / "app" / "envcheck.py"
+    assert module.is_file(), f"AC-06: {module} does not exist; sochron.app.envcheck not implemented"
+    files = [module] + [path for path in (source_root / "sochron" / "app" / "__init__.py",) if path.is_file()]
+    findings = []
+    for path in files:
+        relative = path.relative_to(source_root)
+        try:
+            violations = _inspect_envcheck_source(path.read_text(encoding="utf-8-sig"), "sochron.app")
+        except SyntaxError as error:
+            findings.append(f"{relative}:{error.lineno}: invalid Python syntax: {error.msg}")
+            continue
+        findings.extend(f"{relative}: {violation}" for violation in violations)
+    assert not findings, "AC-06: forbidden use in sochron.app.envcheck:\n" + "\n".join(findings)
