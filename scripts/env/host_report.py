@@ -632,10 +632,12 @@ def _git(f: Facts) -> tuple[str, str]:
         failures.append(f"{headers} http extraheader(s) in effect (values not shown) -> remove each key that "
                         "git config --show-origin --get-regexp \"^http\\..*extraheader$\" lists, in the file it names")
     if helpers:
+        # A plain helper in a later scope (the clone's .git/config, a later include) survives the
+        # global reset, so every listed key is named, not only the URL-scoped ones (review r3 F28).
         failures.append(f"{len(helpers)} credential helper(s) in effect "
-                        f"({helper_kinds(helpers)}; values not shown); also remove any "
-                        "credential.<url>.helper that git config --show-origin --get-regexp "
-                        "\"^credential\\..*helper$\" lists -> git config --global credential.helper --% \"\"")
+                        f"({helper_kinds(helpers)}; values not shown); remove every credential helper key that "
+                        "git config --show-origin --get-regexp \"^credential\\..*helper$\" lists, in the file it "
+                        "names, except the empty global one -> git config --global credential.helper --% \"\"")
     unknown = f.git_credential_helpers is None or f.remote_has_userinfo is None
     return _known_status(failures, unknown, "no credential helper; remote URLs without user information")
 

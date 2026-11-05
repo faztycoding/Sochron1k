@@ -360,6 +360,15 @@ def test_git_advice_ends_with_the_command(helpers, userinfo):
     assert text.count("--%") == 1
 
 
+def test_helper_advice_covers_keys_in_any_file():
+    # Review r3 F28: a plain helper in the clone's own config (or later in the global file) survives the
+    # global reset, so the advice must name every listed key, not only the URL-scoped ones.
+    text = detail(hr.evaluate(replace(valid_facts(), git_credential_helpers=("store",))), "git")
+    assert "remove every credential helper key that" in text and "in the file it names" in text
+    assert "except the empty global one" in text
+    assert text.endswith(' -> git config --global credential.helper --% ""')
+
+
 def test_extraheaders_and_remote_urls_have_their_own_advice():
     # Contract v1.7 (review r2 F23): counted apart from helpers, values never shown.
     facts = replace(valid_facts(), git_credential_helpers=(hr.EXTRAHEADER, hr.EXTRAHEADER), remote_has_userinfo=True)
