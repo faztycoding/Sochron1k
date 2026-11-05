@@ -394,6 +394,16 @@ def test_names_are_single_quoted_for_powershell():
     assert "Disable-NetFirewallRule -Name 'Bob''s rule'" in text
 
 
+def test_typographic_quotes_are_doubled():
+    # Review r2 F22: PowerShell also ends a single-quoted string at U+2018, U+2019, U+201A and U+201B.
+    names = ("Bob’s rule", "x’; Write-Output INJECTED; ’", "a‘b‚c‛d")
+    rules = [rule(name, "TCP", ("445",), ("Any",)) for name in names]
+    text = detail(hr.evaluate(valid_facts((RDP, *rules))), "inbound")
+    assert "Disable-NetFirewallRule -Name 'Bob’’s rule'" in text
+    assert "Disable-NetFirewallRule -Name 'x’’; Write-Output INJECTED; ’’'" in text
+    assert "Disable-NetFirewallRule -Name 'a‘‘b‚‚c‛‛d'" in text
+
+
 def test_advice_notes_are_powershell_comments():
     # F17: "(keep RDP)" after a command was a parse error or ran as a command in PowerShell 5.1.
     mixed_ports = rule("Custom-Mixed-In-TCP", "TCP", ("3389", "445"), ("192.0.2.10",))

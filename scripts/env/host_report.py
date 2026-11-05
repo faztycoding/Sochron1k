@@ -379,9 +379,15 @@ def _parse_profiles(raw: object) -> tuple[Profile, ...] | None:
 
 
 # ---- evaluate ------------------------------------------------------------------------------------
+SINGLE_QUOTES = ("'", "‘", "’", "‚", "‛")  # each one ends a PowerShell literal (r2 F22)
+
+
 def _quote(name: str) -> str:
-    """A PowerShell single-quoted literal: an unquoted {GUID} would be read as a script block."""
-    return "'" + name.replace("'", "''") + "'"
+    """A PowerShell single-quoted literal: an unquoted {GUID} would be read as a script block.
+    Every character PowerShell reads as a single quote is doubled."""
+    for quote in SINGLE_QUOTES:
+        name = name.replace(quote, quote * 2)
+    return "'" + name + "'"
 
 
 def _known_status(failures: list[str], unknown: bool, ok_detail: str) -> tuple[str, str]:
