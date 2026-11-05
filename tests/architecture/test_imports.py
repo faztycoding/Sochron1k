@@ -2685,9 +2685,13 @@ def test_ac06_env002_importing_research_backtest_strategy_loads_no_app_broker_or
 # reads the OS, os.environ and files), so it gets its own checker. The checker resolves names through
 # every import in the module (any scope, conservatively) and through plain aliases (name = value, a
 # walrus), then reports, each with its line:
-#   - an import of a process, network or file-writing stdlib module (_ENVCHECK_DENIED_MODULES), of a
-#     third-party module, or of a sochron package other than the pure ones, sochron.app and the
-#     module itself; a wildcard import;
+#   - an import of a process, network or file-writing stdlib module (_ENVCHECK_DENIED_MODULES), of any
+#     other stdlib module outside the allow list of contract v1.7 (tests-r1 F5, _ENVCHECK_STDLIB, a
+#     module's submodules included), of a third-party module, or of a sochron package other than the
+#     pure ones, sochron.app and the module itself; a wildcard import;
+#   - (tests r2, F3) a name bound to a second checked object that differs from its first (two
+#     handles, or a module and a handle, under one name): the flat alias table could not tell them
+#     apart, so the form is refused on purpose and the name is not resolved further;
 #   - os functions that change files or start processes (_ENVCHECK_OS_DENIED, os.exec*, os.spawn*,
 #     os.posix_spawn*); os.open whose flags are not built from read-only O_ names; open, io.open,
 #     codecs.open, os.fdopen, io.FileIO and Path.open with a write mode or a mode that is no literal;
@@ -2700,8 +2704,9 @@ def test_ac06_env002_importing_research_backtest_strategy_loads_no_app_broker_or
 #     (anything but attribute access, a call where that is the use, getattr/hasattr with a literal
 #     name, or a plain alias);
 #   - winreg members other than the read-only ones (_ENVCHECK_WINREG), an OpenKey access mask with an
-#     int literal other than 0, and a registry path literal ("SOFTWARE\..." or "SYSTEM\...") other
-#     than the two Uninstall keys;
+#     int literal other than 0, a registry path literal ("SOFTWARE\..." or "SYSTEM\...") other than
+#     the two Uninstall keys, and (v1.7, tests-r1 F5) any str literal passed as the sub-key of
+#     OpenKey/OpenKeyEx (second argument or sub_key=) that is not one of the two Uninstall keys;
 #   - Windows-only access at import time (winreg, ctypes.windll/oledll/WinDLL/OleDLL or a library
 #     outside a function body), which would break the import on Linux;
 #   - dynamic code: __import__, importlib.import_module or reload, module_from_spec, exec_module,
@@ -2716,6 +2721,10 @@ _ENVCHECK_DENIED_MODULES = frozenset({
     "logging", "fileinput", "mmap", "runpy", "code", "_winapi", "nt", "posix", "_posixsubprocess", "_socket", "_ssl",
     "_ctypes", "_io", "_overlapped", "_multiprocessing", "_asyncio",
 })
+# Contract v1.7 (tests-r1 F5): the stdlib modules envcheck may import, with their submodules (winreg only
+# inside a function, by the import-time rule). Every other stdlib module is a finding.
+_ENVCHECK_STDLIB = frozenset({"argparse", "collections", "ctypes", "dataclasses", "datetime", "hashlib", "importlib",
+                              "json", "os", "pathlib", "re", "sys", "typing", "winreg"})
 _ENVCHECK_SOCHRON = ("sochron.core", "sochron.timebase", "sochron.costs", "sochron.risk", "sochron.strategy",
                      "sochron.backtest", "sochron.research", "sochron.data.snapshot")
 _ENVCHECK_WIN32 = {
@@ -2798,15 +2807,28 @@ def _envcheck_resolve(node, bindings):
 
 
 def _envcheck_bindings(tree, current_package):
-    """Every name bound by an import (any scope) or by a plain alias of a tracked name, to a fixed point."""
-    bindings = {}
+    """(bindings, conflicts): every name bound by an import (any scope) or by a plain alias of a tracked
+    name, to a fixed point, and (line, name) for each name that a second binding gives another checked
+    object (tests r2, F3). A name in conflict resolves to nothing afterwards."""
+    bindings, conflicts, conflicted = {}, [], set()
+
+    def bind(name, value, line):
+        old = bindings.get(name, value)
+        if name in conflicted or old == value:
+            bindings.setdefault(name, value)
+            return False
+        if value.startswith(_ENVCHECK_TRACKED) or (old or "").startswith(_ENVCHECK_TRACKED):
+            conflicted.add(name)
+            conflicts.append((line, name))
+        return False
+
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.asname:
-                    bindings[alias.asname] = alias.name
+                    bind(alias.asname, alias.name, node.lineno)
                 else:
-                    bindings[alias.name.split(".")[0]] = alias.name.split(".")[0]
+                    bind(alias.name.split(".")[0], alias.name.split(".")[0], node.lineno)
         elif isinstance(node, ast.ImportFrom):
             module = node.module or ""
             if node.level:
@@ -2816,7 +2838,7 @@ def _envcheck_bindings(tree, current_package):
                     continue
             for alias in node.names:
                 if alias.name != "*":
-                    bindings[alias.asname or alias.name] = f"{module}.{alias.name}"
+                    bind(alias.asname or alias.name, f"{module}.{alias.name}", node.lineno)
     for _ in range(20):
         changed = False
         for node in ast.walk(tree):
@@ -2829,12 +2851,16 @@ def _envcheck_bindings(tree, current_package):
             resolved = _envcheck_resolve(value, bindings)
             if resolved and resolved.startswith(_ENVCHECK_TRACKED):
                 for name in targets:
-                    if name not in bindings:
+                    if name not in bindings and name not in conflicted:
                         bindings[name] = resolved
                         changed = True
+                    else:
+                        bind(name, resolved, node.lineno)
         if not changed:
             break
-    return bindings
+    for name in conflicted:
+        bindings[name] = None
+    return bindings, sorted(set(conflicts))
 
 
 def _envcheck_runtime(tree):
@@ -2937,6 +2963,8 @@ def _envcheck_import_findings(node, current_package, runtime):
         if top in sys.stdlib_module_names:
             if top in _ENVCHECK_DENIED_MODULES:
                 findings.append(f"forbidden import {name}")
+            elif top not in _ENVCHECK_STDLIB:
+                findings.append(f"forbidden stdlib import {name}")
             elif top == "winreg" and node not in runtime:
                 findings.append(_ENVCHECK_IMPORT_TIME)
         elif top == "sochron":
@@ -2958,10 +2986,10 @@ def _envcheck_import_findings(node, current_package, runtime):
 def _inspect_envcheck_source(source, current_package="sochron.app"):
     """ENV-002 AC-06: the findings of the envcheck checker described above, sorted and unique."""
     tree = ast.parse(source)
-    bindings = _envcheck_bindings(tree, current_package)
+    bindings, conflicts = _envcheck_bindings(tree, current_package)
     parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
     runtime = _envcheck_runtime(tree)
-    findings = set()
+    findings = {f"line {line}: {name} is bound to more than one checked object" for line, name in conflicts}
 
     def report(node, message):
         findings.add(f"line {node.lineno}: {message}")
@@ -3023,6 +3051,12 @@ def _envcheck_call(node, resolved, bindings, report):
         if access is not None and any(isinstance(item, ast.Constant) and type(item.value) is int and item.value != 0
                                       for item in ast.walk(access)):
             report(node, "forbidden winreg access mask")
+        # v1.7 (tests-r1 F5): a literal sub-key must be one of the two Uninstall keys.
+        sub_key = node.args[1] if len(node.args) > 1 else next(
+            (keyword.value for keyword in node.keywords if keyword.arg == "sub_key"), None)
+        if (_envcheck_literal(sub_key)
+                and sub_key.value.replace("/", "\\").lower().rstrip("\\") not in _ENVCHECK_UNINSTALL):
+            report(node, f"forbidden registry key {sub_key.value}")
     if isinstance(func, ast.Attribute):
         if func.attr in _ENVCHECK_FILE_CHANGES or (func.attr == "replace" and len(node.args) == 1 and not node.keywords):
             report(node, f"forbidden file change .{func.attr}")
@@ -3156,6 +3190,38 @@ _ENVCHECK_ALLOWED = (
         "    fn: object = k.GetDriveTypeW",
         "    return fn(letter)",
     )),
+    # Tests r2 (F3, F5): the allow list with submodules, one library bound twice under the same name, and
+    # literal Uninstall sub-keys.
+    ("allowed stdlib modules and their submodules", (
+        "import collections",
+        "import ctypes.wintypes",
+        "import os.path",
+        "import re",
+        "import typing",
+        "from collections.abc import Mapping",
+        "from importlib import util",
+        "from json import JSONDecodeError",
+        "from typing import Literal",
+        "PATTERN = re.compile(r'[0-9a-f]{32}')",
+    )),
+    ("the same library under the same name in two functions", (
+        "import ctypes",
+        "def drive_type(letter):",
+        "    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)",
+        "    return kernel32.GetDriveTypeW(letter)",
+        "def close(handle):",
+        "    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)",
+        "    return kernel32.CloseHandle(handle)",
+    )),
+    ("literal Uninstall sub-keys", (
+        "def names():",
+        "    import winreg",
+        r"    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall') as key:",
+        "        return winreg.QueryInfoKey(key)",
+        "def wow_names():",
+        "    import winreg",
+        r"    return winreg.OpenKeyEx(winreg.HKEY_LOCAL_MACHINE, sub_key='Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\')",
+    )),
 )
 _ENVCHECK_OS = "forbidden file change or process os."
 # (label, source lines, exact findings); line 1 is _HEADER, so the first source line is 2.
@@ -3201,10 +3267,11 @@ _ENVCHECK_FORBIDDEN = (
     ("open exclusive", ("def put(path):", "    return open(path, 'x')"), ("line 3: forbidden write open mode 'x'",)),
     ("open with a variable mode", ("def put(path, mode):", "    return open(path, mode)"),
      ("line 3: forbidden open with a mode that is no literal",)),
+    # Tests r2 (F5, v1.7): io and codecs are outside the stdlib allow list, so their import is a finding too.
     ("io.open for writing", ("import io", "def put(path):", "    return io.open(path, 'w')"),
-     ("line 4: forbidden write open mode 'w'",)),
+     ("line 2: forbidden stdlib import io", "line 4: forbidden write open mode 'w'")),
     ("codecs.open for writing", ("import codecs", "def put(path):", "    return codecs.open(path, 'w', 'utf-8')"),
-     ("line 4: forbidden write open mode 'w'",)),
+     ("line 2: forbidden stdlib import codecs", "line 4: forbidden write open mode 'w'")),
     ("Path.open for writing", ("from pathlib import Path", "def put(path):", "    return Path(path).open('w')"),
      ("line 4: forbidden write open mode 'w'",)),
     ("Path.open through the class", ("from pathlib import Path", "def put(path):", "    return Path.open(path, 'a')"),
@@ -3304,6 +3371,42 @@ _ENVCHECK_FORBIDDEN = (
     ("getattr of os with a literal name", ("import os", "def drop(path):", "    return getattr(os, 'remove')(path)"),
      (f"line 4: {_ENVCHECK_OS}remove",)),
     ("os passed on", ("import os", "def call(make):", "    return make(os)"), ("line 4: os escapes the static check",)),
+    # Tests r2, F3 (review tests-r1): one name for two checked objects. (a) two libraries under one handle
+    # name, which once named the wrong library; (b) a module, then a library, which once hid DeleteFileW.
+    ("one handle name for two libraries", ("import ctypes", "def drives(letter):", "    lib = ctypes.WinDLL('kernel32')",
+                                           "    return lib.GetDriveTypeW(letter)", "def close(handle):",
+                                           "    lib = ctypes.WinDLL('mpr')", "    return lib.WNetCloseEnum(handle)"),
+     ("line 7: lib is bound to more than one checked object",)),
+    ("one name for a module and a library", ("import ctypes", "import os", "def sep():", "    k = os", "    return k.sep",
+                                             "def drop(path):", "    k = ctypes.WinDLL('kernel32')",
+                                             "    return k.DeleteFileW(path)"),
+     ("line 8: k is bound to more than one checked object",)),
+    ("an imported name rebound to a library", ("from json import loads as k", "import ctypes", "def drop(path):",
+                                               "    k = ctypes.windll.kernel32", "    return k.DeleteFileW(path)"),
+     ("line 5: k is bound to more than one checked object",)),
+    # Tests r2, F5 (v1.7): stdlib modules outside the allow list, and registry sub-keys outside Uninstall.
+    ("platform", ("import platform",), ("line 2: forbidden stdlib import platform",)),
+    ("venv", ("import venv",), ("line 2: forbidden stdlib import venv",)),
+    ("ensurepip", ("import ensurepip",), ("line 2: forbidden stdlib import ensurepip",)),
+    ("py_compile", ("import py_compile",), ("line 2: forbidden stdlib import py_compile",)),
+    ("compileall", ("import compileall",), ("line 2: forbidden stdlib import compileall",)),
+    ("zipapp", ("import zipapp",), ("line 2: forbidden stdlib import zipapp",)),
+    ("mailbox", ("import mailbox",), ("line 2: forbidden stdlib import mailbox",)),
+    ("pydoc", ("import pydoc",), ("line 2: forbidden stdlib import pydoc",)),
+    ("stat", ("import stat",), ("line 2: forbidden stdlib import stat",)),
+    ("glob, from-imported", ("from glob import glob",), ("line 2: forbidden stdlib import glob",)),
+    ("__future__", ("from __future__ import annotations",), ("line 2: forbidden stdlib import __future__",)),
+    ("platform inside a function", ("def system():", "    import platform", "    return platform.system()"),
+     ("line 3: forbidden stdlib import platform",)),
+    ("an OpenKey sub-key outside Uninstall", ("def read():", "    import winreg",
+                                              "    return winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Network')"),
+     ("line 4: forbidden registry key Network",)),
+    ("an OpenKeyEx sub_key= outside Uninstall", ("def read():", "    import winreg",
+                                                 "    return winreg.OpenKeyEx(winreg.HKEY_CURRENT_USER, sub_key='Environment')"),
+     ("line 4: forbidden registry key Environment",)),
+    ("an OpenKey sub-key under SYSTEM", ("def read():", "    import winreg",
+                                         r"    return winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'SYSTEM\CurrentControlSet')"),
+     (r"line 4: forbidden registry key SYSTEM\CurrentControlSet",)),
 )
 
 

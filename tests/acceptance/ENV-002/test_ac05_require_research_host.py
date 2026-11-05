@@ -1,5 +1,6 @@
-"""Approved ENV-002 v1.6 contract tests for AC-05 (docs/contracts/ENV-002-research-host-separation.md);
-run pytest from the repository root.
+"""Approved ENV-002 v1.7 contract tests for AC-05 (docs/contracts/ENV-002-research-host-separation.md);
+run pytest from the repository root. Tests r2 (docs/reviews/ENV-002-tests-r1.md F1, F7) made the
+`__main__` guard check stricter and added the stderr and error-text checks.
 
 Contract names used: Facts, ResearchRoots, Sentinel, Report, collect and is_cloud_only (both replaced by
 fakes), evaluate, research_host_report, require_research_host, ResearchHostError, default_roots and main
@@ -17,12 +18,15 @@ Conventions the contract leaves to these tests (also in docs/handoff/ENV-002.md)
     because the real one needs Windows shell folders.
 17. require_research_host returns the report when its verdict is PASS: the same role, verdict and item
     statuses that evaluate gives for the same inputs. Otherwise it raises ResearchHostError, a
-    ValueError, whose message names every item that is not PASS.
+    ValueError, whose message names every item that is not PASS and never holds the token (v1.7,
+    tests-r1 F7).
 18. The CLI is envcheck.main(argv) (v1.6 Q9), argv being the arguments after the module name. It returns
     the exit code or raises SystemExit (None counts as 0, a non-int as 1). It prints the report to
-    standard output, naming every item, never the token (v1.6 Q7), and the last line is
-    "RESEARCH HOST: <verdict>". `python -m sochron.app.envcheck` calls main under
-    `if __name__ == "__main__":`.
+    standard output, naming every item, and the last line is "RESEARCH HOST: <verdict>". The token is
+    in neither standard output nor standard error (v1.6 Q7, v1.7 tests-r1 F7). `python -m
+    sochron.app.envcheck` runs main under `if __name__ == "__main__":`, where main's result is the
+    argument of SystemExit(...), sys.exit(...) or exit(...) (tests r2, F1), so the process exits with
+    that code; a bare `main()` there would exit 0 on FAIL.
 19. --sentinel-file names a JSON file with the six values make_sentinel.py prints; the end-to-end test
     writes make_sentinel.py's real output there verbatim, as Claude commits it.
 """
@@ -93,16 +97,22 @@ def _setup(tmp_path, monkeypatch, *names, **facts):
 
 
 def _cli(ec, argv, capsys):
-    """(exit code, standard output) of envcheck.main(argv)."""
+    """(exit code, standard output, standard error) of envcheck.main(argv)."""
     capsys.readouterr()
     try:
         code = ec.main(list(argv))
     except SystemExit as stop:
         code = stop.code
-    out = capsys.readouterr().out
+    captured = capsys.readouterr()
     if code is None:
-        return 0, out
-    return (code if isinstance(code, int) and not isinstance(code, bool) else 1), out
+        return 0, captured.out, captured.err
+    return (code if isinstance(code, int) and not isinstance(code, bool) else 1), captured.out, captured.err
+
+
+def _token_shown(token, out, err):
+    """Which of the two streams show the token (v1.6 Q7, v1.7 tests-r1 F7); [] when neither does."""
+    return [f"the token is on {name}" for name, text in (("standard output", out), ("standard error", err))
+            if token in text]
 
 
 def _last_line(out):
@@ -185,6 +195,7 @@ def test_ac05_require_research_host_raises_and_names_the_item(tmp_path, monkeypa
     except ec.ResearchHostError as error:
         assert isinstance(error, ValueError) and item in str(error), \
             f"AC-05: the error {str(error)!r} does not name {item}"
+        assert K.TOKEN not in str(error), "AC-05: the error message holds the sentinel token (v1.7, tests-r1 F7)"
         return
     except Exception as error:  # the wrong exception type is the failure reported
         pytest.fail(f"AC-05: {item} not PASS raised {error!r}, expected ResearchHostError", pytrace=False)
@@ -199,6 +210,7 @@ def test_ac05_require_research_host_names_every_item_that_is_not_pass(tmp_path, 
     message = str(caught.value)
     missing = [item for item in ("network_shares", "terminal_data", "holdout_dir", "sentinel") if item not in message]
     assert not missing, f"AC-05: the error {message!r} does not name {missing}"
+    assert K.TOKEN not in message, "AC-05: the error message holds the sentinel token (v1.7, tests-r1 F7)"
 
 
 # ------------------------------------------------------------------------- the CLI
@@ -209,15 +221,14 @@ def test_ac05_cli_exits_zero_only_for_pass(tmp_path, monkeypatch, capsys, verdic
     ec, machine, host = _setup(tmp_path, monkeypatch, "main", "default_roots", **facts)
     sentinel_file = machine.repo.joinpath(*K.SENTINEL_EVIDENCE)
     with K.recording() as audit:
-        code, out = _cli(ec, ["--role", "research", "--sentinel-file", str(sentinel_file)], capsys)
+        code, out, err = _cli(ec, ["--role", "research", "--sentinel-file", str(sentinel_file)], capsys)
     wrong = K.side_effects(audit, machine, machine.roots(ec), machine.sentinel(ec))
     if (code == 0) != (verdict == "PASS"):
         wrong.append(f"exit code {code} for {verdict}")
     if _last_line(out) != f"RESEARCH HOST: {verdict}":
         wrong.append(f"last line {_last_line(out)!r}, expected 'RESEARCH HOST: {verdict}'")
     wrong += [f"the report does not name {item}" for item in K.ITEMS if item not in out]
-    if K.TOKEN in out:
-        wrong.append("the printed report shows the sentinel token")
+    wrong += _token_shown(K.TOKEN, out, err)
     if not host.defaults or any(extra != () for extra in host.defaults):
         wrong.append(f"default_roots was called with {host.defaults!r}, expected ()")
     assert not wrong, f"AC-05 CLI {verdict}:\n" + "\n".join(wrong) + f"\noutput:\n{out}"
@@ -229,9 +240,9 @@ def test_ac05_cli_passes_every_data_dir_in_order(tmp_path, monkeypatch, capsys):
     machine.add_snapshot(first, K.AT_CUTOFF)
     machine.add_snapshot(second, "2025-06-30T00:00:00Z")
     sentinel_file = machine.repo.joinpath(*K.SENTINEL_EVIDENCE)
-    code, out = _cli(ec, ["--role", "research", "--sentinel-file", str(sentinel_file), "--data-dir", str(first),
-                          "--data-dir", str(second)], capsys)
-    wrong = []
+    code, out, err = _cli(ec, ["--role", "research", "--sentinel-file", str(sentinel_file), "--data-dir", str(first),
+                               "--data-dir", str(second)], capsys)
+    wrong = _token_shown(K.TOKEN, out, err)
     calls = [tuple(map(K.norm, extra)) for extra in host.defaults]
     if not calls or any(call != (K.norm(first), K.norm(second)) for call in calls):
         wrong.append(f"default_roots was called with {host.defaults!r}, expected ({first}, {second})")
@@ -246,9 +257,9 @@ def test_ac05_cli_with_a_data_dir_that_does_not_exist_does_not_exit_zero(tmp_pat
     ec, machine, host = _setup(tmp_path, monkeypatch, "main", "default_roots")
     typo = machine.base / "usb" / "exprot"
     sentinel_file = machine.repo.joinpath(*K.SENTINEL_EVIDENCE)
-    code, out = _cli(ec, ["--role", "research", "--sentinel-file", str(sentinel_file), "--data-dir", str(typo)],
-                     capsys)
-    wrong = []
+    code, out, err = _cli(ec, ["--role", "research", "--sentinel-file", str(sentinel_file), "--data-dir", str(typo)],
+                          capsys)
+    wrong = _token_shown(K.TOKEN, out, err)
     if [tuple(map(K.norm, extra)) for extra in host.defaults][:1] != [(K.norm(typo),)]:
         wrong.append(f"default_roots was called with {host.defaults!r}, expected ({typo},)")
     if code == 0 or _last_line(out) != "RESEARCH HOST: UNKNOWN":
@@ -258,8 +269,9 @@ def test_ac05_cli_with_a_data_dir_that_does_not_exist_does_not_exit_zero(tmp_pat
 
 def test_ac05_cli_without_a_sentinel_file_does_not_exit_zero(tmp_path, monkeypatch, capsys):
     ec, _, _ = _setup(tmp_path, monkeypatch, "main", "default_roots")
-    code, out = _cli(ec, ["--role", "research"], capsys)
+    code, out, err = _cli(ec, ["--role", "research"], capsys)
     assert code != 0, f"AC-05: no --sentinel-file exited 0:\n{out}"
+    assert not _token_shown(K.TOKEN, out, err), "AC-05: no --sentinel-file: the token was printed"
 
 
 def test_ac05_python_m_runs_main():
@@ -275,10 +287,25 @@ def test_ac05_python_m_runs_main():
         return (any(isinstance(side, ast.Name) and side.id == "__name__" for side in sides)
                 and any(isinstance(side, ast.Constant) and side.value == "__main__" for side in sides))
 
+    def is_exit(func):
+        """SystemExit, exit or sys.exit (tests r2, F1)."""
+        if isinstance(func, ast.Name):
+            return func.id in ("SystemExit", "exit")
+        return (isinstance(func, ast.Attribute) and func.attr == "exit" and isinstance(func.value, ast.Name)
+                and func.value.id == "sys")
+
+    def is_main_call(node):
+        return isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "main"
+
     guards = [node for node in tree.body if isinstance(node, ast.If) and is_main_guard(node.test)]
     calls = [node for guard in guards for statement in guard.body for node in ast.walk(statement)
-             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "main"]
+             if is_main_call(node)]
     assert calls, "AC-05: envcheck.py has no `if __name__ == \"__main__\":` that calls main"
+    exits = [node for guard in guards for statement in guard.body for node in ast.walk(statement)
+             if isinstance(node, ast.Call) and is_exit(node.func) and len(node.args) == 1
+             and is_main_call(node.args[0])]
+    assert exits, ("AC-05: the `__main__` guard does not pass main's result to SystemExit(...), sys.exit(...) "
+                   "or exit(...), so `python -m sochron.app.envcheck` would exit 0 on FAIL (tests r2, F1)")
 
 
 def test_ac05_cli_end_to_end_with_make_sentinel_output(tmp_path, monkeypatch, capsys):
@@ -303,12 +330,11 @@ def test_ac05_cli_end_to_end_with_make_sentinel_output(tmp_path, monkeypatch, ca
 
     def run(state, expected):
         with K.recording() as audit:
-            code, out = _cli(ec, argv, capsys)
+            code, out, err = _cli(ec, argv, capsys)
         wrong.extend(K.side_effects(audit, machine, machine.roots(ec), sentinel))
         if (code == 0) != (expected == "PASS") or _last_line(out) != f"RESEARCH HOST: {expected}":
             wrong.append(f"{state}: exit {code}, last line {_last_line(out)!r}, expected {expected}")
-        if values["token"] in out:
-            wrong.append(f"{state}: the printed report shows the token (v1.6 Q7)")
+        wrong.extend(f"{state}: {shown}" for shown in _token_shown(values["token"], out, err))
 
     run("clean host", "PASS")
     shutil.copyfile(copy, machine.desktop / "vault export.json")
@@ -321,4 +347,6 @@ def test_ac05_cli_end_to_end_with_make_sentinel_output(tmp_path, monkeypatch, ca
     except ec.ResearchHostError as error:
         if "sentinel" not in str(error):
             wrong.append(f"copy on Desktop: the error {str(error)!r} does not name sentinel")
+        if values["token"] in str(error):
+            wrong.append("copy on Desktop: the error message holds the token (v1.7, tests-r1 F7)")
     assert not wrong, "AC-05 end to end:\n" + "\n".join(wrong)

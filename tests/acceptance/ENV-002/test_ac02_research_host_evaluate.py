@@ -1,5 +1,6 @@
-r"""Approved ENV-002 v1.6 contract tests for AC-02 (docs/contracts/ENV-002-research-host-separation.md);
-run pytest from the repository root.
+r"""Approved ENV-002 v1.7 contract tests for AC-02 (docs/contracts/ENV-002-research-host-separation.md);
+run pytest from the repository root. Tests r2 (docs/reviews/ENV-002-tests-r1.md F2, F4, F6, F8) added
+cases; no earlier case changed.
 
 sochron.app.envcheck is imported as a package module (pytest's pythonpath is src). Only contract names
 are used: Item, Report, Sentinel, ResearchRoots, Facts, collect (looked up, never called), evaluate and
@@ -36,7 +37,8 @@ Conventions the contract leaves to these tests (also in docs/handoff/ENV-002.md)
 4. Sentinel is a frozen dataclass with exactly the contract's fields, built with the committed JSON's
    values: name, sha256 (64 lower-case hex), token (32 lower-case hex), vault_path and created_utc
    ("%Y-%m-%dT%H:%M:%SZ") as str, and size as int. The sentinel file of these tests has the shape
-   the contract gives make_sentinel.py (envkit.sentinel_document).
+   the contract gives make_sentinel.py (envkit.sentinel_document). vault_path is the vault folder or
+   the sentinel file (v1.6 Q8); rule (1) FAILs when either exists here (tests r2, F4).
 5. Item.status and Report.verdict compare equal to "PASS", "FAIL" or "UNKNOWN"; Item.detail is a str;
    Report.role == "research"; Report.items is a tuple with exactly one Item for each of
    terminal_install, terminal_data, mt5_package, holdout_dir, excluded_period, network_shares and
@@ -44,14 +46,22 @@ Conventions the contract leaves to these tests (also in docs/handoff/ENV-002.md)
    property. Inside an item, as in the verdict, FAIL outranks UNKNOWN.
 6. Every search is recursive under its roots and enters every folder, .git, .venv and node_modules
    included (v1.6 Q11); "under a root" compares absolute paths. A file under both the repo or a data
-   dir and a search dir follows the repo/data-dir rules (contract v1.5).
+   dir and a search dir follows the repo/data-dir rules (contract v1.5). (v1.7, tests-r1 F8) A folder
+   that cannot be listed makes every item that searches it UNKNOWN: holdout_dir, excluded_period and
+   sentinel for a folder under the repo or a data dir, sentinel alone for one under a search dir only.
+   Reparse points (junctions, symlinks) are not entered; no test makes one (that needs privileges on
+   Windows).
 7. A per-file manifest is named after the full file name: bars.parquet.manifest.json. Every manifest
    written here, per file or per folder, has the folder manifest's shape {"files": [{"name",
-   "sha256"}], "period_end_utc"} and holds the true SHA-256 (hashes are SLICE-R1's check).
+   "sha256"}], "period_end_utc"} and holds the true SHA-256 (hashes are SLICE-R1's check). (v1.7,
+   tests-r1 F2) A cloud-only manifest is never opened: the data files that need it are UNKNOWN for
+   excluded_period, and the manifest itself (a .json in a data dir) makes sentinel UNKNOWN.
 8. "Opened" means an "open" audit event for the path (builtins.open, io.open, Path.open, read_bytes
    and os.open raise it). One process-wide sys.addaudithook records only while a test flag is on,
    because audit hooks cannot be removed. The same hook refuses an open of a chosen path with
    PermissionError: that is how "unreadable because of permissions" is made, on any OS and for any user.
+   (Tests r2, F8) It also refuses the listing of a chosen folder (the os.scandir and os.listdir events,
+   which os.walk, Path.iterdir and Path.rglob raise) with PermissionError.
 9. During every evaluate call the tests check the contract's read rules against every file of the
    fake host. A file may be opened only when a rule needs it: in the repo and data dirs a .json, .csv,
    .txt or .md file (the token search reads them; manifests are .json); in a search dir outside them
@@ -66,7 +76,8 @@ Conventions the contract leaves to these tests (also in docs/handoff/ENV-002.md)
     answers by absolute path. The real one calls os.stat (looked up at call time): an
     st_file_attributes with 0x00400000 or 0x00040000 set is cloud-only; other bits, 0 and no
     attribute are not.
-11. The token is searched as its 32 ASCII characters in files written as UTF-8. File names match the
+11. The token is searched as its 32 ASCII characters (files written as UTF-8 or ASCII) and, v1.7
+    tests-r1 F6, as UTF-16 LE and BE text with or without a BOM. File names match the
     sentinel's name and the searched extensions without case (v1.6 Q4). The one excluded file is exactly
     <repo>/docs/evidence/ENV-002-sentinel.json; a file of that name anywhere else gets no exception.
 12. (v1.6 Q5) When <repo>/data does not exist there is nothing to check there: alone it makes no item
@@ -78,6 +89,7 @@ Conventions the contract leaves to these tests (also in docs/handoff/ENV-002.md)
 14. (v1.6 Q7) No Item.detail holds the token; every report of these tests is checked for it.
 """
 
+import codecs
 import hashlib
 import importlib.util
 import os
@@ -111,11 +123,12 @@ def _ec():
 
 
 def _verdict(machine, ec, monkeypatch, *, facts=None, sentinel=True, cloud=(), deny=(), fail=(), unknown=(),
-             ignore=()):
+             ignore=(), deny_list=()):
     """Evaluate the fake host and return every difference from the expectation and the read rules."""
     facts_value = K.facts(ec, **(facts or {}))
     sentinel_value = machine.sentinel(ec) if sentinel else None
-    report, wrong = K.judge(ec, monkeypatch, machine, facts_value, sentinel_value, cloud=cloud, deny=deny)
+    report, wrong = K.judge(ec, monkeypatch, machine, facts_value, sentinel_value, cloud=cloud, deny=deny,
+                            deny_list=deny_list)
     return K.check_report(report, fail=fail, unknown=unknown, ignore=ignore) + wrong
 
 
@@ -451,6 +464,23 @@ def _vault(m):
     return {}
 
 
+def _vault_file(m):
+    """Tests r2, F4: the Sentinel names the sentinel file itself as vault_path, and that file is here."""
+    m.vault = m.base / "vps" / "vault" / K.SENTINEL_NAME
+    K.put(m.vault, K.SENTINEL_BYTES)
+    return {}
+
+
+def _utf16(path, codec, bom):
+    """Tests r2, F6: the token pasted alone into a file saved as UTF-16 (Windows PowerShell 5.1 redirection).
+
+    The file holds only the token, with no text around it: with ASCII text before or after the token,
+    the byte pattern of one byte order also matches inside the other (one byte off), so a search for
+    one order alone would pass both kinds of case."""
+    K.put(path, bom + TOKEN.encode(codec))
+    return {}
+
+
 def _onedrive_desktop(m):
     moved = m.onedrive / "Desktop"
     m.search_dirs = [m.downloads, moved, m.onedrive / "Documents", m.onedrive]
@@ -566,6 +596,17 @@ _SENTINEL = (
     ("token in a .json under the .git of a --data-dir",
      lambda m: _token_text(m.add_data_dir(m.base / "usb" / "export") / ".git" / "values.json", '{"t": "'),
      ("sentinel",), ()),
+    # Tests r2, F4: vault_path in the file form of v1.6 Q8, and that file exists here.
+    ("vault_path is the sentinel file and it exists on this machine", lambda m: _vault_file(m), ("sentinel",), ()),
+    # Tests r2, F6 (v1.7): the token in UTF-16 text, LE and BE, with or without a BOM.
+    ("token in a UTF-16LE .txt with a BOM in data/transfer",
+     lambda m: _utf16(m.data / "transfer" / "pasted-le.txt", "utf-16-le", codecs.BOM_UTF16_LE), ("sentinel",), ()),
+    ("token in a UTF-16BE .txt without a BOM in data/transfer",
+     lambda m: _utf16(m.data / "transfer" / "pasted-be.txt", "utf-16-be", b""), ("sentinel",), ()),
+    ("token in a UTF-16LE .txt without a BOM in data/transfer",
+     lambda m: _utf16(m.data / "transfer" / "pasted-le-nobom.txt", "utf-16-le", b""), ("sentinel",), ()),
+    ("token in a UTF-16BE .txt with a BOM in data/transfer",
+     lambda m: _utf16(m.data / "transfer" / "pasted-be-bom.txt", "utf-16-be", codecs.BOM_UTF16_BE), ("sentinel",), ()),
 )
 
 
@@ -600,6 +641,68 @@ def test_ac02_repo_under_a_search_dir_follows_the_repo_rules(tmp_path, monkeypat
     extra = build(m) or {}
     wrong = _verdict(m, ec, monkeypatch, cloud=extra.get("cloud", ()), fail=fail, unknown=unknown)
     assert not wrong, f"AC-02 repo under Desktop, {label}:\n" + "\n".join(wrong)
+
+
+# ------------------------------------------------------------------------- tests r2: manifests and folders
+
+def _cloud_manifest_in_onedrive(m):
+    """Tests r2, F2: a --data-dir in OneDrive whose folder manifest is not downloaded."""
+    folder = m.add_data_dir(m.onedrive / "Sochron data")
+    m.add_snapshot(folder, K.BEFORE_CUTOFF)
+    return [folder / "manifest.json"]
+
+
+def _cloud_per_file_manifest(m):
+    folder = m.data / "m1-cloud"
+    m.add_snapshot(folder, K.BEFORE_CUTOFF, per_file=True)
+    return [folder / "bars.parquet.manifest.json"]
+
+
+_CLOUD_MANIFESTS = (
+    ("a cloud-only manifest.json in a --data-dir under OneDrive", _cloud_manifest_in_onedrive),
+    ("a cloud-only per-file manifest under <repo>/data", _cloud_per_file_manifest),
+)
+
+
+@pytest.mark.parametrize("label, build", _CLOUD_MANIFESTS, ids=[case[0] for case in _CLOUD_MANIFESTS])
+def test_ac02_cloud_only_manifest_is_never_opened_and_unknown(tmp_path, monkeypatch, label, build):
+    """v1.7 (tests-r1 F2): the manifest is not opened; excluded_period and sentinel are UNKNOWN."""
+    ec = _ec()
+    m = K.Machine(tmp_path)
+    cloud = build(m)
+    wrong = _verdict(m, ec, monkeypatch, cloud=cloud, unknown=("excluded_period", "sentinel"))
+    assert not wrong, f"AC-02 {label}:\n" + "\n".join(wrong)
+
+
+def _locked_folder(path, *names):
+    """A folder (with files in it) whose listing the audit hook refuses (tests r2, F8)."""
+    for name in names:
+        K.put(path / name, f"{TOKEN}\n" if name.endswith(".txt") else K.PARQUET)
+    path.mkdir(parents=True, exist_ok=True)
+    return {"deny_list": [path]}
+
+
+_UNLISTABLE = (
+    ("a folder under data/transfer", lambda m: _locked_folder(m.data / "transfer" / "locked", "bars.parquet", "a.txt"),
+     ("holdout_dir", "excluded_period", "sentinel")),
+    ("a folder under a --data-dir",
+     lambda m: _locked_folder(m.add_data_dir(m.base / "usb" / "export") / "locked", "a.txt"),
+     ("holdout_dir", "excluded_period", "sentinel")),
+    ("a folder under the repo outside the data dirs", lambda m: _locked_folder(m.repo / "private", "a.txt"),
+     ("holdout_dir", "excluded_period", "sentinel")),
+    ("a folder under Desktop", lambda m: _locked_folder(m.desktop / "locked", "a.txt"), ("sentinel",)),
+    ("a folder under OneDrive", lambda m: _locked_folder(m.onedrive / "Documents" / "locked"), ("sentinel",)),
+)
+
+
+@pytest.mark.parametrize("label, build, unknown", _UNLISTABLE, ids=[case[0] for case in _UNLISTABLE])
+def test_ac02_folder_that_cannot_be_listed_is_unknown(tmp_path, monkeypatch, label, build, unknown):
+    """v1.7 (tests-r1 F8): a folder that cannot be listed makes every item that searches it UNKNOWN."""
+    ec = _ec()
+    m = K.Machine(tmp_path)
+    extra = build(m)
+    wrong = _verdict(m, ec, monkeypatch, deny_list=extra["deny_list"], unknown=unknown)
+    assert not wrong, f"AC-02 {label}:\n" + "\n".join(wrong)
 
 
 # ------------------------------------------------------------------------- files that are never opened

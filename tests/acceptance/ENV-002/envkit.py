@@ -216,10 +216,15 @@ def _event_path(value):
 
 
 class Audit:
-    """What one recording saw: opens (path, mode, flags), listings and forbidden events."""
+    """What one recording saw: opens (path, mode, flags), listings and forbidden events.
 
-    def __init__(self, deny=()):
+    deny: paths whose open is refused with PermissionError. deny_list: folders whose listing
+    (os.scandir, os.listdir; os.walk and Path.iterdir use them) is refused the same way (tests r2, F8).
+    """
+
+    def __init__(self, deny=(), deny_list=()):
         self.deny = {norm(path) for path in deny}
+        self.deny_list = {norm(path) for path in deny_list}
         self.opens = []
         self.listings = []
         self.forbidden = []
@@ -236,6 +241,8 @@ class Audit:
             path = _event_path(args[0] if args else None)
             if path is not None:
                 self.listings.append(path)
+                if path in self.deny_list:
+                    raise PermissionError(errno.EACCES, "Permission denied (ENV-002 test)", path)
         elif event.startswith(FORBIDDEN_EVENTS):
             text = repr(args)
             if "__pycache__" not in text:
@@ -263,12 +270,12 @@ def _hook(event, args):
 
 
 @contextmanager
-def recording(deny=()):
+def recording(deny=(), deny_list=()):
     """Record audit events while the block runs; outside it the process-wide hook does nothing."""
     if not _STATE["hooked"]:
         sys.addaudithook(_hook)
         _STATE["hooked"] = True
-    audit = Audit(deny)
+    audit = Audit(deny, deny_list)
     _STATE["audit"] = audit
     try:
         yield audit
@@ -342,11 +349,11 @@ def side_effects(audit, machine, roots, sentinel, cloud=()):
     return wrong
 
 
-def judge(ec, monkeypatch, machine, facts_value, sentinel, *, cloud=(), deny=()):
+def judge(ec, monkeypatch, machine, facts_value, sentinel, *, cloud=(), deny=(), deny_list=()):
     """evaluate on the fake host with the fake is_cloud_only; returns (report, side-effect breaks)."""
     roots = machine.roots(ec)
     monkeypatch.setattr(ec, "is_cloud_only", cloud_only(cloud))
-    with recording(deny) as audit:
+    with recording(deny, deny_list) as audit:
         report = ec.evaluate(facts_value, roots, sentinel)
     return report, side_effects(audit, machine, roots, sentinel, cloud)
 
