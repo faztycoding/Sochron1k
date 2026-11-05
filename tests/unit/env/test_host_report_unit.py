@@ -1,9 +1,10 @@
-"""Implementer's unit tests for scripts/env/host_report.py (ENV-001 v1.5).
+"""Implementer's unit tests for scripts/env/host_report.py (ENV-001 v1.6).
 
 They cover what the contract gives to unit tests and the locked AC-02 tests cannot reach:
 parse_firewall_json on the captured sample (review r5 F53), policy_first's four cases and the
 clipboard mapping (contract: collect_facts sources), the `.env.example` name rule (tests review r1
-Q1), advice for mixed failures (tests review r1 F1), quoting, and the CLI. The script is loaded by
+Q1), advice for mixed failures (tests review r1 F1), quoting, the git and uv sources through a fake
+runner (review r2 F21), and the CLI. The script is loaded by
 the contract's recipe; the fixture module beside this file is loaded by path the same way.
 """
 
@@ -13,6 +14,7 @@ import re
 import sys
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -232,6 +234,68 @@ def test_remote_userinfo(urls, expected):
     assert hr.any_userinfo(urls) is expected
 
 
+# ---- git and uv calls through a runner (review r2 F21 a) -------------------------------------------
+class FakeRun:
+    """Stands in for _run: answers by the exact argument list; None means the program could not run."""
+
+    def __init__(self, answers):
+        self.answers, self.calls = answers, []
+
+    def __call__(self, command, cwd=None, timeout=60):
+        self.calls.append((tuple(command), cwd))
+        answer = self.answers[tuple(command)]
+        return None if answer is None else SimpleNamespace(returncode=answer[0], stdout=answer[1])
+
+
+HELPERS_COMMAND = ("git", "config", "--show-origin", "--get-regexp", "^credential\\..*helper$")
+UV_CHECK = ("uv", "sync", "--locked", "--check", "--offline")
+CLEAN_URL, USER_URL = "https://github.com/x/y.git\n", "https://u@github.com/x/y.git\n"
+
+
+def get_url(name, push=False):
+    return ("git", "remote", "get-url", *(("--push",) if push else ()), "--all", name)
+
+
+def remotes(origin=(0, CLEAN_URL), origin_push=(0, CLEAN_URL), backup=(0, CLEAN_URL), backup_push=(0, CLEAN_URL)):
+    return {("git", "remote"): (0, "origin\nbackup\n"), get_url("origin"): origin,
+            get_url("origin", True): origin_push, get_url("backup"): backup, get_url("backup", True): backup_push}
+
+
+def test_credential_helpers_runs_the_contract_command(tmp_path):
+    run = FakeRun({HELPERS_COMMAND: (0, SYSTEM)})
+    assert hr.credential_helpers(tmp_path, run=run) == ("manager",)
+    assert run.calls == [(HELPERS_COMMAND, tmp_path)]  # N02: never `--get-all credential.helper`
+    assert hr.credential_helpers(tmp_path, run=FakeRun({HELPERS_COMMAND: None})) is None  # M20b
+
+
+@pytest.mark.parametrize("answers, expected", [
+    (remotes(), False),
+    (remotes(backup=(0, USER_URL)), True),  # M24a: user information on the second remote only
+    (remotes(backup_push=(0, USER_URL)), True),  # M24b: on a push URL only
+    (remotes(backup=(2, "")), None),  # M24c: a remote whose get-url fails
+    (remotes(backup=None), None),  # git could not run
+    ({("git", "remote"): (128, "")}, None),
+    ({("git", "remote"): None}, None),
+])
+def test_remote_userinfo_reads_every_remote_and_push_url(answers, expected, tmp_path):
+    assert hr.remote_userinfo(tmp_path, run=FakeRun(answers)) is expected
+
+
+def test_remote_userinfo_runs_the_contract_commands(tmp_path):
+    run = FakeRun(remotes())
+    hr.remote_userinfo(tmp_path, run=run)
+    assert run.calls == [(command, tmp_path) for command in (
+        ("git", "remote"), get_url("origin"), get_url("origin", True), get_url("backup"), get_url("backup", True))]
+
+
+@pytest.mark.parametrize("answer, expected", [((0, ""), True), ((1, ""), False), ((2, ""), False), (None, None)])
+def test_project_synced_runs_the_contract_command(answer, expected, tmp_path):
+    # M21b: uv that cannot run is unknown, never in sync.
+    run = FakeRun({UV_CHECK: answer})
+    assert hr.project_synced(tmp_path, run=run) is expected
+    assert run.calls == [(UV_CHECK, tmp_path)]
+
+
 def test_git_detail_names_kinds_not_values():
     # F7 (a): a helper value can hold a path or an inline token.
     secret = "!f() { echo password=hunter2; }; f"
@@ -351,6 +415,13 @@ def test_names_with_paths_or_addresses_are_masked():
     assert "is not printed" in text
 
 
+def test_names_with_ipv6_addresses_are_masked():
+    # Review r2 F21 (c): removing the IPv6 mask (N15) went unnoticed.
+    provider = rule("Allow-mgmt-2001:db8::5", "TCP", ("5985",), ("Any",))
+    text = detail(hr.evaluate(valid_facts((RDP, provider))), "inbound")
+    assert "2001:db8" not in text and "'Allow-mgmt-x:x::x'" in text
+
+
 def test_paths_are_masked_to_the_end_of_the_name():
     # Review r2 F20: a path with a space (Program Files, a user name with a space) or a UNC path.
     names = ("TCP Query User{5A0E}C:\\Program Files\\probe app\\app.exe",
@@ -373,6 +444,8 @@ def test_paths_are_masked_to_the_end_of_the_name():
     (("2001:db8:1234::/48",), True),
     (("203.0.113.0/255.255.255.0",), True),
     (("203.0.113.0/0.0.0.255",), False),  # a hostmask, read by Python as /24
+    (("::ffff:192.0.2.0/119",), False),  # review r2 F21 (b), N08: one bit wider than /120
+    (("::c000:200/112",), False),  # N10: IPv4-compatible space only (::/96)
 ])
 def test_scope_forms_of_contract_v1_6(scope, ok):
     # F10 (owner, 2026-10-25): mapped, compatible and NAT64 IPv6 need /120; masks must be netmasks.
@@ -402,7 +475,11 @@ def test_every_profile_entry_is_judged(profiles):
 
 def test_firewall_script_refuses_duplicate_instance_ids():
     # F5: a duplicate InstanceID could pair a rule with another rule's filters; the script throws (UNKNOWN).
-    assert "duplicate rule InstanceID" in hr.FIREWALL_SCRIPT
+    # Review r2 F21 (d): the exact guard line, before any filter is read (N22 `-gt 2`, N23 commented out).
+    lines = [line.strip() for line in hr.FIREWALL_SCRIPT.splitlines()]
+    guard = "if (@($rs | Group-Object InstanceID | Where-Object Count -gt 1).Count) { throw 'duplicate rule InstanceID' }"
+    assert guard in lines
+    assert lines.index(guard) < lines.index("$ports = @{}")
 
 
 def test_versions_compare_exactly():

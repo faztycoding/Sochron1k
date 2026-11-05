@@ -1,6 +1,6 @@
 """ENV-001 host report: a read-only check of the acquisition/execution VPS.
 
-Contract: docs/contracts/ENV-001-vps-acquisition-host.md (v1.5). Standard library only.
+Contract: docs/contracts/ENV-001-vps-acquisition-host.md (v1.6). Standard library only.
 collect_facts reads the Windows facts; every Windows-only module is imported inside it, so the
 module also imports on Linux, where evaluate and render (both pure) are tested.
 
@@ -19,6 +19,7 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -651,6 +652,35 @@ def _run(command: list[str], cwd: Path | None = None, timeout: int = 60) -> subp
         return None
 
 
+# The git and uv sources (contract v1.6). They take the runner so unit tests reach them with a fake
+# (review r2 F21); collect_facts passes _run. A runner result of None means the program did not run.
+Runner = Callable[..., subprocess.CompletedProcess | None]
+
+
+def credential_helpers(repo: Path, run: Runner = _run) -> tuple[str, ...] | None:
+    done = run(["git", "config", "--show-origin", "--get-regexp", r"^credential\..*helper$"], cwd=repo)
+    return None if done is None else helpers_from_git(done.returncode, done.stdout)
+
+
+def remote_userinfo(repo: Path, run: Runner = _run) -> bool | None:
+    names = run(["git", "remote"], cwd=repo)
+    if names is None or names.returncode != 0:
+        return None
+    urls: list[str] = []
+    for name in names.stdout.split():
+        for extra in ([], ["--push"]):
+            done = run(["git", "remote", "get-url", *extra, "--all", name], cwd=repo)
+            if done is None or done.returncode != 0:
+                return None
+            urls.extend(done.stdout.splitlines())
+    return any_userinfo(urls)
+
+
+def project_synced(repo: Path, run: Runner = _run) -> bool | None:
+    done = run(["uv", "sync", "--locked", "--check", "--offline"], cwd=repo, timeout=180)
+    return synced_from_uv(None if done is None else done.returncode)
+
+
 def collect_facts(repo: Path) -> Facts:
     """Read every fact from its one source; a fact that cannot be read is None (UNKNOWN)."""
     import ctypes
@@ -771,27 +801,6 @@ def collect_facts(repo: Path) -> Facts:
                      "import platform; print(platform.python_version())"])
         return None if done is None or done.returncode != 0 else done.stdout.strip() or None
 
-    def project_synced():
-        done = _run(["uv", "sync", "--locked", "--check", "--offline"], cwd=repo, timeout=180)
-        return synced_from_uv(None if done is None else done.returncode)
-
-    def credential_helpers():
-        done = _run(["git", "config", "--show-origin", "--get-regexp", r"^credential\..*helper$"], cwd=repo)
-        return None if done is None else helpers_from_git(done.returncode, done.stdout)
-
-    def userinfo():
-        names = _run(["git", "remote"], cwd=repo)
-        if names is None or names.returncode != 0:
-            return None
-        urls: list[str] = []
-        for name in names.stdout.split():
-            for extra in ([], ["--push"]):
-                done = _run(["git", "remote", "get-url", *extra, "--all", name], cwd=repo)
-                if done is None or done.returncode != 0:
-                    return None
-                urls.extend(done.stdout.splitlines())
-        return any_userinfo(urls)
-
     rules, profiles = guarded(firewall) or (None, None)
     return Facts(
         os_caption=guarded(os_caption),
@@ -808,9 +817,9 @@ def collect_facts(repo: Path) -> Facts:
         sync_clients=guarded(sync_clients),
         uv_version=guarded(uv_version),
         python_version=guarded(python_version),
-        project_synced=guarded(project_synced),
-        git_credential_helpers=guarded(credential_helpers),
-        remote_has_userinfo=guarded(userinfo),
+        project_synced=guarded(lambda: project_synced(repo)),
+        git_credential_helpers=guarded(lambda: credential_helpers(repo)),
+        remote_has_userinfo=guarded(lambda: remote_userinfo(repo)),
         secret_like_files_in_repo=guarded(lambda: count_secret_like(repo)),
         holdout_dir_in_repo=guarded(lambda: has_holdout_dir(repo)),
     )
