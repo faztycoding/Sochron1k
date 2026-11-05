@@ -157,10 +157,16 @@ def test_uv_version_parse():
     assert hr.parse_uv_version("error: no such command") is None
 
 
-# `git config --show-origin --get-regexp "^credential\..*helper$"` lines (contract v1.6, review r1 F1)
-SYSTEM = "file:C:/Program Files/Git/etc/gitconfig\tcredential.helper manager\n"
-GLOBAL_RESET = "file:C:/Users/owner/.gitconfig\tcredential.helper \n"
-URL_HELPER = "file:C:/Users/owner/.gitconfig\tcredential.https://github.com.helper !gh auth git-credential\n"
+# `git config --show-origin -z --get-regexp` entries (contract v1.7): <origin> NUL <key> LF <value> NUL,
+# or <origin> NUL <key> NUL for a key written without "=" (shapes as git 2.46.1 prints them).
+def entry(key, value, origin="file:C:/Users/owner/.gitconfig"):
+    return f"{origin}\0{key}" + ("" if value is None else f"\n{value}") + "\0"
+
+
+SYSTEM = entry("credential.helper", "manager", origin="file:C:/Program Files/Git/etc/gitconfig")
+GLOBAL_RESET = entry("credential.helper", "")
+URL_HELPER = entry("credential.https://github.com.helper", "!gh auth git-credential")
+LINE_FORM = "file:C:/Users/owner/.gitconfig\tcredential.helper manager\n"  # the output without -z
 
 
 def test_git_helpers_follow_the_reset_rule():
@@ -171,7 +177,7 @@ def test_git_helpers_follow_the_reset_rule():
 
 def test_reset_clears_only_earlier_helpers_of_the_same_key():
     # M10: a reset must not clear helpers that come after it, nor helpers of another key.
-    store = "file:C:/Users/owner/.gitconfig\tcredential.helper store\n"
+    store = entry("credential.helper", "store")
     assert hr.parse_git_helpers(SYSTEM + GLOBAL_RESET + store) == ("store",)
     assert hr.parse_git_helpers(URL_HELPER + GLOBAL_RESET) == ("!gh auth git-credential",)
 
@@ -181,35 +187,38 @@ def test_url_scoped_helper_is_found():
     assert hr.parse_git_helpers(SYSTEM + GLOBAL_RESET + URL_HELPER) == ("!gh auth git-credential",)
 
 
-GLOBAL = "file:C:/Users/owner/.gitconfig\t"
-MULTI_LINE = SYSTEM + GLOBAL + "credential.helper \n!probe\n"  # a value that starts with a newline
-
-
 @pytest.mark.parametrize("stdout, expected", [
     # Review r2 F18, the cases of its driver/git_probe.py: git resets only on an exactly empty value.
-    (SYSTEM + GLOBAL + "credential.helper  \n", ("manager", " ")),  # A1: one space
-    (SYSTEM + GLOBAL + "credential.helper    \n", ("manager", "   ")),  # A: three spaces
-    (SYSTEM + GLOBAL + "credential.helper \t\n", ("manager", "\t")),  # I: a tab
-    (MULTI_LINE, None),  # B: the second line of the value has no tab
-    (SYSTEM + GLOBAL + "credential.helper \n\n", None),  # a value that is one newline
-    (GLOBAL + "credential.https://example.invalid/Foo.helper store\n"
-     + GLOBAL + "credential.https://example.invalid/foo.helper \n", ("store",)),  # D: URL paths are case-sensitive
+    (SYSTEM + entry("credential.helper", " "), ("manager", " ")),  # A1: one space
+    (SYSTEM + entry("credential.helper", "   "), ("manager", "   ")),  # A: three spaces
+    (SYSTEM + entry("credential.helper", "\t"), ("manager", "\t")),  # I: a tab
+    (SYSTEM + entry("credential.helper", "\n!probe"), ("manager", "\n!probe")),  # B: starts with a newline
+    (SYSTEM + entry("credential.helper", "\n"), ("manager", "\n")),  # a value that is one newline
+    # E, the r2 residual: a second line that looks like a whole reset entry is still part of the value
+    (entry("credential.helper", "!probe\nfile:x\tcredential.helper "), ("!probe\nfile:x\tcredential.helper ",)),
+    (entry("credential.https://example.invalid/Foo.helper", "store")
+     + entry("credential.https://example.invalid/foo.helper", ""), ("store",)),  # D: URL paths are case-sensitive
+    (SYSTEM + entry("credential.helper", None), ("manager", hr.NO_VALUE)),  # C: a key without "=" (fails closed)
     (SYSTEM + GLOBAL_RESET, ()),  # A0: an exactly empty value is git's reset
 ])
 def test_only_an_exactly_empty_value_resets(stdout, expected):
     assert hr.parse_git_helpers(stdout) == expected
 
 
-def test_a_key_without_a_value_counts_as_a_helper():
-    # F18 case C: "[credential] helper" with no "=" prints the key alone; git then refuses to run,
-    # and the parser keeps it as a helper (fails closed).
-    helpers = hr.parse_git_helpers(SYSTEM + GLOBAL + "credential.helper\n")
-    assert helpers is not None and len(helpers) == 2 and helpers[0] == "manager"
+@pytest.mark.parametrize("stdout", [
+    LINE_FORM,  # -z dropped from the command
+    SYSTEM[:-1],  # the last NUL missing
+    "file:C:/Users/owner/.gitconfig\0",  # an origin without its entry
+    entry("credential.helper", "manager", origin=""),  # no origin
+    entry("user.name", "owner"),  # a key the command does not ask for
+])
+def test_output_that_does_not_split_into_entries_is_unknown(stdout):
+    assert hr.parse_git_helpers(stdout) is None
 
 
 @pytest.mark.parametrize("returncode, stdout, expected", [
     (0, SYSTEM, ("manager",)), (1, "", ()), (1, "error text", None), (128, "", None), (None, "", None),
-    (0, MULTI_LINE, None),  # F18: a value that cannot be read is unknown
+    (0, LINE_FORM, None),  # F18: output that cannot be read is unknown
 ])
 def test_git_exit_codes(returncode, stdout, expected):
     # M20: only "no key matched" (exit 1, nothing printed) means no helper.
@@ -247,7 +256,7 @@ class FakeRun:
         return None if answer is None else SimpleNamespace(returncode=answer[0], stdout=answer[1])
 
 
-HELPERS_COMMAND = ("git", "config", "--show-origin", "--get-regexp", "^credential\\..*helper$")
+HELPERS_COMMAND = ("git", "config", "--show-origin", "-z", "--get-regexp", "^credential\\..*helper$")
 UV_CHECK = ("uv", "sync", "--locked", "--check", "--offline")
 CLEAN_URL, USER_URL = "https://github.com/x/y.git\n", "https://u@github.com/x/y.git\n"
 

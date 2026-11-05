@@ -220,29 +220,40 @@ def effective_helpers(values: list[str]) -> tuple[str, ...]:
     return tuple(helpers)
 
 
-def parse_git_helpers(stdout: str) -> tuple[str, ...] | None:
-    """`git config --show-origin --get-regexp "^credential\\..*helper$"` (contract v1.6).
+def config_entries(stdout: str, prefix: str, suffix: str) -> list[tuple[str, str | None]] | None:
+    """`git config --show-origin -z --get-regexp <pattern>` as (key, value) pairs (contract v1.7).
 
-    Each line is "<origin>\\t<key> <value>"; an empty value prints the key and a space. Keys are
-    the plain credential.helper and URL-scoped credential.<url>.helper. The reset rule is applied
-    per key (an empty value clears that key's earlier helpers), which never clears more than git
-    does; every helper still in effect for any key is returned.
-
-    Review r2 F18: only an exactly empty value is a reset (a space or a tab is a helper to git), so
-    values are never stripped. Git prints a value with a line break as it is, so a line without a
-    tab means the output cannot be split into entries: None (UNKNOWN). A key printed alone (written
-    without "=") counts as a helper. Keys are kept as printed: git lowercases the section and the
-    variable name, and the URL part is case-sensitive."""
-    lines = stdout.split("\n")
-    if lines[-1] == "":
-        lines.pop()
-    per_key: dict[str, list[str]] = {}
-    for line in lines:
-        _, tab, entry = line.partition("\t")
-        if not tab:
+    Each entry is <origin> NUL <key> LF <value> NUL, or <origin> NUL <key> NUL for a key written
+    without "=" (value None). Values can hold line breaks but never NUL, so the split is exact
+    (review r2 F18). Output that does not split into such pairs, or a key outside prefix...suffix,
+    is None (UNKNOWN)."""
+    parts = stdout.split("\0")
+    if parts[-1] != "" or len(parts) % 2 == 0:
+        return None
+    entries: list[tuple[str, str | None]] = []
+    for origin, item in zip(parts[0:-1:2], parts[1:-1:2]):
+        key, sep, value = item.partition("\n")
+        if not origin or not key.startswith(prefix) or not key.endswith(suffix):
             return None
-        key, sep, value = entry.partition(" ")
-        per_key.setdefault(key, []).append(value if sep else NO_VALUE)
+        entries.append((key, value if sep else None))
+    return entries
+
+
+def parse_git_helpers(stdout: str) -> tuple[str, ...] | None:
+    """`git config --show-origin -z --get-regexp "^credential\\..*helper$"` (contract v1.7).
+
+    Keys are the plain credential.helper and URL-scoped credential.<url>.helper. The reset rule is
+    applied per key (an empty value clears that key's earlier helpers), which never clears more than
+    git does; every helper still in effect for any key is returned. Review r2 F18: only an exactly
+    empty value is a reset (a space, a tab or a multi-line value is a helper to git), a key written
+    without "=" counts as a helper, and keys are kept as printed (git lowercases the section and the
+    variable name; the URL part is case-sensitive)."""
+    entries = config_entries(stdout, "credential.", ".helper")
+    if entries is None:
+        return None
+    per_key: dict[str, list[str]] = {}
+    for key, value in entries:
+        per_key.setdefault(key, []).append(NO_VALUE if value is None else value)
     return tuple(helper for values in per_key.values() for helper in effective_helpers(values))
 
 
@@ -664,7 +675,7 @@ Runner = Callable[..., subprocess.CompletedProcess | None]
 
 
 def credential_helpers(repo: Path, run: Runner = _run) -> tuple[str, ...] | None:
-    done = run(["git", "config", "--show-origin", "--get-regexp", r"^credential\..*helper$"], cwd=repo)
+    done = run(["git", "config", "--show-origin", "-z", "--get-regexp", r"^credential\..*helper$"], cwd=repo)
     return None if done is None else helpers_from_git(done.returncode, done.stdout)
 
 
