@@ -141,7 +141,7 @@ def _summary(findings: list[str]) -> str:
 
 
 def is_cloud_only(path) -> bool:
-    """A OneDrive Files On-Demand placeholder: opening it would download the file (os.stat only)."""
+    """A cloud-only file (OneDrive Files On-Demand): opening it would download it, so only os.stat is used."""
     return bool(getattr(os.stat(path), "st_file_attributes", 0) & RECALL_ATTRIBUTES)
 
 

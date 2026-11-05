@@ -4,8 +4,8 @@ Run by the owner in the vault folder on the VPS, with no arguments (standard lib
 nothing of sochron):
   python scripts\\env\\make_sentinel.py      (or: uv run --no-project python <repo>\\scripts\\env\\make_sentinel.py)
 
-It writes one file, SENTINEL-ENV002-<first 8 token characters>.json, holding a random token and 60 fake
-M1 bars from 2025-01-02T00:00:00Z (inside the excluded period, marked "synthetic"), and prints the six
+It writes one file, SENTINEL-ENV002-<first 8 token characters>.json, holding a random token and 60
+synthetic M1 bars from 2025-01-02T00:00:00Z (inside the excluded period, marked "synthetic"), and prints the six
 values Claude commits as docs/evidence/ENV-002-sentinel.json: name, size, sha256, token, vault_path and
 created_utc. The owner copies the printed text, never the file. The file is not real market data.
 """
