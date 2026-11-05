@@ -94,17 +94,22 @@ PS> net accounts /lockoutthreshold:5 /lockoutduration:30 /lockoutwindow:30
    PS> uv sync --locked --python 3.12.15
    ```
    ทำขั้นนี้แบบออนไลน์ก่อนคำสั่ง offline ใดๆ · สองบรรทัด `Select-String` ต้องพิมพ์บรรทัดที่มี flag นั้นออกมา
-3. **ส่งให้ Claude:** ผลของ `uv --version`, SHA-256 จาก `Get-FileHash` และผลของสองบรรทัด `Select-String` · Claude ตั้ง `EXPECTED_UV` และแถวใน `docs/tooling/registry.md` แล้วบอกให้คุณรัน `git pull`
+3. **ส่งให้ Claude:** ผลของ `uv --version`, SHA-256 จาก `Get-FileHash` และผลของสองบรรทัด `Select-String` · Claude ตั้ง `EXPECTED_UV` และแถวใน `docs/tooling/registry.md`, push branch `chore/ENV-001-vps-acquisition-host` แล้วส่ง **hash ของ commit ที่ตรวจแล้ว** ให้คุณ (`host_report.py` ยังไม่อยู่ใน `main` จนกว่าจะ merge หลังได้หลักฐาน)
 
 ## 6. ตรวจเครื่อง (AC-01, PowerShell ธรรมดา ที่ `C:\Sochron1k`)
 1. ตรวจชื่อ rule DHCP ก่อนทำตามคำแนะนำใดๆ แล้วส่งผลให้ Claude:
    ```powershell
    PS> Get-NetFirewallRule -Name CoreNet-DHCP-In,CoreNet-DHCPV6-In | Select-Object Name, Enabled
    ```
-2. ```powershell
-   PS> git pull
+2. ดึง commit ที่ตรวจแล้วจาก Claude (ขั้นที่ 5.3) แล้วรัน host_report:
+   ```powershell
+   PS> git fetch origin chore/ENV-001-vps-acquisition-host
+   PS> git switch --detach <hash ที่ Claude ให้>
+   PS> git rev-parse --short HEAD
+   PS> git status --short
    PS> uv run --no-sync --offline python scripts/env/host_report.py --role acquisition --repo .
    ```
+   `git rev-parse` ต้องพิมพ์ hash เดียวกับที่ Claude ให้ และ `git status --short` ต้องไม่พิมพ์อะไร · ถ้าไม่ตรง หยุดแล้วส่งผลให้ Claude · ถ้า Claude ส่ง hash ใหม่ (เช่น หลังแก้ตามรายงาน) ให้ทำสี่บรรทัดแรกซ้ำด้วย hash ใหม่ · หลัง PR merge แล้วใช้ `git switch main` และ `git pull` แทน
 - บรรทัดสุดท้ายต้องเป็น `HOST REPORT: PASS` · ถ้าเป็น FAIL ทำตามคำแนะนำในคอลัมน์ Detail ทีละข้อแล้วรันใหม่ (ตามกฎกันล็อกตัวเอง) · ส่วนหลัง `#` ในคำแนะนำเป็นคำอธิบาย ไม่ต้องพิมพ์ · `|` ท้ายแถวเป็นเส้นขอบตาราง ไม่ใช่ส่วนของคำสั่ง: ก๊อปแค่คำสั่งหลัง `->` ถึง `""` (ถ้าติด `|` มาด้วย PowerShell จะไม่รันและขึ้นว่า empty pipe element) · rule ที่ชื่อถูกบังไว้ (มี path หรือที่อยู่) ให้หาจาก `Get-NetFirewallRule` บน VPS · **rule ชื่อ `CoreNet-DHCP*` ห้ามปิด ให้ส่งให้ Claude แทน** · บันทึกรายการ rule ที่คุณปิดหรือแก้
 - รายงานไม่มี IP เต็ม (แสดงแค่จำนวนรายการและความยาว prefix)
 - **ทดสอบ drift (หลังได้ PASS):**
