@@ -179,8 +179,35 @@ def test_url_scoped_helper_is_found():
     assert hr.parse_git_helpers(SYSTEM + GLOBAL_RESET + URL_HELPER) == ("!gh auth git-credential",)
 
 
+GLOBAL = "file:C:/Users/owner/.gitconfig\t"
+MULTI_LINE = SYSTEM + GLOBAL + "credential.helper \n!probe\n"  # a value that starts with a newline
+
+
+@pytest.mark.parametrize("stdout, expected", [
+    # Review r2 F18, the cases of its driver/git_probe.py: git resets only on an exactly empty value.
+    (SYSTEM + GLOBAL + "credential.helper  \n", ("manager", " ")),  # A1: one space
+    (SYSTEM + GLOBAL + "credential.helper    \n", ("manager", "   ")),  # A: three spaces
+    (SYSTEM + GLOBAL + "credential.helper \t\n", ("manager", "\t")),  # I: a tab
+    (MULTI_LINE, None),  # B: the second line of the value has no tab
+    (SYSTEM + GLOBAL + "credential.helper \n\n", None),  # a value that is one newline
+    (GLOBAL + "credential.https://example.invalid/Foo.helper store\n"
+     + GLOBAL + "credential.https://example.invalid/foo.helper \n", ("store",)),  # D: URL paths are case-sensitive
+    (SYSTEM + GLOBAL_RESET, ()),  # A0: an exactly empty value is git's reset
+])
+def test_only_an_exactly_empty_value_resets(stdout, expected):
+    assert hr.parse_git_helpers(stdout) == expected
+
+
+def test_a_key_without_a_value_counts_as_a_helper():
+    # F18 case C: "[credential] helper" with no "=" prints the key alone; git then refuses to run,
+    # and the parser keeps it as a helper (fails closed).
+    helpers = hr.parse_git_helpers(SYSTEM + GLOBAL + "credential.helper\n")
+    assert helpers is not None and len(helpers) == 2 and helpers[0] == "manager"
+
+
 @pytest.mark.parametrize("returncode, stdout, expected", [
     (0, SYSTEM, ("manager",)), (1, "", ()), (1, "error text", None), (128, "", None), (None, "", None),
+    (0, MULTI_LINE, None),  # F18: a value that cannot be read is unknown
 ])
 def test_git_exit_codes(returncode, stdout, expected):
     # M20: only "no key matched" (exit 1, nothing printed) means no helper.

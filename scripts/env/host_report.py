@@ -203,6 +203,9 @@ def parse_uv_version(text: str) -> str | None:
     return None
 
 
+NO_VALUE = "<no value>"  # a helper key written without "=" (review r2 F18 case C)
+
+
 def effective_helpers(values: list[str]) -> tuple[str, ...]:
     """Git's rule: an empty credential.helper value clears the helpers listed before it."""
     helpers: list[str] = []
@@ -214,20 +217,29 @@ def effective_helpers(values: list[str]) -> tuple[str, ...]:
     return tuple(helpers)
 
 
-def parse_git_helpers(stdout: str) -> tuple[str, ...]:
+def parse_git_helpers(stdout: str) -> tuple[str, ...] | None:
     """`git config --show-origin --get-regexp "^credential\\..*helper$"` (contract v1.6).
 
     Each line is "<origin>\\t<key> <value>"; an empty value prints the key and a space. Keys are
     the plain credential.helper and URL-scoped credential.<url>.helper. The reset rule is applied
     per key (an empty value clears that key's earlier helpers), which never clears more than git
-    does; every helper still in effect for any key is returned."""
+    does; every helper still in effect for any key is returned.
+
+    Review r2 F18: only an exactly empty value is a reset (a space or a tab is a helper to git), so
+    values are never stripped. Git prints a value with a line break as it is, so a line without a
+    tab means the output cannot be split into entries: None (UNKNOWN). A key printed alone (written
+    without "=") counts as a helper. Keys are kept as printed: git lowercases the section and the
+    variable name, and the URL part is case-sensitive."""
+    lines = stdout.split("\n")
+    if lines[-1] == "":
+        lines.pop()
     per_key: dict[str, list[str]] = {}
-    for line in stdout.splitlines():
-        if not line.strip():
-            continue
-        entry = line.split("\t", 1)[1] if "\t" in line else line
-        key, _, value = entry.partition(" ")
-        per_key.setdefault(key.lower(), []).append(value.strip())
+    for line in lines:
+        _, tab, entry = line.partition("\t")
+        if not tab:
+            return None
+        key, sep, value = entry.partition(" ")
+        per_key.setdefault(key, []).append(value if sep else NO_VALUE)
     return tuple(helper for values in per_key.values() for helper in effective_helpers(values))
 
 
