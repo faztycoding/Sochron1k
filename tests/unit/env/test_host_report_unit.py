@@ -503,6 +503,17 @@ def test_forward_slash_and_device_paths_are_masked():
     assert "'TCP Query User{5A0E}<path>'" in text and "'Allow <path>'" in text
 
 
+def test_lowercase_and_slash_only_paths_are_masked():
+    # Review r4 N3: a lowercase drive letter, an MSYS-style /c/... path and a //server/... path.
+    names = ("TCP Query User{5A0E}c:\\users\\First Last\\app.exe", "Allow /c/Users/First Last/app.exe",
+             "Allow //fileserver/Users/First Last/app.exe")
+    rules = [rule(name, "TCP", ("445",), ("Any",)) for name in names]
+    text = detail(hr.evaluate(valid_facts((RDP, *rules))), "inbound")
+    for leak in ("users", "Users", "Last", "fileserver"):
+        assert leak not in text
+    assert "'TCP Query User{5A0E}<path>'" in text and text.count("'Allow <path>'") == 4  # label and advice, twice
+
+
 def test_names_with_ipv6_addresses_are_masked():
     # Review r2 F21 (c): removing the IPv6 mask (N15) went unnoticed.
     provider = rule("Allow-mgmt-2001:db8::5", "TCP", ("5985",), ("Any",))
