@@ -17,7 +17,7 @@ Contract: `docs/contracts/ENV-001-vps-acquisition-host.md` (v1.6) · ผู้�
 - ส่งให้ Claude: ชื่อผู้ให้บริการ, แพ็กเกจ, ราคา/เดือน, ผลตรวจ CGNAT (ตรง/ไม่ตรง)
 
 ## 1. ชั้นนอก: firewall ของผู้ให้บริการ และบัญชี
-1. ใน console ของผู้ให้บริการ ตั้ง rule ขาเข้า: อนุญาต **TCP 3389** (และ UDP 3389 ถ้ามีให้เลือก) จาก **IPv4 บ้านของคุณ** (หรือ subnet ของ VPN) เท่านั้น · พอร์ตอื่นปิดทั้งหมด · ถ้า VPS มี IPv6 สาธารณะ ให้ปิด IPv6 ที่ผู้ให้บริการ หรือทำ rule แบบเดียวกันให้ IPv6 ด้วย
+1. ใน console ของผู้ให้บริการ ตั้ง rule ขาเข้า: อนุญาต **TCP 3389** (และ UDP 3389 ถ้ามีให้เลือก) จาก **IPv4 บ้านของคุณ** (หรือ subnet ของ VPN) เท่านั้น · พอร์ตอื่นปิดทั้งหมด · IPv6: ข้อ 5 จะตรวจว่า VPS มี IPv6 สาธารณะหรือไม่ ถ้ามี ให้กลับมาข้อนี้แล้วปิด IPv6 ที่ผู้ให้บริการ หรือทำ rule แบบเดียวกันให้ IPv6
 2. RDP เข้า VPS ด้วยบัญชีที่ผู้ให้บริการให้มา · **ไม่บันทึกรหัส RDP** ในเครื่องคุณ (ไม่ติ๊ก "Remember me")
 3. **สร้างบัญชี admin ของคุณเอง** (PowerShell แบบ Administrator) แล้วใช้บัญชีนี้ RDP ต่อจากนี้ (lockout คุ้มครองบัญชีนี้แน่นอน):
    ```powershell
@@ -28,7 +28,7 @@ Contract: `docs/contracts/ENV-001-vps-acquisition-host.md` (v1.6) · ผู้�
    ```
    เปิด RDP session ที่สองด้วยบัญชีใหม่ให้ได้ก่อน แล้วจึงปิดบัญชีเดิม: `Disable-LocalUser -Name Administrator` (ถ้าบัญชีที่ผู้ให้บริการให้ชื่ออื่น ใช้ชื่อนั้น)
 4. รัน Windows Update จนไม่มีอะไรค้าง แล้ว restart (ตามกฎกันล็อกตัวเอง)
-5. ตรวจ IPv6 (PowerShell ธรรมดา): `Get-NetIPAddress -AddressFamily IPv6 | Where-Object { $_.PrefixOrigin -ne 'WellKnown' -and $_.IPAddress -notlike 'fe80*' } | Select-Object InterfaceAlias, PrefixOrigin` · ส่งให้ Claude ว่ามีหรือไม่มี (ไม่ต้องส่งตัวที่อยู่)
+5. ตรวจ IPv6 (PowerShell ธรรมดา): `Get-NetIPAddress -AddressFamily IPv6 | Where-Object { $_.PrefixOrigin -ne 'WellKnown' -and $_.IPAddress -notlike 'fe80*' } | Select-Object InterfaceAlias, PrefixOrigin` · ส่งให้ Claude ว่ามีหรือไม่มี (ไม่ต้องส่งตัวที่อยู่) · **ถ้ามี:** กลับไปทำส่วน IPv6 ของข้อ 1 ก่อนไปขั้นที่ 2
 
 ## 2. ชั้นใน: firewall ของ Windows (PowerShell แบบ Administrator บน VPS)
 ทำตามลำดับนี้ห้ามสลับ:
@@ -127,8 +127,11 @@ PS> net accounts /lockoutthreshold:5 /lockoutduration:30 /lockoutwindow:30
    ```
    ผลที่ถูก: 3389 เป็น True · พอร์ตอื่นเป็น False ทั้งหมด
 2. จากเครือข่ายอื่นที่ไม่อยู่ใน allowlist (เช่น เปิด hotspot มือถือแล้วต่อโน้ตบุ๊ก): รันเฉพาะพอร์ต 3389 → ต้องเป็น **False**
-3. ถ้า VPS มี IPv6 สาธารณะ (ขั้นที่ 1.5): ทำข้อ 1–2 ซ้ำกับที่อยู่ IPv6 นั้น
-4. **ส่งให้ Claude:** ผลทุกชุด (ปิดบัง IP), รายการ rule ใน firewall ของผู้ให้บริการ (ปิดบัง IP), ผลตรวจ CGNAT · ถ้าเป็น CGNAT ให้ทำขั้นนี้ใหม่ผ่าน VPN
+3. IPv6 (ทำเมื่อขั้นที่ 1.5 พบ IPv6 สาธารณะ):
+   1. ตรวจก่อนว่าเครื่องคุณออก IPv6 ได้ (ปลายทางนี้มีแต่ IPv6): `Test-NetConnection ipv6.google.com -Port 443 -WarningAction SilentlyContinue | Select-Object TcpTestSucceeded`
+   2. ถ้าเป็น True: รันคำสั่งของข้อ 1 กับที่อยู่ IPv6 ของ VPS → ผลที่ถูก: **ทั้ง 7 พอร์ตเป็น False** เพราะ scope ของ Windows ในขั้นที่ 2.2 มีแค่ที่อยู่ที่ VPS เห็นตอนนั้น (ปกติเป็น IPv4) · ยกเว้นคุณใส่ IPv6 ของบ้านไว้ทั้งใน firewall ของผู้ให้บริการและใน scope ของ Windows: 3389 จึงเป็น True ได้ ส่วนพอร์ตอื่นต้องเป็น False · ถ้า hotspot ของข้อ 2 ออก IPv6 ได้ (ตรวจแบบข้อ 3.1) ให้ลอง 3389 กับที่อยู่ IPv6 ด้วย → ต้องเป็น False
+   3. ถ้าเป็น False (เครื่องคุณไม่มี IPv6): ผล "False ทุกพอร์ต" ไม่ได้พิสูจน์อะไร ให้บันทึกว่า **"IPv6 ไม่ได้ทดสอบ"** แล้วส่ง rule IPv6 ของผู้ให้บริการ หรือหลักฐานว่าปิด IPv6 ที่ผู้ให้บริการแล้วแทน
+4. **ส่งให้ Claude:** ผลทุกชุด (ปิดบัง IP), ผลของข้อ 3.1 (หรือ "IPv6 ไม่ได้ทดสอบ"), รายการ rule ใน firewall ของผู้ให้บริการ (ปิดบัง IP), ผลตรวจ CGNAT · ถ้าเป็น CGNAT ให้ทำขั้นนี้ใหม่ผ่าน VPN
 
 ## 8. ทดสอบช่องทางไฟล์ (AC-04)
 1. ก่อนเชื่อม: เปิด mstsc → Show Options → Local Resources → More… → **ติ๊ก Drives** (ขอ redirect ทุกไดรฟ์ เพื่อทดสอบว่า VPS ปฏิเสธ) → Printers ติ๊กไว้ด้วย → Connect
@@ -169,6 +172,6 @@ PS> net accounts /lockoutthreshold:5 /lockoutduration:30 /lockoutwindow:30
 | 1 | มีหรือไม่มี IPv6 สาธารณะ, ยืนยันว่าสร้างบัญชี admin ใหม่และปิดบัญชีเดิมแล้ว |
 | 5 | `uv --version`, SHA-256 ของ uv, ผล `Select-String` สองบรรทัด |
 | 6 | ชื่อ rule DHCP, รายงาน host_report รอบ PASS, ผล drift test, rule ที่ปิดหรือแก้ |
-| 7 | ผล Test-NetConnection ทุกชุด, rule ของผู้ให้บริการ (ปิดบัง IP) |
+| 7 | ผล Test-NetConnection ทุกชุด, ผลตรวจ IPv6 ของเครื่องคุณ (หรือ "IPv6 ไม่ได้ทดสอบ"), rule ของผู้ให้บริการ (ปิดบัง IP) |
 | 8 | ผลทดสอบช่องทางไฟล์และ printer |
 | 9 | คำยืนยันของ checklist terminal |
