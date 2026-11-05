@@ -577,14 +577,16 @@ def _python_env(f: Facts) -> tuple[str, str]:
 
 
 def _git(f: Facts) -> tuple[str, str]:
+    # The helper advice comes last and ends with its command: after `--%` PowerShell passes the
+    # rest of the line to git, so nothing may follow it (review r2 F19).
     failures = []
-    if f.git_credential_helpers:
-        failures.append(f"{len(f.git_credential_helpers)} credential helper(s) in effect "
-                        f"({helper_kinds(f.git_credential_helpers)}; values not shown) -> "
-                        "git config --global credential.helper --% \"\"  # and remove any credential.<url>.helper "
-                        "listed by: git config --show-origin --get-regexp \"^credential\\..*helper$\"")
     if f.remote_has_userinfo is True:
         failures.append("a remote URL carries user information -> clone again over HTTPS without it")
+    if f.git_credential_helpers:
+        failures.append(f"{len(f.git_credential_helpers)} credential helper(s) in effect "
+                        f"({helper_kinds(f.git_credential_helpers)}; values not shown); also remove any "
+                        "credential.<url>.helper that git config --show-origin --get-regexp "
+                        "\"^credential\\..*helper$\" lists -> git config --global credential.helper --% \"\"")
     unknown = f.git_credential_helpers is None or f.remote_has_userinfo is None
     return _known_status(failures, unknown, "no credential helper; remote URLs without user information")
 

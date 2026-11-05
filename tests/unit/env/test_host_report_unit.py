@@ -242,6 +242,15 @@ def test_git_detail_names_kinds_not_values():
     assert 'git config --global credential.helper --% ""' in text  # F2: works in Windows PowerShell 5.1
 
 
+@pytest.mark.parametrize("userinfo", [False, True])
+def test_git_advice_ends_with_the_command(userinfo):
+    # Review r2 F19: after `--%` PowerShell passes the rest of the line to git, so nothing may follow it.
+    facts = replace(valid_facts(), git_credential_helpers=("manager",), remote_has_userinfo=userinfo)
+    text = detail(hr.evaluate(facts), "git")
+    assert text.endswith(' -> git config --global credential.helper --% ""')
+    assert text.count("--%") == 1
+
+
 # ---- secrets and holdout (tests review r1 Q1) --------------------------------------------------------
 @pytest.mark.parametrize("name, expected", [
     (".env.example", False), (".ENV.EXAMPLE", False), (".env", True), (".env.local", True), (".ENV", True),
