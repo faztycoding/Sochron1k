@@ -153,7 +153,11 @@ PS> net accounts /lockoutthreshold:5 /lockoutduration:30 /lockoutwindow:30
 2. ทำไฟล์ .rdp ที่ redirect **เฉพาะ T:**: เปิด mstsc → Show Options → Local Resources → More… → ใต้ Drives ติ๊ก**เฉพาะ T:** → OK → แท็บ General → Save As → เก็บไว้**นอก repo** (เช่น Documents)
 3. บน VPS (Administrator): `Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name fDisableCdm -Value 0` แล้วตัดการเชื่อม
 4. เชื่อมด้วยไฟล์ .rdp จากข้อ 2 · คัดลอก**เฉพาะไฟล์ที่อยู่ใน manifest ที่ `period_end_utc` ≤ 2025-01-01** ไปที่ T: · ตัดการเชื่อม
-5. เชื่อมแบบปกติ แล้วบน VPS (Administrator): `Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name fDisableCdm -Value 1` · บนเครื่องคุณ: `subst T: /d`
+5. ปิดช่องทางไฟล์กลับ:
+   - ก่อนเชื่อม: เปิด mstsc → Show Options → Local Resources → More… → **เอาติ๊กไดรฟ์ออกทุกตัว** (การเชื่อมแบบปกติของ mstsc อาจจำ T: จากข้อ 2 ไว้ และตอนนี้ VPS ยังยอมรับไดรฟ์อยู่) → Connect
+   - บน VPS (Administrator): `Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name fDisableCdm -Value 1`
+   - ตัดการเชื่อม แล้วเชื่อมใหม่ · บน VPS เปิด File Explorer พิมพ์ `\\tsclient` → **ต้องไม่มีไดรฟ์**
+   - บนเครื่องคุณ: `subst T: /d`
 6. รัน `host_report.py` บน VPS (ต้อง PASS) และ envcheck ของ ENV-002 บนเครื่องคุณ (ต้อง PASS)
 7. **ส่งให้ Claude:** วันที่, รายการไฟล์และ SHA-256, ผลของตัวตรวจทั้งสอง
 (ต้องยืนยันก่อนใช้จริงว่า mstsc redirect ไดรฟ์จาก `subst` ได้ ถ้าไม่ได้ ใช้ไดรฟ์ VHD ขนาดเล็กที่ mount ไว้ที่โฟลเดอร์เดียวกันแทน)
