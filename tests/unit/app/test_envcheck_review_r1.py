@@ -103,9 +103,10 @@ def test_f1_repo_files_under_a_data_dir_follow_the_data_rules(tmp_path, monkeypa
 
 # ---- F2 and F3: reparse points ---------------------------------------------------------------------------------------
 class _Entry:
-    def __init__(self, path: Path, *, junction=False, symlink=False, directory=False, broken=False):
+    def __init__(self, path: Path, *, junction=False, symlink=False, directory=False, broken=False, no_stat=False):
         self.path, self.name = str(path), path.name
         self._junction, self._symlink, self._directory, self._broken = junction, symlink, directory, broken
+        self._no_stat = no_stat
 
     def is_junction(self):
         return self._junction
@@ -122,7 +123,7 @@ class _Entry:
         return not self._directory
 
     def stat(self, follow_symlinks=True):
-        if self._broken:
+        if self._broken or self._no_stat:
             raise PermissionError(13, "denied", self.path)
         return os.stat(self.path)
 
@@ -231,7 +232,7 @@ def _fake_kernel32(monkeypatch, names, *, first_ok=True, last_error=18):
         Process32NextW=_Fn(lambda handle, ref: fill(ref)),
         CloseHandle=_Fn(lambda handle: 1))
     monkeypatch.setattr(ec.ctypes, "WinDLL", lambda name, use_last_error=False: kernel32, raising=False)
-    monkeypatch.setattr(ec.ctypes, "get_last_error", lambda: last_error)
+    monkeypatch.setattr(ec.ctypes, "get_last_error", lambda: last_error, raising=False)  # r2 F12: Windows only
     monkeypatch.setattr(ec.ctypes, "WinError", lambda code=None: OSError(code, "fake WinError"), raising=False)
 
 
@@ -488,3 +489,73 @@ def test_f10_make_sentinel_never_overwrites_and_prints_a_time(tmp_path, monkeypa
         module.main()
     assert (tmp_path / values["name"]).read_bytes() == before
     assert isinstance(io.BytesIO(before).read(), bytes)
+
+
+# ---- implementation review r2 ------------------------------------------------------------------------------------------
+def test_r2_f10_a_search_dir_json_whose_size_cannot_be_read_is_unknown(tmp_path, monkeypatch):
+    # M46 proper: the entry's kind is readable, only its stat is refused.
+    repo, desktop = tmp_path / "repo", tmp_path / "Desktop"
+    repo.mkdir()
+    touch(desktop / "export.json", SENTINEL_BYTES)
+    real = os.scandir
+
+    def scandir(path):
+        with real(path) as listing:
+            entries = list(listing)
+        if ec._norm(path) == ec._norm(desktop):
+            entries = [_Entry(Path(entry.path), no_stat=True) for entry in entries]
+        return _Listing(entries)
+
+    monkeypatch.setattr(os, "scandir", scandir)
+    found, _ = judge(monkeypatch, roots(tmp_path, repo, search_dirs=(desktop,)), sentinel(tmp_path))
+    assert found["sentinel"] == ec.UNKNOWN
+
+
+def test_r2_f13_a_relative_root_below_a_terminal_folder_is_never_opened(tmp_path, monkeypatch):
+    repo, terminal = tmp_path / "repo", tmp_path / "MT5"
+    repo.mkdir()
+    touch(terminal / "terminal64.exe", b"MZ")
+    touch(terminal / "MQL5" / "Files" / "notes.txt", f"{TOKEN}\n")
+    monkeypatch.chdir(terminal / "MQL5")
+    with K.recording() as audit:
+        found, _ = judge(monkeypatch, roots(tmp_path, repo, (repo / "data", Path("Files"))), sentinel(tmp_path))
+    assert not {path for path in audit.opened() if path.startswith(ec._norm(terminal))}
+    assert found["sentinel"] == ec.UNKNOWN
+
+
+def test_r2_f14_a_search_dir_behind_a_junction_under_another_is_walked(tmp_path, monkeypatch):
+    repo, onedrive = tmp_path / "repo", tmp_path / "OneDrive"
+    repo.mkdir()
+    onedrive.mkdir()
+    target = tmp_path / "D-drive" / "Docs"
+    touch(target / "export.json", SENTINEL_BYTES)
+    docs = onedrive / "Docs"  # a junction to target in OneDrive; given as its own search dir
+    real = os.scandir
+
+    def scandir(path):
+        key = ec._norm(path)
+        if key == ec._norm(docs):
+            return real(target)  # what Windows lists through the junction
+        with real(path) as listing:
+            entries = list(listing)
+        if key == ec._norm(onedrive):
+            entries.append(_Entry(docs, junction=True, directory=True))
+        return _Listing(entries)
+
+    monkeypatch.setattr(os, "scandir", scandir)
+    monkeypatch.setattr(ec, "_kind", lambda path: "dir")
+    for order in ((onedrive, docs), (docs, onedrive)):
+        found, _ = judge(monkeypatch, roots(tmp_path, repo, search_dirs=order), sentinel(tmp_path))
+        assert found["sentinel"] == ec.FAIL
+
+
+@pytest.mark.parametrize("relative", [".env.json", "values.key", "MT5/values.json", "AppData/Roaming/MetaQuotes/v.json"])
+def test_r2_f15_the_cli_never_opens_a_closed_values_file(tmp_path, monkeypatch, relative):
+    touch(tmp_path / "MT5" / "terminal64.exe", b"MZ")
+    path = touch(tmp_path / relative, json.dumps({**GOOD}))
+    monkeypatch.setattr(ec, "is_cloud_only", lambda path: False)
+    with K.recording() as audit:
+        sentinel_value, note = ec.load_sentinel(path, appdata=tmp_path / "AppData" / "Roaming")
+    assert sentinel_value is None and note and ec._norm(path) not in audit.opened()
+    control = touch(tmp_path / "docs" / "values.json", json.dumps(GOOD))
+    assert ec.load_sentinel(control, appdata=tmp_path / "AppData" / "Roaming")[0] is not None

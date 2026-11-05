@@ -166,7 +166,8 @@ def _exists(path) -> bool | None:
 def _below_terminal(root: Path) -> bool:
     """Whether a folder above root holds terminal64.exe (v1.9 F6), by stat of that one name, never listing.
     A stat that fails for another reason than "not there" counts as a terminal: nothing below is opened."""
-    return any(_exists(ancestor / TERMINAL) is not False for ancestor in Path(root).parents)
+    absolute = Path(os.path.abspath(root))  # r2 F13: a relative root's parents end at the cwd
+    return any(_exists(ancestor / TERMINAL) is not False for ancestor in absolute.parents)
 
 
 def is_cloud_only(path) -> bool:
@@ -244,7 +245,8 @@ class _Search:
     def _plan(self, roots: ResearchRoots) -> list[tuple[Path, str, str]]:
         """Every data dir is its own root with the data rules (r1 F1); the repository follows the data rules
         when a data dir contains it. A search dir under the repository or a data dir is walked with them
-        (contract v1.5); one under another search dir is walked with that one."""
+        (contract v1.5). Every other search dir is its own root too (r2 F14): the outer walk does not enter a
+        junction, so a nested search dir behind one would otherwise be searched by nobody."""
         repo_key = _norm(self.repo)
         data: list[tuple[Path, str]] = []
         for folder in roots.data_dirs:
@@ -288,8 +290,7 @@ class _Search:
                 self._unlisted("search", folder, "does not exist" if kind == "missing" else "could not be read")
         searched: list[tuple[Path, str, str]] = []
         for folder, key in candidates:
-            nested = any(key != other and _within(key, other) for _, other in candidates)
-            if not nested and all(key != other for _, other, _ in searched):
+            if all(key != other for _, other, _ in searched):
                 searched.append((folder, key, "search"))
         return plan + searched
 
@@ -821,9 +822,17 @@ def require_research_host(*, roots: ResearchRoots | None = None, sentinel: Senti
     return report
 
 
-def load_sentinel(path) -> tuple[Sentinel | None, str | None]:
-    """(Sentinel, None) from the committed values file, or (None, why); the token is never echoed."""
-    path = Path(path)
+def load_sentinel(path, appdata=None) -> tuple[Sentinel | None, str | None]:
+    """(Sentinel, None) from the committed values file, or (None, why); the token is never echoed.
+    A file the read rules never open is not opened here either (r2 F15)."""
+    path = Path(os.path.abspath(path))
+    lower = path.name.lower()
+    if lower == ".env" or lower.startswith(".env.") or os.path.splitext(lower)[1] in CLOSED_SUFFIXES:
+        return None, f"the sentinel file {path} has a name that is never opened"
+    if _below_terminal(path):
+        return None, f"the sentinel file {path} is below a folder with terminal64.exe and is never opened"
+    if appdata is not None and _within(_norm(path), _norm(Path(appdata) / "MetaQuotes")):
+        return None, f"the sentinel file {path} is under %APPDATA%\\MetaQuotes and is never opened"
     try:
         if is_cloud_only(path):
             return None, f"the sentinel file {path} is cloud-only and was not opened"
@@ -866,14 +875,15 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     sentinel: Sentinel | None
     note: str | None
-    if args.sentinel_file is None:
-        sentinel, note = None, "no --sentinel-file given"
-    else:
-        sentinel, note = load_sentinel(args.sentinel_file)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="replace")
     try:
-        report = research_host_report(roots=default_roots(tuple(args.data_dir)), sentinel=sentinel)
+        roots = default_roots(tuple(args.data_dir))
+        if args.sentinel_file is None:
+            sentinel, note = None, "no --sentinel-file given"
+        else:
+            sentinel, note = load_sentinel(args.sentinel_file, appdata=roots.appdata)
+        report = research_host_report(roots=roots, sentinel=sentinel)
     except OSError as error:  # v1.9 F5: the check could not run; never a traceback or a PASS
         print(f"# ENV-002 research host check\n\nnote: the check could not run: {error}\n\nRESEARCH HOST: {UNKNOWN}")
         return 1
