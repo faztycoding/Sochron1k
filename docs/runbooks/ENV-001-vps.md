@@ -105,7 +105,7 @@ PS> net accounts /lockoutthreshold:5 /lockoutduration:30 /lockoutwindow:30
    PS> git pull
    PS> uv run --no-sync --offline python scripts/env/host_report.py --role acquisition --repo .
    ```
-- บรรทัดสุดท้ายต้องเป็น `HOST REPORT: PASS` · ถ้าเป็น FAIL ทำตามคำแนะนำในคอลัมน์ Detail ทีละข้อแล้วรันใหม่ (ตามกฎกันล็อกตัวเอง) · ส่วนหลัง `#` ในคำแนะนำเป็นคำอธิบาย ไม่ต้องพิมพ์ · rule ที่ชื่อถูกบังไว้ (มี path หรือที่อยู่) ให้หาจาก `Get-NetFirewallRule` บน VPS · **rule ชื่อ `CoreNet-DHCP*` ห้ามปิด ให้ส่งให้ Claude แทน** · บันทึกรายการ rule ที่คุณปิดหรือแก้
+- บรรทัดสุดท้ายต้องเป็น `HOST REPORT: PASS` · ถ้าเป็น FAIL ทำตามคำแนะนำในคอลัมน์ Detail ทีละข้อแล้วรันใหม่ (ตามกฎกันล็อกตัวเอง) · ส่วนหลัง `#` ในคำแนะนำเป็นคำอธิบาย ไม่ต้องพิมพ์ · `|` ท้ายแถวเป็นเส้นขอบตาราง ไม่ใช่ส่วนของคำสั่ง: ก๊อปแค่คำสั่งหลัง `->` ถึง `""` (ถ้าติด `|` มาด้วย PowerShell จะไม่รันและขึ้นว่า empty pipe element) · rule ที่ชื่อถูกบังไว้ (มี path หรือที่อยู่) ให้หาจาก `Get-NetFirewallRule` บน VPS · **rule ชื่อ `CoreNet-DHCP*` ห้ามปิด ให้ส่งให้ Claude แทน** · บันทึกรายการ rule ที่คุณปิดหรือแก้
 - รายงานไม่มี IP เต็ม (แสดงแค่จำนวนรายการและความยาว prefix)
 - **ทดสอบ drift (หลังได้ PASS):**
   ```powershell
