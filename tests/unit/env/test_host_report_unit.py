@@ -481,6 +481,16 @@ def test_names_with_paths_or_addresses_are_masked():
     assert "is not printed" in text
 
 
+def test_forward_slash_and_device_paths_are_masked():
+    # Review r3 F30: a drive path written with "/" and an NT device path were printed whole.
+    names = ("TCP Query User{5A0E}C:/Users/First Last/app.exe", "Allow \\Device\\HarddiskVolume3\\Users\\First Last\\app.exe")
+    rules = [rule(name, "TCP", ("445",), ("Any",)) for name in names]
+    text = detail(hr.evaluate(valid_facts((RDP, *rules))), "inbound")
+    for leak in ("Users", "Last", "Device", "Harddisk"):
+        assert leak not in text
+    assert "'TCP Query User{5A0E}<path>'" in text and "'Allow <path>'" in text
+
+
 def test_names_with_ipv6_addresses_are_masked():
     # Review r2 F21 (c): removing the IPv6 mask (N15) went unnoticed.
     provider = rule("Allow-mgmt-2001:db8::5", "TCP", ("5985",), ("Any",))

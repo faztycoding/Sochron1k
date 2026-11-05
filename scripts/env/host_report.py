@@ -39,9 +39,10 @@ MIN_IPV6_PREFIX = 48
 # least as narrow as an IPv4 /24, i.e. /120.
 IPV4_IN_IPV6_BLOCKS = tuple(ipaddress.ip_network(n) for n in ("::ffff:0:0/96", "::/96", "64:ff9b::/96"))
 MIN_IPV4_IN_IPV6_PREFIX = 120
-# A drive path or a UNC path is masked to the end of the Name: Query User Names end with the
-# program path, and a path can hold spaces (review r2 F20).
-WINDOWS_PATH = re.compile(r"(?:[A-Za-z]:\\|\\\\)[\s\S]*")
+# A path is masked to the end of the Name: Query User Names end with the program path, and a path
+# can hold spaces (review r2 F20). It starts at a drive letter followed by "\" or "/", or at the
+# first backslash (UNC, \Device\..., %USERPROFILE%\...) (review r3 F30).
+WINDOWS_PATH = re.compile(r"(?:[A-Za-z]:[\\/]|\\)[\s\S]*")
 IPV4_LOOKALIKE = re.compile(r"\b([0-9]{1,3}\.){3}[0-9]{1,3}\b")
 IPV6_LOOKALIKE = re.compile(r"\b[0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{0,4}){2,7}")
 
