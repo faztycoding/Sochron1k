@@ -1,7 +1,7 @@
 # TASK ENV-002 — แยก research host ออกจาก terminal และ holdout พร้อม synthetic excluded-period sentinel
 
-Version v1.5 (v1 ร่าง 2026-10-25 → v1.1 ตอบ `docs/reviews/ENV-contracts-r1.md`: research identity และ break-it test (F1), OneDrive (F3), ความหมายของ "ผ่าน data" และงานที่ส่งต่อ (F7), คำสั่งที่รันได้จริง (F8), นิยามที่ผู้เขียน tests ต้องใช้ (F9), ขอบเขตของ excluded_period (F11), การค้น sentinel ที่ไม่อ่านไฟล์ลับ (F12), terminal ที่ติดตั้งที่อื่น (F13), ความสอดคล้อง (F20) → v1.2 ตอบ `docs/reviews/ENV-contracts-r2.md`: การประเมิน holdout เป็นงานส่งต่อ (F7), ที่อยู่ของตัวสร้างแท่งปลอม (F9), เอกสารที่แก้ตอนบันทึก ENV-1 ผ่าน (F20), โฟลเดอร์รับไฟล์ของ D-021 (F29), shell folder/ขอบเขตของ hash/token (F30), ความเสี่ยงของ RDP ที่เปิดอยู่ (F32) → v1.3 ตอบ `docs/reviews/ENV-contracts-r3.md`: ขอบเขตการค้น token และไฟล์ cloud-only (F36), ขั้นตอนโหลด `synthetic.py` (F37), `ResearchRoots` ชุดเดียวของ R1 (F43 a), ป้ายเวอร์ชัน (F44) → v1.4 ตอบ `docs/reviews/ENV-contracts-r4.md` (ทุกข้อ Low): ไฟล์ cloud-only ใน repo/data dirs (F49), จุดที่ tests แทนและการดักการเปิดไฟล์ (F50) → v1.5 ตอบ `docs/reviews/ENV-contracts-r5.md` (Low): ไฟล์ที่อยู่ทั้งใต้ data dirs และ search_dirs (F51)) · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 6.1 ("ด่านก่อน SLICE-R1"), 9, 13a · D-017, D-019, D-020, D-021 (proposed) · Tier **High** · Branch `feat/ENV-002-research-host-separation`
-Status: **approved by owner 2026-10-25 17:5x** (v1.5 · เจ้าของตอบ "อนุมัติทั้งหมด" ในแชท Claude: contract นี้, การตัดสิน (ก)–(ง) ตามที่แนะนำ และ D-021 · review r5 ว่าพร้อม · ข้อ Low F51 ของ r5 แก้ใน v1.5 ให้ผู้ตรวจรอบถัดไปตรวจซ้ำ) · เริ่มได้หลัง ENV-001 และ SPIKE-002 ผ่าน
+Version v1.5 (v1 ร่าง 2026-10-25 → v1.1 ตอบ `docs/reviews/ENV-contracts-r1.md`: research identity และ break-it test (F1), OneDrive (F3), ความหมายของ "ผ่าน data" และงานที่ส่งต่อ (F7), คำสั่งที่รันได้จริง (F8), นิยามที่ผู้เขียน tests ต้องใช้ (F9), ขอบเขตของ excluded_period (F11), การค้น sentinel ที่ไม่อ่านไฟล์ลับ (F12), terminal ที่ติดตั้งที่อื่น (F13), ความสอดคล้อง (F20) → v1.2 ตอบ `docs/reviews/ENV-contracts-r2.md`: การประเมิน holdout เป็นงานส่งต่อ (F7), ที่อยู่ของตัวสร้างแท่งปลอม (F9), เอกสารที่แก้ตอนบันทึก ENV-1 ผ่าน (F20), โฟลเดอร์รับไฟล์ของ D-021 (F29), shell folder/ขอบเขตของ hash/token (F30), ความเสี่ยงของ RDP ที่เปิดอยู่ (F32) → v1.3 ตอบ `docs/reviews/ENV-contracts-r3.md`: ขอบเขตการค้น token และไฟล์ cloud-only (F36), ขั้นตอนโหลด `synthetic.py` (F37), `ResearchRoots` ชุดเดียวของ R1 (F43 a), ป้ายเวอร์ชัน (F44) → v1.4 ตอบ `docs/reviews/ENV-contracts-r4.md` (ทุกข้อ Low): ไฟล์ cloud-only ใน repo/data dirs (F49), จุดที่ tests แทนและการดักการเปิดไฟล์ (F50) → v1.5 ตอบ `docs/reviews/ENV-contracts-r5.md` (Low): ไฟล์ที่อยู่ทั้งใต้ data dirs และ search_dirs (F51) → **v1.6 ตอบคำถามของผู้เขียน tests (`docs/handoff/ENV-002.md` Q2–Q12) อนุมัติโดยการมอบอำนาจ 2026-11-05 15:0x:** ระดับของการค้น terminal และ helper ที่ทดสอบได้ (Q2, Q3), ไม่สนตัวพิมพ์ (Q4), data dir ที่ไม่มีอยู่ (Q5), ไฟล์ห้ามเปิดที่กฎค้นต้องเปิด = UNKNOWN (Q6), รายงานไม่พิมพ์ token (Q7), vault_path (Q8), `default_roots` และ `main` (Q9), ค้นรวม `.git`/`.venv` (Q11), ขอบเขตของตัวตรวจ AC-06 (Q12)) · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 6.1 ("ด่านก่อน SLICE-R1"), 9, 13a · D-017, D-019, D-020, D-021 (proposed) · Tier **High** · Branch `feat/ENV-002-research-host-separation`
+Status: **approved by owner 2026-10-25 17:5x; v1.6 approved by delegation 2026-11-05 15:0x** (v1.6: เจ้าของสั่ง 13:4x "อนุมัติตาม recommended ไปเลย" จึงใช้ทางที่แนะนำของ Q2–Q12 ทุกข้อ เลือกทาง fail-closed; เจ้าของ veto ได้ก่อน merge · branch จริงคือ `feat/ENV-002-research-host-separation` ตามหัวข้อนี้) · (v1.5 · เจ้าของตอบ "อนุมัติทั้งหมด" ในแชท Claude: contract นี้, การตัดสิน (ก)–(ง) ตามที่แนะนำ และ D-021 · review r5 ว่าพร้อม · ข้อ Low F51 ของ r5 แก้ใน v1.5 ให้ผู้ตรวจรอบถัดไปตรวจซ้ำ) · เริ่มได้หลัง ENV-001 และ SPIKE-002 ผ่าน
 Hypothesis (research tasks): ไม่ใช่งานวิจัย
 
 ด่าน ENV-1: ENV-001 → SPIKE-002 → **ENV-002**
@@ -53,6 +53,8 @@ sochron.app.envcheck   (stdlib · Windows-only API ผ่าน ctypes/winreg �
   evaluate(facts, roots, sentinel | None) -> Report     # อ่าน manifest JSON และไฟล์ที่ต้องค้น sentinel ตามกฎข้างล่าง
   research_host_report(*, roots=None, sentinel=None) -> Report       # = evaluate(collect(roots), roots, sentinel)
   require_research_host(*, roots=None, sentinel=None) -> Report      # ResearchHostError(ValueError) เมื่อ verdict ไม่ใช่ PASS พร้อมชื่อ item
+  (v1.6, Q9) default_roots(extra_data_dirs) -> ResearchRoots         # data_dirs = (<repo>/data, *extra_data_dirs) · ใช้เมื่อ roots เป็น None และใน CLI
+  (v1.6, Q9) main(argv) -> int                                        # CLI: พิมพ์ทุก item แล้วบรรทัดสุดท้าย "RESEARCH HOST: <verdict>" · exit 0 เฉพาะ PASS
   CLI (Git Bash):   PYTHONPATH=src uv run --offline python -m sochron.app.envcheck --role research --sentinel-file docs/evidence/ENV-002-sentinel.json [--data-dir <path> …]
       (PowerShell): $env:PYTHONPATH="src"; uv run --offline python -m sochron.app.envcheck --role research --sentinel-file docs/evidence/ENV-002-sentinel.json
       พิมพ์รายงาน + "RESEARCH HOST: PASS|FAIL|UNKNOWN" · exit 0 เฉพาะ PASS
@@ -60,6 +62,9 @@ Items:
   terminal_install  FAIL เมื่อพบอย่างใดอย่างหนึ่ง: โฟลเดอร์ `Program Files*\MetaTrader*` · `terminal64.exe` ในระดับ 1–2 ของ Program Files
                     · Uninstall entry (HKLM, HKCU, WOW6432Node) ที่ DisplayName มี "MetaTrader" · โปรเซส `terminal64.exe` ที่รันอยู่
                     · `terminal64.exe` ใต้ user profile ลึกไม่เกิน 3 ระดับ (ข้าม .git, .venv, node_modules)
+                    · (v1.6, Q3) ระดับ = จำนวนโฟลเดอร์ระหว่างรากกับไฟล์ (`<root>\terminal64.exe` = 0): Program Files* ระดับ 0–2,
+                      user profile ระดับ 0–3 · (Q4) "MetaTrader" และ `terminal64.exe` ไม่สนตัวพิมพ์ · (Q2) การค้น path อยู่ในฟังก์ชัน
+                      ระดับโมดูลที่รับโฟลเดอร์ราก (ไม่เรียก Windows API) ซึ่ง collect เรียก และมี unit test ใน `tests/unit/app/` บนโฟลเดอร์ชั่วคราว
   terminal_data     FAIL เมื่อ `%APPDATA%\MetaQuotes` มีอยู่ (ตรวจการมีอยู่เท่านั้น ห้าม list หรืออ่านข้างใน)
   mt5_package       FAIL เมื่อ `importlib.util.find_spec("MetaTrader5")` ไม่ใช่ None
   holdout_dir       FAIL เมื่อมีโฟลเดอร์ชื่อ holdout (ไม่สนตัวพิมพ์) ใต้ repo หรือ data dirs
@@ -69,6 +74,8 @@ Items:
                     (JSON ผิด, ขาด field, เวลาผิดรูปแบบ) = FAIL · อ่านไม่ได้เพราะสิทธิ์ = UNKNOWN
                     นอก data dirs แต่ใต้ repo: เฉพาะ `*.hcc`, `*.hc`, `*.tkc` (cache ของ MT5) = FAIL · CSV/parquet อื่นใต้ repo ไม่ตรวจที่นี่
                     (การตรวจ hash และเวลาจริงของไฟล์เป็นงานของ loader ใน SLICE-R1)
+                    · (v1.6, Q5) data dir ค่าตั้งต้น `<repo>/data` ที่ไม่มีอยู่ = ไม่มีไฟล์ให้ตรวจ (ไม่ทำให้ FAIL หรือ UNKNOWN) · data dir ที่ส่ง
+                      ด้วย `--data-dir` แต่ไม่มีอยู่ = UNKNOWN (พิมพ์ผิดต้องไม่ผ่านเงียบ) · (Q4) นามสกุลไม่สนตัวพิมพ์
   network_shares    FAIL เมื่อมี drive ชนิด DRIVE_REMOTE หรือ resource ที่ต่ออยู่จาก WNetOpenEnumW
   sentinel          ไม่ให้ Sentinel = UNKNOWN · FAIL เมื่อพบอย่างใดอย่างหนึ่ง:
                     (1) vault_path มีอยู่บนเครื่องนี้
@@ -86,6 +93,10 @@ Items:
                     `terminal64.exe` และใต้ `%APPDATA%\MetaQuotes`
                     · ข้ามไฟล์เดียว: `docs/evidence/ENV-002-sentinel.json` · กฎของ repo: มีเพียงไฟล์นั้นที่เก็บ token · หลักฐาน, handoff, review
                     และ PROGRESS อ้าง sentinel ด้วยชื่อ, ขนาด และ SHA-256 เท่านั้น (ไฟล์อื่นที่มี token = FAIL ตามที่ตั้งใจ)
+                    · (v1.6, Q6) ไฟล์ห้ามเปิดที่กฎ (3) หรือ (4) จะต้องเปิด (เช่น `.env.json` ขนาดเท่า size ใน search_dirs หรือ `.env.txt`
+                      ใน repo/data dirs) = UNKNOWN และไม่ถูกเปิด · (Q4) ชื่อ sentinel และนามสกุลไม่สนตัวพิมพ์ · (Q11) ค้นทุกโฟลเดอร์ใต้ repo
+                      และ data dirs รวม `.git` และ `.venv` · (Q7) detail และรายงานไม่พิมพ์ token (แสดงได้แค่ชื่อ, ขนาด, SHA-256)
+                    · (v1.6, Q8) vault_path เป็นโฟลเดอร์ vault หรือไฟล์ sentinel ก็ได้ (FAIL เมื่อ path นั้นมีอยู่บนเครื่องนี้)
   ค่าที่อ่านไม่ได้ (สิทธิ์, API ล้ม) = UNKNOWN ของ item นั้น
 
 scripts/env/make_sentinel.py   (stdlib เท่านั้น · เจ้าของรันบน VPS ในโฟลเดอร์ vault)
@@ -123,7 +134,7 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 - AC-03 Given sentinel ที่สร้างบน VPS ด้วย `make_sentinel.py` และค่าที่ commit ใน `docs/evidence/ENV-002-sentinel.json` When เจ้าของทำ break-it test จากเครื่องตัวเอง (research identity) Then `Test-NetConnection <vps>` ที่พอร์ต 22, 80, 443, 445, 5985, 5986 ล้มทั้งหมด (3389 เปิดเป็นประตูของคน) · `dir \\<vps>\C$` และ share ของ vault ล้ม · เจ้าของรัน `cmdkey /list` เอง (agent ห้ามรัน) แล้วยืนยันว่าไม่มีรายการของ VPS · บน VPS `Get-FileHash` ของ sentinel ตรงกับค่าที่ commit ณ เวลาตรวจ · และ item `sentinel` ของ envcheck เป็น PASS · หลักฐานมีคำสั่ง ผล เวลา และ hash ทั้งสองฝั่ง (IP ปิดบัง)
 - AC-04 Given `synthetic_bars` ของช่วงที่ตัดออก (2025-01-02) When ส่งเข้า `research.run_variant` และ `research.random_entry_baseline` Then ได้ `HoldoutRefused` และ registry ไม่เปลี่ยน
 - AC-05 Given รายงานที่ไม่ใช่ PASS When เรียก `require_research_host` Then ได้ `ResearchHostError` ที่บอกชื่อ item · รายงาน PASS คืนรายงานนั้น · CLI exit 0 เฉพาะ PASS
-- AC-06 Given source ของ `sochron.app` และแพ็กเกจเดิม When รัน architecture test Then `research`/`backtest`/`strategy` import `data.acquire`, `broker`, `app` ไม่ได้ · `sochron.app.envcheck` ไม่ใช้ subprocess, socket, http, ไม่เขียน/ลบไฟล์ และใช้ ctypes/winreg เฉพาะฟังก์ชันที่ระบุในหัวข้อ contract
+- AC-06 Given source ของ `sochron.app` และแพ็กเกจเดิม When รัน architecture test Then `research`/`backtest`/`strategy` import `data.acquire`, `broker`, `app` ไม่ได้ · `sochron.app.envcheck` ไม่ใช้ subprocess, socket, http, ไม่เขียน/ลบไฟล์ และใช้ ctypes/winreg เฉพาะฟังก์ชันที่ระบุในหัวข้อ contract · (v1.6, Q12) ตัวตรวจเป็นแบบ static และยอมรับเฉพาะรูปแบบที่ตรวจได้ (เปิด library ด้วยชื่อตรงตัว, เรียก `<handle>.<Function>`, อ่าน error ด้วย `ctypes.get_last_error()`) · รูปแบบอื่นถูกปฏิเสธโดยตั้งใจ
 - AC-07 Given ทั้ง suite When `uv run --offline pytest tests -q -p no:cacheprovider` และ `bash scripts/controls/red-flags.sh main` Then ผ่านทั้งหมด skipped 0, CI เขียว (Linux) และกลุ่ม "Order or account mutation surface" ว่าง
 
 ## Verification per AC
