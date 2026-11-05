@@ -658,8 +658,8 @@ def _run(command: list[str], cwd: Path | None = None, timeout: int = 60) -> subp
         return None
 
 
-# The git and uv sources (contract v1.6). They take the runner so unit tests reach them with a fake
-# (review r2 F21); collect_facts passes _run. A runner result of None means the program did not run.
+# The git and uv sources (contract v1.6). They take the runner, so unit tests can call them with
+# their own (review r2 F21); collect_facts uses _run. A runner result of None means the program did not run.
 Runner = Callable[..., subprocess.CompletedProcess | None]
 
 
