@@ -451,12 +451,13 @@ def test_names_are_single_quoted_for_powershell():
 
 def test_typographic_quotes_are_doubled():
     # Review r2 F22: PowerShell also ends a single-quoted string at U+2018, U+2019, U+201A and U+201B.
-    names = ("Bob’s rule", "x’; Write-Output INJECTED; ’", "a‘b‚c‛d")
+    left, right, low, rev = (chr(code) for code in (0x2018, 0x2019, 0x201A, 0x201B))
+    names = (f"Bob{right}s rule", f"x{right}; Write-Output INJECTED; {right}", f"a{left}b{low}c{rev}d")
     rules = [rule(name, "TCP", ("445",), ("Any",)) for name in names]
     text = detail(hr.evaluate(valid_facts((RDP, *rules))), "inbound")
-    assert "Disable-NetFirewallRule -Name 'Bob’’s rule'" in text
-    assert "Disable-NetFirewallRule -Name 'x’’; Write-Output INJECTED; ’’'" in text
-    assert "Disable-NetFirewallRule -Name 'a‘‘b‚‚c‛‛d'" in text
+    assert f"Disable-NetFirewallRule -Name 'Bob{right * 2}s rule'" in text
+    assert f"Disable-NetFirewallRule -Name 'x{right * 2}; Write-Output INJECTED; {right * 2}'" in text
+    assert f"Disable-NetFirewallRule -Name 'a{left * 2}b{low * 2}c{rev * 2}d'" in text
 
 
 def test_advice_notes_are_powershell_comments():

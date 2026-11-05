@@ -410,7 +410,8 @@ def _parse_profiles(raw: object) -> tuple[Profile, ...] | None:
 
 
 # ---- evaluate ------------------------------------------------------------------------------------
-SINGLE_QUOTES = ("'", "‘", "’", "‚", "‛")  # each one ends a PowerShell literal (r2 F22)
+# Each one ends a PowerShell single-quoted literal (review r2 F22): the apostrophe and U+2018..U+201B.
+SINGLE_QUOTES = ("'",) + tuple(chr(code) for code in (0x2018, 0x2019, 0x201A, 0x201B))
 
 
 def _quote(name: str) -> str:
