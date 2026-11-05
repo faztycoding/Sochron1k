@@ -316,6 +316,8 @@ def test_credential_sources_are_combined(helpers, headers, expected, tmp_path):
     (remotes(backup=(0, USER_URL)), True),  # M24a: user information on the second remote only
     (remotes(backup_push=(0, USER_URL)), True),  # M24b: on a push URL only
     (remotes(origin_push=(0, "ssh://github.com/x/y.git\n")), True),  # F23 a: an SSH push URL
+    (remotes(origin_push=(0, CLEAN_URL + "ssh://github.com/x/y.git\n")), True),  # r4 F32: every URL, not the first
+    (remotes(backup=(0, CLEAN_URL + USER_URL)), True),
     (remotes(backup=(2, "")), None),  # M24c: a remote whose get-url fails
     (remotes(backup=None), None),  # git could not run
     ({("git", "remote"): (128, "")}, None),
