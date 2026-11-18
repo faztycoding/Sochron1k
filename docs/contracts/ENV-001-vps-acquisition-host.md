@@ -4,7 +4,7 @@ Version v2.0 draft (ประวัติ: v2.0 ร่าง 2026-11-18 ยั�
 Status: **v2.0 draft 2026-11-18: รอ contract review และการอนุมัติของเจ้าของ (High) · ฉบับที่อนุมัติล่าสุดคือ v1.9 ซึ่ง `host_report.py`, tests และ runbook บน branch ทำตาม** · ประวัติ v1.x: **approved by owner 2026-10-25 17:5x; v1.6 approved 22:1x; v1.7 approved 2026-11-05 11:1x; v1.8 approved 13:2x; v1.9 approved by delegation 14:0x** (v1.9: เจ้าของสั่ง 13:4x "อนุมัติตาม recommended ไปเลย" จึงใช้ทางที่แนะนำ (a) ของ r4 F31 แบบเดียวกับ F27; เจ้าของ veto ได้ก่อน merge) · (v1.8: เจ้าของเลือกทางที่แนะนำของ F27 "เขียนห้ามใน runbook" ในแชท Claude) · (v1.7: เจ้าของเลือกทางที่แนะนำของ F23 "เพิ่มใน v1.7" และของช่องที่เหลือของ F18 "ใช้ -z ใน v1.7" ในแชท Claude) · (v1.6: เจ้าของเลือกทางที่แนะนำของ F1, F10, F12, F13 ในแชท Claude) · (v1.5 · เจ้าของตอบ "อนุมัติทั้งหมด" ในแชท Claude: contract นี้, การตัดสิน (ก)–(จ) ตามที่แนะนำ, D-021 และงบ Q-10 ไม่เกิน 40 USD/เดือน · review r5 ว่าพร้อม · ข้อ Low F52/F53 ของ r5 แก้ใน v1.5 ให้ผู้ตรวจรอบถัดไปตรวจซ้ำ) · เดิม: draft (Claude ร่าง 2026-10-25: High และมีค่าใช้จ่าย จึงอนุมัติแทนไม่ได้)
 Hypothesis (research tasks): ไม่ใช่งานวิจัย
 
-**ด่าน ENV-1** = ENV-001 (contract นี้: VPS ปลอดภัย) → SPIKE-002 (`docs/contracts/SPIKE-002-vps-remeasure.md`: วัดซ้ำบน VPS แบบอ่านอย่างเดียว) → ENV-002 (`docs/contracts/ENV-002-research-host-separation.md`: แยก research host + sentinel) · SPIKE-002 เริ่มได้เมื่อ ENV-001 ผ่านครบทุก AC (AC-05 เป็น checklist ของเจ้าของ ไม่รอผลของ SPIKE-002) · terminal บนเครื่องเจ้าของอยู่จนกว่า VPS ผ่าน ENV-001 และ SPIKE-002 ((v2.0) "เครื่องเจ้าของ" ในประโยคนี้คือเครื่อง Windows เดิม ซึ่งถูกล้างตาม D-023 ข้อ 2 ทาง 1 · เครื่องที่เจ้าของใช้ทดสอบจากภายนอกและเปิด RDP ตั้งแต่ v2.0 คือ Mac) · ความหมายของ "ENV-1 ผ่าน" ลำดับการตัด holdout และช่องทางส่ง snapshot อยู่ใน D-021 (proposed)
+**ด่าน ENV-1** = ENV-001 (contract นี้: VPS ปลอดภัย) → SPIKE-002 (`docs/contracts/SPIKE-002-vps-remeasure.md`: วัดซ้ำบน VPS แบบอ่านอย่างเดียว) → ENV-002 (`docs/contracts/ENV-002-research-host-separation.md`: แยก research host + sentinel) · SPIKE-002 เริ่มได้เมื่อ ENV-001 ผ่านครบทุก AC (AC-05 เป็น checklist ของเจ้าของ ไม่รอผลของ SPIKE-002) · terminal บนเครื่องเจ้าของอยู่จนกว่า VPS ผ่าน ENV-001 และ SPIKE-002 ((v2.0) "เครื่องเจ้าของ" ในประโยคนี้คือเครื่อง Windows เดิม ซึ่งถูกล้างตาม D-023 ข้อ 2 ทาง 1 · เครื่องที่เจ้าของใช้ทดสอบจากภายนอกและเปิด RDP ตั้งแต่ v2.0 คือ Mac) · ความหมายของ "ENV-1 ผ่าน" ลำดับการตัด holdout และช่องทางส่ง snapshot อยู่ใน D-021 (accepted 2026-10-25; v2.1, r1 F8: ข้อ 3 (a) แก้ฝั่งเครื่องเจ้าของโดย D-023 ข้อ 5)
 
 ## Risk tier (Q1–Q6, one line each; unsure = yes)
 - Q1 auth/permissions/isolation: **yes** — เพิ่มทางเข้าระยะไกล (RDP) ไปเครื่องที่จะถือ terminal, holdout และ Demo runner และเป็นฝั่งหนึ่งของขอบเขต research/holdout
@@ -239,7 +239,11 @@ operation: VPS ปลอดภัยและพิสูจน์แล้ว (
 ที่มา: เจ้าของย้ายงานจากเครื่อง Windows 11 มา Mac เมื่อ 2026-11-17 และ D-023 (accepted 2026-11-18 ภายใต้คำอนุญาตของเจ้าของ 2026-11-18 11:2x
 พร้อม contract ENV-002 v2.6) ข้อ 6 ให้ขั้นฝั่งเครื่องเจ้าของของ runbook ทั้งสามมีฉบับ macOS และให้ส่วนของ ENV-001 เป็น contract revision แยกที่ต้องเสร็จก่อนเช่า VPS
 · ข้อนี้คือ revision นั้น · ขอบเขต: เฉพาะสิ่งที่เจ้าของทำบน**เครื่องของตัวเอง** (ทดสอบจากภายนอก, โปรแกรม RDP, การตรวจรหัสที่บันทึก, ช่องทางส่ง snapshot)
-· ทุกขั้นบน VPS, `host_report.py`, tests, AC-01, AC-02, AC-05, AC-06, AC-07 และ decision (ก)–(จ) ไม่เปลี่ยน
+· การตั้งค่าบน VPS, `host_report.py`, tests, AC-01, AC-02, AC-05, AC-06, AC-07 และ decision (ก)–(จ) ไม่เปลี่ยน (v2.1, r1 F6: AC-04 และข้อ 10 เพิ่มการอ่านและตรวจบน VPS
+แบบอ่านอย่างเดียว)
+· (v2.1, r1 F8) ทุกการอ้าง "ENV-002" ในหัวข้อนี้ (checklist C1–C10, ความเสี่ยงที่เหลือข้อ 16, decision (ค), (ซ)) หมายถึง contract ENV-002 **v2.6** บน branch
+`chore/ENV-002-macos-research-host` (อนุมัติ 2026-11-18 17:2x) ไม่ใช่ v1.5 ที่อยู่บน branch นี้ · D-023 อยู่ใน `DECISIONS.md` ของ branch นั้นเช่นกัน · **ลำดับ merge:** PR ของ
+ENV-001 v2.x merge หลัง PR ของ ENV-002 (ซึ่งพา D-023 และ ENV-002 v2.6 เข้า `main`) · ถ้าเจ้าของยกเลิก D-023 ก่อน merge v2.x ของ ENV-001 ตกไป
 
 **ข้อเท็จจริงที่วัดบน Mac (2026-11-17 ถึง 18):** macOS 26.6.2 arm64 · `nc` ของระบบ (`/usr/bin/nc`) มี `-v`, `-z`, `-G <วินาที>` และ `-6` (`man nc`) และ
 `nc -z -G 2 127.0.0.1 9` บนพอร์ตที่ปิด exit 1 โดยไม่พิมพ์อะไร (`-v` จึงจำเป็นเพื่อให้มีข้อความ) · `smbutil` มี `view`, `-N`, `-g` · ยังไม่ได้ติดตั้ง Windows App
@@ -283,16 +287,24 @@ policy ของ (a) เท่านั้น"
 folder redirection ของ Windows App (โฟลเดอร์ `<repo>/data/transfer/` เท่านั้น) พร้อมการทดสอบ T1–T4 ของ D-023 ข้อ 5 ก่อนใช้จริง และการรัน `host_report.py`
 และตัวตรวจของ ENV-002 ซ้ำหลังส่งทุกครั้ง
 
-**runbook ฉบับ macOS (Claude เขียนหลังอนุมัติ; ขั้นบน VPS คงเดิม):**
-- กติกาท้ายหัว runbook: "ปิดหน้าต่าง Claude Code และ Codex ก่อนเปิด RDP" → Quit (⌘Q) Visual Studio Code, Claude, ChatGPT/Codex และทุกแอปที่ agent รันอยู่
-  แล้ว `pgrep -ilf 'claude|codex|chatgpt'` ใน Terminal.app ต้องไม่พิมพ์อะไร (ENV-002 checklist C9) · กฎเดียวกันใช้กับการเปิด console ของผู้ให้บริการใน browser
+**runbook ฉบับ macOS (Claude เขียนหลังอนุมัติ; v2.1, r1 F6: การตั้งค่าบน VPS คงเดิม · ข้อ 8 และ 10 เพิ่มการอ่านและตรวจฝั่ง VPS แบบอ่านอย่างเดียว):**
+- กติกาท้ายหัว runbook: "ปิดหน้าต่าง Claude Code และ Codex ก่อนเปิด RDP" → (v2.1, r1 F7) ทำ ENV-002 checklist C9 ครบทุกข้อความ: Quit (⌘Q) Visual Studio Code, Claude,
+  ChatGPT/Codex และทุกแอปที่ agent รันอยู่ แล้ว `pgrep -ilf 'claude|codex|chatgpt'` ใน Terminal.app ต้องไม่พิมพ์อะไร · เปิด console ของผู้ให้บริการใน browser หรือ profile
+  ที่ไม่มี extension ของ Claude หรือ ChatGPT; ถ้ามี ให้รัน pgrep ซ้ำหลังเปิด browser · ใช้ทุกครั้งที่เปิด RDP หรือ console รวมข้อ 0, 1.1 และ 1.5
+- (v2.1, r1 F9) กฎกันล็อกตัวเอง (ส่วนฝั่ง Mac): session ที่สองต้องเปิดได้ก่อนเปลี่ยน firewall, ปิด rule หรือ restart · ใน Windows App ใช้รายการ PC ที่สองของ VPS ตัวเดียวกัน
+  (Duplicate รายการเดิม) เพื่อเปิด session ที่สอง เพราะการคลิกรายการเดิมซ้ำอาจนำหน้าต่างเดิมขึ้นมาแทน (ยังไม่ได้ตรวจในแอปจริง: เจ้าของตรวจตอนใช้ครั้งแรกและบันทึก)
+  · ถ้าเปิด session ที่สองไม่ได้ ห้ามเปลี่ยน firewall และใช้ console ของผู้ให้บริการแทน
 - ข้อ 0 (CGNAT): ใช้ browser หรือ `/usr/bin/curl -s https://api.ipify.org` บน Mac
 - ข้อ 1.2 (ไม่บันทึกรหัส RDP): ใน Windows App ตั้ง credential ของรายการ PC เป็น "Ask when required" (หรือชื่อเทียบเท่า) ไม่บันทึกรหัส · หลังเชื่อมครั้งแรก
-  ตรวจ Windows App → Settings → Credentials ว่าไม่มีรายการของ VPS (ENV-002 checklist C1–C3 เป็นการตรวจซ้ำก่อน ENV-1 ผ่าน)
+  ตรวจ Windows App → Settings → Credentials ว่าไม่มีรายการของ VPS และ (v2.1, r1 F7) ทำ ENV-002 checklist C2 (แอป Passwords และ Keychain Access ไม่มีรายการของ VPS)
+  ทันที ไม่รอถึงก่อน ENV-1 ผ่าน (C1–C10 ทั้งชุดยังเป็นการตรวจซ้ำก่อน ENV-1 ผ่าน)
 - ข้อ 7: คำสั่ง `nc` ตาม AC-03 (v2.0) แทน `Test-NetConnection`
-- ข้อ 8: ขั้นตอนตาม AC-04 (v2.0) แทน mstsc และเอาค่าที่ขอไว้ออกหลังทดสอบ
-- ข้อ 10: ช่องทางตาม D-023 ข้อ 5 (folder redirection ของ Windows App เฉพาะ `<repo>/data/transfer/`, ไม่ติ๊ก Read-only, เอาออกหลังเสร็จ, การทดสอบ T1–T4 ก่อนใช้
-  ครั้งแรก) แทน `subst` และไฟล์ `.rdp`
+- ข้อ 8: ขั้นตอนตาม AC-04 (v2.0) แทน mstsc รวมการอ่านค่า policy บน VPS (a), ตัวควบคุมของ clipboard (b), `net view \\tsclient` (c) และสภาพ C3 หลังทดสอบ (d)
+- ข้อ 10: (v2.1, r1 F6) คัด D-023 ข้อ 5 มาครบทุกข้อความ แทน `subst` และไฟล์ `.rdp` อย่างน้อย: folder redirection ของ Windows App เฉพาะ `<repo>/data/transfer/`
+  โดยไม่ติ๊ก Read-only · **ก่อนเปิดช่องทาง:** envcheck บน Mac เป็น PASS และ `data/transfer/` ว่าง · การทดสอบ T1–T4 ของ D-023 ข้อ 5 ทำตอนใช้จริงครั้งแรกภายใต้ contract ของ
+  acquisition host และบันทึกผลที่นั่น (ข้อ 10 ยังเป็น "ใช้หลัง ENV-1 ผ่านเท่านั้น") · ข้อใดของ T1–T4 ไม่ผ่าน = ช่องทางนี้ยังไม่อนุมัติ และต้องตัดสินใหม่ (ไม่มีทางสำรองแบบ VHD
+  ของ v1.9) · **ลำดับการปิด:** เอาโฟลเดอร์ออกจากรายการ PC ก่อนเชื่อมใหม่เพื่อปิด policy บน VPS (เพราะตอนนั้น VPS ยังยอมรับ redirection อยู่) → ปิด policy → เชื่อมใหม่แล้ว
+  `net view \\tsclient` ไม่มี share → รายการไฟล์ใต้ `data/transfer/` เท่ากับ manifest (ชื่อและ SHA-256) → `host_report.py` บน VPS และ envcheck บน Mac เป็น PASS
 - ตารางสรุปสิ่งที่ส่งกลับ: แถว 7 เป็นผลของ `nc` (ข้อความและ exit status ทุกพอร์ต) และแถว 8 รวมค่าที่เหลือของแท็บ Folders และ Devices & Audio
 
 **Negative cases (v2.0):** `nc` ถึง 3389 จาก hotspot ได้ (FAIL ของ AC-03) · พอร์ตอื่นตอบ `Connection refused` (ต้องอธิบาย) · ไม่ใส่ `-v` จนไม่มีข้อความ (ทำซ้ำด้วย `-v`) ·
@@ -311,7 +323,8 @@ Mac ไม่มี IPv6 (บันทึก "IPv6 ไม่ได้ทดส�
 
 **Budget (v2.0):** Claude 1 session · session ใหม่ไม่เกิน 4 (ผู้ตรวจ contract ×2, ผู้ตรวจ runbook, สำรอง ×1) · ไม่มีโค้ดหรือ tests ใหม่
 
-**Recovery (v2.0):** ถ้าเจ้าของไม่รับ v2.0: ฉบับ v1.9 ยังใช้ได้จากเครื่อง Windows เดิม (ก่อนล้างตาม D-023) · runbook ฉบับ Windows ยังอยู่ใน history ของ git
+**Recovery (v2.0; v2.1, r1 F4: แทนข้อความเดิมที่ให้ใช้ v1.9 จากเครื่อง Windows เดิม):** ถ้าเจ้าของไม่รับ v2.0: ยังไม่เช่า VPS (D-023 ข้อ 6) · แก้เป็น v2.x หรือเจ้าของเปลี่ยน
+D-023 ข้อ 2 · เครื่อง Windows เดิมใช้ฉบับ v1.9 ไม่ได้ (D-023 ข้อ 2 ทาง 1: ห้ามเชื่อมต่อ VPS หรือ console ของผู้ให้บริการตั้งแต่เช่าจนถึงวันล้าง) · runbook ฉบับ Windows อยู่ใน history ของ git
 
 **Plan (v2.0):** (1) contract review ของ v2.0 โดย session ใหม่ → แก้ → เจ้าของอนุมัติ (High) (2) Claude เขียน runbook ข้อ 0, 1.2, 7, 8, 10 และกติกาท้ายหัวเป็นฉบับ
 macOS · check: review ของ runbook ว่าพร้อม (3) เจ้าของใช้ runbook ตอนเช่า VPS · check: AC-03 และ AC-04 ฉบับ v2.0 ครบพร้อมหลักฐาน · Decisions needed from the owner:
