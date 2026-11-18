@@ -252,7 +252,12 @@ def test_a_sentinel_file_under_a_terminal_data_folder_is_never_examined(tmp_path
     path = appdata / name / "ENV-002-sentinel.json"
     path.parent.mkdir(parents=True)
     path.write_text("{}")
-    monkeypatch.setattr(ec, "is_cloud_only", lambda value: pytest.fail(f"{value} was examined"))
+    def is_cloud_only(value):  # the file itself is never examined; appdata's ancestors may be (r4 F23)
+        if ec._norm(value) == ec._norm(path):
+            pytest.fail(f"{value} was examined")
+        return False
+
+    monkeypatch.setattr(ec, "is_cloud_only", is_cloud_only)
     sentinel, why = ec.load_sentinel(path, appdata=appdata)
     assert sentinel is None and "never opened" in why
 
@@ -285,6 +290,63 @@ def test_another_spelling_of_appdata_still_hides_its_terminal_data_folders(tmp_p
     other = tmp_path / "alias" / "Library" / "Application Support" / "MetaTrader 5" / "values.json"
     sentinel, why = ec.load_sentinel(other, appdata=appdata)
     assert sentinel is None and "never opened" in why
+
+
+def test_a_renamed_link_into_appdata_or_a_terminal_data_folder_is_caught(tmp_path, monkeypatch):
+    """Work review r4 F22: a data dir that is a link with another name to appdata or to its terminal data folder,
+    and a --sentinel-file link into that folder, are caught by identity or by the real path; nothing under the
+    folder is listed and the values file is never opened."""
+    appdata = tmp_path / "Home" / "Library" / "Application Support"
+    folder = appdata / "MetaTrader 5"
+    folder.mkdir(parents=True)
+    (folder / "notes.txt").write_text(f"pasted from the VPS: {TOKEN}\n")
+    (folder / "values.json").write_text("{}")
+    os.symlink(appdata, tmp_path / "as-link", target_is_directory=True)
+    os.symlink(folder, tmp_path / "mt5-link", target_is_directory=True)
+    os.symlink(folder / "values.json", tmp_path / "link.json")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    listed = []
+    real_scandir = os.scandir
+
+    def scandir(path="."):
+        listed.append(ec._norm(path))
+        return real_scandir(path)
+
+    monkeypatch.setattr(os, "scandir", scandir)
+    for data_dir in (tmp_path / "as-link", tmp_path / "mt5-link"):
+        listed.clear()
+        roots = _roots(tmp_path, repo, appdata=appdata, data_dirs=(repo / "data", data_dir))
+        report = ec.evaluate(_facts(metaquotes_exists=False), roots, _sentinel(tmp_path))
+        statuses = {item.name: item.status for item in report.items}
+        assert [statuses[name] for name in ("holdout_dir", "excluded_period", "sentinel")] == [ec.UNKNOWN] * 3
+        assert [path for path in listed if "MetaTrader 5" in path or path == ec._norm(tmp_path / "mt5-link")] == []
+    sentinel, why = ec.load_sentinel(tmp_path / "link.json", appdata=appdata)
+    assert sentinel is None and "never opened" in why
+
+
+def test_appdata_below_a_dataless_folder_is_matched_by_text_and_nothing_below_is_statted(tmp_path, monkeypatch):
+    """Work review r4 F23: when appdata lies below a dataless folder, its identity is not taken, so evaluate stats
+    nothing below that folder (v2.2 r2 F12)."""
+    cloud = tmp_path / "Cloud"
+    appdata = cloud / "Library" / "Application Support"
+    appdata.mkdir(parents=True)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.setattr(ec, "is_cloud_only", lambda path: ec._norm(path) == ec._norm(cloud))
+    seen = []
+
+    def recorder(real):
+        def wrapper(path, *args, **kwargs):
+            if not isinstance(path, int):
+                seen.append(ec._norm(path))
+            return real(path, *args, **kwargs)
+        return wrapper
+
+    monkeypatch.setattr(os, "stat", recorder(os.stat))
+    monkeypatch.setattr(os, "lstat", recorder(os.lstat))
+    ec.evaluate(_facts(), _roots(tmp_path, repo, appdata=appdata), _sentinel(tmp_path))
+    assert [path for path in seen if path.startswith(ec._norm(cloud) + os.sep)] == []
 
 
 @pytest.mark.parametrize("make", ("symlinked prefix", "home named with the token"))

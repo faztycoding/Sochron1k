@@ -241,16 +241,33 @@ def _is_folder(path, key: str, name: str, identity: tuple[int, int] | None) -> b
     return identity is not None and Path(path).name.lower() == name and _identity(path) == identity
 
 
+def _appdata_identity(appdata) -> tuple[int, int] | None:
+    """(st_dev, st_ino) of appdata, or None when appdata is at or below a dataless folder: then it is matched by
+    text only, so nothing below that folder is stat'ed (v2.2 r2 F12, work review r4 F23)."""
+    return _identity(appdata) if _dataless_above(appdata) is None else None
+
+
 def _appdata_folder(path, appdata) -> str | None:
     """The level-0 entry of appdata with a terminal_data name that holds path, or None (v2.2 r2 F28). appdata is
     looked for among the ancestors of path by _is_folder, so another spelling of it is found too (r3 F17)."""
-    key, name, identity = _norm(appdata), Path(appdata).name.lower(), _identity(appdata)
+    key, name, identity = _norm(appdata), Path(appdata).name.lower(), _appdata_identity(appdata)
     absolute = Path(os.path.abspath(path))
     chain = (*reversed(absolute.parents), absolute)
     for folder, child in zip(chain, chain[1:]):
         if _is_folder(folder, key, name, identity):
             return child.name if _appdata_match(child.name) else None
     return None
+
+
+def _terminal_data_entry(path, appdata) -> str | None:
+    """_appdata_folder of path as written and of its real path, so a link with another name into appdata or into
+    a terminal data folder is caught too (work review r4 F22)."""
+    named = _appdata_folder(path, appdata)
+    if named is None:
+        real = os.path.realpath(path)
+        if real != os.path.abspath(path):
+            named = _appdata_folder(real, appdata)
+    return named
 
 
 def _interpreter_identity() -> tuple[int, int] | None:
@@ -323,7 +340,7 @@ class _Search:
         self.appdata = Path(roots.appdata)
         self.appdata_key = _norm(roots.appdata)
         self.appdata_name = self.appdata.name.lower()
-        self.appdata_id = _identity(roots.appdata)  # r3 F17: another spelling of appdata is recognised by identity
+        self.appdata_id = _appdata_identity(roots.appdata)  # r3 F17, r4 F23: by identity unless below a dataless folder
         self.metaquotes = _norm(Path(roots.appdata) / "MetaQuotes")
         self.quiet = quiet  # terminal_data is FAIL already: a terminal data folder is skipped silently (r2 F28)
         self.excused = _norm(self.repo.joinpath(*EXCUSED))
@@ -405,7 +422,7 @@ class _Search:
             if _norm(dataless) == key:
                 return "is a dataless folder (its content is in the cloud), not listed"
             return f"is below the dataless folder {dataless}, not listed"
-        named = _appdata_folder(folder, self.appdata)
+        named = _terminal_data_entry(folder, self.appdata)
         if named is not None:
             return f"is under {named}, a terminal data folder that is never listed"
         return None
@@ -438,6 +455,8 @@ class _Search:
                 self._visit(area, folder, files, folders, reparse, beside, at_appdata)
 
     def _walk(self, root: Path, area: str):
+        # work review r4 F22: a root that is appdata under another name (a link) is recognised by identity
+        root_is_appdata = self.appdata_id is not None and _identity(root) == self.appdata_id
         stack = [(root, _below_terminal(root))]  # v1.9 F6: a root below a terminal folder is never opened
         while stack:
             folder, beside = stack.pop()
@@ -468,7 +487,8 @@ class _Search:
                 except OSError:
                     self._unlisted(area, Path(entry.path), "could not be read")
             here = beside or any(entry.name.lower() == TERMINAL for entry in files + reparse)
-            at_appdata = _is_folder(folder, self.appdata_key, self.appdata_name, self.appdata_id)
+            at_appdata = (folder is root and root_is_appdata) or _is_folder(folder, self.appdata_key, self.appdata_name,
+                                                                            self.appdata_id)
             yield folder, files, folders, reparse, here, at_appdata
             for entry in folders:
                 if _norm(entry.path) in self.prune:
@@ -1595,7 +1615,7 @@ def load_sentinel(path, appdata=None) -> tuple[Sentinel | None, str | None]:
         return None, f"the sentinel file {path} is below a folder with terminal64.exe and is never opened"
     if appdata is not None and _within(_norm(path), _norm(Path(appdata) / "MetaQuotes")):
         return None, f"the sentinel file {path} is under %APPDATA%\\MetaQuotes and is never opened"
-    if appdata is not None and _appdata_folder(path, appdata) is not None:  # v2.2 r2 F28
+    if appdata is not None and _terminal_data_entry(path, appdata) is not None:  # v2.2 r2 F28; r4 F22: links too
         return None, f"the sentinel file {path} is under a terminal data folder of {appdata} and is never opened"
     try:
         if is_cloud_only(path):
