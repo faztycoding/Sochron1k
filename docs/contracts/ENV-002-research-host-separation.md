@@ -210,6 +210,9 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
                       r1 F5 คงเดิม)
                     · (v2.1, F9) โฟลเดอร์ต้นทาง (`wineprefix`, `Bottles`) ที่มีอยู่แต่ list ไม่ได้ทำให้ `default_roots` ยก OSError: CLI พิมพ์
                       `RESEARCH HOST: UNKNOWN` exit 1 และ `require_research_host` ยก `ResearchHostError` (ทางเดียวกับ shell folder ของ v1.9 r1 F5)
+                    · (v2.2, r2 F10) กฎเดียวกันใช้กับ `~/.wine`, โฟลเดอร์ของแต่ละ prefix, `drive_c` ของ prefix, `~/Library/PlayOnMac` และ
+                      `~/Library/Application Support/CrossOver`: มีอยู่แต่ list ไม่ได้ หรือเป็น symlink → `default_roots` ยก OSError · prefix ที่ไม่มี
+                      `drive_c` หรือไม่มี `Program Files*` = ไม่มี root จาก prefix นั้น (ไม่ใช่ข้อผิดพลาด)
                     · จำนวน Wine prefix ที่พบและโฟลเดอร์ต้นทางที่ดู อยู่ในบรรทัด `wine:` ของ CLI
     search_dirs   = ~/Downloads, ~/Desktop, ~/Documents
                     + ~/Library/Mobile Documents/com~apple~CloudDocs (iCloud Drive) ถ้ามี
@@ -220,7 +223,9 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
   terminal_install (darwin)  FAIL เมื่อพบอย่างใดอย่างหนึ่ง (ชื่อไม่สนตัวพิมพ์):
     · (v2.1, F8) แอปที่ชื่อมี `metatrader` (ไม่สนตัวพิมพ์; กฎเดียวกับ Uninstall entry ของ v1.9) และลงท้าย `.app` ระดับ 0 ของ /Applications หรือ
       ~/Applications (ดูชื่อเท่านั้น ไม่เข้าไป; ครอบชื่อของโบรกเกอร์เช่น `Exness MetaTrader 5.app` · ยังไม่ได้ตรวจว่าแอป iPhone/iPad จาก App Store ใช้ชื่อที่เข้ากฎนี้)
-    · โฟลเดอร์ `MetaTrader*` ระดับ 0 ของ program_files แต่ละตัว · `terminal64.exe` ระดับ 0–2 ใต้ program_files แต่ละตัว (helper เดิม)
+    · โฟลเดอร์ `MetaTrader*` ระดับ 0 ของ program_files แต่ละตัว · `terminal64.exe` ระดับ 0–2 ใต้ program_files แต่ละตัว
+      (v2.2, r2 F10) การค้นใต้ program_files บน darwin ไม่ใช้กฎข้ามของ v1.8: โฟลเดอร์ใดใต้ root ที่ list ไม่ได้ = การค้นไม่ครบ (`terminal_paths` None
+      ตามกฎของ r2 F30) · ตรรกะเทียบชื่อและระดับเหมือน helper เดิม แต่ helper เดิมของ Windows (ซึ่งข้ามโฟลเดอร์ที่ list ไม่ได้) ไม่ถูกเรียกบน darwin
     · `terminal64.exe` ใต้ home ระดับ 0–3 (ข้าม .git, .venv, node_modules และทุกรายการที่ตรงกฎของ terminal_data
       · (v2.1, F10, คำตัดสินข้อ 7) ไม่เข้า `~/Library` ทั้งโฟลเดอร์ และไม่เข้า `~/.ssh` (เทียบ path ไม่ใช่ชื่อ): ที่รู้จักใต้ `~/Library` ตรวจด้วยกฎ terminal_data
         และ Wine prefix อยู่แล้ว · การค้นนี้เทียบชื่อไฟล์เท่านั้น ไม่เปิดไฟล์)
@@ -348,6 +353,8 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 
 (v2.1, F19) กรณีเพิ่มของ macOS: `autofs` จาก `map auto_home` ที่ไม่มี MNT_LOCAL (PASS) · `autofs` จาก `map -fstab`, `map -static` หรือ `map -hosts` (UNKNOWN) · `os.uname().machine` เป็น `x86_64` (UNKNOWN ของ `terminal_install` และ `network_shares`) · mount ชนิด `ntfs` หรือ `lifs` (UNKNOWN)
 
+(v2.2, r2 F10) กรณีเพิ่มของ macOS: โฟลเดอร์ที่ list ไม่ได้ระดับ 1 ของ `drive_c/Program Files` ของ prefix (UNKNOWN ของ `terminal_install`) · `drive_c` ของ prefix มีอยู่แต่ list ไม่ได้ (`default_roots` ยก OSError) · โฟลเดอร์ของ prefix เป็น symlink (`default_roots` ยก OSError) · prefix ที่ไม่มี `drive_c` (PASS, `wine: 1 prefixes`)
+
 ## Acceptance (Given–When–Then, Thai; ≤ 7)
 - AC-01 (v2.0 แทนฉบับ Windows ของ v1.9) Given เครื่อง Mac หลังทำตาม runbook ฉบับ macOS (ไม่มีแอป MetaTrader, ไม่มีโฟลเดอร์ Wine ของ MT5, ไม่มี network volume ที่ mount อยู่ · (v2.1, F10) รันจากแอปเดียวกับที่ R1 จะรัน คือ Visual Studio Code (terminal ในแอปนั้น) และแอปนั้นได้สิทธิ์ Files and Folders ของ Desktop, Documents, Downloads และ iCloud Drive เท่านั้น ไม่มี Full Disk Access · หลักฐานบอกชื่อแอป · ล้าง Trash ก่อนรัน · ทำข้ออื่นของหัวข้อ "Runbook ฉบับ macOS: ข้อที่ต้องมี" ครบ) และ repo อยู่ที่ commit ที่ตรวจแล้ว (`git rev-parse --short HEAD` ตรงกับที่ Claude ให้ และ `git status --short` ไม่พิมพ์อะไร) When เจ้าของรันคำสั่ง CLI (zsh) ของ contract พร้อม `--sentinel-file docs/evidence/ENV-002-sentinel.json` Then ทุก item เป็น PASS, รายงานมีบรรทัด `reader: darwin` (v2.1, F1), home ในบรรทัด `roots:` คือ home ของเจ้าของเอง (v2.1, F11), บรรทัดสุดท้ายเป็น `RESEARCH HOST: PASS` และ exit status เป็น 0 · (v2.1, F7) บรรทัด `processes:` มี `paths read` มากกว่า 0 และชนิด mount ในบรรทัด `mounts:` ตรงกับผลของคำสั่ง `mount` ที่เจ้าของรันเวลาเดียวกัน · (v2.1, F7, คำตัดสินข้อ 5) รอบควบคุมก่อนรอบ PASS: เจ้าของสร้างโฟลเดอร์เปล่า `~/Applications/MetaTrader 5.app` และ `~/Library/Application Support/net.metaquotes.wine.metatrader5` (ไม่ใช่การติดตั้ง) แล้วรันคำสั่งเดียวกัน → `terminal_install` และ `terminal_data` ต้องเป็น FAIL และ exit status ไม่ใช่ 0 → ลบสองโฟลเดอร์ → รันใหม่ได้ PASS · หลักฐานมี commit, เวลา และรายงานทั้งหมดของทั้งสองรอบ
 - AC-01 ฉบับ v1.9 (Windows, เลิกใช้เมื่อ v2.0 อนุมัติ): Given เครื่องเจ้าของหลังทำตาม runbook (ถอน terminal, ลบ `%APPDATA%\MetaQuotes`, ไม่มี mapped drive ไป VPS) When เจ้าของรันคำสั่ง CLI ของ contract พร้อม `--sentinel-file docs/evidence/ENV-002-sentinel.json` Then ทุก item เป็น PASS และบรรทัดสุดท้าย `RESEARCH HOST: PASS`
@@ -410,7 +417,7 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 
 ### Plan v2.0 (ร่าง 2026-11-17, D-023)
 1. Understanding: research host เปลี่ยนเป็นเครื่อง Mac ตัวตรวจเดิมจึงต้องอ่านข้อเท็จจริงของ macOS ได้ และเครื่อง Windows เดิมต้องออกจากโปรเจกต์อย่างตรวจได้ · ข้อกำหนดของข้อ 6.1 และกฎของ evaluate ไม่เปลี่ยน · เข้าใจผิดที่เป็นไปได้: ติดตั้ง MT5 บน Mac เพื่อดู path จริง (ห้าม) · รื้อตัวอ่าน Windows และ tests ที่ล็อก · ให้ agent อ่าน Keychain แทน `cmdkey` · ให้ Full Disk Access เพื่อให้ผ่านเร็ว · ถือว่า PASS บน Mac แล้วเครื่อง Windows ไม่ต้องล้าง
-2. Files / reuse: `src/sochron/app/envcheck.py` (เพิ่มตัวอ่าน darwin, ใช้ helper ค้น `terminal64.exe` และกฎ evaluate เดิม) · `tests/unit/app/**` · `docs/runbooks/ENV-002-research-host.md` (ข้อ 2–4 ฉบับ macOS, ข้อ 1 และ 5 บน VPS คงเดิม · (v2.1, F17) ข้อ 6 ยังชี้ไป runbook ของ ENV-001 ข้อ 10 ซึ่งต้องเป็นฉบับ macOS ตาม D-023 ข้อ 5 ก่อนใช้: งานของ ENV-001 revision) · patch D-006 ของผู้เขียน tests สำหรับ `tests/acceptance/ENV-002/**` และ `tests/architecture/**`
+2. Files / reuse: `src/sochron/app/envcheck.py` (เพิ่มตัวอ่าน darwin, ใช้กฎ evaluate เดิม และตรรกะเทียบชื่อของ helper ค้น `terminal64.exe` โดยไม่ใช้กฎข้ามของ v1.8; r2 F10) · `tests/unit/app/**` · `docs/runbooks/ENV-002-research-host.md` (ข้อ 2–4 ฉบับ macOS, ข้อ 1 และ 5 บน VPS คงเดิม · (v2.1, F17) ข้อ 6 ยังชี้ไป runbook ของ ENV-001 ข้อ 10 ซึ่งต้องเป็นฉบับ macOS ตาม D-023 ข้อ 5 ก่อนใช้: งานของ ENV-001 revision) · patch D-006 ของผู้เขียน tests สำหรับ `tests/acceptance/ENV-002/**` และ `tests/architecture/**`
 3. Steps, each with its check:
    1. contract review ของ v2.0 และ D-023 โดย session ใหม่ (ตรวจ path ของ MT5 บน macOS จากหน้าทางการ, รายการชนิด mount, flag dataless, ขั้นของ Windows App) → แก้ตาม finding → เจ้าของอนุมัติ (High) และเลือก D-023 ข้อ 2 · check: review file ใน `docs/reviews/` ว่าพร้อม และบรรทัด Status ของ contract
    1a. (v2.1, F13) เจ้าของย้าย `docs/proposals/` และ memory ของ Claude Code จากเครื่อง Windows มา Mac ด้วยรายการไฟล์ที่ระบุชื่อ · check: รายการ SHA-256 สองฝั่งตรงกัน (เงื่อนไขก่อนขั้นลบ clone ของ AC-03 ข้อ 7)
