@@ -308,6 +308,21 @@ def test_the_token_never_reaches_the_cli_or_the_gate_when_a_wine_folder_fails(tm
     assert TOKEN not in str(raised.value) and raised.value.__cause__ is None
 
 
+def test_a_dataless_search_root_makes_the_terminal_search_incomplete(tmp_path, monkeypatch):
+    """Work review r3 F19: a dataless root is named in skipped: and the search is not complete (fail-closed);
+    a dataless folder below a root is still only skipped."""
+    home = tmp_path / "home"
+    (home / "x").mkdir(parents=True)
+    (home / "x" / "terminal64.exe").write_bytes(b"MZ synthetic")
+    (home / "Music" / "Archive").mkdir(parents=True)
+    monkeypatch.setattr(ec, "is_cloud_only", lambda path: ec._norm(path) == ec._norm(home))
+    found, complete, skipped = ec.find_terminal_paths_darwin((), (), home, ())
+    assert (found, complete, skipped) == ((), False, (str(home),))
+    monkeypatch.setattr(ec, "is_cloud_only", lambda path: ec._norm(path) == ec._norm(home / "Music" / "Archive"))
+    found, complete, skipped = ec.find_terminal_paths_darwin((), (), home, ())
+    assert complete is True and skipped == (str(home / "Music" / "Archive"),) and len(found) == 1
+
+
 def test_the_reader_name_is_none_on_other_platforms(monkeypatch):
     monkeypatch.setattr(ec.sys, "platform", "linux")
     assert ec.reader_name() == "none"

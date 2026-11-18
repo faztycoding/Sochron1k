@@ -1213,6 +1213,8 @@ def _darwin_walk(root: Path, levels: int, *, skip=(), never=frozenset(), skippab
             continue
         if dataless:
             skipped.append(str(folder))
+            if level == 0:  # work review r3 F19: a dataless root itself was never searched
+                complete = False
             continue
         try:
             folders, names, reparse = _list_folders(folder)
