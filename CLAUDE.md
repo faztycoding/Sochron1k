@@ -25,5 +25,6 @@
   against its handoff and continue. A hash mismatch, missing expected hash, or any other report
   means stop and ask (N6). For each patch: apply, verify hashes, fresh-session review, then commit.
 - Before a handoff: commit, then write docs/handoff/<TASK-ID>.md (the `implement-task` skill covers this).
-- Environment: Windows 11, shell is Git Bash. There is no system Python; use `uv run`. Node.js is
-  available for the control-plane scripts.
+- Environment (D-023): macOS arm64, shell is zsh. uv is at `~/.local/bin/uv`, which the agent shell does
+  not have on PATH; run Python only through it, never `/usr/bin/python3`. Node.js is available for the
+  control-plane scripts. No agent session runs on the old Windows PC (D-023 item 2).
