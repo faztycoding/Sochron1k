@@ -213,10 +213,9 @@ PS> net accounts /lockoutthreshold:5 /lockoutduration:30 /lockoutwindow:30
 1. **ก่อนเปิดช่องทาง:** envcheck ของ ENV-002 บน Mac เป็น PASS (runbook ENV-002 ข้อ 3) และโฟลเดอร์รับไฟล์มีอยู่และว่าง:
    ```zsh
    % /bin/mkdir -p ~/Documents/GitHub/Sochron1k/data/transfer
-   % cd ~/Documents/GitHub/Sochron1k/data/transfer
-   % /usr/bin/find . -mindepth 1 ! -name .DS_Store
+   % cd ~/Documents/GitHub/Sochron1k/data/transfer && /usr/bin/find . -mindepth 1 ! -name .DS_Store
    ```
-   `find` ต้องไม่พิมพ์อะไร
+   `find` ต้องไม่พิมพ์อะไร · ถ้า `cd` ขึ้น error: หยุด ไม่ส่งผล (r2 F28)
 2. Windows App → แก้รายการ PC หลักของ VPS → แท็บ Folders → ติ๊ก Redirect folders → เพิ่ม**เฉพาะ** `~/Documents/GitHub/Sochron1k/data/transfer` **โดยไม่ติ๊ก Read-only** (VPS เขียนลงโฟลเดอร์นี้) · โฟลเดอร์อื่นต้องไม่อยู่ในรายการ
 3. Connect · **T1** (policy ยังปิด, redirect เปิด): บน VPS `PS> net view \\tsclient` → ไม่มี share
 4. บน VPS (Administrator): `PS> Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name fDisableCdm -Value 0` แล้วตัดการเชื่อม
@@ -227,9 +226,9 @@ PS> net accounts /lockoutthreshold:5 /lockoutduration:30 /lockoutwindow:30
    3. เชื่อมใหม่ → **T4:** `PS> net view \\tsclient` ไม่มี share, แท็บ Folders ของทุกรายการ PC ไม่มีโฟลเดอร์ และ `PS> Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' | Select-Object fDisableCdm` (PowerShell ธรรมดา; อ่านอย่างเดียว) แสดง 1 (r2 F27)
    4. บน Mac รายการไฟล์ใต้ `data/transfer/` เท่ากับ manifest (ชื่อและ SHA-256) · พิมพ์ path แบบ `./<ไฟล์>` จึงไม่มีชื่อบัญชี (review F19):
       ```zsh
-      % cd ~/Documents/GitHub/Sochron1k/data/transfer
-      % /usr/bin/find . -type f ! -name .DS_Store -print0 | /usr/bin/xargs -0 /usr/bin/shasum -a 256
+      % cd ~/Documents/GitHub/Sochron1k/data/transfer && /usr/bin/find . -type f ! -name .DS_Store -print0 | /usr/bin/xargs -0 /usr/bin/shasum -a 256
       ```
+      ถ้า `cd` ขึ้น error: หยุด ไม่ส่งผล (r2 F28)
    5. `host_report.py` บน VPS เป็น PASS (ข้อ 6) → **ตัดการเชื่อม RDP** (กติกาบนหัวไฟล์) → envcheck บน Mac เป็น PASS (runbook ENV-002 ข้อ 3)
 7. **ส่งให้ Claude:** วันที่, รายการไฟล์และ SHA-256, ผล T1–T4, ผลของตัวตรวจทั้งสอง
 
