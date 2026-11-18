@@ -146,8 +146,8 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
               ของ path · v2.0 ทำให้ทั้งสามเป็น UNKNOWN บน platform อื่น และมี test · `mt5_package` ยังอ่านได้ทุก platform · `default_roots` บน platform
               อื่นคงพฤติกรรม v1.9 · tests บน Linux ยังใช้ Facts ปลอมได้ตามเดิม
   (v2.1, F1) Facts, ResearchRoots, Item และ Report ไม่เพิ่ม field (tests ที่ล็อกเทียบชุด field แบบเท่ากันพอดี) · ชื่อตัวอ่านมาจากฟังก์ชันระดับโมดูล
-    `reader_name() -> str` (`win32`, `darwin` หรือ `none` จาก `sys.platform` ที่อ่านตอนเรียก) · CLI (`main`) พิมพ์บรรทัด `reader: <ชื่อ>` ก่อนรายการ item
-    ทุกแพลตฟอร์ม (`render` ไม่เปลี่ยน) · evaluate ไม่รู้ platform · ขอบเขต: `reader_name()` บอก platform ของโปรเซสที่พิมพ์ ไม่ได้บอกที่มาของ Facts ที่สร้างจากที่อื่น
+    `reader_name() -> str` (`win32`, `darwin` หรือ `none` จาก `sys.platform` ที่อ่านตอนเรียก) · CLI (`main`) พิมพ์บรรทัด `reader: <ชื่อ>` ก่อนข้อความของ
+    `render` ทุกแพลตฟอร์ม (`render` ไม่เปลี่ยน; รายละเอียดที่ r2 F25) · evaluate ไม่รู้ platform · ขอบเขต: `reader_name()` บอก platform ของโปรเซสที่พิมพ์ ไม่ได้บอกที่มาของ Facts ที่สร้างจากที่อื่น
   (v2.1, F4) ตัวอ่าน darwin เติม Facts เดิม 7 field (กฎของ evaluate ไม่เปลี่ยน):
     terminal_paths          = path ที่พบจากกฎแอป, โฟลเดอร์ `MetaTrader*`, `terminal64.exe` และ path ของ executable ที่รันอยู่ใต้แอปที่ตรงกฎ
     process_names           = ชื่อไฟล์ (basename) ของ executable ทุกโปรเซสที่อ่านได้ · รายการโปรเซสอ่านไม่ได้ตามกฎของ terminal_install
@@ -184,17 +184,22 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
     เพราะงานนี้ High) · ถ้อยคำ detail ของ item ที่มาจาก Facts คงเดิมตาม v1.9 ทุกแพลตฟอร์ม (เช่น `%APPDATA%\MetaQuotes`, `Uninstall entries`,
     `remote drives`); บรรทัด `reader: darwin` และ runbook ฉบับ macOS บอกว่าคำเหล่านั้นหมายถึงอะไรบน Mac
   (v2.1, F4) ค่าที่ Facts 7 field พาไปไม่ได้ (errno, จำนวน pid, จำนวน Wine prefix, โฟลเดอร์ที่ข้าม, ชื่อแอปของ note) ไม่อยู่ใน detail ของ item:
-    `main` พิมพ์เป็นบรรทัดของ CLI จากฟังก์ชันระดับโมดูลแยก ไม่ผ่าน Facts (`render`, Report และ Item ไม่เปลี่ยน · token ถูกแทนด้วย `<token>`):
-    ก่อนรายการ item ทุกแพลตฟอร์ม:
-      reader: <win32|darwin|none>                                                        (F1)
-      roots: repo=<path> home=<path> search_dirs=<path>, …                               (F11)
-    หลังรายการ item ก่อนบรรทัดสุดท้าย เฉพาะ darwin:
-      processes: <n> listed, <n> paths read, <n> skipped, <n> wine loaders               (F7) หรือ processes: unreadable (<เหตุ>, errno <n>, <n> pids)
-      mounts: <n> (<ชนิดที่พบ>)                                                           (F7) หรือ mounts: unreadable (<เหตุ>)
-      wine: <n> prefixes; looked at <โฟลเดอร์ต้นทางที่มีอยู่ หรือ none>                     (F9)
-      skipped: <n> folders (<path>, …)                                                   (F10: โฟลเดอร์ในรายการข้ามที่ list ไม่ได้)
-      note: apps <ชื่อแอปที่ตรงรายการของ note หรือ none>                                  (F9)
-    บรรทัดสุดท้ายยังเป็น `RESEARCH HOST: <verdict>` ตามเดิม
+    (v2.2, r2 F25) `collect` บน darwin เก็บสรุปของการอ่านรอบล่าสุดไว้ในตัวแปรระดับโมดูล · `host_lines() -> tuple[str, ...]` คืนบรรทัดข้างล่างของการอ่าน
+    รอบนั้น ไม่อ่าน OS เอง ไม่ยก exception และแทน token ด้วย `<token>` · เมื่อ reader เป็น darwin แต่ `collect` ไม่ได้รันตัวอ่าน darwin ในโปรเซสนี้
+    (ถูกแทนใน tests) คืน `reader:`, `roots:`, `processes: not read`, `mounts: not read` · reader อื่นคืนเฉพาะ `reader:` และ `roots:`
+    · `main` พิมพ์บรรทัดของ `host_lines()` ทั้งหมดก่อนข้อความของ `render` (`render(report, note)`, Report และ Item คง signature และผลเดิม
+      บรรทัดสุดท้ายจึงยังเป็น `RESEARCH HOST: <verdict>`) · เมื่อ `default_roots` ยก OSError: พิมพ์ `reader:` แล้วข้อความเดิมของ v1.9 (ไม่มี `roots:`)
+    ทุกแพลตฟอร์ม:
+      reader: <win32|darwin|none>                                                                                              (F1)
+      roots: repo=<path> home=<path> search_dirs=<path>, …; cloud storage: <n> (<ผู้ให้บริการ>, …)                              (F11, r2 F41)
+             · โฟลเดอร์ระดับ 0 ของ `~/Library/CloudStorage` พิมพ์เป็นจำนวนและส่วนของชื่อก่อน `-` ตัวแรกเท่านั้น (เช่น `OneDrive`) ไม่พิมพ์ชื่อบัญชี
+    เฉพาะ darwin:
+      processes: <n> listed, <n> paths read, <n> skipped, <n> wine loaders   หรือ   processes: unreadable (<เหตุ>, errno <n>, <n> pids)   (F7)
+      mounts: <n> (<ชนิดที่พบ>)[; not allowed: <จุด mount>, …]              หรือ   mounts: unreadable (<เหตุ>)             (F7, r2 F15, r2 F32)
+      wine: <n> prefixes; looked at <โฟลเดอร์ต้นทางที่มีอยู่ หรือ none>                                                          (F9)
+      skipped: <n> folders (<path>, …)     โฟลเดอร์ที่การค้น terminal ข้าม: ในรายการข้ามที่ list ไม่ได้ และโฟลเดอร์ dataless          (F10, F6, r2 F24)
+      apps: <ชื่อแอปที่ตรงรายการ หรือ none>                                                                 (F9; v2.1 เรียกบรรทัดนี้ว่า note:)
+      tools: <ชื่อที่พบ หรือ none>                                                                                              (r2 F9)
   default_roots บน darwin:
     user_profile  = โฟลเดอร์ home ของผู้ใช้
     appdata       = ~/Library/Application Support
