@@ -283,6 +283,8 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
     · (v2.2, r2 F26) ลำดับต่อ mount: กฎ FAIL ก่อน แล้วจึงกฎ UNKNOWN · ผลรวมของ item: FAIL ชนะ UNKNOWN ชนะ PASS (เหมือน `_status` ของ v1.9)
       · mount ที่ `/`: ไม่มีในรายการ หรือเป็นชนิด local อื่นที่ไม่ใช่ `apfs` = UNKNOWN · ไม่มี MNT_LOCAL หรือเป็นชนิด remote = FAIL ตามกฎ FAIL
       · กฎทั้งหมดของ mount อยู่ใน `classify_mounts` (pure)
+    · (v2.2, r2 F31) `read_mounts`: จำนวน mount ที่ `_darwin_mounts` คืนเท่ากับ capacity = ขยายแล้วอ่านใหม่ (รายการที่ถูกตัดต้องไม่ถือว่าครบ; `getfsstat`
+      เติม buffer ได้เท่าขนาดที่ให้) · บรรทัด `mounts:` บอกจำนวนที่อ่านได้
   is_cloud_only (v2.1, F6)   ฟังก์ชันเดียวทุกแพลตฟอร์ม (ไม่เลือกตาม `sys.platform`): True เมื่อ `getattr(st, "st_file_attributes", 0)` มี bit recall ของ v1.9
     หรือ `getattr(st, "st_flags", 0)` มี `0x40000000` (SF_DATALESS) · test ที่ล็อกของ v1.9 ต้องผ่านบน Mac โดยไม่แก้
     · (v2.1, F2) `SF_DATALESS` เป็นค่าคงที่ int `0x40000000` ใน envcheck (แบบเดียวกับ `RECALL_ATTRIBUTES`) ไม่ import `stat`
