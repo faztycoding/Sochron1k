@@ -223,13 +223,34 @@ def _appdata_match(name: str) -> bool:
     return lower.startswith(("net.metaquotes.", "metatrader")) or lower == "metaquotes"
 
 
-def _appdata_folder(path, appdata) -> str | None:
-    """The level-0 entry of appdata with a terminal_data name that holds path, or None (v2.2 r2 F28)."""
-    text, base = _norm(path), _norm(appdata)
-    if text == base or not _within(text, base):
+def _identity(path) -> tuple[int, int] | None:
+    """(st_dev, st_ino) of a path after symlinks, or None when it cannot be stat'ed."""
+    try:
+        status = os.stat(path)
+    except (OSError, ValueError):
         return None
-    first = os.path.relpath(text, base).split(os.sep)[0]
-    return first if _appdata_match(first) else None
+    return status.st_dev, status.st_ino
+
+
+def _is_folder(path, key: str, name: str, identity: tuple[int, int] | None) -> bool:
+    """Whether path is the folder whose normalised text is key: by text, or for another spelling of it (another
+    case on APFS, a symlinked parent) by (st_dev, st_ino). Only a path with the same last name, in any case, is
+    stat'ed (work review r3 F17)."""
+    if _norm(path) == key:
+        return True
+    return identity is not None and Path(path).name.lower() == name and _identity(path) == identity
+
+
+def _appdata_folder(path, appdata) -> str | None:
+    """The level-0 entry of appdata with a terminal_data name that holds path, or None (v2.2 r2 F28). appdata is
+    looked for among the ancestors of path by _is_folder, so another spelling of it is found too (r3 F17)."""
+    key, name, identity = _norm(appdata), Path(appdata).name.lower(), _identity(appdata)
+    absolute = Path(os.path.abspath(path))
+    chain = (*reversed(absolute.parents), absolute)
+    for folder, child in zip(chain, chain[1:]):
+        if _is_folder(folder, key, name, identity):
+            return child.name if _appdata_match(child.name) else None
+    return None
 
 
 def _interpreter_identity() -> tuple[int, int] | None:
@@ -301,6 +322,8 @@ class _Search:
         self.default_data = _norm(self.repo / "data")
         self.appdata = Path(roots.appdata)
         self.appdata_key = _norm(roots.appdata)
+        self.appdata_name = self.appdata.name.lower()
+        self.appdata_id = _identity(roots.appdata)  # r3 F17: another spelling of appdata is recognised by identity
         self.metaquotes = _norm(Path(roots.appdata) / "MetaQuotes")
         self.quiet = quiet  # terminal_data is FAIL already: a terminal data folder is skipped silently (r2 F28)
         self.excused = _norm(self.repo.joinpath(*EXCUSED))
@@ -372,20 +395,20 @@ class _Search:
         return plan + searched
 
     def _closed_root(self, folder: Path, key: str) -> str | None:
-        """Why a root is never listed, or None: under %APPDATA%\\MetaQuotes (v1.9 F6), under a terminal data
-        folder of appdata (v2.2 r2 F28) or at or below a dataless folder, checked from the top down before
-        the root itself is stat'ed (v2.2 r2 F12)."""
+        """Why a root is never listed, or None: under %APPDATA%\\MetaQuotes (v1.9 F6), at or below a dataless
+        folder, checked from the top down before anything below it is stat'ed (v2.2 r2 F12), or under a terminal
+        data folder of appdata in any spelling (v2.2 r2 F28, work review r3 F17)."""
         if _within(key, self.metaquotes):
             return "is under %APPDATA%\\MetaQuotes, which is never listed"
+        dataless = _dataless_above(folder)
+        if dataless is not None:
+            if _norm(dataless) == key:
+                return "is a dataless folder (its content is in the cloud), not listed"
+            return f"is below the dataless folder {dataless}, not listed"
         named = _appdata_folder(folder, self.appdata)
         if named is not None:
             return f"is under {named}, a terminal data folder that is never listed"
-        dataless = _dataless_above(folder)
-        if dataless is None:
-            return None
-        if _norm(dataless) == key:
-            return "is a dataless folder (its content is in the cloud), not listed"
-        return f"is below the dataless folder {dataless}, not listed"
+        return None
 
     def _unlisted(self, area: str, folder: Path, why: str = "could not be listed") -> None:
         text = f"{folder} {why}"
@@ -411,8 +434,8 @@ class _Search:
             if area == "search" and sentinel is None:
                 continue  # only the sentinel rules read the search dirs
             self.counts["roots"] += 1
-            for folder, files, folders, reparse, beside in self._walk(root, area):
-                self._visit(area, folder, files, folders, reparse, beside)
+            for folder, files, folders, reparse, beside, at_appdata in self._walk(root, area):
+                self._visit(area, folder, files, folders, reparse, beside, at_appdata)
 
     def _walk(self, root: Path, area: str):
         stack = [(root, _below_terminal(root))]  # v1.9 F6: a root below a terminal folder is never opened
@@ -445,8 +468,8 @@ class _Search:
                 except OSError:
                     self._unlisted(area, Path(entry.path), "could not be read")
             here = beside or any(entry.name.lower() == TERMINAL for entry in files + reparse)
-            yield folder, files, folders, reparse, here
-            at_appdata = _norm(folder) == self.appdata_key
+            at_appdata = _is_folder(folder, self.appdata_key, self.appdata_name, self.appdata_id)
+            yield folder, files, folders, reparse, here, at_appdata
             for entry in folders:
                 if _norm(entry.path) in self.prune:
                     continue
@@ -456,7 +479,8 @@ class _Search:
                     continue
                 stack.append((Path(entry.path), here))
 
-    def _visit(self, area: str, folder: Path, files: list, folders: list, reparse: list, beside: bool) -> None:
+    def _visit(self, area: str, folder: Path, files: list, folders: list, reparse: list, beside: bool,
+               at_appdata: bool) -> None:
         sentinel = self.sentinel
         if area != "search":
             for entry in folders + reparse:
@@ -473,7 +497,6 @@ class _Search:
                 self.counts["interpreter links excused"] += 1
             else:  # v1.9 F3 (a): research code could read through it
                 self._unlisted(area, Path(entry.path), "is a junction or symbolic link, not entered")
-        at_appdata = folder_key == self.appdata_key
         by_name = {entry.name.lower(): entry for entry in files}
         for entry in files:
             self.counts["files examined"] += 1

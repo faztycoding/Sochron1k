@@ -257,6 +257,36 @@ def test_a_sentinel_file_under_a_terminal_data_folder_is_never_examined(tmp_path
     assert sentinel is None and "never opened" in why
 
 
+def test_another_spelling_of_appdata_still_hides_its_terminal_data_folders(tmp_path, monkeypatch):
+    """Work review r3 F17: appdata reached through a symlinked parent is recognised by identity, so its terminal
+    data folder is never listed or opened in evaluate, and load_sentinel refuses a file under it."""
+    home = tmp_path / "Home"
+    appdata = home / "Library" / "Application Support"
+    folder = appdata / "MetaTrader 5"
+    folder.mkdir(parents=True)
+    (folder / "notes.txt").write_text(f"pasted from the VPS: {TOKEN}\n")
+    (folder / "values.json").write_text("{}")
+    os.symlink(home, tmp_path / "alias", target_is_directory=True)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    listed = []
+    real_scandir = os.scandir
+
+    def scandir(path="."):
+        listed.append(ec._norm(path))
+        return real_scandir(path)
+
+    monkeypatch.setattr(os, "scandir", scandir)
+    roots = _roots(tmp_path, repo, appdata=appdata, data_dirs=(repo / "data", tmp_path / "alias" / "Library"))
+    report = ec.evaluate(_facts(metaquotes_exists=False), roots, _sentinel(tmp_path))
+    statuses = {item.name: item.status for item in report.items}
+    assert [statuses[name] for name in ("holdout_dir", "excluded_period", "sentinel")] == [ec.UNKNOWN] * 3
+    assert [path for path in listed if "MetaTrader 5" in path] == []
+    other = tmp_path / "alias" / "Library" / "Application Support" / "MetaTrader 5" / "values.json"
+    sentinel, why = ec.load_sentinel(other, appdata=appdata)
+    assert sentinel is None and "never opened" in why
+
+
 def test_the_reader_name_is_none_on_other_platforms(monkeypatch):
     monkeypatch.setattr(ec.sys, "platform", "linux")
     assert ec.reader_name() == "none"
