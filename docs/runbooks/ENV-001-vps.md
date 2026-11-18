@@ -153,7 +153,7 @@ PS> net accounts /lockoutthreshold:5 /lockoutduration:30 /lockoutwindow:30
    % /usr/bin/curl -s https://api.ipify.org; echo
    ```
    `curl` ต้องได้ IP ที่ต่างจาก IP บ้าน (บันทึกแค่ "ต่างจาก IP บ้าน: ใช่" ไม่วาง IP) · ได้ IP เดียวกับบ้านหรือไม่มีเน็ต = ทดสอบนี้ไม่มีผล · 3389 ต้อง exit ไม่ใช่ 0 · `curl` บรรทัดหลังต้องได้ IP อีกครั้ง (ตัวควบคุมรอบหลัง)
-3. **IPv6** (ทำเมื่อข้อ 1.5 พบ IPv6 สาธารณะ) · ที่อยู่ IPv6 ของ VPS: ดูจากหน้าของผู้ให้บริการ (ที่อยู่ของเครื่อง ไม่ใช่แค่ prefix `/64`) หรืออ่านบน VPS (PowerShell ธรรมดา, อ่านอย่างเดียว): `PS> (Get-NetIPAddress -AddressFamily IPv6 | Where-Object { $_.PrefixOrigin -ne 'WellKnown' -and $_.IPAddress -notlike 'fe80*' }).IPAddress` · ห้ามวางในแชท (review F21):
+3. **IPv6** (ทำเมื่อข้อ 1.5 พบ IPv6 สาธารณะ) · ที่อยู่ IPv6 ของ VPS: ดูจากหน้าของผู้ให้บริการ (ที่อยู่ของเครื่อง ไม่ใช่แค่ prefix `/64`) หรืออ่านบน VPS (PowerShell ธรรมดา, อ่านอย่างเดียว): `PS> (Get-NetIPAddress -AddressFamily IPv6 | Where-Object { $_.PrefixOrigin -ne 'WellKnown' -and $_.IPAddress -notlike 'fe80*' }).IPAddress` · ห้ามวางในแชท (review F21) · ที่ `read` วางที่อยู่เดียว บรรทัดเดียว (ถ้าคำสั่งพิมพ์หลายที่อยู่ ใช้ที่อยู่แรก; r2 F30):
    ```zsh
    % /usr/bin/nc -6 -vz -G 5 ipv6.google.com 443; echo "exit $?"
    % read -r 'VPS6?IPv6 ของ VPS: '
