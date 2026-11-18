@@ -301,6 +301,7 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
         (win32: `metaquotes_exists`; darwin: ชื่อเท่ากับ `metaquotes` ตรงกฎ) การข้ามจึงไม่ซ่อน PASS และไม่เปลี่ยนผลของ test ที่ล็อก
       · บน default roots ของ darwin รายการที่ตรงอยู่ใต้ `~/Library` ซึ่งการค้น home ไม่เข้าอยู่แล้ว `never_listed` จึงมีผลเมื่อ appdata อยู่นอก `<home>/Library`
   network_shares (darwin)    อ่านรายการ mount ด้วย `getfsstat` ของ libc:
+    · (v2.3, r3 F44) `MNT_LOCAL` เป็นค่าคงที่ int `0x00001000` ใน envcheck (`sys/mount.h`:222 ของ macOS SDK) แบบเดียวกับ `SF_DATALESS` · tests ใช้ค่าคงที่นี้
     FAIL เมื่อมี mount ชนิด smbfs, nfs, afpfs, webdav, ftp หรือ mount ที่ไม่มี flag MNT_LOCAL และชนิดไม่ใช่ autofs
     · (v2.1, F19) mount ชนิด autofs ผ่านเฉพาะเมื่อ `f_mntfromname` เป็น `map auto_home` (ค่าที่วัดบนเครื่องนี้) · autofs อื่น (เช่น `map -static`, `map -fstab`,
       `map -hosts`) = UNKNOWN · devfs มี MNT_LOCAL อยู่แล้วจึงไม่ต้องยกเว้น
