@@ -204,9 +204,17 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
     FAIL เมื่อมี mount ชนิด smbfs, nfs, afpfs, webdav, ftp หรือ mount ที่ไม่มี flag MNT_LOCAL และชนิดไม่ใช่ autofs หรือ devfs
     · ชนิดที่ไม่อยู่ในรายการ local ที่รู้จัก (apfs, hfs, devfs, autofs, msdos, exfat, udf, cd9660, tmpfs, nullfs) และไม่อยู่ในรายการ remote = UNKNOWN
     · API ล้ม = UNKNOWN
-  is_cloud_only (darwin)     True เมื่อ `os.stat(path).st_flags` มี SF_DATALESS (0x40000000)
+  is_cloud_only (v2.1, F6)   ฟังก์ชันเดียวทุกแพลตฟอร์ม (ไม่เลือกตาม `sys.platform`): True เมื่อ `getattr(st, "st_file_attributes", 0)` มี bit recall ของ v1.9
+    หรือ `getattr(st, "st_flags", 0)` มี `0x40000000` (SF_DATALESS) · test ที่ล็อกของ v1.9 ต้องผ่านบน Mac โดยไม่แก้
     · (v2.1, F2) `SF_DATALESS` เป็นค่าคงที่ int `0x40000000` ใน envcheck (แบบเดียวกับ `RECALL_ATTRIBUTES`) ไม่ import `stat`
-    · ไฟล์ตัวแทนแบบเก่าชื่อ `.<ชื่อ>.icloud`: ใต้ repo หรือ data dirs = UNKNOWN · ใต้ search_dirs อย่างเดียว = ข้าม
+    · (v2.1, F6) ไฟล์ชื่อ `.<ชื่อ>.icloud` (ไม่สนตัวพิมพ์, ทุกแพลตฟอร์ม, ไม่ถูกเปิด): ใต้ repo หรือ data dir = UNKNOWN ของ `excluded_period` และ `sentinel`
+      · ใต้ search_dirs อย่างเดียว: `.<ชื่อ sentinel>.icloud` = FAIL ตามกฎ (2), `.<อะไรก็ได้>.json.icloud` = UNKNOWN ของ `sentinel` (ขนาดจริงอ่านไม่ได้โดย
+        ไม่เปิด), อื่นๆ ข้าม (ครึ่งของ search_dirs เป็นกฎใหม่ของ v2.1; macOS 14 ขึ้นไปไม่สร้างไฟล์ตัวแทนแบบนี้แล้ว)
+    · (v2.1, F6, คำตัดสินข้อ 4) โฟลเดอร์ dataless (`envcheck.is_cloud_only(folder)` เป็น True) ไม่ถูก list เพราะการ list ทำให้ macOS ดึงรายการจาก cloud
+      (Apple TN3150) · ตรวจก่อน list ทุกครั้ง รวม root ของ data dirs และ search_dirs เอง และห้าม stat path ที่อยู่ใต้โฟลเดอร์ dataless
+      · ใต้ repo หรือ data dir = UNKNOWN ของ holdout_dir, excluded_period และ sentinel · ใต้ search_dirs = UNKNOWN ของ sentinel
+      · ใต้ root ของการค้น terminal = ข้ามและนับในบรรทัด `skipped:` · tests จำลองด้วยการแทน `envcheck.is_cloud_only` ตัวเดิม และตรวจว่าโฟลเดอร์นั้นไม่ถูก list
+      · ไม่ใช้ `setiopolicy_np`
   symlink (ทุกแพลตฟอร์ม; ข้อยกเว้นเดียวของกฎ v1.9 r1 F2/F3):
     (v2.1, F5) symlink ที่อยู่ระดับ 0 ของ `<repo>/.venv/bin/` (`<repo>` คือ `roots.repo` เสมอ รวมกรณี data dir ครอบ repo) ชื่อตรงตัวพิมพ์กับ
     `python`, `python3` หรือ `python3\.[0-9]+` ซึ่ง `os.stat` (ตาม link) ให้ `st_dev` และ `st_ino` เท่ากับของ `os.stat(sys.executable)`
@@ -263,6 +271,8 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 
 (v2.0) กรณีของ macOS (โฟลเดอร์ชั่วคราว, Facts ปลอม และฟังก์ชันระดับโมดูลของตัวอ่าน darwin; v2.1, F1, F4): แอป `MetaTrader 5.app` ใน /Applications หรือ ~/Applications (FAIL) · แอปชื่อ `metatrader 5.APP` (FAIL: ไม่สนตัวพิมพ์) · แอปอื่นชื่อ `MetaEditor.app` (PASS) · โฟลเดอร์ `net.metaquotes.wine.metatrader5` หรือ `MetaTrader 5` ใต้ Application Support (FAIL และไม่ถูก list) · `terminal64.exe` ระดับ 2 ใต้ `drive_c/Program Files` ของ prefix ของ PlayOnMac, CrossOver หรือ `~/.wine` (FAIL) และระดับ 3 (PASS) · ไม่มี Wine prefix เลย (PASS ไม่ใช่ UNKNOWN) · โฟลเดอร์ `Bottles` มีอยู่แต่ list ไม่ได้ (UNKNOWN) · โปรเซสที่ path อยู่ใต้ `MetaTrader 5.app` หรือชื่อ `terminal64.exe` (FAIL) · รายการโปรเซสอ่านไม่ได้ (UNKNOWN) · mount ชนิด `smbfs` หรือ `nfs` (FAIL) · mount ชนิดที่ไม่รู้จัก (UNKNOWN) · มีแต่ `apfs`, `devfs`, `autofs` (PASS) · ไฟล์ `.json` ที่มี flag dataless ขนาดเท่า sentinel ใน iCloud Drive (UNKNOWN และไม่ถูกเปิด) · ไฟล์ `.txt` dataless ใต้ `<repo>/data/` (UNKNOWN และไม่ถูกเปิด) · `.<ชื่อ>.icloud` ใต้ data dir (UNKNOWN) · โฟลเดอร์ใน search_dirs ที่ list ไม่ได้เพราะ Privacy (UNKNOWN) · (v2.1, F5) `.venv/bin/python` → interpreter ที่กำลังรัน (ไม่ UNKNOWN ไม่ถูกเปิด) · `.venv/bin/python3` → `python` → interpreter ที่กำลังรัน (ไม่ UNKNOWN) · chain ที่ออกนอกโฟลเดอร์ผ่าน symlink อื่นแต่จบที่ interpreter ที่กำลังรัน (ไม่ UNKNOWN) · `.venv/bin/python3.9` → ไฟล์ธรรมดาอื่นนอก repo (UNKNOWN) · `.venv/bin/python` → สำเนาของ interpreter ที่ path อื่น (UNKNOWN) · link ขาด, วนกลับ หรือชี้โฟลเดอร์ (UNKNOWN) · tests สร้าง link ไปที่ `os.path.realpath(sys.executable)` ในโฟลเดอร์ชั่วคราว นอกช่วงที่ envkit บันทึก side effect (`os.symlink` อยู่ในรายการต้องห้ามของ envkit.py:197) · symlink ชื่ออื่นใน `.venv/bin/` หรือ `python` ที่อยู่ที่อื่นใต้ repo (UNKNOWN) · `collect` จริงบน platform ที่ไม่ใช่ `win32` หรือ `darwin` (UNKNOWN ไม่มีวัน PASS)
 
+(v2.1, F6) กรณีเพิ่มของ macOS: โฟลเดอร์ dataless ใน iCloud Drive (UNKNOWN ของ `sentinel` และไม่ถูก list) · โฟลเดอร์ dataless ใต้ `<repo>/data/` (UNKNOWN และไม่ถูก list) · `.<ชื่อ sentinel>.icloud` ใต้ search_dirs อย่างเดียว (FAIL) · `.x.json.icloud` ใต้ search_dirs อย่างเดียว (UNKNOWN) · `.x.png.icloud` ใต้ search_dirs อย่างเดียว (ข้าม: PASS) · `is_cloud_only` ตัวจริงกับ stat ปลอมที่มีแต่ `st_flags` = `0x40000000` (True) และที่ไม่มีทั้ง `st_flags` กับ `st_file_attributes` (False)
+
 ## Acceptance (Given–When–Then, Thai; ≤ 7)
 - AC-01 (v2.0 แทนฉบับ Windows ของ v1.9) Given เครื่อง Mac หลังทำตาม runbook ฉบับ macOS (ไม่มีแอป MetaTrader, ไม่มีโฟลเดอร์ Wine ของ MT5, ไม่มี network volume ที่ mount อยู่, แอปที่ใช้รันคำสั่งได้สิทธิ์ Files and Folders ของ Desktop, Documents, Downloads และ iCloud Drive) และ repo อยู่ที่ commit ที่ตรวจแล้ว (`git rev-parse --short HEAD` ตรงกับที่ Claude ให้ และ `git status --short` ไม่พิมพ์อะไร) When เจ้าของรันคำสั่ง CLI (zsh) ของ contract พร้อม `--sentinel-file docs/evidence/ENV-002-sentinel.json` Then ทุก item เป็น PASS, รายงานมีบรรทัด `reader: darwin` (v2.1, F1), บรรทัดสุดท้ายเป็น `RESEARCH HOST: PASS` และ exit status เป็น 0 · หลักฐานมี commit, เวลา และรายงานทั้งหมด
 - AC-01 ฉบับ v1.9 (Windows, เลิกใช้เมื่อ v2.0 อนุมัติ): Given เครื่องเจ้าของหลังทำตาม runbook (ถอน terminal, ลบ `%APPDATA%\MetaQuotes`, ไม่มี mapped drive ไป VPS) When เจ้าของรันคำสั่ง CLI ของ contract พร้อม `--sentinel-file docs/evidence/ENV-002-sentinel.json` Then ทุก item เป็น PASS และบรรทัดสุดท้าย `RESEARCH HOST: PASS`
@@ -287,6 +297,7 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 ## Runbook ฉบับ macOS: ข้อที่ต้องมี (v2.1)
 ข้อเหล่านี้เป็นส่วนของ Given ใน AC-01 และ AC-03 · Claude เขียนลง `docs/runbooks/ENV-002-research-host.md` ตอน implement · เจ้าของเป็นผู้ทำ
 - (F3) ก่อนรอบหลักฐานของ AC-01: ลบ `.venv` แล้วสร้างใหม่ด้วย `uv sync --locked` (ไฟล์ `.pth` ใน `.venv` ซึ่งถูก gitignore รันอยู่ในโปรเซสของ envcheck) · shell ที่รันไม่มีตัวแปรที่ขึ้นต้นด้วย `DYLD_` (`env | grep '^DYLD_'` ไม่พิมพ์อะไร)
+- (F6) โฟลเดอร์ cloud ที่ตัวตรวจค้น (iCloud Drive และทุกโฟลเดอร์ระดับ 0 ของ `~/Library/CloudStorage`) ต้องถูกดาวน์โหลดไว้ในเครื่อง: ปิด Optimize Mac Storage หรือสั่ง Keep Downloaded / Download Now · โฟลเดอร์ที่ยังเป็น dataless ทำให้ `sentinel` เป็น UNKNOWN
 
 ## Risk, data and external side effects
 **Threat model ย่อ (High):**
