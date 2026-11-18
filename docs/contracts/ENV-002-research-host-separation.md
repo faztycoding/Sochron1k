@@ -164,21 +164,33 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
                               API ล้ม, มี `DYLD_*` หรือเครื่องไม่ใช่ arm64 (r2 F26)
   (v2.1, F4) ฟังก์ชันระดับโมดูลที่ tests เรียกหรือแทนได้ (ไม่เรียก API ของ OS เอง; ชื่อและ signature เป็นข้อผูกของ contract ผู้เขียน tests ที่ต้องการ
     เปลี่ยนให้ถามใน handoff ก่อน):
-    find_terminal_paths_darwin(applications, program_files, home, never_listed) -> tuple[tuple[str, ...], bool]   # (path ที่พบ, ค้นครบหรือไม่; r2 F30)
-    find_wine_program_files(home) -> tuple[Path, ...]
-    classify_mounts(entries: tuple[tuple[str, str, str, int], ...]) -> tuple[tuple[str, ...], tuple[str, ...] | None]
-        # entry = (ชนิด, ต้นทาง, จุด mount, flags) · คืน (remote_drives, connected_resources)
-    classify_processes(paths: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[str, ...] | None]   # คืน (terminal_paths ส่วนของโปรเซส, process_names)
+    (v2.3, r3 F25: ค่าที่คืนขยายให้พาตัวเลขของบรรทัด CLI ได้ ทุกฟังก์ชันในรายการนี้ไม่เขียนสถานะของโมดูล มีแต่ `collect` และ `research_host_report` ที่เขียน)
+    find_terminal_paths_darwin(applications, program_files, home, never_listed)
+        -> tuple[tuple[str, ...], bool, tuple[str, ...]]          # (path ที่พบ, ค้นครบหรือไม่ (r2 F30), path ของโฟลเดอร์ที่ข้าม (บรรทัด `skipped:`))
+    wine_prefixes(home) -> tuple[tuple[Path, ...], tuple[Path, ...], tuple[Path, ...]]
+        # (prefix ที่พบ, โฟลเดอร์ต้นทางที่มีอยู่, root `drive_c/Program Files*`) · ยก OSError ตามกฎของ program_files ข้างล่าง (บรรทัด `wine:`)
+    find_wine_program_files(home) -> tuple[Path, ...]              # = ส่วนที่สามของ `wine_prefixes(home)`
+    classify_mounts(entries: tuple[tuple[str, str, str, int], ...])
+        -> tuple[tuple[str, ...], tuple[str, ...] | None, tuple[str, ...], str | None]
+        # entry = (ชนิด, ต้นทาง, จุด mount, flags) · คืน (remote_drives, connected_resources, จุด mount ที่ไม่อยู่ในรายการอนุญาต,
+        #   ปัญหาของ `/`: None เมื่อผ่าน, `missing` หรือ `<ชนิด>` เมื่อไม่ใช่ apfs)
+    classify_processes(paths: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[str, ...] | None, int]
+        # คืน (terminal_paths ส่วนของโปรเซส, process_names, จำนวน Wine loader)
     _darwin_application_dirs(home) -> tuple[Path, ...]
     (v2.2, r2 F4) การอ่านโปรเซสและ mount แยกเป็นตัวอ่านดิบ (มีแต่การเรียก ctypes; tests แทนด้วยตัวปลอม) กับฟังก์ชัน pure ที่ถือกฎทั้งหมด (tests เรียกตรง):
       ตัวอ่านดิบ  _darwin_list_pids(capacity: int) -> tuple[int, tuple[int, ...]]     # (จำนวนที่ API คืน, pid ที่อ่านได้) · API ล้ม = ยก OSError
                  _darwin_pid_path(pid: int) -> tuple[str | None, int]                 # (path หรือ None, errno) · ไม่ยก exception
                  _darwin_mounts(capacity: int) -> tuple[int, tuple[tuple[str, str, str, int], ...]]   # (จำนวนที่ API คืน, entries) · API ล้ม = ยก OSError
-      pure       read_process_paths(own_pid: int, own_path: str) -> tuple[str, ...]   # ถือกฎของ F7 ทั้งหมด: วนขยาย buffer, ข้าม pid 0 และ ESRCH,
-                                                                                      #   errno อื่น, PID ของตัวเอง · อ่านไม่ได้ตามกฎ = ยก OSError
+      pure       read_process_paths(own_pid: int, own_path: str) -> tuple[tuple[str, ...], int, int]
+                     # (path ที่อ่านได้, จำนวน pid ที่ list, จำนวนที่ข้าม (pid 0 และ ESRCH)) (v2.3, r3 F25) · ถือกฎของ F7 ทั้งหมด: วนขยาย buffer,
+                     #   ข้าม pid 0 และ ESRCH, errno อื่น, PID ของตัวเอง · อ่านไม่ได้ตามกฎ = ยก OSError ที่ข้อความเป็น <เหตุ> ของบรรทัด `processes:`
                  read_mounts() -> tuple[tuple[str, str, str, int], ...]               # วนขยาย buffer (r2 F31) · อ่านไม่ได้ = ยก OSError
+      ("pure" ในที่นี้ = ไม่เรียก ctypes เอง เรียกผ่านตัวอ่านดิบเท่านั้น และไม่เขียนสถานะของโมดูล)
       `collect` บน darwin เรียก `read_process_paths(os.getpid(), os.path.realpath(sys.executable))` แล้ว `classify_processes`, และ `read_mounts()`
       แล้ว `classify_mounts` · OSError จากฟังก์ชันเหล่านี้ → field ที่เกี่ยวเป็น None ตามตาราง Facts ข้างบน · `_darwin_process_paths()` ของ v2.1 ถูกแทนด้วยชุดนี้
+      · (v2.3, r3 F25) `collect` บน darwin เรียก `wine_prefixes(roots.user_profile)` ซ้ำเพื่อทำบรรทัด `wine:` และค้น `terminal64.exe` ใต้ root
+        `Program Files*` ที่ได้ รวมกับ `roots.program_files` (ไม่ซ้ำ) · roots ที่ประกอบเองจึงไม่ข้ามการค้น Wine prefix · `wine_prefixes` ยก OSError
+        = `terminal_paths` None (UNKNOWN ของ terminal_install) และบรรทัด `wine: unreadable (<เหตุ>)`
     (v2.2, r2 F4) `never_listed: tuple[Path, ...]` = path เต็มที่การค้น home ไม่เข้า (`<home>/Library`, `<home>/.ssh` และ path ที่พบจากกฎ terminal_data)
     (v2.2, r2 F4) การตรวจ `DYLD_*` และ `os.uname().machine` อยู่ใน `collect` ก่อนเรียกฟังก์ชันอ่านโปรเซสและ mount ทั้งหมด (ไม่ผ่าน = ไม่เรียก และ field
       ที่เกี่ยวเป็น None) · tests ของ collect ตั้ง `envcheck.os.uname` ปลอมที่คืน machine `arm64` (CI เป็น Linux x86_64) และมีกรณี `x86_64` แยก
@@ -189,22 +201,40 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
     เพราะงานนี้ High) · ถ้อยคำ detail ของ item ที่มาจาก Facts คงเดิมตาม v1.9 ทุกแพลตฟอร์ม (เช่น `%APPDATA%\MetaQuotes`, `Uninstall entries`,
     `remote drives`); บรรทัด `reader: darwin` และ runbook ฉบับ macOS บอกว่าคำเหล่านั้นหมายถึงอะไรบน Mac
   (v2.1, F4) ค่าที่ Facts 7 field พาไปไม่ได้ (errno, จำนวน pid, จำนวน Wine prefix, โฟลเดอร์ที่ข้าม, ชื่อแอปของ note) ไม่อยู่ใน detail ของ item:
-    (v2.2, r2 F25) `collect` บน darwin เก็บสรุปของการอ่านรอบล่าสุดไว้ในตัวแปรระดับโมดูล · `host_lines() -> tuple[str, ...]` คืนบรรทัดข้างล่างของการอ่าน
-    รอบนั้น ไม่อ่าน OS เอง ไม่ยก exception และแทน token ด้วย `<token>` · เมื่อ reader เป็น darwin แต่ `collect` ไม่ได้รันตัวอ่าน darwin ในโปรเซสนี้
-    (ถูกแทนใน tests) คืน `reader:`, `roots:`, `processes: not read`, `mounts: not read` · reader อื่นคืนเฉพาะ `reader:` และ `roots:`
+    (v2.3, r3 F25: แทนถ้อยคำของ v2.2 เรื่อง "ตัวแปรระดับโมดูล" และ "ในโปรเซสนี้") สถานะของบรรทัด CLI:
+    · ตัวแปรระดับโมดูลเดียวชื่อ `_HOST_SUMMARY` (dict) · ค่าตั้งต้นตอน import คือว่าง
+    · `research_host_report(*, roots, sentinel)` ทุกครั้ง ทุก reader: ล้าง `_HOST_SUMMARY` แล้วบันทึก reader, `roots` ที่จะใช้ และ token ของ sentinel
+      (ถ้ามี) ก่อนเรียก `collect` · signature ไม่เปลี่ยน (รับทั้ง roots และ sentinel อยู่แล้ว)
+    · `collect` ตัวจริงบน darwin บันทึกสรุปของการอ่านลง `_HOST_SUMMARY` จากค่าที่ฟังก์ชันข้างบนคืน · ถ้าถูกเรียกตรง (ไม่ผ่าน `research_host_report`)
+      ก็ล้างและบันทึก reader กับ `roots` เองก่อน (ไม่มี token ให้แทน)
+    · `host_lines() -> tuple[str, ...]` คืนบรรทัดจาก `_HOST_SUMMARY` ของการเรียกครั้งล่าสุด ไม่อ่าน OS เอง ไม่ยก exception และแทน token ที่บันทึกไว้ด้วย
+      `<token>` · ก่อนมีการเรียกใดเลย คืนแค่ `reader:`
+    · ผลที่ตามมา: `collect` ที่ถูกแทนใน tests ไม่เขียนสรุป เมื่อเรียกผ่าน `research_host_report` หรือ `main` บน darwin จึงได้ `reader: darwin`, `roots:`,
+      `processes: not read`, `mounts: not read`, `wine: not read` ไม่ว่า test ก่อนหน้าทำอะไร · reader อื่นได้แค่ `reader:` และ `roots:`
+    · tests ของ `host_lines()` เรียกผ่าน `research_host_report` หรือ `main` เสมอ (หรือ `collect` ตัวจริงที่ตั้ง platform เป็น darwin พร้อมตัวอ่านดิบปลอม)
     · `main` พิมพ์บรรทัดของ `host_lines()` ทั้งหมดก่อนข้อความของ `render` (`render(report, note)`, Report และ Item คง signature และผลเดิม
       บรรทัดสุดท้ายจึงยังเป็น `RESEARCH HOST: <verdict>`) · เมื่อ `default_roots` ยก OSError: พิมพ์ `reader:` แล้วข้อความเดิมของ v1.9 (ไม่มี `roots:`)
+    รูปของบรรทัด (v2.3, r3 F48: ทุกรูปที่เกิดได้ · รายการในวงเล็บคั่นด้วย `, ` · ชนิดของ mount ไม่ซ้ำ เรียงตามลำดับที่พบ · ชื่อใน `tools:` และ `apps:` เรียงตามลำดับ
+    ของรายการใน contract นี้):
     ทุกแพลตฟอร์ม:
       reader: <win32|darwin|none>                                                                                              (F1)
-      roots: repo=<path> home=<path> search_dirs=<path>, …; cloud storage: <n> (<ผู้ให้บริการ>, …)                              (F11, r2 F41)
-             · โฟลเดอร์ระดับ 0 ของ `~/Library/CloudStorage` พิมพ์เป็นจำนวนและส่วนของชื่อก่อน `-` ตัวแรกเท่านั้น (เช่น `OneDrive`) ไม่พิมพ์ชื่อบัญชี
+      roots: repo=<path> home=<path> search_dirs=<path>, …[; cloud storage: <n> (<ผู้ให้บริการ>, …)]                           (F11, r2 F41)
+             · ส่วน `cloud storage:` มีเฉพาะ darwin · โฟลเดอร์ระดับ 0 ของ `~/Library/CloudStorage` ไม่อยู่ใน `search_dirs=` แต่พิมพ์เป็นจำนวนและส่วนของ
+               ชื่อก่อน `-` ตัวแรกเท่านั้น (เช่น `OneDrive`) ไม่พิมพ์ชื่อบัญชี · ไม่มีหรือว่าง = `cloud storage: 0`
+             · (v2.3, r3 F46) บน win32 search_dirs ที่มาจากตัวแปร `OneDrive*` ไม่อยู่ใน `search_dirs=` แต่พิมพ์เป็น `; onedrive: <n>`
     เฉพาะ darwin:
-      processes: <n> listed, <n> paths read, <n> skipped, <n> wine loaders   หรือ   processes: unreadable (<เหตุ>, errno <n>, <n> pids)   (F7)
-      mounts: <n> (<ชนิดที่พบ>)[; not allowed: <จุด mount>, …]              หรือ   mounts: unreadable (<เหตุ>)             (F7, r2 F15, r2 F32)
-      wine: <n> prefixes; looked at <โฟลเดอร์ต้นทางที่มีอยู่ หรือ none>                                                          (F9)
-      skipped: <n> folders (<path>, …)     โฟลเดอร์ที่การค้น terminal ข้าม: ในรายการข้ามที่ list ไม่ได้ และโฟลเดอร์ dataless          (F10, F6, r2 F24)
-      apps: <ชื่อแอปที่ตรงรายการ หรือ none>                                                                 (F9; v2.1 เรียกบรรทัดนี้ว่า note:)
-      tools: <ชื่อที่พบ หรือ none>                                                                                              (r2 F9)
+      processes: <n> listed, <n> paths read, <n> skipped, <n> wine loaders                                                     (F7)
+        หรือ processes: unreadable (<เหตุ>)   เหตุ = `DYLD_ variables set` · `not arm64: <machine>` · `proc_listallpids failed, errno <n>` ·
+                                             `listed 0 pids` · `own pid missing, <n> pids` · `own path differs, <n> pids` · `errno <n> on pid <pid>, <n> pids`
+        หรือ processes: not read
+      mounts: <n> (<ชนิดที่พบ>)[; not allowed: <จุด mount>, …][; root: <missing|ชนิด>]                                      (F7, r2 F15, r2 F32)
+        หรือ mounts: unreadable (<เหตุ>)      เหตุ = `DYLD_ variables set` · `not arm64: <machine>` · `getfsstat failed, errno <n>`
+        หรือ mounts: not read
+      wine: <n> prefixes; looked at <โฟลเดอร์ต้นทางที่มีอยู่, … หรือ none>   หรือ   wine: unreadable (<เหตุ>)   หรือ   wine: not read   (F9)
+      skipped: <n> folders[ (<path>, …)]   โฟลเดอร์ที่การค้น terminal ข้าม: ในรายการข้ามที่ list ไม่ได้ และโฟลเดอร์ dataless · ไม่มี = `skipped: 0 folders`
+      apps: <ชื่อแอปที่ตรงรายการ, … หรือ none>                                                              (F9; v2.1 เรียกบรรทัดนี้ว่า note:)
+      tools: <ชื่อที่พบ, … หรือ none>                                                                                          (r2 F9)
+    · ใน `collect` ที่ถูกเรียกจริง บรรทัด `skipped:`, `apps:`, `tools:` มาจากการค้นของรอบนั้น · เมื่อ `collect` ถูกแทน สามบรรทัดนี้ไม่ถูกพิมพ์
   default_roots บน darwin:
     user_profile  = โฟลเดอร์ home ของผู้ใช้
     appdata       = ~/Library/Application Support
@@ -379,7 +409,7 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 
 (v2.2, r2 F10) กรณีเพิ่มของ macOS: โฟลเดอร์ที่ list ไม่ได้ระดับ 1 ของ `drive_c/Program Files` ของ prefix (UNKNOWN ของ `terminal_install`) · `drive_c` ของ prefix มีอยู่แต่ list ไม่ได้ (`default_roots` ยก OSError) · โฟลเดอร์ของ prefix เป็น symlink (`default_roots` ยก OSError) · prefix ที่ไม่มี `drive_c` (PASS, `wine: 1 prefixes`)
 
-(v2.2, r2 F12) กรณีเพิ่มของ macOS สำหรับกฎของ v2.1 ที่ยังไม่มีกรณี: `collect` โดยมี `DYLD_INSERT_LIBRARIES` ใน `os.environ` (UNKNOWN ของ `terminal_install` และ `network_shares`; `read_process_paths`, `read_mounts` และตัวอ่านดิบไม่ถูกเรียก) · โฟลเดอร์ dataless ระดับ 1 ของ home (ไม่ถูก list, อยู่ในบรรทัด `skipped:`, PASS) · `~/Applications` ไม่มีอยู่ (PASS) และ `/Applications` มีอยู่แต่ list ไม่ได้ (UNKNOWN ของ `terminal_install`) · `terminal64.exe` ใต้ `<home>/x/.git/`, `<home>/x/.venv/` หรือ `<home>/x/node_modules/` (PASS) · โฟลเดอร์ `MetaQuotes` ใต้ Application Support (FAIL) · `metaquotes2` และ `my metatrader` ใต้ Application Support (PASS) · `--sentinel-file` ที่ชี้ไฟล์ใต้ `<appdata>/Metatrader 5/` (ไม่ถูกเปิด, `sentinel` UNKNOWN) · root ของ data dir หรือ search dir ที่มี ancestor เป็นโฟลเดอร์ dataless (UNKNOWN และ root ไม่ถูก stat หรือ list: ตรวจ ancestor จากบนลงล่างก่อน) · `host_lines()` หลัง `collect` บน darwin ด้วยตัวอ่านดิบปลอม: มีบรรทัด `reader: darwin`, `processes: 3 listed, 2 paths read, 1 skipped, 0 wine loaders`, `mounts: 3 (apfs, devfs, autofs)` และ `wine: 0 prefixes; looked at none` ตรงกับค่าปลอม · `host_lines()` เมื่อ `collect` ถูกแทน (`processes: not read`, `mounts: not read`)
+(v2.2, r2 F12) กรณีเพิ่มของ macOS สำหรับกฎของ v2.1 ที่ยังไม่มีกรณี: `collect` โดยมี `DYLD_INSERT_LIBRARIES` ใน `os.environ` (UNKNOWN ของ `terminal_install` และ `network_shares`; `read_process_paths`, `read_mounts` และตัวอ่านดิบไม่ถูกเรียก) · โฟลเดอร์ dataless ระดับ 1 ของ home (ไม่ถูก list, อยู่ในบรรทัด `skipped:`, PASS) · `~/Applications` ไม่มีอยู่ (PASS) และ `/Applications` มีอยู่แต่ list ไม่ได้ (UNKNOWN ของ `terminal_install`) · `terminal64.exe` ใต้ `<home>/x/.git/`, `<home>/x/.venv/` หรือ `<home>/x/node_modules/` (PASS) · โฟลเดอร์ `MetaQuotes` ใต้ Application Support (FAIL) · `metaquotes2` และ `my metatrader` ใต้ Application Support (PASS) · `--sentinel-file` ที่ชี้ไฟล์ใต้ `<appdata>/Metatrader 5/` (ไม่ถูกเปิด, `sentinel` UNKNOWN) · root ของ data dir หรือ search dir ที่มี ancestor เป็นโฟลเดอร์ dataless (UNKNOWN และ root ไม่ถูก stat หรือ list: ตรวจ ancestor จากบนลงล่างก่อน) · `host_lines()` หลัง `research_host_report` ที่ตั้ง platform เป็น darwin พร้อมตัวอ่านดิบปลอม (3 pid ซึ่งข้าม 1, mount `/` apfs, `/dev` devfs, `/System/Volumes/Data/home` autofs จาก `map auto_home`, home ปลอมที่ไม่มี Wine prefix): มีบรรทัด `reader: darwin`, `processes: 3 listed, 2 paths read, 1 skipped, 0 wine loaders`, `mounts: 3 (apfs, devfs, autofs)` และ `wine: 0 prefixes; looked at none` ตรงกับค่าปลอม · (v2.3, r3 F25) `host_lines()` หลัง `research_host_report` ที่แทน `collect` ด้วยตัวปลอม โดยรันต่อจาก test ข้างต้นใน process เดียวกัน (`processes: not read`, `mounts: not read`, `wine: not read`) · `host_lines()` เมื่อ `_HOST_SUMMARY` ว่าง (test แทนด้วย dict ว่างผ่าน `monkeypatch.setattr`: คืนแค่ `reader:`) · token ของ sentinel ที่ส่งให้ `research_host_report` ปรากฏใน path ของ roots ปลอม (บรรทัด `roots:` มี `<token>` และไม่มี token) · (v2.3, r3 F25) roots ที่ประกอบเองโดย `program_files=()` แต่ home ปลอมมี prefix ที่มี `terminal64.exe` ระดับ 1 (FAIL ของ `terminal_install` และ `wine: 1 prefixes`)
 
 (v2.2, r2 F30, r2 F31, r2 F33) กรณีผสมและกรณีเพิ่มของ macOS: โปรเซส `terminal64.exe` พร้อม `wineserver` (FAIL ของ `terminal_install`: path ของ `terminal64.exe` อยู่ใน `terminal_paths`) · พบ `terminal64.exe` ใต้ home และมีโฟลเดอร์อื่นใต้ home ที่ list ไม่ได้ (FAIL ไม่ใช่ UNKNOWN) · `.<ชื่อ sentinel>.icloud` ใต้ `<repo>/data/` (FAIL ของ `sentinel`) · บน `read_mounts` โดยแทน `_darwin_mounts`: คืนจำนวนเท่า capacity (เรียกใหม่ด้วย capacity ที่ใหญ่ขึ้น) และ `_darwin_mounts` ยก OSError (ยก OSError → `network_shares` UNKNOWN) · โฟลเดอร์ `MetaTrader 5` ที่ไม่ลงท้าย `.app` ระดับ 0 ของ /Applications (FAIL) · `MetaTrader 5.app` ใต้ `/Applications/Trading/` (ระดับ 1: PASS จากกฎแอป เป็นข้อที่เหลือ)
 
