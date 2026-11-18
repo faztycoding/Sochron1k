@@ -1,11 +1,12 @@
 # Runbook ENV-001: เช่าและตั้ง Windows VPS ให้ปลอดภัย (ขั้นฝั่งเครื่องเจ้าของเป็นฉบับ macOS)
 
-Contract: `docs/contracts/ENV-001-vps-acquisition-host.md` v2.2 (อนุมัติ 2026-11-18; ขั้นฝั่งเครื่องเจ้าของตามหัวข้อ "v2.0: ขั้นฝั่งเครื่องเจ้าของบน macOS") · ผู้ทำ: เจ้าของ · ใช้เวลา ≈ 2–3 ชั่วโมง · ขั้นบน VPS (ข้อ 2–6 และ 9) คงตาม v1.9 · ฉบับ Windows ของขั้นฝั่งเครื่องเจ้าของอยู่ใน history ของ git
+Contract: `docs/contracts/ENV-001-vps-acquisition-host.md` v2.2 (อนุมัติ 2026-11-18; ขั้นฝั่งเครื่องเจ้าของตามหัวข้อ "v2.0: ขั้นฝั่งเครื่องเจ้าของบน macOS") · ผู้ทำ: เจ้าของ · ใช้เวลา ≈ 2–3 ชั่วโมง · ขั้นบน VPS (ข้อ 2–6 และ 9) คงตาม v1.9 ยกเว้นข้อ 2.3 ที่เปิด session ที่สองด้วยรายการ PC ที่ Duplicate ไว้ · ฉบับ Windows ของขั้นฝั่งเครื่องเจ้าของอยู่ใน history ของ git
 
 กติกาตลอดทั้ง runbook:
 - **คุณ**รันทุกคำสั่งบน VPS · Claude ไม่เข้าถึง VPS
 - ส่งผลกลับเป็น**ข้อความ** และ**ปิดบัง IP ทุกครั้ง**ก่อนวาง (เขียนเป็น `x.x.x.x`) · ไม่ส่งไฟล์ ไม่ส่งรหัสผ่าน ไม่ส่งเลขบัญชีเต็ม
 - **ก่อนเปิด RDP หรือ console ของผู้ให้บริการทุกครั้ง** (ENV-002 checklist C9; รวมข้อ 0, 1.1 และ 1.5): Quit (⌘Q) Visual Studio Code, Claude, ChatGPT/Codex และทุกแอปที่ agent รันอยู่ (บน macOS การปิดหน้าต่างไม่ได้ปิดแอป) แล้วรันใน Terminal.app: `/usr/bin/pgrep -ilf 'claude|codex|chatgpt'` ต้องไม่พิมพ์อะไร · เปิด console ใน browser หรือ profile ที่ไม่มี extension ของ Claude หรือ ChatGPT (ถ้ามี ให้รัน `pgrep` ซ้ำหลังเปิด browser)
+- **ก่อนเปิด Claude, Codex หรือ VS Code อีกครั้ง** (ทุกครั้งที่ "ส่งให้ Claude" และก่อนรัน envcheck ของ ENV-002): ตัดการเชื่อม RDP ทุกหน้าต่างและ logout จาก console ของผู้ให้บริการก่อน · ข้อความที่จะส่งให้วางลง TextEdit ไว้ก่อนตัดการเชื่อม (agent ต้องไม่รันอยู่ข้างหน้าต่าง RDP ที่เปิดอยู่; review F20)
 - คำสั่งที่ขึ้นต้นด้วย `PS>` รันใน PowerShell บน VPS (แต่ละขั้นบอกว่าต้องเปิดแบบ **Administrator** หรือแบบธรรมดา) · ที่ขึ้นต้นด้วย `%` รันใน Terminal.app บน Mac · ไม่ต้องพิมพ์ `PS>` หรือ `%`
 - **กฎกันล็อกตัวเอง:** ก่อนเปลี่ยน firewall, ปิด rule ใดๆ หรือ restart ให้เปิด RDP session ที่สองให้ได้ก่อนเสมอ และอย่าปิด session แรกจนกว่า session ใหม่จะเข้าได้ · บน Mac: ใน Windows App ใช้**รายการ PC ที่สอง**ของ VPS ตัวเดียวกัน (Duplicate รายการเดิม) เพื่อเปิด session ที่สอง เพราะการคลิกรายการเดิมซ้ำอาจนำหน้าต่างเดิมขึ้นมาแทน (ยังไม่ได้ตรวจในแอปจริง: ตรวจตอนใช้ครั้งแรกแล้วบันทึก) · รายการที่ Duplicate ต้องตั้งค่าเหมือนรายการหลักทุกข้อ (ข้อ 1.2 และ C3) และลบทิ้งหลังขั้นที่ต้องใช้มันเสร็จ · ถ้าเปิด session ที่สองไม่ได้ ห้ามเปลี่ยน firewall ให้ใช้ console ของผู้ให้บริการแก้ · Windows Server ให้บัญชีหนึ่งมี session เดียว: ถ้าใช้บัญชีเดิมแล้ว session ใหม่เข้าได้ หน้าต่างแรกจะขึ้นว่าถูกตัดการเชื่อม ซึ่งเป็นเรื่องปกติ · ถ้า session ใหม่เข้าไม่ได้ หน้าต่างแรกจะยังอยู่ ให้แก้จากหน้าต่างนั้น
 - ชื่อเมนูของ Windows App มาจากหน้า Microsoft Learn ที่อ่าน 2026-11-17 และยังไม่ได้ตรวจในแอปจริง: ถ้าไม่ตรง ใช้ชื่อในแอปแล้วบันทึกในหลักฐาน
@@ -70,7 +71,7 @@ PS> Set-ItemProperty -Path $k -Name SCClipLevel -Type DWord -Value 1
 PS> net accounts /lockoutthreshold:5 /lockoutduration:30 /lockoutwindow:30
 ```
 - `UserAuthentication = 1`: บังคับ NLA · `fDisableCdm`: ปิด drive redirection · `fDisableCpm`, `fDisableCcm`, `fDisableLPT`, `fDisablePNPRedir`: ปิด printer, COM, LPT และอุปกรณ์ PnP (เช่น มือถือ) ซึ่งเป็นทางส่งไฟล์ออกได้เหมือนกัน · `SCClipLevel = 1`: clipboard จาก VPS มาเครื่องคุณได้แค่**ข้อความ** (ENV-001 (ค))
-- Server 2022 ต้องมี cumulative update 2024-07 (KB5040437, OS Build 20348.2582) ขึ้นไป จึงจะรู้จัก `SCClipLevel` · ถ้าเลือกปิด clipboard ทั้งหมดแทน: `Set-ItemProperty -Path $k -Name fDisableClip -Type DWord -Value 1` แล้วส่งผลด้วยการพิมพ์
+- Server 2022 ต้องมี cumulative update 2024-07 (KB5040437) ขึ้นไป จึงจะรู้จัก `SCClipLevel` · ถ้าเลือกปิด clipboard ทั้งหมดแทน: `Set-ItemProperty -Path $k -Name fDisableClip -Type DWord -Value 1` แล้วส่งผลด้วยการพิมพ์
 - ถ้ามี OneDrive, Dropbox, Google Drive หรือ iCloud ติดตั้งอยู่: ถอนออกใน Settings → Apps
 - จากนั้น `Restart-Computer` (ตามกฎกันล็อกตัวเอง: เปิด session ที่สองได้ก่อน)
 
