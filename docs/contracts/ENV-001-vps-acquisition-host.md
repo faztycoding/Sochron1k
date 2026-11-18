@@ -253,7 +253,9 @@ https://learn.microsoft.com/windows-app/device-audio-folder-redirection-teams) �
 **AC-03 (v2.0, แทนฉบับ v1.9 เมื่อ v2.0 อนุมัติ)** Given VPS หลัง AC-01 When เจ้าของทดสอบจากภายนอกด้วย Mac ตาม runbook ข้อ 7 ฉบับ macOS Then
 (1) จากเครือข่ายบ้าน `/usr/bin/nc -vz -G 5 <vps> 3389` สำเร็จ (exit 0) และ `/usr/bin/nc -vz -G 5 <vps> <port>` ที่พอร์ต 22, 80, 139, 443, 445, 5985, 5986 ล้มทั้งหมด
 (exit ไม่ใช่ 0) · หลักฐานมีข้อความและ exit status ของทุกพอร์ต · (v2.1, r1 F5) ข้อความของ `nc -v` มีที่อยู่ของ VPS ทุกบรรทัด: ปิดบังที่อยู่ในทุกบรรทัดก่อนวาง (runbook พิมพ์
-บรรทัดที่ปิดบังแล้วพร้อม exit status ของ `nc` เอง) · ข้อความ usage หรือ option ผิด (เช่น `invalid option`, `port range not valid`) ไม่ใช่ผล: ทำซ้ำให้ถูก
+บรรทัดที่ปิดบังแล้วพร้อม exit status ของ `nc` เอง) · ข้อความ usage หรือ option ผิด (เช่น `invalid option`, `port range not valid`) ไม่ใช่ผล: ทำซ้ำให้ถูก · (v2.2, r2 F13) ข้อความอื่นนอกจาก timeout และ
+`Connection refused` (เช่น `No route to host`, `Network is unreachable`) ไม่ใช่ผล: ทำซ้ำ · ตัวควบคุมทำซ้ำหลังการทดสอบด้วย: 3389 จากบ้านสำเร็จอีกครั้งหลังพอร์ตสุดท้ายของ (1)
+และ `curl` บน hotspot ได้ IP อีกครั้งหลัง `nc` ของ (2) (ถ้าตัวควบคุมรอบหลังล้ม ผลของรอบนั้นไม่มีผล)
 · (v2.1, r1 F2: แทนประโยคเดิมเรื่อง `Connection refused`) `nc` แยกไม่ได้ว่าชั้นไหนทิ้ง packet: ผลที่คาดของพอร์ตที่ปิดคือ timeout (`Operation timed out`) · พอร์ตที่ได้
 `Connection refused` ผ่านได้เฉพาะเมื่อแสดงที่มาได้ อย่างใดอย่างหนึ่ง: พอร์ตเดียวกันได้ timeout เมื่อทดสอบจาก hotspot ของ (2) (reset มาจากเส้นทางฝั่งบ้าน) หรือรายการ rule ของ (4)
 ปฏิเสธพอร์ตนั้นและผู้ให้บริการตอบแบบ reject ไม่ใช่ drop · นอกจากนั้น AC-03 ยังไม่ PASS จนกว่าแก้ที่มา · contract ENV-002 v2.6 AC-03 (2) อ้างกฎข้อนี้
