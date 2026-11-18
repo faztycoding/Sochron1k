@@ -287,6 +287,27 @@ def test_another_spelling_of_appdata_still_hides_its_terminal_data_folders(tmp_p
     assert sentinel is None and "never opened" in why
 
 
+@pytest.mark.parametrize("make", ("symlinked prefix", "home named with the token"))
+def test_the_token_never_reaches_the_cli_or_the_gate_when_a_wine_folder_fails(tmp_path, monkeypatch, capsys, make):
+    """Work review r3 F18: a Wine folder that cannot be read raises OSError naming only the fixed folder from ~/,
+    so neither main's output nor ResearchHostError holds the token (or the account name)."""
+    home = tmp_path / (f"home-{TOKEN}" if make == "home named with the token" else "home")
+    source = home / "Library" / "PlayOnMac" / "wineprefix"
+    source.mkdir(parents=True)
+    (tmp_path / "elsewhere").mkdir()
+    os.symlink(tmp_path / "elsewhere", source / (TOKEN if make == "symlinked prefix" else "p1"), target_is_directory=True)
+    monkeypatch.setattr(ec.sys, "platform", "darwin")
+    monkeypatch.setattr(ec, "_darwin_home", lambda: str(home))
+    code = ec.main(["--role", "research"])
+    captured = capsys.readouterr()
+    assert code == 1 and TOKEN not in captured.out + captured.err
+    assert "~/Library/PlayOnMac/wineprefix (symlink)" in captured.out
+    assert str(tmp_path) not in captured.out
+    with pytest.raises(ec.ResearchHostError) as raised:
+        ec.require_research_host(sentinel=_sentinel(tmp_path))
+    assert TOKEN not in str(raised.value) and raised.value.__cause__ is None
+
+
 def test_the_reader_name_is_none_on_other_platforms(monkeypatch):
     monkeypatch.setattr(ec.sys, "platform", "linux")
     assert ec.reader_name() == "none"

@@ -1441,20 +1441,44 @@ def _unique(paths) -> tuple[Path, ...]:
     return tuple(seen.values())
 
 
+_WINE_FIXED = (("Library", "PlayOnMac", "wineprefix"), ("Library", "PlayOnMac"),
+               ("Library", "Application Support", "CrossOver", "Bottles"), ("Library", "Application Support", "CrossOver"),
+               (".wine",))
+
+
+def _wine_fixed(error: OSError, home) -> str:
+    """The deepest fixed folder of the Wine chain, from ~/, that holds the path of error, with the kind of failure.
+    Never an entry name or the full path: those could hold the sentinel token or the account name (r3 F18)."""
+    kind = "symlink" if error.strerror == "symlink" else f"errno {error.errno}"
+    text = os.path.abspath(os.fsdecode(error.filename)).lower() if error.filename else ""
+    for parts in _WINE_FIXED:
+        if text and _within(text, os.path.abspath(Path(home).joinpath(*parts)).lower()):
+            return f"~/{'/'.join(parts)} ({kind})"
+    return f"a folder of the Wine chain ({kind})"
+
+
 def _darwin_roots(repo: Path, data_dirs: tuple[Path, ...]) -> ResearchRoots:
     """default_roots on darwin (v2.0; v2.1 F9-F11): everything from the home of _darwin_home(), never from the
-    Windows variables. A Wine folder or ~/Library/CloudStorage that exists but cannot be read raises OSError."""
+    Windows variables. A Wine folder or ~/Library/CloudStorage that exists but cannot be read raises OSError whose
+    text names only the fixed folder from ~/, never an entry name or the full path (work review r3 F18)."""
     home = Path(_darwin_home())
     library = home / "Library"
-    program_files = find_wine_program_files(home)
+    try:
+        program_files = find_wine_program_files(home)
+    except OSError as error:
+        raise OSError(f"a Wine folder cannot be read: {_wine_fixed(error, home)}") from None
     search = [home / "Downloads", home / "Desktop", home / "Documents"]
     icloud = library / "Mobile Documents" / "com~apple~CloudDocs"
     if _kind(icloud) != "missing":
         search.append(icloud)
     storage = library / "CloudStorage"
     if _kind(storage) != "missing":
-        with os.scandir(storage) as listing:
-            search += sorted((Path(entry.path) for entry in listing if entry.is_dir()), key=lambda path: path.name)
+        try:
+            with os.scandir(storage) as listing:
+                found = sorted((Path(entry.path) for entry in listing if entry.is_dir()), key=lambda path: path.name)
+        except OSError as error:
+            raise OSError(f"~/Library/CloudStorage cannot be listed (errno {error.errno})") from None
+        search += found
     return ResearchRoots(repo=repo, data_dirs=data_dirs, program_files=program_files,
                          appdata=library / "Application Support", user_profile=home, search_dirs=_unique(search))
 
@@ -1542,11 +1566,16 @@ def host_lines() -> tuple[str, ...]:
 
 def require_research_host(*, roots: ResearchRoots | None = None, sentinel: Sentinel | None = None) -> Report:
     """The gate R1 calls before every run: the PASS report, or ResearchHostError naming each other item.
-    A check that cannot run at all (the roots cannot be read) is a ResearchHostError too (v1.9 F5)."""
+    A check that cannot run at all (the roots cannot be read) is a ResearchHostError too (v1.9 F5). The message
+    never holds the sentinel token (v1.7 F7), and the cause is not chained, so a traceback cannot show it either
+    (work review r3 F18)."""
     try:
         report = research_host_report(roots=roots, sentinel=sentinel)
     except OSError as error:
-        raise ResearchHostError(f"research host check could not run: {error}") from error
+        text = f"research host check could not run: {error}"
+        if sentinel is not None and sentinel.token:
+            text = text.replace(sentinel.token, "<token>")
+        raise ResearchHostError(text) from None
     if report.verdict != PASS:
         others = ", ".join(f"{item.name} {item.status}" for item in report.items if item.status != PASS)
         raise ResearchHostError(f"research host check is {report.verdict}: {others}")
