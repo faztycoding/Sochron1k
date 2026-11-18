@@ -440,7 +440,7 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 ## Budget
 2 sessions ของ Claude · headless session ไม่เกิน 5 (ผู้เขียน tests, ผู้ตรวจ tests, ผู้ตรวจงาน, สำรอง ×2) · 3 attempts ต่อปัญหาที่ไม่มีหลักฐานใหม่
 
-(v2.0) งบของ v1.x ใช้ครบแล้ว (headless 5/5) · งบใหม่ของ v2.0: 2 sessions ของ Claude · session ใหม่ไม่เกิน 5 (ผู้ตรวจ contract, ผู้เขียน tests, ผู้ตรวจ tests, ผู้ตรวจงาน, สำรอง ×1) · 3 attempts ต่อปัญหาที่ไม่มีหลักฐานใหม่
+(v2.0) งบของ v1.x ใช้ครบแล้ว (headless 5/5) · งบใหม่ของ v2.0: 2 sessions ของ Claude · (v2.1, F23, คำตัดสินข้อ 12) session ใหม่ไม่เกิน 8: ผู้ตรวจ contract ×2 (รอบแรกและตรวจซ้ำ), ผู้เขียน tests, ผู้ตรวจ tests, ผู้ตรวจงาน ×2, ผู้ตรวจหลักฐาน, สำรอง ×1 · lens ขนานของ review หนึ่งรอบ (รวมการตรวจหักล้างและการรวมผล) นับเป็นหนึ่ง session · ใช้ไปแล้ว 1 (ผู้ตรวจ contract รอบแรก: `docs/reviews/ENV-002-contract-v2-r1.md`) · 3 attempts ต่อปัญหาที่ไม่มีหลักฐานใหม่
 
 ## Recovery, compensation and checkpoint
 (v1.9, เฉพาะเครื่อง Windows เดิมและก่อนล้างตาม D-023 ข้อ 2 เท่านั้น) ติดตั้ง MT5 ใหม่บนเครื่อง Windows ได้ถ้าต้องย้อน (ENV-1 จะไม่ผ่านจนกว่าจะถอนอีกครั้ง) · (v2.1, F16) บนเครื่อง Mac ไม่มีทางย้อนแบบนี้: ห้ามติดตั้ง MT5 หรือ Wine · ลบไฟล์ sentinel บน VPS ได้หลังบันทึกหลักฐาน (แล้วค่าที่ commit ใช้ไม่ได้: ต้องสร้างใหม่และ commit ใหม่) · revert PR
