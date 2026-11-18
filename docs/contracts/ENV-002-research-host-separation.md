@@ -321,6 +321,9 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
       ยังเป็น finding ด้วยข้อความเดิมของแต่ละรูป (`forbidden ctypes use ctypes.CDLL`, `… ctypes.cdll`, `… ctypes.util`)
     · mutation ใหม่ที่ต้องถูกปฏิเสธ: `ctypes.CDLL("libproc.dylib")`, `ctypes.CDLL("libSystem.B.dylib")`, `ctypes.CDLL("./libSystem.B.dylib")`,
       `ctypes.CDLL("/tmp/libSystem.B.dylib")`, `ctypes.CDLL(None)`, `<handle>.proc_pidinfo`
+    · (v2.2, r2 F34) การเรียกที่ยอมรับมี argument สองตัวนี้เท่านั้น: literal ของ path และ `use_errno=True` · mutation เพิ่มที่ต้องถูกปฏิเสธ: literal เดียวกัน
+      โดยไม่มี `use_errno=True`, มี `use_errno=False`, มี `handle=h` เพิ่ม, มี `mode=m` เพิ่ม (ไม่มี `use_errno=True` แล้ว `ctypes.get_errno()` เป็น 0 เสมอ
+      กฎ errno จะกลายเป็น UNKNOWN ถาวรโดยไม่มีคำอธิบาย)
     · ยังไม่มี subprocess, socket, http · ไม่เขียน ไม่ลบไฟล์ · ไม่อ่าน Keychain และไม่เรียกโปรแกรม `security`
   CLI (zsh บน macOS): PYTHONPATH=src uv run --offline python -m sochron.app.envcheck --role research --sentinel-file docs/evidence/ENV-002-sentinel.json [--data-dir <path> …]
 
