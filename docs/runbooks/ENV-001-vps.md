@@ -206,17 +206,29 @@ PS> net accounts /lockoutthreshold:5 /lockoutduration:30 /lockoutwindow:30
 
 ## 10. ส่ง snapshot ก่อน cutoff มาเครื่องวิจัย (D-021 ทาง (a), ฝั่ง Mac ตาม D-023 ข้อ 5) — ใช้หลัง ENV-1 ผ่านเท่านั้น
 ทำครั้งละครั้ง และทำ C9 ก่อนเชื่อม · ช่องทางเดียวคือ folder redirection ของ Windows App เฉพาะโฟลเดอร์ `<repo>/data/transfer/` (repo บน Mac คือ `~/Documents/GitHub/Sochron1k`) · **ใช้ครั้งแรก:** ทำการทดสอบ T1–T4 ตามข้างล่างและบันทึกผลใน contract ของ acquisition host · ข้อใดของ T1–T4 ไม่ผ่าน = ช่องทางนี้ยังไม่อนุมัติ และต้องตัดสินใหม่ (ไม่มีทางสำรองแบบ VHD ของ v1.9)
-1. **ก่อนเปิดช่องทาง:** envcheck ของ ENV-002 บน Mac เป็น PASS (runbook ENV-002 ข้อ 3) และโฟลเดอร์รับไฟล์ว่าง: `% /bin/ls -A ~/Documents/GitHub/Sochron1k/data/transfer` ต้องไม่พิมพ์อะไร
+· **ถ้า T1, T2 หรือ T3 ไม่ผ่าน (review F17): ห้ามคัดลอก · ทำข้อ 6.1–6.3 ทันที** (เอาโฟลเดอร์ออกจากทุกรายการ PC → เชื่อมแล้วตั้ง `fDisableCdm` เป็น 1 → เชื่อมใหม่และตรวจ T4) **แล้วจึงหยุดและส่งผลให้ Claude**
+· อย่าเปิดโฟลเดอร์รับไฟล์ใน Finder (Finder เขียนไฟล์ `.DS_Store` ลงไป) · ไฟล์ `.DS_Store` ไม่นับในทุกการตรวจของข้อนี้
+1. **ก่อนเปิดช่องทาง:** envcheck ของ ENV-002 บน Mac เป็น PASS (runbook ENV-002 ข้อ 3) และโฟลเดอร์รับไฟล์มีอยู่และว่าง:
+   ```zsh
+   % /bin/mkdir -p ~/Documents/GitHub/Sochron1k/data/transfer
+   % cd ~/Documents/GitHub/Sochron1k/data/transfer
+   % /usr/bin/find . -mindepth 1 ! -name .DS_Store
+   ```
+   `find` ต้องไม่พิมพ์อะไร
 2. Windows App → แก้รายการ PC หลักของ VPS → แท็บ Folders → ติ๊ก Redirect folders → เพิ่ม**เฉพาะ** `~/Documents/GitHub/Sochron1k/data/transfer` **โดยไม่ติ๊ก Read-only** (VPS เขียนลงโฟลเดอร์นี้) · โฟลเดอร์อื่นต้องไม่อยู่ในรายการ
 3. Connect · **T1** (policy ยังปิด, redirect เปิด): บน VPS `PS> net view \\tsclient` → ไม่มี share
 4. บน VPS (Administrator): `PS> Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name fDisableCdm -Value 0` แล้วตัดการเชื่อม
-5. Connect อีกครั้ง · **T2:** `PS> net view \\tsclient` มี share เดียว และจาก share นั้นเข้าไฟล์อื่นของ repo ไม่ได้ · **T3:** item `clipboard` ของ `host_report.py` ยังเป็น PASS ขณะ policy เปิด · คัดลอก**เฉพาะไฟล์ที่อยู่ใน manifest ที่ `period_end_utc` ≤ 2025-01-01T00:00:00Z** (และตัว manifest) ไปที่ share นั้น · ตัดการเชื่อม
+5. Connect อีกครั้ง · **T2:** `PS> net view \\tsclient` มี share เดียว (บันทึกชื่อ share) และ `PS> Get-ChildItem -Force \\tsclient\<ชื่อ share>` แสดงเฉพาะสิ่งที่อยู่ใน `data/transfer` (ก่อนคัดลอก = ว่าง หรือมีแค่ `.DS_Store`) ไม่ใช่ไฟล์อื่นของ repo · **T3:** รัน `host_report.py` (ข้อ 6): item `clipboard` ต้องยังเป็น PASS ขณะ policy เปิด · ผลรวมของรายงานรอบนี้เป็น FAIL ได้เพราะ item `drive_redirection` (policy เปิดอยู่ตามตั้งใจ): **อย่าแก้ตาม FAIL นี้ระหว่างข้อนี้** ดูเฉพาะ item `clipboard` · **คัดลอกเฉพาะเมื่อ T2 และ T3 ผ่าน:** คัดลอก**เฉพาะไฟล์ที่อยู่ใน manifest ที่ `period_end_utc` ≤ 2025-01-01T00:00:00Z** (และตัว manifest) ไปที่ share นั้น · ตัดการเชื่อม
 6. **ปิดช่องทางตามลำดับนี้** (ตอนนี้ VPS ยังยอมรับ redirection อยู่):
    1. ใน Windows App เอาโฟลเดอร์ออกจากแท็บ Folders ของรายการ PC (และไม่ติ๊ก Redirect folders) **ก่อนเชื่อมใหม่**
    2. Connect → บน VPS (Administrator): `PS> Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name fDisableCdm -Value 1` → ตัดการเชื่อม
    3. เชื่อมใหม่ → **T4:** `PS> net view \\tsclient` ไม่มี share และแท็บ Folders ของทุกรายการ PC ไม่มีโฟลเดอร์
-   4. บน Mac รายการไฟล์ใต้ `data/transfer/` เท่ากับ manifest (ชื่อและ SHA-256): `% /usr/bin/find ~/Documents/GitHub/Sochron1k/data/transfer -type f -print0 | /usr/bin/xargs -0 /usr/bin/shasum -a 256`
-   5. `host_report.py` บน VPS เป็น PASS (ข้อ 6) และ envcheck บน Mac เป็น PASS (runbook ENV-002 ข้อ 3)
+   4. บน Mac รายการไฟล์ใต้ `data/transfer/` เท่ากับ manifest (ชื่อและ SHA-256) · พิมพ์ path แบบ `./<ไฟล์>` จึงไม่มีชื่อบัญชี (review F19):
+      ```zsh
+      % cd ~/Documents/GitHub/Sochron1k/data/transfer
+      % /usr/bin/find . -type f ! -name .DS_Store -print0 | /usr/bin/xargs -0 /usr/bin/shasum -a 256
+      ```
+   5. `host_report.py` บน VPS เป็น PASS (ข้อ 6) → **ตัดการเชื่อม RDP** (กติกาบนหัวไฟล์) → envcheck บน Mac เป็น PASS (runbook ENV-002 ข้อ 3)
 7. **ส่งให้ Claude:** วันที่, รายการไฟล์และ SHA-256, ผล T1–T4, ผลของตัวตรวจทั้งสอง
 
 ## สรุปสิ่งที่ส่งกลับ
