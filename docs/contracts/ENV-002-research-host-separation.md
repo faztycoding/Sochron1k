@@ -177,7 +177,16 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
     ยังเป็น UNKNOWN ของ holdout_dir, excluded_period และ sentinel ตามเดิม
   โฟลเดอร์ที่ macOS ไม่ให้ list เพราะ Privacy (TCC, "Operation not permitted") ใช้กฎเดิมของโฟลเดอร์ที่ list ไม่ได้:
     ใน repo, data dirs, search_dirs = UNKNOWN · ใต้ root ของการค้น terminal = ข้าม (v1.8) · root เอง list ไม่ได้ = UNKNOWN (v1.9)
-  ctypes บน darwin: เปิดเฉพาะ `libproc` และ `libc` ด้วยชื่อตรงตัว · เรียกเฉพาะ `proc_listallpids`, `proc_pidpath`, `getfsstat` · อ่าน error ด้วย `ctypes.get_errno()`
+  ctypes บน darwin (v2.1, F3): เปิด library เดียวด้วย `ctypes.CDLL("/usr/lib/libSystem.B.dylib", use_errno=True)`
+    (str literal เต็ม เทียบตรงทุกตัวอักษร ไม่ตัดโฟลเดอร์หรือนามสกุล · ภายในฟังก์ชันเท่านั้น เปิดตอน import = finding เหมือนกฎ Windows
+    · ไฟล์นี้ไม่มีบนดิสก์ (dyld shared cache) จึงห้ามตรวจการมีอยู่ก่อนเปิด · วัด 2026-11-17: `CDLL("libproc")` และ `CDLL("libc")` โหลดไม่ได้
+    และชื่อเปล่าถูกค้นใน `DYLD_LIBRARY_PATH`, working directory และ `/usr/local/lib` ก่อน `/usr/lib`)
+    · เรียกเฉพาะ `<handle>.proc_listallpids`, `<handle>.proc_pidpath`, `<handle>.getfsstat` · อ่าน error ด้วย `ctypes.get_errno()`
+    · `os.environ` มีตัวแปรที่ขึ้นต้นด้วย `DYLD_` = โปรเซสและ mount อ่านไม่ได้ (UNKNOWN ของ `terminal_install` และ `network_shares`) และไม่เปิด library
+    · `from ctypes import CDLL`, `ctypes.cdll`, `ctypes.util` และ `ctypes.CDLL` ด้วย argument อื่น (รวม `libc.so.6`, ชื่อเปล่า และค่าที่ไม่ใช่ literal)
+      ยังเป็น finding ด้วยข้อความเดิมของแต่ละรูป (`forbidden ctypes use ctypes.CDLL`, `… ctypes.cdll`, `… ctypes.util`)
+    · mutation ใหม่ที่ต้องถูกปฏิเสธ: `ctypes.CDLL("libproc.dylib")`, `ctypes.CDLL("libSystem.B.dylib")`, `ctypes.CDLL("./libSystem.B.dylib")`,
+      `ctypes.CDLL("/tmp/libSystem.B.dylib")`, `ctypes.CDLL(None)`, `<handle>.proc_pidinfo`
     · ยังไม่มี subprocess, socket, http · ไม่เขียน ไม่ลบไฟล์ · ไม่อ่าน Keychain และไม่เรียกโปรแกรม `security`
   CLI (zsh บน macOS): PYTHONPATH=src uv run --offline python -m sochron.app.envcheck --role research --sentinel-file docs/evidence/ENV-002-sentinel.json [--data-dir <path> …]
 
@@ -223,7 +232,7 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 - AC-03 ฉบับ v1.9 (Windows, เลิกใช้เมื่อ v2.0 อนุมัติ): Given sentinel ที่สร้างบน VPS ด้วย `make_sentinel.py` และค่าที่ commit ใน `docs/evidence/ENV-002-sentinel.json` When เจ้าของทำ break-it test จากเครื่องตัวเอง (research identity) Then `Test-NetConnection <vps>` ที่พอร์ต 22, 80, 443, 445, 5985, 5986 ล้มทั้งหมด (3389 เปิดเป็นประตูของคน) · `dir \\<vps>\C$` และ share ของ vault ล้ม · เจ้าของรัน `cmdkey /list` เอง (agent ห้ามรัน) แล้วยืนยันว่าไม่มีรายการของ VPS · บน VPS `Get-FileHash` ของ sentinel ตรงกับค่าที่ commit ณ เวลาตรวจ · และ item `sentinel` ของ envcheck เป็น PASS · หลักฐานมีคำสั่ง ผล เวลา และ hash ทั้งสองฝั่ง (IP ปิดบัง)
 - AC-04 Given `synthetic_bars` ของช่วงที่ตัดออก (2025-01-02) When ส่งเข้า `research.run_variant` และ `research.random_entry_baseline` Then ได้ `HoldoutRefused` และ registry ไม่เปลี่ยน
 - AC-05 Given รายงานที่ไม่ใช่ PASS When เรียก `require_research_host` Then ได้ `ResearchHostError` ที่บอกชื่อ item · รายงาน PASS คืนรายงานนั้น · CLI exit 0 เฉพาะ PASS
-- AC-06 Given source ของ `sochron.app` และแพ็กเกจเดิม When รัน architecture test Then `research`/`backtest`/`strategy` import `data.acquire`, `broker`, `app` ไม่ได้ · `sochron.app.envcheck` ไม่ใช้ subprocess, socket, http, ไม่เขียน/ลบไฟล์ และใช้ ctypes/winreg เฉพาะฟังก์ชันที่ระบุในหัวข้อ contract · (v1.6, Q12) ตัวตรวจเป็นแบบ static และยอมรับเฉพาะรูปแบบที่ตรวจได้ (เปิด library ด้วยชื่อตรงตัว, เรียก `<handle>.<Function>`, อ่าน error ด้วย `ctypes.get_last_error()`) · รูปแบบอื่นถูกปฏิเสธโดยตั้งใจ · (v1.7, tests-r1 F5) stdlib ที่ envcheck import ได้เป็น allow list: `argparse`, `collections`, `ctypes`, `dataclasses`, `datetime`, `hashlib`, `importlib`, `json`, `os`, `pathlib`, `re`, `sys`, `typing`, `winreg` (ในฟังก์ชันเท่านั้น) · str literal ที่ส่งเป็น sub-key ของ `OpenKey`/`OpenKeyEx` ต้องเป็น Uninstall key ใดใน 2 key · (v2.0) ตัวตรวจยอมรับเพิ่มเฉพาะ: การเปิด `libproc` และ `libc` ด้วยชื่อตรงตัว, การเรียก `<handle>.proc_listallpids`, `<handle>.proc_pidpath`, `<handle>.getfsstat`, การอ่าน error ด้วย `ctypes.get_errno()` · (v2.1, F2) allow list ของ stdlib ไม่เปลี่ยน (ไม่เพิ่ม `stat`: กรณีที่ล็อก "forbidden stdlib import stat" คงเดิม) · ชื่อ library หรือฟังก์ชันอื่นถูกปฏิเสธ (ทดสอบด้วย mutation)
+- AC-06 Given source ของ `sochron.app` และแพ็กเกจเดิม When รัน architecture test Then `research`/`backtest`/`strategy` import `data.acquire`, `broker`, `app` ไม่ได้ · `sochron.app.envcheck` ไม่ใช้ subprocess, socket, http, ไม่เขียน/ลบไฟล์ และใช้ ctypes/winreg เฉพาะฟังก์ชันที่ระบุในหัวข้อ contract · (v1.6, Q12) ตัวตรวจเป็นแบบ static และยอมรับเฉพาะรูปแบบที่ตรวจได้ (เปิด library ด้วยชื่อตรงตัว, เรียก `<handle>.<Function>`, อ่าน error ด้วย `ctypes.get_last_error()`) · รูปแบบอื่นถูกปฏิเสธโดยตั้งใจ · (v1.7, tests-r1 F5) stdlib ที่ envcheck import ได้เป็น allow list: `argparse`, `collections`, `ctypes`, `dataclasses`, `datetime`, `hashlib`, `importlib`, `json`, `os`, `pathlib`, `re`, `sys`, `typing`, `winreg` (ในฟังก์ชันเท่านั้น) · str literal ที่ส่งเป็น sub-key ของ `OpenKey`/`OpenKeyEx` ต้องเป็น Uninstall key ใดใน 2 key · (v2.0; v2.1, F3) ตัวตรวจยอมรับเพิ่มเฉพาะ: การเปิด `ctypes.CDLL("/usr/lib/libSystem.B.dylib", use_errno=True)` ภายในฟังก์ชัน (str literal เต็ม เทียบตรงทุกตัวอักษร; รูปอื่นของ `CDLL`, `cdll`, `util` ยังเป็น finding ด้วยข้อความเดิม และ mutation ใหม่ในหัวข้อ contract ต้องถูกปฏิเสธ), การเรียก `<handle>.proc_listallpids`, `<handle>.proc_pidpath`, `<handle>.getfsstat`, การอ่าน error ด้วย `ctypes.get_errno()` · (v2.1, F2) allow list ของ stdlib ไม่เปลี่ยน (ไม่เพิ่ม `stat`: กรณีที่ล็อก "forbidden stdlib import stat" คงเดิม) · ชื่อ library หรือฟังก์ชันอื่นถูกปฏิเสธ (ทดสอบด้วย mutation)
 - AC-07 Given ทั้ง suite When `uv run --offline pytest tests -q -p no:cacheprovider` และ `bash scripts/controls/red-flags.sh main` Then ผ่านทั้งหมด skipped 0, CI เขียว (Linux) และกลุ่ม "Order or account mutation surface" ว่าง · (v2.0) คำสั่งเดียวกันผ่านบนเครื่อง Mac ด้วย โดยตั้ง `PYTHONTZPATH=""` เหมือน CI และจำนวน test ที่ผ่านบน Mac เท่ากับบน CI
 
 ## Verification per AC
@@ -235,6 +244,10 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 | 07 | Claude + CI | suite + red-flags + run ของ PR | L2/L3 |
 
 (v2.0) AC-01 และ AC-03 ทำบนเครื่อง Mac และ VPS (ข้อ 7 ของ AC-03 ทำบนเครื่อง Windows เดิม) · AC-02 และ AC-06 เพิ่มกรณี macOS ผ่าน patch D-006 ของผู้เขียน tests · AC-07 รันทั้งบน Mac (Claude) และ CI (Linux) · ผู้เขียน tests และผู้ตรวจของ v2.0 ตาม decision (ซ) ข้างล่าง
+
+## Runbook ฉบับ macOS: ข้อที่ต้องมี (v2.1)
+ข้อเหล่านี้เป็นส่วนของ Given ใน AC-01 และ AC-03 · Claude เขียนลง `docs/runbooks/ENV-002-research-host.md` ตอน implement · เจ้าของเป็นผู้ทำ
+- (F3) ก่อนรอบหลักฐานของ AC-01: ลบ `.venv` แล้วสร้างใหม่ด้วย `uv sync --locked` (ไฟล์ `.pth` ใน `.venv` ซึ่งถูก gitignore รันอยู่ในโปรเซสของ envcheck) · shell ที่รันไม่มีตัวแปรที่ขึ้นต้นด้วย `DYLD_` (`env | grep '^DYLD_'` ไม่พิมพ์อะไร)
 
 ## Risk, data and external side effects
 **Threat model ย่อ (High):**
@@ -250,6 +263,7 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 | (v2.0) เครื่อง Windows เดิมยังถือ terminal และ cache ของช่วงหลัง cutoff | เจ้าของคัดลอกไฟล์ข้ามเครื่อง (USB, AirDrop, cloud) · เปิด agent บนเครื่องนั้นตามความเคยชิน | D-023 ข้อ 2 (ก) และ AC-03 ข้อ 7 · item `holdout_dir`, `excluded_period`, `sentinel` บน Mac จับไฟล์ที่เข้ามาใน repo, data dirs และ search_dirs | ระหว่างรอ SPIKE-002 เครื่องนั้นยังมี terminal: กฎคือไม่เปิด agent ของโปรเจกต์บนเครื่องนั้น ซึ่งเป็นคำยืนยันของเจ้าของ โค้ดตรวจไม่ได้ |
 | (v2.0) MT5 บน Mac ที่กฎ path ไม่เห็น | Wine prefix ที่อื่น (เช่น Whisky), Windows VM, web terminal ของโบรกเกอร์ใน browser | กฎชื่อแอป, prefix ที่รู้จัก, home ระดับ 0–3, โปรเซสที่รันอยู่ · คำยืนยันเรื่อง VM ใน AC-03 ข้อ 4 | **รับไว้:** prefix ที่อื่นและ VM ที่ไม่ได้รันอยู่ตรวจไม่เจอ · web terminal เปิดได้จาก browser ใดก็ได้ จัดเป็นความเสี่ยงเดียวกับแถว "ข้อมูลราคาสาธารณะ" |
 | (v2.0) สิทธิ์ Privacy ของ macOS กว้างเกิน | ให้ Full Disk Access แก่แอปที่ agent รันอยู่ด้วย | runbook ให้เฉพาะ Files and Folders ของ Desktop, Documents, Downloads และ iCloud Drive (decision (ช)) | agent ที่รันในแอปเดียวกันอ่านโฟลเดอร์เหล่านั้นได้เท่ากับตัวตรวจ |
+| (v2.1, F3) library หรือโค้ดที่ถูกวางให้ตัวตรวจโหลด | ตัวแปร `DYLD_*`, ไฟล์ library ใน working directory, ไฟล์ `.pth` ใน `.venv` | เปิด library ด้วย path เต็มตัวเดียว · มี `DYLD_*` = UNKNOWN · สร้าง `.venv` ใหม่ก่อนรอบหลักฐาน | ไฟล์ `.pth` ที่ถูกวางหลังสร้าง `.venv` ใหม่และก่อนรัน ตรวจไม่เจอ (เหมือน v1.9) |
 
 - ผลภายนอก: ไม่มี · การลบเป็นขั้นตอนของเจ้าของบนเครื่องตัวเอง · ผู้อนุญาต: เจ้าของ
 
