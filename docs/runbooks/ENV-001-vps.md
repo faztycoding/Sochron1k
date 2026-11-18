@@ -207,7 +207,8 @@ PS> net accounts /lockoutthreshold:5 /lockoutduration:30 /lockoutwindow:30
 
 ## 10. ส่ง snapshot ก่อน cutoff มาเครื่องวิจัย (D-021 ทาง (a), ฝั่ง Mac ตาม D-023 ข้อ 5) — ใช้หลัง ENV-1 ผ่านเท่านั้น
 ทำครั้งละครั้ง และทำ C9 ก่อนเชื่อม · ช่องทางเดียวคือ folder redirection ของ Windows App เฉพาะโฟลเดอร์ `<repo>/data/transfer/` (repo บน Mac คือ `~/Documents/GitHub/Sochron1k`) · **ใช้ครั้งแรก:** ทำการทดสอบ T1–T4 ตามข้างล่างและบันทึกผลใน contract ของ acquisition host · ข้อใดของ T1–T4 ไม่ผ่าน = ช่องทางนี้ยังไม่อนุมัติ และต้องตัดสินใหม่ (ไม่มีทางสำรองแบบ VHD ของ v1.9)
-· **ถ้า T1, T2 หรือ T3 ไม่ผ่าน (review F17): ห้ามคัดลอก · ทำข้อ 6.1–6.3 ทันที** (เอาโฟลเดอร์ออกจากทุกรายการ PC → เชื่อมแล้วตั้ง `fDisableCdm` เป็น 1 → เชื่อมใหม่และตรวจ T4) **แล้วจึงหยุดและส่งผลให้ Claude**
+· **ถ้า T1, T2 หรือ T3 ไม่ผ่าน (review F17): ห้ามคัดลอก · ทำข้อ 6.1–6.3 แล้วข้อ 6.5 ทันที** (เอาโฟลเดอร์ออกจากทุกรายการ PC → เชื่อมแล้วตั้ง `fDisableCdm` เป็น 1 → เชื่อมใหม่และตรวจ T4 → `host_report.py` และ envcheck; บันทึกผลตามจริง, r2 F27) **แล้วจึงหยุดและส่งผลให้ Claude**
+· **ถ้าข้อ 6.2 เชื่อมไม่ได้ หรือ T4 ไม่ผ่าน (r2 F27):** ห้ามเชื่อมด้วยรายการ PC ที่ยังมีโฟลเดอร์ · ตั้ง `fDisableCdm` เป็น 1 จาก console ของผู้ให้บริการ (PowerShell แบบ Administrator) · หยุดและส่งผลให้ Claude
 · อย่าเปิดโฟลเดอร์รับไฟล์ใน Finder (Finder เขียนไฟล์ `.DS_Store` ลงไป) · ไฟล์ `.DS_Store` ไม่นับในทุกการตรวจของข้อนี้
 1. **ก่อนเปิดช่องทาง:** envcheck ของ ENV-002 บน Mac เป็น PASS (runbook ENV-002 ข้อ 3) และโฟลเดอร์รับไฟล์มีอยู่และว่าง:
    ```zsh
@@ -223,7 +224,7 @@ PS> net accounts /lockoutthreshold:5 /lockoutduration:30 /lockoutwindow:30
 6. **ปิดช่องทางตามลำดับนี้** (ตอนนี้ VPS ยังยอมรับ redirection อยู่):
    1. ใน Windows App เอาโฟลเดอร์ออกจากแท็บ Folders ของรายการ PC (และไม่ติ๊ก Redirect folders) **ก่อนเชื่อมใหม่**
    2. Connect → บน VPS (Administrator): `PS> Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -Name fDisableCdm -Value 1` → ตัดการเชื่อม
-   3. เชื่อมใหม่ → **T4:** `PS> net view \\tsclient` ไม่มี share และแท็บ Folders ของทุกรายการ PC ไม่มีโฟลเดอร์
+   3. เชื่อมใหม่ → **T4:** `PS> net view \\tsclient` ไม่มี share, แท็บ Folders ของทุกรายการ PC ไม่มีโฟลเดอร์ และ `PS> Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' | Select-Object fDisableCdm` (PowerShell ธรรมดา; อ่านอย่างเดียว) แสดง 1 (r2 F27)
    4. บน Mac รายการไฟล์ใต้ `data/transfer/` เท่ากับ manifest (ชื่อและ SHA-256) · พิมพ์ path แบบ `./<ไฟล์>` จึงไม่มีชื่อบัญชี (review F19):
       ```zsh
       % cd ~/Documents/GitHub/Sochron1k/data/transfer
