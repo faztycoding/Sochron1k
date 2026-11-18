@@ -142,7 +142,9 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
     "win32"   ตัวอ่าน Windows ของ v1.9 (ไม่เปลี่ยน คงไว้พร้อม tests ที่ล็อก)
     "darwin"  ตัวอ่าน macOS (ใหม่) ตามรายการข้างล่าง
     อื่นๆ      ทุก fact ที่ต้องอ่านจาก OS = อ่านไม่ได้ → `terminal_install`, `terminal_data`, `network_shares` เป็น UNKNOWN (ไม่มีวัน PASS)
-              (v1.9 ให้ผลนี้โดยบังเอิญผ่าน `guarded`; v2.0 ทำให้เป็นกฎที่มี test) · tests บน Linux ยังใช้ Facts ปลอมได้ตามเดิม
+              (v2.1, F22) v1.9: `terminal_install` และ `network_shares` เป็น UNKNOWN ผ่าน `guarded` แต่ `terminal_data` เป็น PASS เพราะตรวจแค่การมีอยู่
+              ของ path · v2.0 ทำให้ทั้งสามเป็น UNKNOWN บน platform อื่น และมี test · `mt5_package` ยังอ่านได้ทุก platform · `default_roots` บน platform
+              อื่นคงพฤติกรรม v1.9 · tests บน Linux ยังใช้ Facts ปลอมได้ตามเดิม
   (v2.1, F1) Facts, ResearchRoots, Item และ Report ไม่เพิ่ม field (tests ที่ล็อกเทียบชุด field แบบเท่ากันพอดี) · ชื่อตัวอ่านมาจากฟังก์ชันระดับโมดูล
     `reader_name() -> str` (`win32`, `darwin` หรือ `none` จาก `sys.platform` ที่อ่านตอนเรียก) · CLI (`main`) พิมพ์บรรทัด `reader: <ชื่อ>` ก่อนรายการ item
     ทุกแพลตฟอร์ม (`render` ไม่เปลี่ยน) · evaluate ไม่รู้ platform · ขอบเขต: `reader_name()` บอก platform ของโปรเซสที่พิมพ์ ไม่ได้บอกที่มาของ Facts ที่สร้างจากที่อื่น
@@ -393,7 +395,7 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
    1. contract review ของ v2.0 และ D-023 โดย session ใหม่ (ตรวจ path ของ MT5 บน macOS จากหน้าทางการ, รายการชนิด mount, flag dataless, ขั้นของ Windows App) → แก้ตาม finding → เจ้าของอนุมัติ (High) และเลือก D-023 ข้อ 2 · check: review file ใน `docs/reviews/` ว่าพร้อม และบรรทัด Status ของ contract
    1a. (v2.1, F13) เจ้าของย้าย `docs/proposals/` และ memory ของ Claude Code จากเครื่อง Windows มา Mac ด้วยรายการไฟล์ที่ระบุชื่อ · check: รายการ SHA-256 สองฝั่งตรงกัน (เงื่อนไขก่อนขั้นลบ clone ของ AC-03 ข้อ 7)
    2. บันทึกผู้เขียน tests และผู้ตรวจใน PROGRESS → ผู้เขียน tests ส่ง patch ของกรณี macOS และ allow list → Claude apply ตาม D-006 และตรวจ hash → review ของ tests → red · check: tests ใหม่ล้มก่อนมีโค้ด และ tests เดิมยังผ่าน
-   3. Claude implement ตัวอ่าน macOS, unit tests และ runbook ฉบับ macOS · check: suite ผ่านบน Mac ด้วย `PYTHONTZPATH=""`, red-flags 0, mypy ของแพ็กเกจ
+   3. Claude implement ตัวอ่าน macOS, unit tests และ runbook ฉบับ macOS · check: suite ผ่านบน Mac ด้วย `PYTHONTZPATH=""`, red-flags 0, mypy ของแพ็กเกจ · (v2.1, F22) unit test เดิม `test_f10_collect_keeps_unreadable_facts_as_none` (`tests/unit/app/test_envcheck_review_r1.py`) ตั้ง `sys.platform` เป็น `win32` (ไฟล์ของ implementer, ระบุใน handoff)
    4. review งานโดย session ใหม่ รวมการตรวจซ้ำ F12–F15 ของ `ef7881e` ที่ยังไม่มีใครตรวจ → แก้ทีละ finding · check: review ว่าพร้อมรัน L4
    5. เจ้าของเปิด draft PR เพื่อให้ CI รันบน Linux (ยังไม่ merge) · check: `python-tests` และ `control-plane` เขียว
    6. หลัง ENV-001 และ SPIKE-002 ผ่าน: เจ้าของทำ runbook (sentinel บน VPS → envcheck บน Mac → break-it → เครื่อง Windows เดิม) · check: AC-01 และ AC-03 ครบทุกข้อพร้อม commit และเวลา
