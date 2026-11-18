@@ -276,12 +276,15 @@ Devices & Audio **ระหว่างทดสอบ** อยู่ในห�
 เมื่อ (ค) เลือกแบบข้อความ) · `\\tsclient` ไม่มี share · ไม่มี printer ที่ redirect มาจาก Mac (หรือ "spooler off") ·
 (v2.1, r1 F3: ให้ผลพิสูจน์ VPS ไม่ใช่ Mac; คำตัดสินภายใต้คำอนุญาต 11:2x ของเจ้าของ: ทำทั้งการอ่านค่าบน VPS และการทดสอบ printer เมื่อ Mac มี printer)
 (a) บน VPS อ่านค่า policy แบบอ่านอย่างเดียว: `Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' | Select-Object fDisableCdm, fDisableCpm,
-fDisableCcm, fDisableLPT, fDisablePNPRedir, SCClipLevel` → ห้าค่า `fDisable*` เป็น 1 และ `SCClipLevel` เป็น 1 (หรือ `fDisableClip` เป็น 1 ถ้า (ค) เลือกปิด clipboard ทั้งหมด) ·
+fDisableCcm, fDisableLPT, fDisablePNPRedir, SCClipLevel, fDisableClip` (v2.2, r2 F11: พิมพ์ `fDisableClip` ด้วย) → ห้าค่า `fDisable*` เป็น 1 และ `SCClipLevel` เป็น 1
+(หรือ `fDisableClip` เป็น 1 ถ้า (ค) เลือกปิด clipboard ทั้งหมด) ·
 ก่อนเชื่อม บน Mac `lpstat -p` บอกว่ามี printer queue หรือไม่: มี = ผลของ `Get-Printer` นับเป็นการทดสอบ · ไม่มี = บันทึก "Mac ไม่มี printer: ช่องทาง printer พิสูจน์ด้วยค่า
 policy ของ (a) เท่านั้น"
 (b) ตัวควบคุมของ clipboard แบบไฟล์: ก่อนทดสอบทิศ VPS → Mac ให้วางไฟล์ทดสอบจาก Finder เข้า session ของ VPS (ทิศ Mac → VPS ซึ่ง `SCClipLevel` ไม่จำกัด) · วางได้ = Windows App
 ส่งไฟล์ผ่าน clipboard ได้ ผล "วางไฟล์ไม่ได้" ทิศ VPS → Mac จึงพิสูจน์ VPS · วางไม่ได้ = บันทึกว่าการทดสอบไฟล์ไม่พิสูจน์อะไรเกี่ยวกับ VPS และการป้องกันทิศนี้อยู่ที่ค่า
-`SCClipLevel` ของ (a) และ AC-01
+`SCClipLevel` ของ (a) และ AC-01 · (v2.2, r2 F11) และบน Server 2022 build ต้องมี cumulative update 2024-07 (KB5040437) ขึ้นไป (ค่า `UBR` ใน
+`HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion` ในหลักฐาน) เพราะรุ่นก่อนนั้นไม่รู้จัก `SCClipLevel` · ไฟล์ทดสอบบน Mac และบน VPS ใช้ชื่อต่างกัน (ไฟล์ที่วางใน Finder
+ต้องเป็นชื่อของไฟล์บน VPS จึงนับว่าข้ามมา)
 (c) ระหว่างทดสอบ บน VPS รัน `net view \\tsclient` ด้วย (ผลเป็นข้อความ) คู่กับ File Explorer
 (d) หลังทดสอบ เจ้าของตั้งรายการ PC เป็นสภาพของ ENV-002 checklist C3 (แท็บ Folders ไม่ติ๊ก Redirect folders, แท็บ Devices & Audio ไม่ติ๊กอุปกรณ์ใด, clipboard ตาม (ค))
 แล้วบันทึกค่าในหลักฐาน · runbook มีขั้นตอนส่ง snapshot ตาม D-021 ข้อ 3 (a) ที่ D-023 ข้อ 5 แก้ฝั่งเครื่องเจ้าของเป็น
