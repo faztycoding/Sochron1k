@@ -144,6 +144,42 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
   (v2.1, F1) Facts, ResearchRoots, Item และ Report ไม่เพิ่ม field (tests ที่ล็อกเทียบชุด field แบบเท่ากันพอดี) · ชื่อตัวอ่านมาจากฟังก์ชันระดับโมดูล
     `reader_name() -> str` (`win32`, `darwin` หรือ `none` จาก `sys.platform` ที่อ่านตอนเรียก) · CLI (`main`) พิมพ์บรรทัด `reader: <ชื่อ>` ก่อนรายการ item
     ทุกแพลตฟอร์ม (`render` ไม่เปลี่ยน) · evaluate ไม่รู้ platform · ขอบเขต: `reader_name()` บอก platform ของโปรเซสที่พิมพ์ ไม่ได้บอกที่มาของ Facts ที่สร้างจากที่อื่น
+  (v2.1, F4) ตัวอ่าน darwin เติม Facts เดิม 7 field (กฎของ evaluate ไม่เปลี่ยน):
+    terminal_paths          = path ที่พบจากกฎแอป, โฟลเดอร์ `MetaTrader*`, `terminal64.exe` และ path ของ executable ที่รันอยู่ใต้แอปที่ตรงกฎ
+    process_names           = ชื่อไฟล์ (basename) ของ executable ทุกโปรเซสที่อ่านได้ · รายการโปรเซสอ่านไม่ได้ตามกฎของ terminal_install
+                              (รวมกรณี Wine loader และ `DYLD_*`) → None เท่านั้น (`terminal_paths` ยังเป็นผลของกฎ path)
+    uninstall_display_names = `()` เสมอ (ไม่ใช่ None: macOS ไม่มีกฎนี้)
+    metaquotes_exists       = มีรายการที่ตรงกฎของ terminal_data · `~/Library/Application Support` list ไม่ได้ → None
+    mt5_spec_found          = ผลของ `find_spec` เหมือนทุกแพลตฟอร์ม
+    remote_drives           = mount ที่เข้ากฎ FAIL ในรูป `<ชนิด> <ต้นทาง> on <จุด mount>`
+    connected_resources     = `()` เมื่อไม่มี mount ใดเข้ากฎ UNKNOWN · None เมื่อมี mount ที่เข้ากฎ UNKNOWN, API ล้ม หรือมี `DYLD_*`
+  (v2.1, F4) ฟังก์ชันระดับโมดูลที่ tests เรียกหรือแทนได้ (ไม่เรียก API ของ OS เอง; ชื่อและ signature เป็นข้อผูกของ contract ผู้เขียน tests ที่ต้องการ
+    เปลี่ยนให้ถามใน handoff ก่อน):
+    find_terminal_paths_darwin(applications, program_files, home, never_listed) -> tuple[str, ...]
+    find_wine_program_files(home) -> tuple[Path, ...]
+    classify_mounts(entries: tuple[tuple[str, str, str, int], ...]) -> tuple[tuple[str, ...], tuple[str, ...] | None]
+        # entry = (ชนิด, ต้นทาง, จุด mount, flags) · คืน (remote_drives, connected_resources)
+    classify_processes(paths) -> tuple[tuple[str, ...], tuple[str, ...] | None]      # คืน (terminal_paths ส่วนของโปรเซส, process_names)
+    _darwin_application_dirs(home) -> tuple[Path, ...]
+    ตัวอ่านดิบ `_darwin_process_paths()` และ `_darwin_mounts()` ที่ tests แทนด้วยตัวปลอม
+    · `find_terminal_paths(program_files, user_profile, appdata)` เดิมไม่เปลี่ยน · `collect` และ `default_roots` อ่าน `sys.platform` ตอนถูกเรียก
+      (tests ตั้ง `envcheck.sys.platform`)
+  (v2.1, F4) กรณี macOS ระดับ collect (แอป, Wine prefix, ระดับของ `terminal64.exe`, โปรเซส, mount, platform อื่น) เป็น tests ที่ล็อกของผู้เขียน tests ใน
+    `tests/acceptance/ENV-002/` ซึ่งเรียก `collect` จริงโดยตั้ง `envcheck.sys.platform` และแทนตัวอ่านดิบ (ไม่ใช่ unit test ของ implementer อย่างเดียว
+    เพราะงานนี้ High) · ถ้อยคำ detail ของ item ที่มาจาก Facts คงเดิมตาม v1.9 ทุกแพลตฟอร์ม (เช่น `%APPDATA%\MetaQuotes`, `Uninstall entries`,
+    `remote drives`); บรรทัด `reader: darwin` และ runbook ฉบับ macOS บอกว่าคำเหล่านั้นหมายถึงอะไรบน Mac
+  (v2.1, F4) ค่าที่ Facts 7 field พาไปไม่ได้ (errno, จำนวน pid, จำนวน Wine prefix, โฟลเดอร์ที่ข้าม, ชื่อแอปของ note) ไม่อยู่ใน detail ของ item:
+    `main` พิมพ์เป็นบรรทัดของ CLI จากฟังก์ชันระดับโมดูลแยก ไม่ผ่าน Facts (`render`, Report และ Item ไม่เปลี่ยน · token ถูกแทนด้วย `<token>`):
+    ก่อนรายการ item ทุกแพลตฟอร์ม:
+      reader: <win32|darwin|none>                                                        (F1)
+      roots: repo=<path> home=<path> search_dirs=<path>, …                               (F11)
+    หลังรายการ item ก่อนบรรทัดสุดท้าย เฉพาะ darwin:
+      processes: <n> listed, <n> paths read, <n> skipped, <n> wine loaders               (F7) หรือ processes: unreadable (<เหตุ>, errno <n>, <n> pids)
+      mounts: <n> (<ชนิดที่พบ>)                                                           (F7) หรือ mounts: unreadable (<เหตุ>)
+      wine: <n> prefixes; looked at <โฟลเดอร์ต้นทางที่มีอยู่ หรือ none>                     (F9)
+      skipped: <n> folders (<path>, …)                                                   (F10: โฟลเดอร์ในรายการข้ามที่ list ไม่ได้)
+      note: apps <ชื่อแอปที่ตรงรายการของ note หรือ none>                                  (F9)
+    บรรทัดสุดท้ายยังเป็น `RESEARCH HOST: <verdict>` ตามเดิม
   default_roots บน darwin:
     user_profile  = โฟลเดอร์ home ของผู้ใช้
     appdata       = ~/Library/Application Support
@@ -227,7 +263,7 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 ## Acceptance (Given–When–Then, Thai; ≤ 7)
 - AC-01 (v2.0 แทนฉบับ Windows ของ v1.9) Given เครื่อง Mac หลังทำตาม runbook ฉบับ macOS (ไม่มีแอป MetaTrader, ไม่มีโฟลเดอร์ Wine ของ MT5, ไม่มี network volume ที่ mount อยู่, แอปที่ใช้รันคำสั่งได้สิทธิ์ Files and Folders ของ Desktop, Documents, Downloads และ iCloud Drive) และ repo อยู่ที่ commit ที่ตรวจแล้ว (`git rev-parse --short HEAD` ตรงกับที่ Claude ให้ และ `git status --short` ไม่พิมพ์อะไร) When เจ้าของรันคำสั่ง CLI (zsh) ของ contract พร้อม `--sentinel-file docs/evidence/ENV-002-sentinel.json` Then ทุก item เป็น PASS, รายงานมีบรรทัด `reader: darwin` (v2.1, F1), บรรทัดสุดท้ายเป็น `RESEARCH HOST: PASS` และ exit status เป็น 0 · หลักฐานมี commit, เวลา และรายงานทั้งหมด
 - AC-01 ฉบับ v1.9 (Windows, เลิกใช้เมื่อ v2.0 อนุมัติ): Given เครื่องเจ้าของหลังทำตาม runbook (ถอน terminal, ลบ `%APPDATA%\MetaQuotes`, ไม่มี mapped drive ไป VPS) When เจ้าของรันคำสั่ง CLI ของ contract พร้อม `--sentinel-file docs/evidence/ENV-002-sentinel.json` Then ทุก item เป็น PASS และบรรทัดสุดท้าย `RESEARCH HOST: PASS`
-- AC-02 Given สภาพผิดทีละข้อในโฟลเดอร์ชั่วคราวและ Facts ปลอม (ตามรายการ Negative cases) When `evaluate` Then item นั้นเป็น FAIL หรือ UNKNOWN ตามกฎ, verdict ตามลำดับผลรวม · manifest ที่จบตรง cutoff และ CSV นอก data dirs ผ่าน · ไฟล์ที่ห้ามเปิด (รวม `.env.json` ซึ่งเป็นทั้งไฟล์ต้องห้ามและนามสกุล `.json`) และไฟล์ cloud-only ไม่ถูกเปิด: ตรวจด้วย `sys.addaudithook` ที่ดักเหตุการณ์ `"open"` (ครอบ `builtins.open`, `io.open`, `Path.open`, `os.open`) และทำงานเฉพาะเมื่อ flag ของ test เปิด เพราะ audit hook ถอดไม่ได้ · cloud-only จำลองด้วยการแทน `envcheck.is_cloud_only` · สำเนา `.txt` ที่เปลี่ยนชื่อแต่มี token ใต้ `<repo>/data/transfer/` เป็น FAIL · ไฟล์ `.txt` cloud-only ใต้ `<repo>/data/` เป็น UNKNOWN · ไฟล์ `.txt` cloud-only ใน `--data-dir` ที่อยู่ในโฟลเดอร์ OneDrive ปลอมเป็น UNKNOWN และไม่ถูกเปิด · ไฟล์ `.json` cloud-only ขนาดเท่า sentinel ใน OneDrive เป็น UNKNOWN · ไฟล์ `.png` cloud-only ขนาดเท่า sentinel ใน OneDrive ไม่ทำให้เป็น UNKNOWN · (v2.0) ทุกกรณีของ macOS ในหัวข้อ Negative cases ให้ผลตามที่เขียนไว้ และไฟล์ dataless กับโฟลเดอร์ของ `terminal_data` ไม่ถูกเปิดหรือ list (ตรวจด้วย audit hook เดิม)
+- AC-02 Given สภาพผิดทีละข้อในโฟลเดอร์ชั่วคราวและ Facts ปลอม (ตามรายการ Negative cases) When `evaluate` Then item นั้นเป็น FAIL หรือ UNKNOWN ตามกฎ, verdict ตามลำดับผลรวม · manifest ที่จบตรง cutoff และ CSV นอก data dirs ผ่าน · ไฟล์ที่ห้ามเปิด (รวม `.env.json` ซึ่งเป็นทั้งไฟล์ต้องห้ามและนามสกุล `.json`) และไฟล์ cloud-only ไม่ถูกเปิด: ตรวจด้วย `sys.addaudithook` ที่ดักเหตุการณ์ `"open"` (ครอบ `builtins.open`, `io.open`, `Path.open`, `os.open`) และทำงานเฉพาะเมื่อ flag ของ test เปิด เพราะ audit hook ถอดไม่ได้ · cloud-only จำลองด้วยการแทน `envcheck.is_cloud_only` · สำเนา `.txt` ที่เปลี่ยนชื่อแต่มี token ใต้ `<repo>/data/transfer/` เป็น FAIL · ไฟล์ `.txt` cloud-only ใต้ `<repo>/data/` เป็น UNKNOWN · ไฟล์ `.txt` cloud-only ใน `--data-dir` ที่อยู่ในโฟลเดอร์ OneDrive ปลอมเป็น UNKNOWN และไม่ถูกเปิด · ไฟล์ `.json` cloud-only ขนาดเท่า sentinel ใน OneDrive เป็น UNKNOWN · ไฟล์ `.png` cloud-only ขนาดเท่า sentinel ใน OneDrive ไม่ทำให้เป็น UNKNOWN · (v2.0; v2.1, F4) When เพิ่มสำหรับกรณีของ macOS: `evaluate`, หรือ `collect` ที่ตั้ง platform เป็น `darwin` พร้อมตัวอ่านดิบปลอม · ทุกกรณีของ macOS ในหัวข้อ Negative cases (รวมกรณีเพิ่มของ v2.1) ให้ผลตามที่เขียนไว้ และไฟล์ dataless กับโฟลเดอร์ของ `terminal_data` ไม่ถูกเปิดหรือ list (ตรวจด้วย audit hook เดิม)
 - AC-03 (v2.0 แทนฉบับ Windows ของ v1.9) Given sentinel ที่สร้างบน VPS ด้วย `make_sentinel.py` และค่าที่ commit ใน `docs/evidence/ENV-002-sentinel.json` When เจ้าของทำ break-it test จากเครื่อง Mac (research identity) โดยปิดหน้าต่าง agent ก่อน Then (1) ตัวควบคุม: `nc -z -G 5 <vps> 3389` สำเร็จ (พิสูจน์ว่า IP ถูกและ Mac ออนไลน์อยู่) (2) `nc -z -G 5 <vps> <port>` ที่พอร์ต 22, 80, 443, 445, 5985, 5986 ล้มทั้งหมด (3) Finder → Go → Connect to Server → `smb://<vps>` เชื่อมไม่ได้ (4) เจ้าของตรวจเอง (agent ห้ามทำและห้ามอ่าน Keychain) แล้วยืนยันพร้อมเวลาว่า: Windows App ไม่มี credential ของ VPS ที่บันทึกไว้, Keychain Access ค้นด้วย IP ของ VPS ไม่พบรายการ, browser บน Mac ไม่บันทึกรหัสของ console ผู้ให้บริการ VPS, Mac ไม่มี Windows VM ที่ติดตั้ง MT5 (5) บน VPS `Get-FileHash` ของ sentinel ตรงกับค่าที่ commit ณ เวลาตรวจ (6) item `sentinel` ของ envcheck บน Mac เป็น PASS (7) เครื่อง Windows เดิมตาม D-023 ข้อ 2 (ก): เจ้าของยืนยันทีละข้อพร้อมเวลาว่า ทุก branch และ worktree push แล้ว, ถอน MT5 terminal แล้ว, ลบ `%APPDATA%\MetaQuotes` แล้ว, ลบ clone และ worktree ของ repo แล้ว และไม่เปิด session ของ agent กับโปรเจกต์นี้บนเครื่องนั้นอีก · หลักฐานมีคำสั่ง ผล เวลา และ hash ทั้งสองฝั่ง (IP ปิดบัง)
 - AC-03 ฉบับ v1.9 (Windows, เลิกใช้เมื่อ v2.0 อนุมัติ): Given sentinel ที่สร้างบน VPS ด้วย `make_sentinel.py` และค่าที่ commit ใน `docs/evidence/ENV-002-sentinel.json` When เจ้าของทำ break-it test จากเครื่องตัวเอง (research identity) Then `Test-NetConnection <vps>` ที่พอร์ต 22, 80, 443, 445, 5985, 5986 ล้มทั้งหมด (3389 เปิดเป็นประตูของคน) · `dir \\<vps>\C$` และ share ของ vault ล้ม · เจ้าของรัน `cmdkey /list` เอง (agent ห้ามรัน) แล้วยืนยันว่าไม่มีรายการของ VPS · บน VPS `Get-FileHash` ของ sentinel ตรงกับค่าที่ commit ณ เวลาตรวจ · และ item `sentinel` ของ envcheck เป็น PASS · หลักฐานมีคำสั่ง ผล เวลา และ hash ทั้งสองฝั่ง (IP ปิดบัง)
 - AC-04 Given `synthetic_bars` ของช่วงที่ตัดออก (2025-01-02) When ส่งเข้า `research.run_variant` และ `research.random_entry_baseline` Then ได้ `HoldoutRefused` และ registry ไม่เปลี่ยน
