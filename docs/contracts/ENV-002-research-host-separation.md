@@ -232,8 +232,13 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
         หรือ mounts: unreadable (<เหตุ>)      เหตุ = `DYLD_ variables set` · `not arm64: <machine>` · `getfsstat failed, errno <n>`
         หรือ mounts: not read
       wine: <n> prefixes; looked at <โฟลเดอร์ต้นทางที่มีอยู่, … หรือ none>   หรือ   wine: unreadable (<เหตุ>)   หรือ   wine: not read   (F9)
+        · (v2.4, r4 F53) "looked at" = ต้นทางที่มีอยู่จากสามตัว ตามลำดับนี้: `~/Library/PlayOnMac/wineprefix`, `~/Library/Application Support/CrossOver/Bottles`,
+          `~/.wine` (`~/.wine` เป็นทั้งต้นทางและ prefix: นับใน <n> ด้วยเมื่อมี `drive_c`) · พิมพ์ path แบบขึ้นต้นด้วย `~/`
+        · (v2.4, r4 F48) <เหตุ> ของ `wine: unreadable` = path ที่ทำให้ยก OSError แบบขึ้นต้นด้วย `~/` ตามด้วย `: ` และข้อความของ OSError
+          (เช่น `wine: unreadable (~/Library/PlayOnMac/wineprefix: [Errno 13] Permission denied)`) · symlink ใช้ข้อความ `symlink`
       skipped: <n> folders[ (<path>, …)]   โฟลเดอร์ที่การค้น terminal ข้าม: ในรายการข้ามที่ list ไม่ได้ และโฟลเดอร์ dataless · ไม่มี = `skipped: 0 folders`
-      apps: <ชื่อแอปที่ตรงรายการ, … หรือ none>                                                              (F9; v2.1 เรียกบรรทัดนี้ว่า note:)
+      apps: <ชื่อแอปที่ตรงรายการ, … หรือ none>   หรือ   apps: unreadable (<path>, …)[; found: <ชื่อ>, …]   (v2.4, r4 F48: /Applications หรือ
+        ~/Applications ที่มีอยู่แต่ list ไม่ได้ · ชื่อที่พบในอีกโฟลเดอร์พิมพ์หลัง `; found:` · F9; v2.1 เรียกบรรทัดนี้ว่า note:)
       tools: <ชื่อที่พบ, … หรือ none>                                                                                          (r2 F9)
     · ใน `collect` ที่ถูกเรียกจริง บรรทัด `skipped:`, `apps:`, `tools:` มาจากการค้นของรอบนั้น · เมื่อ `collect` ถูกแทน สามบรรทัดนี้ไม่ถูกพิมพ์
   default_roots บน darwin:
