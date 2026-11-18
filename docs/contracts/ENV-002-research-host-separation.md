@@ -150,7 +150,7 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
     `reader_name() -> str` (`win32`, `darwin` หรือ `none` จาก `sys.platform` ที่อ่านตอนเรียก) · CLI (`main`) พิมพ์บรรทัด `reader: <ชื่อ>` ก่อนข้อความของ
     `render` ทุกแพลตฟอร์ม (`render` ไม่เปลี่ยน; รายละเอียดที่ r2 F25) · evaluate ไม่รู้ platform · ขอบเขต: `reader_name()` บอก platform ของโปรเซสที่พิมพ์ ไม่ได้บอกที่มาของ Facts ที่สร้างจากที่อื่น
   (v2.1, F4) ตัวอ่าน darwin เติม Facts เดิม 7 field (กฎของ evaluate ไม่เปลี่ยน):
-    terminal_paths          = path ที่พบจากกฎแอป, โฟลเดอร์ `MetaTrader*`, `terminal64.exe` และ path ของ executable ที่รันอยู่ใต้แอปที่ตรงกฎ
+    terminal_paths          = path ที่พบจากกฎแอป, โฟลเดอร์ `MetaTrader*`, `terminal64.exe` และ path ของ executable ที่รันอยู่ซึ่งเข้ากฎโปรเซสของ terminal_install (r3 F33)
     process_names           = ชื่อไฟล์ (basename) ของ executable ทุกโปรเซสที่อ่านได้ · รายการโปรเซสอ่านไม่ได้ตามกฎของ terminal_install
                               (รวมกรณี Wine loader และ `DYLD_*`) → None เท่านั้น (`terminal_paths` ยังเป็นผลของกฎ path)
     (v2.2, r2 F30) สิ่งที่พบแล้วไม่ถูกกลบด้วย "อ่านไม่ได้": path ที่พบอยู่ใน `terminal_paths` เสมอ · `terminal_paths` เป็น None เฉพาะเมื่อการค้นไม่ครบ
@@ -268,14 +268,15 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
         และ Wine prefix อยู่แล้ว · การค้นนี้เทียบชื่อไฟล์เท่านั้น ไม่เปิดไฟล์)
     · (v2.2, r2 F12) /Applications หรือ ~/Applications ที่ไม่มีอยู่ = ไม่มีรายการให้ดู (ไม่ใช่ UNKNOWN: Mac ส่วนใหญ่ไม่มี ~/Applications) · มีอยู่แต่ list
       ไม่ได้ = การค้นไม่ครบ (`terminal_paths` None ตามกฎของ r2 F30)
-    · โปรเซสที่รันอยู่ซึ่ง path ของ executable อยู่ใต้แอปที่ตรงกฎชื่อข้างบน (ที่ใดก็ได้บนเครื่อง) หรือชื่อไฟล์เป็น `terminal64.exe`
+    · โปรเซสที่รันอยู่ซึ่ง path ของ executable มี component ใดก็ตามที่ชื่อมี `metatrader` (ไม่สนตัวพิมพ์ มีหรือไม่มี `.app`, ที่ใดก็ได้บนเครื่อง;
+      v2.3, r3 F33: อ่านแบบเข้ม) หรือชื่อไฟล์เป็น `terminal64.exe` · ราคาของกฎนี้: FAIL ตลอดเวลาที่มีโปรเซสใดรันจากโฟลเดอร์ที่ชื่อมีคำนี้
       (v2.1, F7) อ่านด้วย `proc_listallpids`, `proc_pidpath` · `proc_listallpids` ล้มหรือคืนค่าไม่เกิน 0 = UNKNOWN · ถ้าจำนวน pid ที่คืนเท่ากับความจุของ
       buffer ให้ขยาย buffer แล้วอ่านใหม่ (รายการที่ถูกตัดต้องไม่ถือว่าครบ) · ข้ามและนับเฉพาะ pid 0 และโปรเซสที่ `proc_pidpath` ล้มด้วย ESRCH (จบไปแล้ว)
       · ล้มด้วย errno อื่น (เช่น ENOMEM, EPERM) = UNKNOWN และบรรทัด `processes:` บอก errno กับจำนวน pid · ตัวอ่านต้องพบ PID ของตัวเอง (`os.getpid()`)
       และ `proc_pidpath` ของ PID นั้นต้องเท่ากับ `os.path.realpath(sys.executable)` ไม่เช่นนั้นรายการโปรเซสอ่านไม่ได้ (UNKNOWN)
       · วัด 2026-11-17: 770 pid, อ่านได้ 769 รวมโปรเซสของ root, pid 0 ให้ ESRCH, EPERM 0
-    · (v2.1, F7, คำตัดสินข้อ 5) executable ที่ชื่อไฟล์ขึ้นต้นด้วย `wine` (ไม่สนตัวพิมพ์ เช่น `wine64-preloader`, `wineserver`) และไม่อยู่ใต้แอปที่ตรงกฎ
-      = รายการโปรเซสอ่านไม่ได้ (UNKNOWN: ปิด Wine ก่อนรัน) · ชื่อโปรเซสของ Wine ยังไม่เคยวัดบน macOS กฎนี้จึงเพิ่มได้แค่ UNKNOWN ไม่ใช่หลักฐานว่าไม่มี Wine
+    · (v2.1, F7, คำตัดสินข้อ 5) executable ที่ชื่อไฟล์ขึ้นต้นด้วย `wine` (ไม่สนตัวพิมพ์ เช่น `wine64-preloader`, `wineserver`) และ path ไม่มี
+      component ที่ชื่อมี `metatrader` (ถ้ามี = FAIL ตามกฎข้างบน; v2.3, r3 F33) = รายการโปรเซสอ่านไม่ได้ (UNKNOWN: ปิด Wine ก่อนรัน) · ชื่อโปรเซสของ Wine ยังไม่เคยวัดบน macOS กฎนี้จึงเพิ่มได้แค่ UNKNOWN ไม่ใช่หลักฐานว่าไม่มี Wine
     · ไม่มีกฎ Uninstall entry บน macOS
     · (v2.1, F9, คำตัดสินข้อ 6) note ที่ไม่เปลี่ยน verdict: บรรทัด `wine:` (จำนวน Wine prefix ที่พบ, โฟลเดอร์ต้นทางที่ดู) และบรรทัด `apps:` ที่พิมพ์ชื่อแอป
       ระดับ 0 ของ /Applications กับ ~/Applications ที่ขึ้นต้นด้วย (ไม่สนตัวพิมพ์) crossover, whisky, playonmac, wineskin, kegworks, wine, parallels, vmware,
@@ -399,7 +400,7 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 
 (v2.1, F6) กรณีเพิ่มของ macOS: โฟลเดอร์ dataless ใน iCloud Drive (UNKNOWN ของ `sentinel` และไม่ถูก list) · โฟลเดอร์ dataless ใต้ `<repo>/data/` (UNKNOWN และไม่ถูก list) · `.<ชื่อ sentinel>.icloud` ใต้ search_dirs อย่างเดียว (FAIL) · `.x.json.icloud` ใต้ search_dirs อย่างเดียว (UNKNOWN) · `.x.png.icloud` ใต้ search_dirs อย่างเดียว (ข้าม: PASS) · `is_cloud_only` ตัวจริงกับ stat ปลอมที่มีแต่ `st_flags` = `0x40000000` (True) และที่ไม่มีทั้ง `st_flags` กับ `st_file_attributes` (False)
 
-(v2.1, F7; v2.2, r2 F7: แต่ละกรณีบอกฟังก์ชันที่ถูกทดสอบ) กรณีเพิ่มของ macOS · บน `read_process_paths` โดยแทน `_darwin_list_pids` และ `_darwin_pid_path` ด้วยตัวปลอม: รายการ pid ไม่มี PID ของตัวเอง (ยก OSError) · path ของ PID ตัวเองไม่ตรงกับ `own_path` (ยก OSError) · `_darwin_pid_path` คืน errno ENOMEM หรือ EPERM (ยก OSError) · คืน errno ESRCH (ข้าม: คืน path ที่เหลือเมื่อ PID ของตัวเองอ่านได้) · pid 0 (ข้าม) · `_darwin_list_pids` คืนจำนวน 0 (ยก OSError) · คืนจำนวนเท่า capacity (เรียกใหม่ด้วย capacity ที่ใหญ่ขึ้นจนจำนวนน้อยกว่า capacity) · `_darwin_list_pids` ยก OSError (ยก OSError) · บน `collect` ที่แทน `read_process_paths` ให้ยก OSError: `process_names` เป็น None และ `terminal_install` เป็น UNKNOWN · บน `classify_processes`: โปรเซสชื่อ `wine64-preloader` หรือ `wineserver` นอกแอปที่ตรงกฎ (`process_names` None → UNKNOWN) · กรณีของ mount อยู่ในย่อหน้า r2 F26
+(v2.1, F7; v2.2, r2 F7: แต่ละกรณีบอกฟังก์ชันที่ถูกทดสอบ) กรณีเพิ่มของ macOS · บน `read_process_paths` โดยแทน `_darwin_list_pids` และ `_darwin_pid_path` ด้วยตัวปลอม: รายการ pid ไม่มี PID ของตัวเอง (ยก OSError) · path ของ PID ตัวเองไม่ตรงกับ `own_path` (ยก OSError) · `_darwin_pid_path` คืน errno ENOMEM หรือ EPERM (ยก OSError) · คืน errno ESRCH (ข้าม: คืน path ที่เหลือเมื่อ PID ของตัวเองอ่านได้) · pid 0 (ข้าม) · `_darwin_list_pids` คืนจำนวน 0 (ยก OSError) · คืนจำนวนเท่า capacity (เรียกใหม่ด้วย capacity ที่ใหญ่ขึ้นจนจำนวนน้อยกว่า capacity) · `_darwin_list_pids` ยก OSError (ยก OSError) · บน `collect` ที่แทน `read_process_paths` ให้ยก OSError: `process_names` เป็น None และ `terminal_install` เป็น UNKNOWN · บน `classify_processes`: โปรเซสชื่อ `wine64-preloader` หรือ `wineserver` ที่ path ไม่มี component ที่ชื่อมี `metatrader` (`process_names` None → UNKNOWN; จำนวน Wine loader 1) · (v2.3, r3 F33) path `/Users/x/MetaTrader 5/bin/wine64-preloader` (component ไม่มี `.app`: path อยู่ใน `terminal_paths` → FAIL) · path `/Users/x/dev/metatrader-notes/.venv/bin/python` (FAIL ตามกฎแบบเข้ม) · กรณีของ mount อยู่ในย่อหน้า r2 F26
 
 (v2.1, F8) กรณีเพิ่มของ macOS: `net.metaquotes.wine.metatrader4` (FAIL และไม่ถูก list) · `Metatrader 4` (FAIL) · `METATRADER 5` (FAIL: ไม่สนตัวพิมพ์) · `net.other.app` (PASS) · Application Support ที่ list ไม่ได้ (UNKNOWN ของ `terminal_data`) · โฟลเดอร์ `metatrader 5` ที่มี `.txt` มี token โดย home และ data dir ครอบ และ appdata อยู่นอก `<home>/Library` ในกรณีนี้ (r2 F28) (`terminal_data` FAIL และ audit hook ไม่เห็น `os.scandir` หรือ `open` ใต้โฟลเดอร์นั้น) · แอป `Exness MetaTrader 5.app` (FAIL) · โปรเซสที่ path อยู่ใต้ `Exness MetaTrader 5.app` นอก /Applications (FAIL)
 
