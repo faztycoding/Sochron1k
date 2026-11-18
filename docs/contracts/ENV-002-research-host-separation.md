@@ -221,7 +221,8 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
                     + ทุกโฟลเดอร์ระดับ 0 ของ ~/Library/CloudStorage ถ้ามี (OneDrive, Google Drive, Dropbox แบบ File Provider)
     (v2.1, F11) ไม่อ่านตัวแปร `USERPROFILE`, `APPDATA`, `ProgramFiles*`, `OneDrive*` บน darwin · home มาจากฟังก์ชันระดับโมดูล `_darwin_home()`
                     (ค่าจริง: `os.path.expanduser("~")`; tests แทนได้) · `main` พิมพ์บรรทัด `roots:` ที่บอก repo, home และ search_dirs ที่ใช้
-                    โดยแทน token ด้วย `<token>` · บรรทัดนี้มีชื่อบัญชี macOS ซึ่งจะอยู่ในหลักฐานที่ commit (คำตัดสินข้อ 8: ยอม)
+                    โดยแทน token ด้วย `<token>` · (v2.2, r2 F29) เมื่อ `default_roots` ยก OSError ไม่มีบรรทัด `roots:` (พิมพ์ `reader:` แล้วข้อความ
+                    เดิมของ v1.9) · R1 บันทึกและเทียบบรรทัดนี้ตามหัวข้อ "งานที่ส่งต่อ" · บรรทัดนี้มีชื่อบัญชี macOS ซึ่งจะอยู่ในหลักฐานที่ commit (คำตัดสินข้อ 8: ยอม)
   terminal_install (darwin)  FAIL เมื่อพบอย่างใดอย่างหนึ่ง (ชื่อไม่สนตัวพิมพ์):
     · (v2.1, F8) แอปที่ชื่อมี `metatrader` (ไม่สนตัวพิมพ์; กฎเดียวกับ Uninstall entry ของ v1.9) และลงท้าย `.app` ระดับ 0 ของ /Applications หรือ
       ~/Applications (ดูชื่อเท่านั้น ไม่เข้าไป; ครอบชื่อของโบรกเกอร์เช่น `Exness MetaTrader 5.app` · ยังไม่ได้ตรวจว่าแอป iPhone/iPad จาก App Store ใช้ชื่อที่เข้ากฎนี้)
