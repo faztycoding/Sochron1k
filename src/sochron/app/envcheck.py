@@ -1,10 +1,11 @@
-"""ENV-002 research-host check (docs/contracts/ENV-002-research-host-separation.md, v1.8).
+"""ENV-002 research-host check (docs/contracts/ENV-002-research-host-separation.md, v2.6).
 
-The owner's PC is the research host: it must hold no MT5 terminal, no MetaTrader5 package, no data of
-the excluded period, no share to the VPS and no copy of the synthetic sentinel made on the VPS.
-collect(roots) reads the OS (Windows-only calls stay inside functions, so the module imports on Linux);
+The research host (the owner's Mac since D-023) must hold no MT5 terminal, no MetaTrader5 package, no data
+of the excluded period, no share to the VPS and no copy of the synthetic sentinel made on the VPS.
+collect(roots) reads the OS with the reader of sys.platform: win32 (the v1.9 reader) or darwin; any other
+platform reads nothing and is never PASS. OS calls stay inside functions, so the module imports anywhere.
 evaluate(facts, roots, sentinel) judges the facts and searches the repository, the data dirs and the
-shell folders by the contract's read rules. Nothing is written, deleted, run or sent over a network.
+search dirs by the contract's read rules. Nothing is written, deleted, run or sent over a network.
 
 Run from the repository root:
   PYTHONPATH=src uv run --offline python -m sochron.app.envcheck --role research \\
@@ -45,6 +46,9 @@ TIME_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 HEX32 = re.compile(r"[0-9a-f]{32}")
 HEX64 = re.compile(r"[0-9a-f]{64}")
 RECALL_ATTRIBUTES = 0x00400000 | 0x00040000  # FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS | FILE_ATTRIBUTE_RECALL_ON_OPEN
+SF_DATALESS = 0x40000000  # sys/stat.h of the macOS SDK: a dataless (cloud) file or folder (v2.1 F2)
+ICLOUD = ".icloud"  # .<name>.icloud: iCloud Drive's marker file for a file that is not on this machine (v2.1 F6)
+VENV_PYTHON = re.compile(r"python(?:3(?:\.[0-9]+)?)?")  # the interpreter link names of .venv/bin (v2.1 F5)
 CHUNK = 1 << 20
 SHOWN = 3  # paths shown per finding kind in a detail
 
@@ -61,6 +65,21 @@ FOLDER_IDS = {  # KNOWNFOLDERID values
     "Desktop": "B4BFCC3A-DB2C-424C-B029-7FE99A87C641",
     "Documents": "FDD39AD0-238F-46AF-ADB4-6C85480369C7",
 }
+
+# darwin (contract v2.0-v2.6)
+MNT_LOCAL = 0x00001000  # sys/mount.h:222 of the macOS SDK (v2.3 r3 F44)
+MNT_NOWAIT = 2
+ESRCH = 3  # sys/errno.h: the process has ended (errno is not among envcheck's imports)
+PATH_SIZE = 4096  # PROC_PIDPATHINFO_MAXSIZE
+PID_CAPACITY, PID_LIMIT = 1024, 1 << 20
+MOUNT_CAPACITY, MOUNT_LIMIT = 64, 4096
+REMOTE_TYPES = ("smbfs", "nfs", "afpfs", "webdav", "ftp")
+LOCAL_TYPES = ("apfs", "hfs", "devfs", "autofs", "msdos", "exfat", "udf", "cd9660", "tmpfs", "nullfs")
+AUTO_HOME = "map auto_home"
+HOME_SKIPPABLE = (".Trash", "Pictures/Photos Library.photoslibrary")  # measured unlistable on the owner's Mac
+APP_NOTES = ("crossover", "whisky", "playonmac", "wineskin", "kegworks", "wine", "parallels", "vmware", "utm",
+             "virtualbox", "docker", "orbstack")
+TOOL_NOTES = (".colima", ".lima", ".docker", ".orbstack", ".wine", ".podman", ".local/share/containers")
 
 
 # ---- records ---------------------------------------------------------------------------------------
@@ -118,6 +137,11 @@ class ResearchHostError(ValueError):
     """The research host check did not PASS; research must not run."""
 
 
+# The state behind host_lines(): empty at import; research_host_report clears it and records reader, roots and
+# token; the real darwin collect writes only its six keys (contract v2.3 r3 F25, v2.4 r4 F55).
+_HOST_SUMMARY: dict = {}
+
+
 # ---- helpers ---------------------------------------------------------------------------------------
 def _norm(path) -> str:
     return os.path.normcase(os.path.abspath(os.fsdecode(os.fspath(path))))
@@ -171,8 +195,52 @@ def _below_terminal(root: Path) -> bool:
 
 
 def is_cloud_only(path) -> bool:
-    """A cloud-only file (OneDrive Files On-Demand): opening it would download it, so only os.stat is used."""
-    return bool(getattr(os.stat(path), "st_file_attributes", 0) & RECALL_ATTRIBUTES)
+    """A cloud-only file or folder: OneDrive Files On-Demand (recall bits of st_file_attributes) or a dataless
+    file or folder of macOS (SF_DATALESS in st_flags). Opening or listing it would download it, so only os.stat
+    is used. One function on every platform (v2.1 F6)."""
+    status = os.stat(path)
+    return bool(getattr(status, "st_file_attributes", 0) & RECALL_ATTRIBUTES
+                or getattr(status, "st_flags", 0) & SF_DATALESS)
+
+
+def _dataless_above(folder) -> Path | None:
+    """The first dataless folder from the top down to folder itself, or None (v2.2 r2 F12). The check stops at
+    the first one, so nothing below it is stat'ed; a folder that cannot be stat'ed ends the check (the root's
+    own stat then reports it)."""
+    absolute = Path(os.path.abspath(folder))
+    for candidate in (*reversed(absolute.parents), absolute):
+        try:
+            if is_cloud_only(candidate):
+                return candidate
+        except (OSError, ValueError):
+            return None
+    return None
+
+
+def _appdata_match(name: str) -> bool:
+    """A terminal_data name at level 0 of Application Support (v2.1 F8): net.metaquotes.*, metatrader*, metaquotes."""
+    lower = name.lower()
+    return lower.startswith(("net.metaquotes.", "metatrader")) or lower == "metaquotes"
+
+
+def _appdata_folder(path, appdata) -> str | None:
+    """The level-0 entry of appdata with a terminal_data name that holds path, or None (v2.2 r2 F28)."""
+    text, base = _norm(path), _norm(appdata)
+    if text == base or not _within(text, base):
+        return None
+    first = os.path.relpath(text, base).split(os.sep)[0]
+    return first if _appdata_match(first) else None
+
+
+def _interpreter_identity() -> tuple[int, int] | None:
+    """(st_dev, st_ino) of the running interpreter, or None, when no link is excused (v2.1 F5)."""
+    if not sys.executable:
+        return None
+    try:
+        status = os.stat(sys.executable)
+    except (OSError, ValueError):
+        return None
+    return status.st_dev, status.st_ino
 
 
 def _token_patterns(token: str) -> tuple[bytes, ...]:
@@ -226,18 +294,24 @@ def parse_manifest(data: bytes):
 class _Search:
     """One walk of the repository, the data dirs and the search dirs, with the findings of three items."""
 
-    def __init__(self, roots: ResearchRoots, sentinel: Sentinel | None):
+    def __init__(self, roots: ResearchRoots, sentinel: Sentinel | None, quiet: bool = False):
         self.sentinel = sentinel
         self.patterns = _token_patterns(sentinel.token) if sentinel is not None else ()
         self.repo = Path(roots.repo)
         self.default_data = _norm(self.repo / "data")
+        self.appdata = Path(roots.appdata)
+        self.appdata_key = _norm(roots.appdata)
         self.metaquotes = _norm(Path(roots.appdata) / "MetaQuotes")
+        self.quiet = quiet  # terminal_data is FAIL already: a terminal data folder is skipped silently (r2 F28)
         self.excused = _norm(self.repo.joinpath(*EXCUSED))
+        self.venv_bin = _norm(self.repo / ".venv" / "bin")
+        self.interpreter = _interpreter_identity()
         self.holdout: tuple[list[str], list[str]] = ([], [])
         self.excluded: tuple[list[str], list[str]] = ([], [])
         self.found: tuple[list[str], list[str]] = ([], [])
         self.manifests: dict[str, object] = {}
-        self.counts = {"roots": 0, "folders listed": 0, "files examined": 0, "reparse points skipped": 0}
+        self.counts = {"roots": 0, "folders listed": 0, "files examined": 0, "reparse points skipped": 0,
+                       "interpreter links excused": 0}
         self.plan = self._plan(roots)
         self.prune = {key for _, key, _ in self.plan} | {self.metaquotes}
 
@@ -251,8 +325,9 @@ class _Search:
         data: list[tuple[Path, str]] = []
         for folder in roots.data_dirs:
             folder, key = Path(folder), _norm(folder)
-            if _within(key, self.metaquotes):
-                self._unlisted("data", folder, "is under %APPDATA%\\MetaQuotes, which is never listed")
+            closed = self._closed_root(folder, key)
+            if closed is not None:
+                self._unlisted("data", folder, closed)
                 continue
             kind = _kind(folder)
             if kind == "unreadable":
@@ -264,8 +339,9 @@ class _Search:
                 data.append((folder, key))
         plan: list[tuple[Path, str, str]] = []
         repo_area = "data" if any(_within(repo_key, other) for _, other in data) else "repo"
-        if _within(repo_key, self.metaquotes):
-            self._unlisted("repo", self.repo, "is under %APPDATA%\\MetaQuotes, which is never listed")
+        closed = self._closed_root(self.repo, repo_key)
+        if closed is not None:
+            self._unlisted("repo", self.repo, closed)
         else:
             kind = _kind(self.repo)
             if kind == "dir":
@@ -280,8 +356,9 @@ class _Search:
             folder, key = Path(folder), _norm(folder)
             if any(_within(key, other) for other in covered):
                 continue
-            if _within(key, self.metaquotes):
-                self._unlisted("search", folder, "is under %APPDATA%\\MetaQuotes, which is never listed")
+            closed = self._closed_root(folder, key)
+            if closed is not None:
+                self._unlisted("search", folder, closed)
                 continue
             kind = _kind(folder)
             if kind == "dir":
@@ -293,6 +370,22 @@ class _Search:
             if all(key != other for _, other, _ in searched):
                 searched.append((folder, key, "search"))
         return plan + searched
+
+    def _closed_root(self, folder: Path, key: str) -> str | None:
+        """Why a root is never listed, or None: under %APPDATA%\\MetaQuotes (v1.9 F6), under a terminal data
+        folder of appdata (v2.2 r2 F28) or at or below a dataless folder, checked from the top down before
+        the root itself is stat'ed (v2.2 r2 F12)."""
+        if _within(key, self.metaquotes):
+            return "is under %APPDATA%\\MetaQuotes, which is never listed"
+        named = _appdata_folder(folder, self.appdata)
+        if named is not None:
+            return f"is under {named}, a terminal data folder that is never listed"
+        dataless = _dataless_above(folder)
+        if dataless is None:
+            return None
+        if _norm(dataless) == key:
+            return "is a dataless folder (its content is in the cloud), not listed"
+        return f"is below the dataless folder {dataless}, not listed"
 
     def _unlisted(self, area: str, folder: Path, why: str = "could not be listed") -> None:
         text = f"{folder} {why}"
@@ -319,12 +412,20 @@ class _Search:
                 continue  # only the sentinel rules read the search dirs
             self.counts["roots"] += 1
             for folder, files, folders, reparse, beside in self._walk(root, area):
-                self._visit(area, files, folders, reparse, beside)
+                self._visit(area, folder, files, folders, reparse, beside)
 
     def _walk(self, root: Path, area: str):
         stack = [(root, _below_terminal(root))]  # v1.9 F6: a root below a terminal folder is never opened
         while stack:
             folder, beside = stack.pop()
+            try:
+                dataless = is_cloud_only(folder)
+            except (OSError, ValueError):
+                self._unlisted(area, folder, "could not be read")
+                continue
+            if dataless:  # v2.1 F6: listing it would fetch its entries from the cloud
+                self._unlisted(area, folder, "is a dataless folder (its content is in the cloud), not listed")
+                continue
             try:
                 with os.scandir(folder) as listing:
                     entries = list(listing)
@@ -345,32 +446,75 @@ class _Search:
                     self._unlisted(area, Path(entry.path), "could not be read")
             here = beside or any(entry.name.lower() == TERMINAL for entry in files + reparse)
             yield folder, files, folders, reparse, here
+            at_appdata = _norm(folder) == self.appdata_key
             for entry in folders:
-                if _norm(entry.path) not in self.prune:
-                    stack.append((Path(entry.path), here))
+                if _norm(entry.path) in self.prune:
+                    continue
+                if at_appdata and _appdata_match(entry.name):  # v2.2 r2 F28: never listed, never opened
+                    if not (self.quiet or entry.name.lower() == "metaquotes"):  # r3 F28: MetaQuotes stays silent
+                        self._unlisted(area, Path(entry.path), "is a terminal data folder, never listed")
+                    continue
+                stack.append((Path(entry.path), here))
 
-    def _visit(self, area: str, files: list, folders: list, reparse: list, beside: bool) -> None:
+    def _visit(self, area: str, folder: Path, files: list, folders: list, reparse: list, beside: bool) -> None:
         sentinel = self.sentinel
         if area != "search":
             for entry in folders + reparse:
                 if entry.name.lower() == "holdout":
                     self.holdout[0].append(f"{entry.path} is a holdout folder")
+        folder_key = _norm(folder)
         for entry in reparse:
             self.counts["reparse points skipped"] += 1
             if sentinel is not None and entry.name.lower() == sentinel.name.lower():
                 self.found[0].append(f"{entry.path} has the sentinel's name")
-            if area != "search":  # v1.9 F3 (a): research code could read through it
+            if area == "search":
+                continue
+            if self._excused(folder_key, entry):
+                self.counts["interpreter links excused"] += 1
+            else:  # v1.9 F3 (a): research code could read through it
                 self._unlisted(area, Path(entry.path), "is a junction or symbolic link, not entered")
+        at_appdata = folder_key == self.appdata_key
         by_name = {entry.name.lower(): entry for entry in files}
         for entry in files:
             self.counts["files examined"] += 1
-            self._file(area, entry, beside, by_name)
+            self._file(area, entry, beside or (at_appdata and _appdata_match(entry.name)), by_name)
+
+    def _excused(self, folder_key: str, entry) -> bool:
+        """The one symlink exception (v2.1 F5): python, python3 or python3.N at level 0 of <repo>/.venv/bin
+        that ends at the running interpreter (the same st_dev and st_ino). It is never opened."""
+        if folder_key != self.venv_bin or self.interpreter is None or not VENV_PYTHON.fullmatch(entry.name):
+            return False
+        try:
+            if entry.is_junction() or not entry.is_symlink():
+                return False
+            status = os.stat(entry.path)
+        except (OSError, ValueError):
+            return False
+        return (status.st_dev, status.st_ino) == self.interpreter
+
+    def _icloud_marker(self, area: str, path: Path, inner: str) -> None:
+        """.<name>.icloud, iCloud Drive's marker for a file that is not downloaded: never opened (v2.1 F6; v2.2
+        r2 F30; v2.4 r4 F54). Under the repository or a data dir it makes excluded_period and sentinel UNKNOWN;
+        in the search dirs only a .json one makes sentinel UNKNOWN; the sentinel's own name is FAIL by rule (2)."""
+        sentinel = self.sentinel
+        named = sentinel is not None and inner == sentinel.name.lower()
+        if named:
+            self.found[0].append(f"{path} is the iCloud marker of a file with the sentinel's name")
+        if area != "search":
+            self.excluded[1].append(f"{path} is the iCloud marker of a file that is not on this machine")
+            if sentinel is not None and not named:
+                self.found[1].append(f"{path} is the iCloud marker of a file that is not on this machine")
+        elif sentinel is not None and not named and inner.endswith(".json"):
+            self.found[1].append(f"{path} is the iCloud marker of a .json file whose size cannot be read")
 
     # -- one file
     def _file(self, area: str, entry, beside: bool, by_name: dict) -> None:
         lower = entry.name.lower()
-        suffix = os.path.splitext(lower)[1]
         path = Path(entry.path)
+        if lower.startswith(".") and lower.endswith(ICLOUD) and len(lower) > len(ICLOUD) + 1:
+            self._icloud_marker(area, path, lower[1:-len(ICLOUD)])
+            return
+        suffix = os.path.splitext(lower)[1]
         closed = lower == ".env" or lower.startswith(".env.") or suffix in CLOSED_SUFFIXES or beside
         sentinel = self.sentinel
         if sentinel is not None and lower == sentinel.name.lower():
@@ -533,7 +677,7 @@ def _network_shares(facts: Facts) -> Item:
 
 def evaluate(facts: Facts, roots: ResearchRoots, sentinel: Sentinel | None) -> Report:
     """Judge the facts and search the roots by the contract's read rules; reads only, never writes."""
-    search = _Search(roots, sentinel)
+    search = _Search(roots, sentinel, quiet=facts.metaquotes_exists is True)
     search.run()
     holdout, excluded, found = search.items()
     items: tuple[Item, ...] = (
@@ -751,8 +895,8 @@ def _known_folder(name: str) -> Path | None:
     return Path(value) if result == 0 and value else None
 
 
-def collect(roots: ResearchRoots) -> Facts:
-    """Read every fact from the OS; a fact that cannot be read is None (UNKNOWN)."""
+def _collect_win32(roots: ResearchRoots) -> Facts:
+    """The win32 reader of v1.9, unchanged: every fact from the OS; a fact that cannot be read is None (UNKNOWN)."""
     def guarded(read):
         try:
             return read()
@@ -770,6 +914,499 @@ def collect(roots: ResearchRoots) -> Facts:
     )
 
 
+# ---- collect (darwin; contract v2.0-v2.6) ------------------------------------------------------------
+class _STATFS(ctypes.Structure):
+    """struct statfs of macOS arm64 (64-bit inodes): 2168 bytes (contract v2.1 F19)."""
+    _fields_ = [("f_bsize", ctypes.c_uint32), ("f_iosize", ctypes.c_int32), ("f_blocks", ctypes.c_uint64),
+                ("f_bfree", ctypes.c_uint64), ("f_bavail", ctypes.c_uint64), ("f_files", ctypes.c_uint64),
+                ("f_ffree", ctypes.c_uint64), ("f_fsid", ctypes.c_int32 * 2), ("f_owner", ctypes.c_uint32),
+                ("f_type", ctypes.c_uint32), ("f_flags", ctypes.c_uint32), ("f_fssubtype", ctypes.c_uint32),
+                ("f_fstypename", ctypes.c_char * 16), ("f_mntonname", ctypes.c_char * 1024),
+                ("f_mntfromname", ctypes.c_char * 1024), ("f_flags_ext", ctypes.c_uint32),
+                ("f_reserved", ctypes.c_uint32 * 7)]
+
+
+def reader_name() -> str:
+    """The reader of this process: win32, darwin or none, from sys.platform when called (v2.1 F1)."""
+    platform = sys.platform
+    return platform if platform in ("win32", "darwin") else "none"
+
+
+def _darwin_home() -> str:
+    return os.path.expanduser("~")
+
+
+def _darwin_application_dirs(home) -> tuple[Path, ...]:
+    return Path("/Applications"), Path(home) / "Applications"
+
+
+# The raw readers hold the ctypes calls only (contract v2.2 r2 F4); tests replace them.
+def _darwin_list_pids(capacity: int) -> tuple[int, tuple[int, ...]]:
+    libsystem = ctypes.CDLL("/usr/lib/libSystem.B.dylib", use_errno=True)
+    libsystem.proc_listallpids.argtypes = (ctypes.c_void_p, ctypes.c_int)
+    libsystem.proc_listallpids.restype = ctypes.c_int
+    buffer = (ctypes.c_int * capacity)()
+    ctypes.set_errno(0)
+    count = libsystem.proc_listallpids(buffer, ctypes.sizeof(buffer))
+    if count < 0:
+        raise OSError(ctypes.get_errno(), "proc_listallpids failed")
+    return count, tuple(buffer[:min(count, capacity)])
+
+
+def _darwin_pid_path(pid: int) -> tuple[str | None, int]:
+    libsystem = ctypes.CDLL("/usr/lib/libSystem.B.dylib", use_errno=True)
+    libsystem.proc_pidpath.argtypes = (ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32)
+    libsystem.proc_pidpath.restype = ctypes.c_int
+    buffer = ctypes.create_string_buffer(PATH_SIZE)
+    ctypes.set_errno(0)
+    size = libsystem.proc_pidpath(pid, buffer, ctypes.sizeof(buffer))
+    if size <= 0:
+        return None, ctypes.get_errno()
+    return os.fsdecode(buffer.value), 0
+
+
+def _darwin_mounts(capacity: int) -> tuple[int, tuple[tuple[str, str, str, int], ...]]:
+    libsystem = ctypes.CDLL("/usr/lib/libSystem.B.dylib", use_errno=True)
+    libsystem.getfsstat.argtypes = (ctypes.c_void_p, ctypes.c_int, ctypes.c_int)
+    libsystem.getfsstat.restype = ctypes.c_int
+    entries = (_STATFS * capacity)()
+    ctypes.set_errno(0)
+    count = libsystem.getfsstat(entries, ctypes.sizeof(entries), MNT_NOWAIT)
+    if count < 0:
+        raise OSError(ctypes.get_errno(), "getfsstat failed")
+    return count, tuple((os.fsdecode(entry.f_fstypename), os.fsdecode(entry.f_mntfromname),
+                         os.fsdecode(entry.f_mntonname), int(entry.f_flags)) for entry in entries[:min(count, capacity)])
+
+
+# The pure functions hold every rule; they read only through the raw readers and write no module state.
+def read_process_paths(own_pid: int, own_path: str) -> tuple[tuple[str, ...], int, int]:
+    """(paths read, pids listed, pids skipped) of the running processes (v2.1 F7, v2.3 r3 F25).
+
+    A full buffer is a cut list: it grows and the list is read again. pid 0 and a process that ended (ESRCH)
+    are skipped and counted. Any other errno, a list without this process or another path for it raises
+    OSError whose text is the reason of the processes: line."""
+    capacity = PID_CAPACITY
+    while True:
+        try:
+            count, pids = _darwin_list_pids(capacity)
+        except OSError as error:
+            raise OSError(f"proc_listallpids failed, errno {error.errno}") from error
+        if count < capacity:
+            break
+        if capacity >= PID_LIMIT:
+            raise OSError(f"proc_listallpids filled a buffer of {capacity} pids")
+        capacity *= 2
+    if count <= 0:
+        raise OSError(f"listed {count} pids")
+    listed = len(pids)
+    paths: list[str] = []
+    skipped, own = 0, None
+    for pid in pids:
+        if pid == 0:
+            skipped += 1
+            continue
+        path, code = _darwin_pid_path(pid)
+        if path is None:
+            if code == ESRCH:
+                skipped += 1
+                continue
+            raise OSError(f"errno {code} on pid {pid}, {listed} pids")
+        paths.append(path)
+        if pid == own_pid:
+            own = path
+    if own_pid not in pids:
+        raise OSError(f"own pid missing, {listed} pids")
+    if own != own_path:
+        raise OSError(f"own path differs, {listed} pids")
+    return tuple(paths), listed, skipped
+
+
+def read_mounts() -> tuple[tuple[str, str, str, int], ...]:
+    """Every mount as (type, source, mount point, flags); a full buffer grows and is read again (v2.2 r2 F31)."""
+    capacity = MOUNT_CAPACITY
+    while True:
+        try:
+            count, entries = _darwin_mounts(capacity)
+        except OSError as error:
+            raise OSError(f"getfsstat failed, errno {error.errno}") from error
+        if count < capacity:
+            return tuple(entries)
+        if capacity >= MOUNT_LIMIT:
+            raise OSError(f"getfsstat filled a buffer of {capacity} mounts")
+        capacity *= 2
+
+
+def _mount_point_allowed(point: str) -> bool:
+    """/, /dev and paths under /System/Volumes/, but under /System/Volumes/Data/ only Data itself and
+    Data/home (v2.2 r2 F32, v2.3 r3 F32)."""
+    if point in ("/", "/dev", "/System/Volumes/Data", "/System/Volumes/Data/home"):
+        return True
+    if point.startswith("/System/Volumes/Data/"):
+        return False
+    return point.startswith("/System/Volumes/")
+
+
+def classify_mounts(entries) -> tuple[tuple[str, ...], tuple[str, ...] | None, tuple[str, ...], str | None]:
+    """(remote_drives, connected_resources, mount points not allowed, problem of /) of a mount list.
+
+    Per mount the FAIL rules come first (a remote type, or no MNT_LOCAL on a type other than autofs), then
+    the UNKNOWN rules (autofs other than map auto_home, a type outside the local list, a mount point outside
+    the allow list). / must be apfs: missing or another type is UNKNOWN (v2.2 r2 F26, v2.4 r4 F53)."""
+    remote: list[str] = []
+    outside: list[str] = []
+    unknown = False
+    root_types: list[str] = []
+    for fstype, source, point, flags in entries:
+        kind = str(fstype).lower()
+        if point == "/":
+            root_types.append(kind)
+        if kind in REMOTE_TYPES or (not flags & MNT_LOCAL and kind != "autofs"):
+            remote.append(f"{fstype} {source} on {point}")
+            continue
+        if kind == "autofs" and source != AUTO_HOME:
+            unknown = True
+        if kind not in LOCAL_TYPES:
+            unknown = True
+        if not _mount_point_allowed(point):
+            unknown = True
+            outside.append(point)
+    root = "missing" if not root_types else None if root_types[0] == "apfs" else root_types[0]
+    if root is not None:
+        unknown = True
+    return tuple(remote), None if unknown else (), tuple(outside), root
+
+
+def classify_processes(paths) -> tuple[tuple[str, ...], tuple[str, ...] | None, int]:
+    """(terminal paths, process_names, Wine loaders) of executable paths (v2.1 F7, v2.3 r3 F33, v2.4 r4 F53).
+
+    A path with any component whose name holds "metatrader", or whose name is terminal64.exe, is a terminal
+    path. A name that starts with "wine" outside such a path is a Wine loader: the list is then unreadable
+    (process_names None), while the terminal paths are kept."""
+    terminal: list[str] = []
+    names: list[str] = []
+    loaders = 0
+    for path in paths:
+        parts = [part for part in str(path).split("/") if part]
+        name = parts[-1] if parts else str(path)
+        names.append(name)
+        if any("metatrader" in part.lower() for part in parts) or name.lower() == TERMINAL:
+            terminal.append(str(path))
+        elif name.lower().startswith("wine"):
+            loaders += 1
+    return tuple(terminal), tuple(names) if loaders == 0 else None, loaders
+
+
+def _wine_folder(path: Path) -> bool:
+    """Whether a Wine folder exists; a symlink raises OSError "symlink" (v2.2 r2 F10, v2.3 r3 F43)."""
+    try:
+        mode = os.lstat(path).st_mode
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    if mode & 0o170000 == 0o120000:
+        raise OSError(None, "symlink", str(path))
+    return mode & 0o170000 == 0o040000
+
+
+def _wine_entries(folder: Path, match) -> list[Path]:
+    """The subfolders of a Wine folder whose lower-case name passes match, by name; the folder must be
+    listable and no matching entry may be a symlink (v2.2 r2 F10, v2.3 r3 F43)."""
+    with os.scandir(folder) as listing:
+        entries = list(listing)
+    found = []
+    for entry in entries:
+        if not match(entry.name.lower()):
+            continue
+        if entry.is_symlink() or entry.is_junction():
+            raise OSError(None, "symlink", entry.path)
+        if entry.is_dir(follow_symlinks=False):
+            found.append(Path(entry.path))
+    return sorted(found, key=lambda path: path.name)
+
+
+def _wine_program_files(prefix: Path) -> list[Path]:
+    """The drive_c/Program Files* roots of a prefix; a prefix without them has none, which is no error."""
+    roots: list[Path] = []
+    for drive_c in _wine_entries(prefix, lambda name: name == "drive_c"):
+        for root in _wine_entries(drive_c, lambda name: name.startswith("program files")):
+            with os.scandir(root):  # a root that cannot be listed raises here, as default_roots must
+                pass
+            roots.append(root)
+    return roots
+
+
+def wine_prefixes(home) -> tuple[tuple[Path, ...], tuple[Path, ...], tuple[Path, ...]]:
+    """(prefixes, source folders that exist, drive_c/Program Files* roots) of the known Wine places, in the
+    contract's order: ~/Library/PlayOnMac/wineprefix (any case), ~/Library/Application Support/CrossOver/Bottles
+    and ~/.wine (a prefix only with drive_c). A folder of that chain that exists but cannot be listed, or is a
+    symlink, raises OSError (v2.1 F9; v2.2 r2 F10; v2.3 r3 F43; v2.4 r4 F53)."""
+    home = Path(home)
+    prefixes: list[Path] = []
+    sources: list[Path] = []
+    roots: list[Path] = []
+    for parent, wanted in ((home / "Library" / "PlayOnMac", "wineprefix"),
+                           (home / "Library" / "Application Support" / "CrossOver", "bottles")):
+        if not _wine_folder(parent):
+            continue
+        for source in _wine_entries(parent, lambda name, wanted=wanted: name == wanted):
+            sources.append(source)
+            for prefix in _wine_entries(source, lambda name: True):
+                prefixes.append(prefix)
+                roots += _wine_program_files(prefix)
+    wine = home / ".wine"
+    if _wine_folder(wine):
+        sources.append(wine)
+        if _wine_entries(wine, lambda name: name == "drive_c"):
+            prefixes.append(wine)
+            roots += _wine_program_files(wine)
+    return tuple(prefixes), tuple(sources), tuple(roots)
+
+
+def find_wine_program_files(home) -> tuple[Path, ...]:
+    return wine_prefixes(home)[2]
+
+
+def _darwin_walk(root: Path, levels: int, *, skip=(), never=frozenset(), skippable=frozenset(),
+                 metatrader=False) -> tuple[list[str], bool, list[str]]:
+    """(paths found, complete, folders skipped) of one terminal search root on darwin (v2.1 F6, F10; r2 F10).
+
+    terminal64.exe at levels 0..levels, and MetaTrader* entries at level 0 when metatrader is set. A dataless
+    folder is skipped unlisted; a folder that cannot be listed is skipped only when it is in skippable,
+    otherwise the search is incomplete (the v1.8 skip rule does not apply on darwin). A reparse point named
+    terminal64.exe is named, never entered."""
+    found: list[str] = []
+    skipped: list[str] = []
+    complete = True
+    stack = [(Path(root), 0)]
+    while stack:
+        folder, level = stack.pop()
+        try:
+            dataless = is_cloud_only(folder)
+        except (OSError, ValueError):
+            complete = False
+            continue
+        if dataless:
+            skipped.append(str(folder))
+            continue
+        try:
+            folders, names, reparse = _list_folders(folder)
+        except OSError:
+            if _norm(folder) in skippable:
+                skipped.append(str(folder))
+            else:
+                complete = False
+            continue
+        if metatrader and level == 0:
+            found += [entry.path for entry in folders + reparse if entry.name.lower().startswith("metatrader")]
+        found += [str(folder / name) for name in names if name.lower() == TERMINAL]
+        found += [entry.path for entry in reparse if entry.name.lower() == TERMINAL]
+        if level < levels:
+            stack += [(Path(entry.path), level + 1) for entry in folders
+                      if entry.name.lower() not in skip and _norm(entry.path) not in never]
+    return found, complete, skipped
+
+
+def find_terminal_paths_darwin(applications, program_files, home,
+                               never_listed) -> tuple[tuple[str, ...], bool, tuple[str, ...]]:
+    """(paths found, search complete, folders skipped) of the darwin path rules of terminal_install.
+
+    Level-0 entries of the application folders whose name holds "metatrader" (names only; a folder that does
+    not exist has none, one that cannot be listed makes the search incomplete), MetaTrader* and terminal64.exe
+    at levels 0-2 of each Program Files root, and terminal64.exe at levels 0-3 of home outside .git, .venv,
+    node_modules and never_listed (compared by path; v2.1 F8, F10, F12; v2.2 r2 F4, F12, F30, F33)."""
+    found: list[str] = []
+    skipped: list[str] = []
+    complete = True
+    for folder in applications:
+        folder = Path(folder)
+        if _kind(folder) == "missing":
+            continue
+        try:
+            with os.scandir(folder) as listing:
+                found += [entry.path for entry in listing if "metatrader" in entry.name.lower()]
+        except OSError:
+            complete = False
+    for root in program_files:
+        paths, whole, passed = _darwin_walk(Path(root), PROGRAM_FILES_LEVELS, metatrader=True)
+        found += paths
+        skipped += passed
+        complete = complete and whole
+    home = Path(home)
+    never = frozenset(_norm(path) for path in never_listed)
+    skippable = frozenset(_norm(home.joinpath(*relative.split("/"))) for relative in HOME_SKIPPABLE)
+    paths, whole, passed = _darwin_walk(home, PROFILE_LEVELS, skip=TERMINAL_SKIP, never=never, skippable=skippable)
+    found += paths
+    skipped += passed
+    unique: dict[str, str] = {}
+    for path in found:
+        unique.setdefault(_norm(path), path)
+    return tuple(sorted(unique.values())), complete and whole, tuple(skipped)
+
+
+def _tilde(path, home) -> str:
+    """A path under home as ~/..., any other path as it is (v2.4 r4 F48: no account name in the wine: line)."""
+    text, base = os.path.abspath(os.fspath(path)), os.path.abspath(os.fspath(home))
+    if not _within(text, base):
+        return text
+    relative = os.path.relpath(text, base)
+    return "~" if relative == "." else f"~/{relative}"
+
+
+def _wine_reason(error: OSError, home) -> str:
+    """<path from ~/>: [Errno <n>] <strerror>, or <path from ~/>: symlink (v2.4 r4 F48, v2.5 r5 F60)."""
+    where = _tilde(error.filename, home) if error.filename else "?"
+    if error.strerror == "symlink":
+        return f"{where}: symlink"
+    return f"{where}: [Errno {error.errno}] {error.strerror}"
+
+
+def _darwin_guard() -> str | None:
+    """Why processes and mounts are not read: a DYLD_* variable or a machine other than arm64 (v2.1 F3, F19).
+    It runs before any process or mount reader (v2.2 r2 F4)."""
+    if any(key.startswith("DYLD_") for key in os.environ):
+        return "DYLD_ variables set"
+    machine = os.uname().machine
+    return None if machine == "arm64" else f"not arm64: {machine}"
+
+
+def _app_note(name: str) -> int | None:
+    lower = name.lower()
+    return next((index for index, prefix in enumerate(APP_NOTES) if lower.startswith(prefix)), None)
+
+
+def _apps_line(applications) -> str:
+    """Names at level 0 of the application folders that start with a name of the contract's list, in its order
+    (v2.1 F9; v2.3 r3 F48; v2.4 r4 F48)."""
+    names: list[str] = []
+    unreadable: list[str] = []
+    for folder in applications:
+        folder = Path(folder)
+        if _kind(folder) == "missing":
+            continue
+        try:
+            with os.scandir(folder) as listing:
+                names += [entry.name for entry in listing if _app_note(entry.name) is not None]
+        except OSError:
+            unreadable.append(str(folder))
+    shown = sorted(set(names), key=lambda name: (_app_note(name), name.lower()))
+    if unreadable:
+        return f"unreadable ({', '.join(unreadable)})" + (f"; found: {', '.join(shown)}" if shown else "")
+    return ", ".join(shown) or "none"
+
+
+def _present(path) -> bool | None:
+    """Whether a path exists (lstat only, never listed), or None when that cannot be told."""
+    try:
+        os.lstat(path)
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    except (OSError, ValueError):
+        return None
+    return True
+
+
+def _tools_line(home) -> str:
+    """Which names of the contract's list exist under home, by existence only (v2.2 r2 F9, v2.4 r4 F49)."""
+    shown: list[str] = []
+    for name in TOOL_NOTES:
+        present = _present(Path(home).joinpath(*name.split("/")))
+        if present is None:
+            shown.append(f"{name} (unreadable)")
+        elif present:
+            shown.append(name)
+    return ", ".join(shown) or "none"
+
+
+def _mounts_line(entries, outside, root) -> str:
+    """<n> (<types in the order found>)[; not allowed: <points>][; root: <problem>] (v2.1 F7; r2 F15, F32)."""
+    kinds = ", ".join(dict.fromkeys(str(entry[0]) for entry in entries))
+    text = f"{len(entries)} ({kinds})"
+    if outside:
+        text += f"; not allowed: {', '.join(outside)}"
+    return text + (f"; root: {root}" if root is not None else "")
+
+
+def _skipped_line(skipped, home) -> str:
+    if not skipped:
+        return "0 folders"
+    return f"{len(skipped)} folders ({', '.join(_tilde(path, home) for path in skipped)})"
+
+
+def _mt5_spec() -> bool | None:
+    try:
+        return importlib.util.find_spec("MetaTrader5") is not None
+    except (ValueError, ImportError):
+        return None
+
+
+def _collect_darwin(roots: ResearchRoots) -> Facts:
+    """The darwin reader: the seven Facts of contract v2.1 F4, plus the darwin keys of _HOST_SUMMARY (processes,
+    mounts, wine, skipped, apps, tools; v2.4 r4 F55). The DYLD_* and arm64 checks come before any process or
+    mount reader; what a rule found stays found when another part cannot be read (v2.2 r2 F30)."""
+    summary: dict[str, str] = {}
+    home = Path(roots.user_profile)
+    try:  # terminal_data: names at level 0 of Application Support only, never entered (v2.1 F8)
+        with os.scandir(roots.appdata) as listing:
+            matched = tuple(Path(entry.path) for entry in listing if _appdata_match(entry.name))
+        metaquotes: bool | None = bool(matched)
+    except OSError:
+        matched, metaquotes = (), None
+    try:  # v2.3 r3 F25: the prefixes again, so roots built by hand are searched as well
+        prefixes, sources, wine_roots = wine_prefixes(home)
+        looked = ", ".join(_tilde(path, home) for path in sources) or "none"
+        summary["wine"] = f"{len(prefixes)} prefixes; looked at {looked}"
+        wine_read = True
+    except OSError as error:  # v2.4 r4 F52: the search is incomplete, what is found elsewhere still counts
+        wine_roots, wine_read = (), False
+        summary["wine"] = f"unreadable ({_wine_reason(error, home)})"
+    applications = _darwin_application_dirs(home)
+    program_files = _unique((*roots.program_files, *wine_roots))
+    found, complete, skipped = find_terminal_paths_darwin(applications, program_files, home,
+                                                          (home / "Library", home / ".ssh", *matched))
+    summary["skipped"] = _skipped_line(skipped, home)
+    summary["apps"] = _apps_line(applications)
+    summary["tools"] = _tools_line(home)
+    paths = list(found)
+    complete = complete and wine_read
+    process_names = remote = connected = None
+    reason = _darwin_guard()
+    if reason is not None:
+        summary["processes"] = summary["mounts"] = f"unreadable ({reason})"
+    else:
+        try:
+            read, listed, passed = read_process_paths(os.getpid(), os.path.realpath(sys.executable))
+        except OSError as error:
+            summary["processes"] = f"unreadable ({error})"
+        else:
+            running, process_names, loaders = classify_processes(read)
+            paths += running
+            summary["processes"] = f"{listed} listed, {len(read)} paths read, {passed} skipped, {loaders} wine loaders"
+        try:
+            entries = read_mounts()
+        except OSError as error:
+            summary["mounts"] = f"unreadable ({error})"
+        else:
+            remote, connected, outside, root = classify_mounts(entries)
+            summary["mounts"] = _mounts_line(entries, outside, root)
+    _HOST_SUMMARY.update(summary)
+    unique = sorted({_norm(path): path for path in paths}.values())
+    return Facts(terminal_paths=tuple(unique) if unique or complete else None, uninstall_display_names=(),
+                 process_names=process_names, metaquotes_exists=metaquotes, mt5_spec_found=_mt5_spec(),
+                 remote_drives=remote, connected_resources=connected)
+
+
+def collect(roots: ResearchRoots) -> Facts:
+    """Every fact from the OS with the reader of sys.platform, read when called (contract v2.0, v2.1 F1, F22).
+    A fact that cannot be read is None (UNKNOWN); a platform other than win32 and darwin reads nothing but
+    find_spec, so terminal_install, terminal_data and network_shares are never PASS there."""
+    platform = sys.platform
+    if platform == "win32":
+        return _collect_win32(roots)
+    if platform == "darwin":
+        return _collect_darwin(roots)
+    return Facts(terminal_paths=None, uninstall_display_names=None, process_names=None, metaquotes_exists=None,
+                 mt5_spec_found=_mt5_spec(), remote_drives=None, connected_resources=None)
+
+
 def _unique(paths) -> tuple[Path, ...]:
     seen: dict[str, Path] = {}
     for path in paths:
@@ -777,9 +1414,30 @@ def _unique(paths) -> tuple[Path, ...]:
     return tuple(seen.values())
 
 
+def _darwin_roots(repo: Path, data_dirs: tuple[Path, ...]) -> ResearchRoots:
+    """default_roots on darwin (v2.0; v2.1 F9-F11): everything from the home of _darwin_home(), never from the
+    Windows variables. A Wine folder or ~/Library/CloudStorage that exists but cannot be read raises OSError."""
+    home = Path(_darwin_home())
+    library = home / "Library"
+    program_files = find_wine_program_files(home)
+    search = [home / "Downloads", home / "Desktop", home / "Documents"]
+    icloud = library / "Mobile Documents" / "com~apple~CloudDocs"
+    if _kind(icloud) != "missing":
+        search.append(icloud)
+    storage = library / "CloudStorage"
+    if _kind(storage) != "missing":
+        with os.scandir(storage) as listing:
+            search += sorted((Path(entry.path) for entry in listing if entry.is_dir()), key=lambda path: path.name)
+    return ResearchRoots(repo=repo, data_dirs=data_dirs, program_files=program_files,
+                         appdata=library / "Application Support", user_profile=home, search_dirs=_unique(search))
+
+
 def default_roots(extra_data_dirs=()) -> ResearchRoots:
-    """This machine's roots (contract v1.6 Q9): data_dirs = (<repo>/data, *extra_data_dirs)."""
+    """This machine's roots (contract v1.6 Q9): data_dirs = (<repo>/data, *extra_data_dirs); on darwin they
+    come from the home folder (v2.0), elsewhere as in v1.9."""
     repo = Path(__file__).resolve().parents[3]
+    if sys.platform == "darwin":
+        return _darwin_roots(repo, (repo / "data", *(Path(item) for item in extra_data_dirs)))
     env = os.environ
     profile = Path(env.get("USERPROFILE") or os.path.expanduser("~"))
     appdata = Path(env.get("APPDATA") or profile / "AppData" / "Roaming")
@@ -805,8 +1463,54 @@ def default_roots(extra_data_dirs=()) -> ResearchRoots:
 
 # ---- entry points --------------------------------------------------------------------------------------
 def research_host_report(*, roots: ResearchRoots | None = None, sentinel: Sentinel | None = None) -> Report:
+    """evaluate(collect(roots), roots, sentinel). Every call first clears _HOST_SUMMARY and records the reader,
+    the token and the roots it uses, for host_lines() (contract v2.3 r3 F25, v2.4 r4 F55)."""
+    _HOST_SUMMARY.clear()
+    _HOST_SUMMARY["reader"] = reader_name()
+    if sentinel is not None and sentinel.token:
+        _HOST_SUMMARY["token"] = sentinel.token
     roots = default_roots(()) if roots is None else roots
+    _HOST_SUMMARY["roots"] = roots
     return evaluate(collect(roots), roots, sentinel)
+
+
+def _roots_line(roots: ResearchRoots, darwin: bool) -> str:
+    """roots: repo=… home=… search_dirs=…; on darwin the level-0 folders of ~/Library/CloudStorage print as a count
+    and the part of their names before the first '-' only (v2.1 F11, v2.2 r2 F41)."""
+    search = [Path(folder) for folder in roots.search_dirs]
+    head = f"roots: repo={roots.repo} home={roots.user_profile} search_dirs="
+    if not darwin:
+        return head + ", ".join(map(str, search))
+    storage = _norm(Path(roots.user_profile) / "Library" / "CloudStorage")
+    cloud = [folder for folder in search if os.path.dirname(_norm(folder)) == storage]
+    plain = [folder for folder in search if folder not in cloud]
+    providers = ", ".join(folder.name.split("-", 1)[0] for folder in cloud)
+    return head + ", ".join(map(str, plain)) + f"; cloud storage: {len(cloud)}" + (f" ({providers})" if cloud else "")
+
+
+def host_lines() -> tuple[str, ...]:
+    """The host lines of the last research_host_report (contract v2.1 F1 to v2.5 r5 F59); reads no OS state and
+    never raises. The darwin lines follow the keys collect wrote; `not read` is printed only when the recorded
+    reader is darwin. The sentinel token prints as <token>."""
+    summary = _HOST_SUMMARY
+    recorded = summary.get("reader")
+    lines = [f"reader: {recorded or reader_name()}"]
+    roots = summary.get("roots")
+    if roots is not None:
+        try:
+            lines.append(_roots_line(roots, recorded == "darwin"))
+        except (AttributeError, TypeError, ValueError):
+            lines.append("roots: unreadable")
+    for key in ("processes", "mounts", "wine"):
+        if key in summary:
+            lines.append(f"{key}: {summary[key]}")
+        elif recorded == "darwin":
+            lines.append(f"{key}: not read")
+    lines += [f"{key}: {summary[key]}" for key in ("skipped", "apps", "tools") if key in summary]
+    token = summary.get("token")
+    if isinstance(token, str) and token:
+        lines = [line.replace(token, "<token>") for line in lines]
+    return tuple(lines)
 
 
 def require_research_host(*, roots: ResearchRoots | None = None, sentinel: Sentinel | None = None) -> Report:
@@ -833,6 +1537,8 @@ def load_sentinel(path, appdata=None) -> tuple[Sentinel | None, str | None]:
         return None, f"the sentinel file {path} is below a folder with terminal64.exe and is never opened"
     if appdata is not None and _within(_norm(path), _norm(Path(appdata) / "MetaQuotes")):
         return None, f"the sentinel file {path} is under %APPDATA%\\MetaQuotes and is never opened"
+    if appdata is not None and _appdata_folder(path, appdata) is not None:  # v2.2 r2 F28
+        return None, f"the sentinel file {path} is under a terminal data folder of {appdata} and is never opened"
     try:
         if is_cloud_only(path):
             return None, f"the sentinel file {path} is cloud-only and was not opened"
@@ -885,8 +1591,11 @@ def main(argv=None) -> int:
             sentinel, note = load_sentinel(args.sentinel_file, appdata=roots.appdata)
         report = research_host_report(roots=roots, sentinel=sentinel)
     except OSError as error:  # v1.9 F5: the check could not run; never a traceback or a PASS
+        print(f"reader: {reader_name()}")  # v2.5 r5 F59: nothing from _HOST_SUMMARY, so no roots: line
         print(f"# ENV-002 research host check\n\nnote: the check could not run: {error}\n\nRESEARCH HOST: {UNKNOWN}")
         return 1
+    for line in host_lines():  # v2.1 F1: the host lines come before the report
+        print(line)
     print(render(report, note), end="")
     return 0 if report.verdict == PASS else 1
 

@@ -443,6 +443,7 @@ def test_f10_unreadable_kinds_cloud_states_and_sizes_are_unknown(tmp_path, monke
 
 
 def test_f10_collect_keeps_unreadable_facts_as_none(tmp_path, monkeypatch):
+    monkeypatch.setattr(ec.sys, "platform", "win32")  # ENV-002 v2.1 F22: the win32 reader, on every OS
     appdata = tmp_path / "AppData"
     (appdata / "MetaQuotes").mkdir(parents=True)
     research_roots = roots(tmp_path, tmp_path / "repo", appdata=appdata)
