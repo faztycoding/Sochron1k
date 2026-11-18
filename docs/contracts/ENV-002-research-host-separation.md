@@ -163,9 +163,20 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
     find_wine_program_files(home) -> tuple[Path, ...]
     classify_mounts(entries: tuple[tuple[str, str, str, int], ...]) -> tuple[tuple[str, ...], tuple[str, ...] | None]
         # entry = (ชนิด, ต้นทาง, จุด mount, flags) · คืน (remote_drives, connected_resources)
-    classify_processes(paths) -> tuple[tuple[str, ...], tuple[str, ...] | None]      # คืน (terminal_paths ส่วนของโปรเซส, process_names)
+    classify_processes(paths: tuple[str, ...]) -> tuple[tuple[str, ...], tuple[str, ...] | None]   # คืน (terminal_paths ส่วนของโปรเซส, process_names)
     _darwin_application_dirs(home) -> tuple[Path, ...]
-    ตัวอ่านดิบ `_darwin_process_paths()` และ `_darwin_mounts()` ที่ tests แทนด้วยตัวปลอม
+    (v2.2, r2 F4) การอ่านโปรเซสและ mount แยกเป็นตัวอ่านดิบ (มีแต่การเรียก ctypes; tests แทนด้วยตัวปลอม) กับฟังก์ชัน pure ที่ถือกฎทั้งหมด (tests เรียกตรง):
+      ตัวอ่านดิบ  _darwin_list_pids(capacity: int) -> tuple[int, tuple[int, ...]]     # (จำนวนที่ API คืน, pid ที่อ่านได้) · API ล้ม = ยก OSError
+                 _darwin_pid_path(pid: int) -> tuple[str | None, int]                 # (path หรือ None, errno) · ไม่ยก exception
+                 _darwin_mounts(capacity: int) -> tuple[int, tuple[tuple[str, str, str, int], ...]]   # (จำนวนที่ API คืน, entries) · API ล้ม = ยก OSError
+      pure       read_process_paths(own_pid: int, own_path: str) -> tuple[str, ...]   # ถือกฎของ F7 ทั้งหมด: วนขยาย buffer, ข้าม pid 0 และ ESRCH,
+                                                                                      #   errno อื่น, PID ของตัวเอง · อ่านไม่ได้ตามกฎ = ยก OSError
+                 read_mounts() -> tuple[tuple[str, str, str, int], ...]               # วนขยาย buffer (r2 F31) · อ่านไม่ได้ = ยก OSError
+      `collect` บน darwin เรียก `read_process_paths(os.getpid(), os.path.realpath(sys.executable))` แล้ว `classify_processes`, และ `read_mounts()`
+      แล้ว `classify_mounts` · OSError จากฟังก์ชันเหล่านี้ → field ที่เกี่ยวเป็น None ตามตาราง Facts ข้างบน · `_darwin_process_paths()` ของ v2.1 ถูกแทนด้วยชุดนี้
+    (v2.2, r2 F4) `never_listed: tuple[Path, ...]` = path เต็มที่การค้น home ไม่เข้า (`<home>/Library`, `<home>/.ssh` และ path ที่พบจากกฎ terminal_data)
+    (v2.2, r2 F4) การตรวจ `DYLD_*` และ `os.uname().machine` อยู่ใน `collect` ก่อนเรียกฟังก์ชันอ่านโปรเซสและ mount ทั้งหมด (ไม่ผ่าน = ไม่เรียก และ field
+      ที่เกี่ยวเป็น None) · tests ของ collect ตั้ง `envcheck.os.uname` ปลอมที่คืน machine `arm64` (CI เป็น Linux x86_64) และมีกรณี `x86_64` แยก
     · `find_terminal_paths(program_files, user_profile, appdata)` เดิมไม่เปลี่ยน · `collect` และ `default_roots` อ่าน `sys.platform` ตอนถูกเรียก
       (tests ตั้ง `envcheck.sys.platform`)
   (v2.1, F4) กรณี macOS ระดับ collect (แอป, Wine prefix, ระดับของ `terminal64.exe`, โปรเซส, mount, platform อื่น) เป็น tests ที่ล็อกของผู้เขียน tests ใน
