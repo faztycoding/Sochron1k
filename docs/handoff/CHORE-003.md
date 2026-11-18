@@ -115,6 +115,11 @@ The review judged the applied files ready: AC-1 to AC-3 PASS, and they match the
 | F4 (question) | for the owner | — | Only the tests command sets `PYTHONTZPATH=""`. Other `uv run` calls on the Mac would read the system tz database instead of the pinned `tzdata`, and no test would notice. No research run is allowed before ENV-1. Proposed: pin the tz source in code under its own contract before SLICE-R1, a design control; or a rule line in the next AGENTS.md patch. |
 | F5 (question) | for the owner | — | The comment in the locked `.gitattributes` still describes Windows (`core.autocrlf=true`). The attributes themselves hold. Proposed for the next D-006 patch. |
 
+**The owner's answers** (chat question box, 2026-11-18 ~23:2x), recorded in DECISIONS.md D-025 items 5 and 6 and in PROGRESS.md:
+- F1: "รับ (Recommended)". The deviation is accepted, as D-024 item 3 was. For the rest of the pause Claude uses no form that guard-bash refuses without asking first.
+- F2–F5: "รวมไว้ patch ถัดไป (Recommended)". They go into the next D-006 patch of the locked files, which comes with the controls FIX when guard-bash returns. F4 is to be fixed in code, under its own contract, before SLICE-R1. No research run happens before ENV-1.
+- Review binding: "นับ review ของ Claude (Recommended)". Review r1 counts as this task's review, not only a pre-review, as (ซ) does for ENV-002.
+
 The review's notes for the owner before labelling, carried into the PR body:
 - One label approves 16 control changes: `.claude/settings.json`, AGENTS.md, CLAUDE.md and 13 ENV-002 test files.
 - The CHORE-002 and CHORE-003 reviews are pre-reviews. Without a binding switch, Codex review remains the rule for Standard+ tasks (CLAUDE.md:17–20; D-025 item 5).

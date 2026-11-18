@@ -189,7 +189,7 @@ PS> Select-String -Path C:\vault\SENTINEL-ENV002-*.json -SimpleMatch -Pattern '<
 ค่า SHA256 ต้องตรงกับ `sha256`, ความยาวต้องตรงกับ `size` ใน `docs/evidence/ENV-002-sentinel.json` (ตัวพิมพ์ของ hash ไม่สำคัญ) และ `Select-String` ต้องพิมพ์ `True` · ห้ามลบไฟล์นี้ (ถ้าลบ ค่าที่ commit ใช้ไม่ได้ ต้องสร้างใหม่ตั้งแต่ข้อ 1)
 
 ## 6. ส่ง snapshot ก่อน cutoff ในภายหลัง
-ใช้ขั้นตอนของ `docs/runbooks/ENV-001-vps.md` ข้อ 10 (D-021 ทาง (a); บน Mac แทน `subst` + mstsc ด้วยการ redirect โฟลเดอร์เดียวใน Windows App ตาม D-023 ข้อ 5) แล้วรันข้อ 3 ของ runbook นี้ซ้ำทุกครั้งหลังส่ง · **ใช้ได้หลัง ENV-1 ผ่านเท่านั้น:** runbook ฉบับ macOS ของ ENV-001 (branch `chore/ENV-001-vps-acquisition-host`) ผ่านการตรวจปิด r2 และ r3 แล้ว (`docs/reviews/ENV-001-runbook-v2-r2.md` และ `-r3.md` บน branch นั้น: F17 และ F27–F30 ปิด, ข้อ 0–10 พร้อมใช้) · F31 และ F32 ของ r3 (Low) แก้แล้วแต่ยังไม่มีผู้ตรวจปิด
+ใช้ขั้นตอนของ `docs/runbooks/ENV-001-vps.md` ข้อ 10 (D-021 ทาง (a); บน Mac แทน `subst` + mstsc ด้วยการ redirect โฟลเดอร์เดียวใน Windows App ตาม D-023 ข้อ 5) แล้วรันข้อ 3 ของ runbook นี้ซ้ำทุกครั้งหลังส่ง · **ใช้ได้หลัง ENV-1 ผ่านเท่านั้น:** runbook ฉบับ macOS ของ ENV-001 (branch `chore/ENV-001-vps-acquisition-host`) ผ่านการตรวจปิด r2 และ r3 แล้ว (`docs/reviews/ENV-001-runbook-v2-r2.md` และ `-r3.md` บน branch นั้น: F17 และ F27–F30 ปิด, ข้อ 0–10 พร้อมใช้) · F31 และ F32 ของ r3 (Low) แก้ด้วยข้อความของผู้ตรวจ และเจ้าของรับโดยไม่ตรวจซ้ำ (2026-11-18)
 
 ## 7. เครื่อง Windows เดิม (AC-03 ข้อ 7, D-023 ข้อ 2 ทาง 1; หลัง SPIKE-002 ผ่านบน VPS)
 ยืนยันทีละข้อพร้อมเวลา**ตามลำดับนี้**:
