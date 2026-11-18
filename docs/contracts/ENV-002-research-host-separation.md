@@ -11,7 +11,7 @@ Hypothesis (research tasks): ไม่ใช่งานวิจัย
 - Q2 real money: no
 - Q3 new storage/transfer of personal or confidential data: no — sentinel เป็นข้อมูลปลอม
 - Q4 schema change or deletion of real data: **yes** — เจ้าของถอน MT5 terminal และลบโฟลเดอร์ข้อมูลของ terminal บนเครื่องตัวเอง · (v2.0) เครื่องที่ถูกล้างคือเครื่อง Windows เดิม รวมการลบ clone และ worktree ของ repo บนเครื่องนั้น (D-023 ข้อ 2)
-- Q5 hard-to-reverse external effect: no (ติดตั้งใหม่ได้)
+- Q5 hard-to-reverse external effect: no (v1.9: ติดตั้งใหม่บนเครื่อง Windows ได้ · v2.1, F16: การลบ clone และโฟลเดอร์ของ terminal บนเครื่อง Windows ย้อนไม่ได้ แต่ไม่ใช่ผลภายนอก)
 - Q6 changes controls: no สำหรับ hooks/CI · เพิ่มกฎใน `tests/architecture` (ล็อก) ผ่าน patch ของผู้เขียน tests ตาม D-006
 
 **High** ตาม Q1, Q4
@@ -46,7 +46,7 @@ Hypothesis (research tasks): ไม่ใช่งานวิจัย
 ## Scope
 - In scope: `src/sochron/app/__init__.py`, `src/sochron/app/envcheck.py` · `scripts/env/make_sentinel.py` (stdlib เท่านั้น, รันบน VPS) · unit tests `tests/unit/app/**` · runbook `docs/runbooks/ENV-002-research-host.md` · `docs/evidence/ENV-002-sentinel.json` (ค่าของ sentinel ที่ commit: ชื่อ, ขนาด, SHA-256, token, vault path, เวลาสร้าง) · หลักฐาน · โดยผู้เขียน tests ผ่าน patch D-006: `tests/acceptance/ENV-002/**`, `tests/architecture/**`
 - (v2.0) In scope เพิ่ม: ตัวอ่าน macOS ใน `src/sochron/app/envcheck.py` (เพิ่ม ไม่รื้อตัวอ่าน Windows) · unit tests ของตัวอ่าน macOS ใน `tests/unit/app/**` · runbook ฉบับ macOS ใน `docs/runbooks/ENV-002-research-host.md` (ขั้นบน VPS ไม่เปลี่ยน) · โดยผู้เขียน tests ผ่าน patch D-006: กรณี macOS ใน `tests/acceptance/ENV-002/**` และตัวตรวจ ctypes ของ envcheck ใน `tests/architecture/test_imports.py` (v2.1, F2: แก้แบบแคบตามหัวข้อ Invariants; allow list ของ stdlib ไม่เปลี่ยน) · `DECISIONS.md` เฉพาะ D-023 และบรรทัดอ้างกลับใต้ D-021 (v2.1, F17)
-- (v2.0) Exclusions เพิ่ม: runbook และ AC ของ ENV-001 ฝั่งเครื่องเจ้าของ (contract revision ของ ENV-001) · การแก้ controls ให้ผ่านบน macOS (งาน FIX แยก, Q6) · patch ของ `AGENTS.md`/`CLAUDE.md` และ `docs/tooling/**` (งานตามของ D-023) · การติดตั้ง MT5 หรือ Wine บน Mac เพื่อทดสอบ (ห้าม)
+- (v2.0) Exclusions เพิ่ม: runbook และ AC ของ ENV-001 ฝั่งเครื่องเจ้าของ (contract revision ของ ENV-001) · การแก้ controls ให้ผ่านบน macOS (งาน FIX แยก, Q6) · patch ของ `AGENTS.md`/`CLAUDE.md` และ `docs/tooling/**` (งานตามของ D-023) · การติดตั้ง MT5 หรือ Wine บน Mac (ห้ามทุกกรณี; v2.1, F16)
 - Exclusions: รูปแบบ snapshot/manifest เต็มและ loader ของ R1 (SLICE-R1) · การดึงข้อมูล การตัดและย้าย holdout (D-021, contract ของ acquisition host) · `data.acquire`, `broker` · แก้ `research`, `backtest`, `strategy`, `data`
 - Allowed files/modules: ข้างบน + `docs/evidence/ENV-002.md`, `docs/handoff/ENV-002.md`, `PROGRESS.md` · หลัง ENV-1 ผ่าน (ตอนบันทึก "ENV-1 ผ่าน": วันที่, commit ของ 3 งาน) แก้ได้เฉพาะ: `docs/architecture.md` ข้อ 6.1 ("ระยะนี้" และ bullet ด่าน ENV-1 ตาม D-021 ข้อ 1), ข้อ 7 ประโยคขอบเขต research/holdout ("ระยะนี้ที่ยังใช้เครื่องเดียว…"), ข้อ 9 แถว holdout, และแถว Q-08 ของ `SPEC.md` (ชี้ไป D-021) · การแก้บรรทัด Phase ใน `AGENTS.md` เป็น patch D-006 แยกให้เจ้าของ
 - Must not touch: `src/sochron/{core,timebase,data,strategy,costs,risk,backtest,research}/**`, `pyproject.toml`, `uv.lock`, `.github/**`, `.claude/**`, `scripts/controls/**`, `AGENTS.md`, `CLAUDE.md`, `spikes/**`
@@ -297,7 +297,7 @@ scripts/env/make_sentinel.py   (stdlib เท่านั้น · เจ้า�
 - sentinel เป็นข้อมูลปลอมที่ติดป้าย `synthetic` ไม่ใช่ holdout จริง · ไฟล์ไม่ถูกคัดลอกมาเครื่องเจ้าของ
 - `research`, `backtest`, `strategy` ยัง import `data.acquire`, `broker` หรือ `app` ไม่ได้
 - UNKNOWN ไม่ถือว่าผ่าน · R1 เริ่มได้เมื่อ `require_research_host` คืน PASS เท่านั้น
-- (v2.0) ไม่ติดตั้ง MT5, Wine หรือแพ็กเกจ `MetaTrader5` บน Mac เพื่อทดสอบ: กรณีของ macOS ทดสอบด้วยโฟลเดอร์ชั่วคราวและ Facts ปลอมเท่านั้น
+- (v2.0; v2.1, F16) ไม่ติดตั้ง MT5, Wine หรือแพ็กเกจ `MetaTrader5` บน Mac ไม่ว่าด้วยเหตุใด (รวมเพื่อทดสอบและเพื่อย้อน) · กรณีของ macOS ทดสอบด้วยโฟลเดอร์ชั่วคราวและค่าปลอมเท่านั้น
 - (v2.0) agent ไม่อ่าน Keychain, รายการ credential ของ Windows App หรือไฟล์ `.rdp` · การตรวจรหัสที่บันทึกไว้เป็นของเจ้าของ
 - (v2.0) tests ที่ล็อกของ v1.9 ไม่ถูกลบ ข้าม หรือทำให้อ่อนลง: (v2.1, F2) ทุกแถวของตารางกรณีที่ล็อก (`_ENVCHECK_FORBIDDEN`, `_ENVCHECK_ALLOWED` และ tests ของ acceptance) คงเดิมพร้อมผลที่คาดไว้ทุกตัวอักษร · ข้อยกเว้นเดียว (คำตัดสินข้อ 2 ของ v2.1): patch ของผู้เขียน tests เพิ่มแถว และแก้ฟังก์ชันกับค่าคงที่ของตัวตรวจ envcheck ใน `tests/architecture/test_imports.py` (อย่างน้อย `_ENVCHECK_CTYPES_DENIED`, `_ENVCHECK_CALLED`, การ resolve handle ของ library และกฎเปิดตอน import) เท่าที่รูป ctypes ของ darwin ใน AC-06 ต้องใช้ · ผู้เขียน tests ระบุทุกฟังก์ชันและค่าคงที่ที่แก้พร้อม diff ใน handoff ให้เจ้าของอนุมัติก่อน apply · จุดอื่นที่ต้องเปลี่ยน รายงานให้เจ้าของตัดสินก่อนแก้ · (v2.1, F5) ข้อยกเว้น symlink ไม่แตะ assertion ที่ล็อกข้อใด (ตรวจ 2026-11-17: tests ที่ล็อกไม่สร้าง symlink และ host ปลอมไม่มี `.venv/bin`)
 
@@ -349,7 +349,7 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 **Threat model ย่อ (High):**
 | ภัย | ทางเข้า | การป้องกัน | ที่เหลือ (ระบุตรงๆ) |
 |---|---|---|---|
-| research identity ดึงช่วง holdout จากโบรกเกอร์ | terminal + `MetaTrader5` บนเครื่องนี้ | ถอน terminal, ลบ `%APPDATA%\MetaQuotes`, item `terminal_*`, `mt5_package` ก่อนทุก R1 | ติดตั้งใหม่ได้เสมอ: envcheck ก่อนทุก R1 จับแบบติดตั้งปกติ, portable ใต้ profile ≤ 3 ระดับ, Uninstall entry และโปรเซส · portable ที่อื่นและไม่รันอยู่ยังหลุดได้ |
+| research identity ดึงช่วง holdout จากโบรกเกอร์ | terminal + `MetaTrader5` บนเครื่องนี้ | ถอน terminal, ลบ `%APPDATA%\MetaQuotes`, item `terminal_*`, `mt5_package` ก่อนทุก R1 | ติดตั้งใหม่ได้เสมอ: envcheck ก่อนทุก R1 จับแบบติดตั้งปกติ, portable ใต้ profile ≤ 3 ระดับ, Uninstall entry และโปรเซส · portable ที่อื่นและไม่รันอยู่ยังหลุดได้ · (v2.1, F16) แถวนี้เขียนสำหรับเครื่อง Windows ของ v1.9 · บน Mac ไม่มีสิ่งที่ต้องถอน การป้องกันคือ item `terminal_*` และ `mt5_package` ก่อนทุก R1 และกฎห้ามติดตั้งของ Invariants |
 | research identity เข้า VPS | share, WinRM, SSH, credential ที่บันทึก | firewall ของ ENV-001 (เปิดแค่ RDP จาก IP เจ้าของ) · break-it test จากเครื่องนี้ (AC-03) · ไม่บันทึกรหัส RDP | **ขณะหน้าต่าง RDP ของเจ้าของเปิดอยู่ โปรเซสของ research identity มองเห็นหน้าจอ ส่ง input และใช้ clipboard ร่วมได้** (ผู้ใช้, session และ integrity เดียวกัน) · ลดด้วยการเปิด RDP เฉพาะเมื่อไม่มี session ของ agent รัน (decision (ค)) หรือเจ้าของรับความเสี่ยงนี้ |
 | ไฟล์ holdout ถูกคัดลอกมา | drive redirection, clipboard ไฟล์, sync | ENV-001 ปิดทั้งหมด · item `holdout_dir`, `excluded_period`, `network_shares`, `sentinel` (รวม OneDrive) | การคัดลอกเป็นข้อความผ่าน clipboard และการพิมพ์ด้วยมือตรวจไม่ได้ · ช่องทางส่ง snapshot ตาม D-021 ตรวจซ้ำทุกครั้ง |
 | ข้อมูลช่วง holdout เข้าโค้ดวิจัยโดยไม่มีไฟล์ | caller ส่งแท่งเอง | `HoldoutRefused` (AC-04) + loader ของ R1 (งานส่งต่อ) | ชั้นเสริม ขอบเขตหลักคือการแยกเครื่อง |
@@ -422,7 +422,7 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 | target | เครื่องเจ้าของ (research host), vault path บน VPS |
 | valid until | TBD (เจ้าของกรอก) |
 
-(v2.0) target เปลี่ยนเป็น: เครื่อง Mac (research host), เครื่อง Windows เดิม (ล้างครั้งเดียวตาม D-023 ข้อ 2), vault path บน VPS · actor เพิ่ม: เจ้าของตรวจ credential ของ Windows App และ Keychain เอง (แทน `cmdkey /list`) · valid until ยัง TBD
+(v2.0) target เปลี่ยนเป็น: เครื่อง Mac (research host), เครื่อง Windows เดิม (ล้างครั้งเดียวตาม D-023 ข้อ 2), vault path บน VPS · actor เพิ่ม: เจ้าของตรวจ credential ของ Windows App และ Keychain เอง (แทน `cmdkey /list`) · valid until ยัง TBD · (v2.1, F16) actor ของ v1.9 ที่เขียนว่าเครื่องตัวเองและ `cmdkey` หมายถึงเครื่อง Windows เดิม · เจ้าของเป็นผู้ลบ clone, worktree และย้ายไฟล์บนเครื่องนั้นเอง
 
 ## Budget
 2 sessions ของ Claude · headless session ไม่เกิน 5 (ผู้เขียน tests, ผู้ตรวจ tests, ผู้ตรวจงาน, สำรอง ×2) · 3 attempts ต่อปัญหาที่ไม่มีหลักฐานใหม่
@@ -430,7 +430,7 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 (v2.0) งบของ v1.x ใช้ครบแล้ว (headless 5/5) · งบใหม่ของ v2.0: 2 sessions ของ Claude · session ใหม่ไม่เกิน 5 (ผู้ตรวจ contract, ผู้เขียน tests, ผู้ตรวจ tests, ผู้ตรวจงาน, สำรอง ×1) · 3 attempts ต่อปัญหาที่ไม่มีหลักฐานใหม่
 
 ## Recovery, compensation and checkpoint
-ติดตั้ง MT5 ใหม่บนเครื่องเจ้าของได้ถ้าต้องย้อน (ENV-1 จะไม่ผ่านจนกว่าจะถอนอีกครั้ง) · ลบไฟล์ sentinel บน VPS ได้หลังบันทึกหลักฐาน (แล้วค่าที่ commit ใช้ไม่ได้: ต้องสร้างใหม่และ commit ใหม่) · revert PR
+(v1.9, เฉพาะเครื่อง Windows เดิมและก่อนล้างตาม D-023 ข้อ 2 เท่านั้น) ติดตั้ง MT5 ใหม่บนเครื่อง Windows ได้ถ้าต้องย้อน (ENV-1 จะไม่ผ่านจนกว่าจะถอนอีกครั้ง) · (v2.1, F16) บนเครื่อง Mac ไม่มีทางย้อนแบบนี้: ห้ามติดตั้ง MT5 หรือ Wine · ลบไฟล์ sentinel บน VPS ได้หลังบันทึกหลักฐาน (แล้วค่าที่ commit ใช้ไม่ได้: ต้องสร้างใหม่และ commit ใหม่) · revert PR
 
 (v2.0) ถ้าเจ้าของไม่รับ D-023 หรือ v2.0: ลบ branch `chore/ENV-002-macos-research-host` แล้ว v1.9 ยังใช้ได้ตามเดิมบนเครื่อง Windows · การลบ clone และโฟลเดอร์ของ terminal บนเครื่อง Windows ย้อนไม่ได้: ทำหลังยืนยันว่า push ครบและย้าย `docs/proposals/` กับ memory พร้อมตรวจ SHA-256 แล้วเท่านั้น · ตัวอ่าน Windows ยังอยู่ในโค้ด ถ้ากลับไปใช้ Windows เป็น research host ต้องตัดสินใหม่ตาม D-023 "Review when"
 
