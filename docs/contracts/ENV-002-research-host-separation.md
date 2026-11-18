@@ -414,6 +414,8 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 
 (v2.1, F19) กรณีเพิ่มของ macOS: `autofs` จาก `map auto_home` ที่ไม่มี MNT_LOCAL (PASS) · `autofs` จาก `map -fstab`, `map -static` หรือ `map -hosts` (UNKNOWN) · `os.uname().machine` เป็น `x86_64` (UNKNOWN ของ `terminal_install` และ `network_shares`) · mount ชนิด `ntfs` หรือ `lifs` ที่มี MNT_LOCAL (UNKNOWN; ไม่มี MNT_LOCAL = FAIL)
 
+(v2.3, r3 F45) รายการฐานของกรณี mount ทุกข้อในหัวข้อนี้ที่คาด PASS หรือคาดผลจาก mount ตัวเดียว: `/` ชนิด `apfs` ที่มี MNT_LOCAL บวก mount ของกรณี · `devfs` อยู่ที่ `/dev` · `autofs` จาก `map auto_home` อยู่ที่ `/System/Volumes/Data/home` · กรณีที่บอกจุด mount ไว้ใช้จุดนั้น · กรณีเพิ่ม: `autofs` จาก `map auto_home` ที่ `/home` (UNKNOWN: จุด mount นอกรายการอนุญาต)
+
 (v2.2, r2 F26) กรณีของ mount บน `classify_mounts` (แทนกรณี mount ของย่อหน้า F7 เดิม): รายการ mount ไม่มี `/` (UNKNOWN) · `/` ชนิด `hfs` ที่มี MNT_LOCAL (UNKNOWN) · `/` ชนิด `apfs` ที่ไม่มี MNT_LOCAL (FAIL) · `/` ชนิด `nfs` (FAIL) · รายการที่มีทั้ง mount ที่เข้ากฎ FAIL และ mount ที่เข้ากฎ UNKNOWN (FAIL)
 
 (v2.3, r3 F28) กรณีเพิ่ม (ทุกแพลตฟอร์ม, บน `evaluate`): Facts ที่ `metaquotes_exists=False`, appdata อยู่ใต้ data dir ที่ครอบ, โฟลเดอร์ `metatrader 5` ระดับ 0 ของ appdata มี `.txt` ที่มี token (`holdout_dir`, `excluded_period` และ `sentinel` เป็น UNKNOWN; audit hook ไม่เห็น `os.scandir` หรือ `open` ใต้โฟลเดอร์นั้น)
