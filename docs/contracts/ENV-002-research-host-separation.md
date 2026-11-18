@@ -42,7 +42,7 @@ Hypothesis (research tasks): ไม่ใช่งานวิจัย
 - `SF_DATALESS` = `0x40000000` (`sys/stat.h` ของ macOS SDK) · `os.stat()` บน Mac มี `st_flags` · โมดูล `stat` ของ Python 3.12 ไม่มีค่าคงที่ `SF_DATALESS`
 - แพ็กเกจ `MetaTrader5` ไม่มี wheel สำหรับ macOS (AGENTS.md: "Windows-only wheels") (v2.1, F20) `mt5_package` บน darwin จึงผ่านเสมอ ไม่นับเป็นหลักฐาน · กฎ (1) ของ `sentinel` (vault_path มีอยู่บนเครื่องนี้) ก็ล้มไม่ได้บน Mac เพราะ `C:\vault` เป็น path สัมพัทธ์บน POSIX ที่ไม่มีวันมีอยู่ · ถ้อยคำ detail คงเดิม (F4) runbook ฉบับ macOS จึงเป็นที่บอกว่าสองข้อนี้ไม่นับ
 - path ของ MT5 บน macOS มาจากผลค้นเว็บ 2026-11-17 (หน้า help ทางการของ MetaQuotes และคู่มือโบรกเกอร์) (v2.1, F9) ผู้ตรวจ contract เปิดหน้าทางการ 2026-11-17 แล้ว: โฟลเดอร์ทั้งสองตรงตามหน้า (หน้าเขียน `Metatrader 5`) · หน้าไม่ระบุชื่อ .app และไม่มีคำว่า `terminal64.exe`; ชื่อแอป `MetaTrader 5` มาจากแหล่งบุคคลที่สาม (D-023 ข้อ 4)
-- (v2.1, F9, วัด 2026-11-18 ด้วยการดูชื่อโฟลเดอร์ระดับ 0 ของ home) มีโฟลเดอร์ `~/.colima` (เครื่องมือ VM/container แบบ command line): อยู่ในขอบเขตคำยืนยันเรื่อง VM และ container ของ AC-03 ข้อ 4
+- (v2.1, F9, วัด 2026-11-18 ด้วยการดูชื่อโฟลเดอร์ระดับ 0 ของ home) มีโฟลเดอร์ `~/.colima` (เครื่องมือ VM/container แบบ command line) และ (v2.3, r3 F42) `~/.docker` (วัดการมีอยู่เท่านั้น ไม่ได้อ่านข้างใน): อยู่ในขอบเขตคำยืนยันเรื่อง VM และ container ของ AC-03 ข้อ 4
 
 ## Scope
 - In scope: `src/sochron/app/__init__.py`, `src/sochron/app/envcheck.py` · `scripts/env/make_sentinel.py` (stdlib เท่านั้น, รันบน VPS) · unit tests `tests/unit/app/**` · runbook `docs/runbooks/ENV-002-research-host.md` · `docs/evidence/ENV-002-sentinel.json` (ค่าของ sentinel ที่ commit: ชื่อ, ขนาด, SHA-256, token, vault path, เวลาสร้าง) · หลักฐาน · โดยผู้เขียน tests ผ่าน patch D-006: `tests/acceptance/ENV-002/**`, `tests/architecture/**`
@@ -284,8 +284,9 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
       utm, virtualbox, docker, orbstack · คำยืนยันของ AC-03 ข้อ 4 เรื่อง VM, container และบัญชีผู้ใช้ ต้องยืนยันซ้ำทุกครั้งที่บรรทัด `apps:`, `tools:` หรือ `wine:` ต่างจาก
       หลักฐานของ ENV-002
     · (v2.2, r2 F9, คำตัดสิน r2 ข้อ 2) บรรทัด `tools:` (ไม่เปลี่ยน verdict) พิมพ์ชื่อที่มีอยู่จากรายการนี้ โดยดูการมีอยู่เท่านั้น ไม่ list ข้างใน: ระดับ 0 ของ home
-      `.colima`, `.lima`, `.docker`, `.orbstack`, `.wine`, `.podman` และ path `<home>/.local/share/containers` · เครื่องนี้มี `.colima` (วัด 2026-11-18)
-      บรรทัดในหลักฐานของ ENV-002 จึงเป็น `tools: .colima` และเจ้าของยืนยันใน AC-03 ข้อ 4 ว่า VM ของ colima ไม่มี MT5 หรือ Wine
+      `.colima`, `.lima`, `.docker`, `.orbstack`, `.wine`, `.podman` และ path `<home>/.local/share/containers` · (v2.3, r3 F42) เครื่องนี้มี `.colima` และ `.docker`
+      (วัดการมีอยู่ 2026-11-18; อีกห้าชื่อไม่มี) บรรทัดในหลักฐานของ ENV-002 จึงคาดว่าเป็น `tools: .colima, .docker` (ค่าที่ commit คือค่าที่รอบ AC-01 พิมพ์จริง)
+      และเจ้าของยืนยันใน AC-03 ข้อ 4 ว่า VM ของ colima และ container ของ Docker ไม่มี MT5 หรือ Wine
       · เครื่องมือ command line ที่ไม่ทิ้งชื่อในรายการนี้ (เช่น qemu ที่ติดตั้งเดี่ยว) ไม่ทำให้ต้องยืนยันซ้ำ: เป็นข้อที่เหลือ
   terminal_data (darwin; v2.1, F8)  FAIL เมื่อระดับ 0 ของ `~/Library/Application Support` มีรายการที่ชื่อ (เทียบแบบ lower-case) ขึ้นต้นด้วย `net.metaquotes.`
     หรือ `metatrader` หรือเท่ากับ `metaquotes` · list เฉพาะ `~/Library/Application Support` ระดับเดียวและดูชื่อเท่านั้น ห้าม list หรืออ่านข้างในรายการที่ตรง
