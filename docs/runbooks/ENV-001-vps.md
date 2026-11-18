@@ -21,9 +21,9 @@ Contract: `docs/contracts/ENV-001-vps-acquisition-host.md` v2.2 (อนุมั
 ## 1. ชั้นนอก: firewall ของผู้ให้บริการ และบัญชี
 1. ใน console ของผู้ให้บริการ ตั้ง rule ขาเข้า: อนุญาต **TCP 3389** (และ UDP 3389 ถ้ามีให้เลือก) จาก **IPv4 บ้านของคุณ** (หรือ subnet ของ VPN) เท่านั้น · พอร์ตอื่นปิดทั้งหมด · ผูก rule ชุดนี้กับ VPS เครื่องนี้และเปิดใช้ · ถ้าผู้ให้บริการมี rule ชุดอื่นผูกกับ VPS อยู่แล้ว (เช่น ชุดตั้งต้น) ให้ถอดออก (ข้อ 7.4 จะตรวจทุกชุด) · IPv6: ข้อ 5 จะตรวจว่า VPS มี IPv6 สาธารณะหรือไม่ ถ้ามี ให้กลับมาข้อนี้แล้วปิด IPv6 ที่ผู้ให้บริการ หรือทำ rule แบบเดียวกันให้ IPv6
 2. **RDP ด้วย Windows App บน Mac** (ติดตั้งจาก Mac App Store ผู้พัฒนา Microsoft):
-   - Add PC: ที่อยู่ = IP ของ VPS · Credentials: **"Ask when required"** (หรือชื่อเทียบเท่า) **ไม่บันทึกรหัส** · แท็บ Folders: ไม่ติ๊ก Redirect folders · แท็บ Devices & Audio: ไม่ติ๊กอุปกรณ์ใด · clipboard ตามที่เลือกใน (ค) (ข้อความเท่านั้น)
+   - Add PC: ที่อยู่ = IP ของ VPS · Credentials: **"Ask when required"** (หรือชื่อเทียบเท่า) **ไม่บันทึกรหัส** · แท็บ Folders: ไม่ติ๊ก Redirect folders · แท็บ Devices & Audio: ไม่ติ๊กอุปกรณ์ใด ยกเว้น **Clipboard: เปิดไว้** (VPS จำกัดให้เป็นข้อความเท่านั้นเองด้วย `SCClipLevel` ของข้อ 3; ปิดเฉพาะเมื่อ (ค) เลือกปิด clipboard ทั้งหมด; review F24)
    - เชื่อมด้วยบัญชีที่ผู้ให้บริการให้มา · ถ้าแอปถามว่าจะบันทึกรหัส ตอบไม่
-   - **ทันทีหลังเชื่อมครั้งแรก** ตรวจเอง (agent ห้ามทำ): C1 Windows App → Settings → Credentials ไม่มีรายการของ VPS · C2 แอป Passwords และ Keychain Access (keychain `login`) ค้น `com.microsoft.rdc.macos`, `Windows App`, `Remote Desktop`, IP ของ VPS, ชื่อผู้ใช้ RDP และโดเมนของผู้ให้บริการ → ไม่พบรายการของ VPS (รวมรายการที่ sync มาจากอุปกรณ์อื่น) · ถ้าพบ ลบแล้วตรวจใหม่
+   - **ทันทีหลังเชื่อมครั้งแรก** ตรวจเอง (agent ห้ามทำ): C1 Windows App → Settings → Credentials ไม่มีรายการของ VPS และทุกรายการ PC (รวมรายการที่ Duplicate) ไม่ผูก credential · C2 แอป Passwords และ Keychain Access (keychain `login`; เปิดด้วย Spotlight: ⌘Space แล้วพิมพ์ Keychain Access) ค้น `com.microsoft.rdc.macos`, `Windows App`, `Remote Desktop`, IP ของ VPS, ชื่อผู้ใช้ RDP และโดเมนของผู้ให้บริการ → ไม่พบรายการของ VPS (รวมรายการที่ sync มาจากอุปกรณ์อื่น) · ถ้าพบ ลบแล้วตรวจใหม่
    - การตั้งค่าของข้อนี้ใช้กับ**ทุก**รายการ PC ของ VPS รวมรายการที่ Duplicate ไว้เปิด session ที่สอง
 3. **สร้างบัญชี admin ของคุณเอง** (PowerShell แบบ Administrator) แล้วใช้บัญชีนี้ RDP ต่อจากนี้ (lockout คุ้มครองบัญชีนี้แน่นอน):
    ```powershell
@@ -177,7 +177,7 @@ PS> net accounts /lockoutthreshold:5 /lockoutduration:30 /lockoutwindow:30
    % /usr/bin/lpstat -p
    ```
    โฟลเดอร์ทดสอบเปล่าอยู่**นอก repo** · บันทึกว่า `lpstat -p` บอกว่ามี printer queue หรือไม่
-2. **ขอ redirect เพื่อทดสอบว่า VPS ปฏิเสธ:** Windows App → แก้รายการ PC หลักของ VPS → แท็บ Folders: ติ๊ก Redirect folders แล้วเพิ่ม `~/rdp-redirect-test` · แท็บ Devices & Audio: ติ๊ก Printers · **บันทึกค่าของสองแท็บนี้ระหว่างทดสอบ** (เขียนเป็นข้อความ) → Connect
+2. **ขอ redirect เพื่อทดสอบว่า VPS ปฏิเสธ:** Windows App → แก้รายการ PC หลักของ VPS → แท็บ Folders: ติ๊ก Redirect folders แล้วเพิ่ม**เฉพาะ** `~/rdp-redirect-test` (โฟลเดอร์อื่นต้องไม่อยู่ในรายการ; review F24) · แท็บ Devices & Audio: ติ๊ก Printers (Clipboard เปิดไว้ตามข้อ 1.2) · **บันทึกค่าของสองแท็บนี้ระหว่างทดสอบ** (เขียนเป็นข้อความ) → Connect
 3. **บน VPS** (PowerShell ธรรมดา; อ่านอย่างเดียว):
    ```powershell
    PS> Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' | Select-Object fDisableCdm, fDisableCpm, fDisableCcm, fDisableLPT, fDisablePNPRedir, SCClipLevel, fDisableClip
@@ -194,7 +194,7 @@ PS> net accounts /lockoutthreshold:5 /lockoutduration:30 /lockoutwindow:30
    1. ตัวควบคุม Mac → VPS: บน Mac สร้าง `~/mac-to-vps.txt` (`% echo test > ~/mac-to-vps.txt`) → Copy ใน Finder → Paste บน Desktop ของ VPS · วางได้ = Windows App ส่งไฟล์ผ่าน clipboard ได้ ผลของข้อถัดไปจึงพิสูจน์ VPS · วางไม่ได้ = บันทึกว่า "การทดสอบไฟล์ไม่พิสูจน์อะไรเกี่ยวกับ VPS" (การป้องกันทิศนี้อยู่ที่ `SCClipLevel` ของข้อ 3 และ AC-01)
    2. VPS → Mac: บน VPS สร้าง `vps-to-mac.txt` บน Desktop → Copy ใน File Explorer → Paste ใน Finder บน Mac → **ต้องวางไม่ได้** (ไฟล์ชื่อ `vps-to-mac.txt` ปรากฏใน Finder = FAIL)
    3. ข้อความ: บน VPS เปิด Notepad พิมพ์ข้อความ → Copy → วางใน TextEdit บน Mac → **ต้องวางได้** (ถ้า (ค) เลือกปิด clipboard ทั้งหมด ข้อความจะวางไม่ได้ ซึ่งถูกต้องเช่นกัน)
-5. **หลังทดสอบ:** ตัดการเชื่อม → ตั้ง**ทุก**รายการ PC ของ VPS (รวมรายการที่ Duplicate) เป็นสภาพของ C3: แท็บ Folders ไม่ติ๊ก Redirect folders (เอา `~/rdp-redirect-test` ออก), แท็บ Devices & Audio ไม่ติ๊กอุปกรณ์ใด, clipboard ตาม (ค) · บันทึกค่า · ลบไฟล์ทดสอบบน VPS และบน Mac: `% /bin/rm ~/mac-to-vps.txt` และ `% /bin/rmdir ~/rdp-redirect-test`
+5. **หลังทดสอบ:** ตัดการเชื่อม → ตั้ง**ทุก**รายการ PC ของ VPS (รวมรายการที่ Duplicate) เป็นสภาพของ C3: แท็บ Folders ไม่ติ๊ก Redirect folders (เอา `~/rdp-redirect-test` ออก), แท็บ Devices & Audio ไม่ติ๊กอุปกรณ์ใดยกเว้น Clipboard ตามข้อ 1.2 · บันทึกค่า · ลบไฟล์ทดสอบบน VPS และบน Mac: `% /bin/rm ~/mac-to-vps.txt` และ `% /bin/rmdir ~/rdp-redirect-test`
 6. **ส่งให้ Claude:** ผลทุกข้อพร้อมเวลา, ค่าของแท็บ Folders และ Devices & Audio ระหว่างทดสอบและหลังข้อ 5, ผลของ `lpstat -p`, ค่า policy, `CurrentBuild` และ `UBR`, ลำดับและผลของข้อ 4
 
 ## 9. Terminal (AC-05, คำยืนยันทีละข้อพร้อมเวลา)
