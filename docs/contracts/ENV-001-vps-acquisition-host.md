@@ -265,10 +265,21 @@ rule IPv6 ของผู้ให้บริการหรือหลัก�
 ทั้งหมด รวม IPv6 · ถ้าเป็น CGNAT ใช้ทางเลือก VPN แล้วทดสอบซ้ำ · ทุกข้อทำหลังทำ ENV-002 checklist ข้อ C9 ครบทุกข้อความ (v2.1, r1 F7)
 
 **AC-04 (v2.0, แทนฉบับ v1.9 เมื่อ v2.0 อนุมัติ)** Given RDP session จาก Windows App บน Mac ที่รายการ PC ของ VPS **ขอ** redirect โฟลเดอร์ทดสอบเปล่าหนึ่งโฟลเดอร์
-นอก repo (เช่น `~/rdp-redirect-test`) ในแท็บ Folders และขอ printer ในแท็บ Devices & Audio ไว้ (เพื่อทดสอบว่า VPS ปฏิเสธ) When เจ้าของคัดลอกไฟล์ทดสอบใน File Explorer
+นอก repo (เช่น `~/rdp-redirect-test`) ในแท็บ Folders และขอ printer ในแท็บ Devices & Audio ไว้ (เพื่อทดสอบว่า VPS ปฏิเสธ) · (v2.1, r1 F3 (c)) ค่าของแท็บ Folders และ
+Devices & Audio **ระหว่างทดสอบ** อยู่ในหลักฐาน When เจ้าของคัดลอกไฟล์ทดสอบใน File Explorer
 ของ VPS แล้ววางใน Finder บน Mac, เปิด `\\tsclient` ใน File Explorer ของ VPS และรัน `Get-Printer | Select-Object Name, Type` บน VPS Then วางไฟล์ไม่ได้ (ข้อความยังคัดลอกได้
-เมื่อ (ค) เลือกแบบข้อความ) · `\\tsclient` ไม่มี share · ไม่มี printer ที่ redirect มาจาก Mac (หรือ "spooler off") · หลังทดสอบ เจ้าของเอาโฟลเดอร์และ printer ออกจากรายการ PC
-แล้วบันทึกค่าที่เหลือของแท็บ Folders และ Devices & Audio ในหลักฐาน · runbook มีขั้นตอนส่ง snapshot ตาม D-021 ข้อ 3 (a) ที่ D-023 ข้อ 5 แก้ฝั่งเครื่องเจ้าของเป็น
+เมื่อ (ค) เลือกแบบข้อความ) · `\\tsclient` ไม่มี share · ไม่มี printer ที่ redirect มาจาก Mac (หรือ "spooler off") ·
+(v2.1, r1 F3: ให้ผลพิสูจน์ VPS ไม่ใช่ Mac; คำตัดสินภายใต้คำอนุญาต 11:2x ของเจ้าของ: ทำทั้งการอ่านค่าบน VPS และการทดสอบ printer เมื่อ Mac มี printer)
+(a) บน VPS อ่านค่า policy แบบอ่านอย่างเดียว: `Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' | Select-Object fDisableCdm, fDisableCpm,
+fDisableCcm, fDisableLPT, fDisablePNPRedir, SCClipLevel` → ห้าค่า `fDisable*` เป็น 1 และ `SCClipLevel` เป็น 1 (หรือ `fDisableClip` เป็น 1 ถ้า (ค) เลือกปิด clipboard ทั้งหมด) ·
+ก่อนเชื่อม บน Mac `lpstat -p` บอกว่ามี printer queue หรือไม่: มี = ผลของ `Get-Printer` นับเป็นการทดสอบ · ไม่มี = บันทึก "Mac ไม่มี printer: ช่องทาง printer พิสูจน์ด้วยค่า
+policy ของ (a) เท่านั้น"
+(b) ตัวควบคุมของ clipboard แบบไฟล์: ก่อนทดสอบทิศ VPS → Mac ให้วางไฟล์ทดสอบจาก Finder เข้า session ของ VPS (ทิศ Mac → VPS ซึ่ง `SCClipLevel` ไม่จำกัด) · วางได้ = Windows App
+ส่งไฟล์ผ่าน clipboard ได้ ผล "วางไฟล์ไม่ได้" ทิศ VPS → Mac จึงพิสูจน์ VPS · วางไม่ได้ = บันทึกว่าการทดสอบไฟล์ไม่พิสูจน์อะไรเกี่ยวกับ VPS และการป้องกันทิศนี้อยู่ที่ค่า
+`SCClipLevel` ของ (a) และ AC-01
+(c) ระหว่างทดสอบ บน VPS รัน `net view \\tsclient` ด้วย (ผลเป็นข้อความ) คู่กับ File Explorer
+(d) หลังทดสอบ เจ้าของตั้งรายการ PC เป็นสภาพของ ENV-002 checklist C3 (แท็บ Folders ไม่ติ๊ก Redirect folders, แท็บ Devices & Audio ไม่ติ๊กอุปกรณ์ใด, clipboard ตาม (ค))
+แล้วบันทึกค่าในหลักฐาน · runbook มีขั้นตอนส่ง snapshot ตาม D-021 ข้อ 3 (a) ที่ D-023 ข้อ 5 แก้ฝั่งเครื่องเจ้าของเป็น
 folder redirection ของ Windows App (โฟลเดอร์ `<repo>/data/transfer/` เท่านั้น) พร้อมการทดสอบ T1–T4 ของ D-023 ข้อ 5 ก่อนใช้จริง และการรัน `host_report.py`
 และตัวตรวจของ ENV-002 ซ้ำหลังส่งทุกครั้ง
 
@@ -286,7 +297,8 @@ folder redirection ของ Windows App (โฟลเดอร์ `<repo>/data/
 
 **Negative cases (v2.0):** `nc` ถึง 3389 จาก hotspot ได้ (FAIL ของ AC-03) · พอร์ตอื่นตอบ `Connection refused` (ต้องอธิบาย) · ไม่ใส่ `-v` จนไม่มีข้อความ (ทำซ้ำด้วย `-v`) ·
 Mac ไม่มี IPv6 (บันทึก "IPv6 ไม่ได้ทดสอบ") · `\\tsclient` มี share ของโฟลเดอร์ทดสอบ (FAIL ของ AC-04: VPS ไม่ได้ปิด drive redirection) · มี printer ที่ redirect
-มาจาก Mac (FAIL) · Windows App บันทึกรหัสของ VPS ไว้ (FAIL ของข้อ 1.2; แก้แล้วทำซ้ำ)
+มาจาก Mac (FAIL) · Windows App บันทึกรหัสของ VPS ไว้ (FAIL ของข้อ 1.2; แก้แล้วทำซ้ำ) · (v2.1, r1 F1, F3) hotspot ไม่มีเน็ตหรือได้ IP เดียวกับบ้าน (ทดสอบ (2) ไม่มีผล)
+· ค่า `fDisable*` ตัวใดไม่เป็น 1 ใน AC-04 (a) (FAIL) · Mac ไม่มี printer (บันทึก ไม่ใช่ PASS ของ printer จากการทดสอบ) · วางไฟล์ทิศ Mac → VPS ไม่ได้ (การทดสอบไฟล์ไม่พิสูจน์ VPS)
 
 **ที่เหลือ (v2.0):** ชื่อเมนูของ Windows App ยังไม่ได้ตรวจในแอปจริง (เจ้าของแก้ตอนใช้ครั้งแรก) · โปรเซสของบัญชี macOS เดียวกับ agent ที่ตั้งใจหลบการตรวจ:
 อยู่ในความเสี่ยงที่เหลือข้อ 16 ของ contract ENV-002 ซึ่งเจ้าของรับแล้ว 2026-11-18 · การป้องกันขณะ RDP เปิดคือ Quit แอปของ agent ก่อน (ENV-002 decision (ค))
