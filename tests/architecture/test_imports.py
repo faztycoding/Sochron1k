@@ -37,6 +37,14 @@ and imports the three packages in a fresh interpreter to see that none of the th
 gives sochron.app.envcheck its own checker: no process, network or file-writing module or call, ctypes and
 winreg only for the functions the contract lists, and nothing Windows-only at import time. Every earlier
 function, table and test is unchanged.
+ENV-002 v2.x (contract v2.6, AC-06 and Invariants: the one narrow exception) lets the envcheck checker
+admit the darwin reader's ctypes forms and nothing else: ctypes.CDLL("/usr/lib/libSystem.B.dylib",
+use_errno=True) exactly, inside a function, and <handle>.proc_listallpids, .proc_pidpath and .getfsstat
+on that handle. Every other ctypes.CDLL form keeps its finding and message. The changes are the new
+constants _ENVCHECK_LIBSYSTEM, _ENVCHECK_LIBSYSTEM_HANDLE and _ENVCHECK_LIBSYSTEM_FUNCTIONS, the new
+function _envcheck_libsystem_open, one new branch in _envcheck_resolve and in _envcheck_member_findings,
+one condition in _inspect_envcheck_source, and the new tables _ENVCHECK_DARWIN_ALLOWED and
+_ENVCHECK_DARWIN_FORBIDDEN with their test. Every other function, table, row and test is unchanged.
 """
 
 import ast
@@ -2714,6 +2722,13 @@ def test_ac06_env002_importing_research_backtest_strategy_loads_no_app_broker_or
 # Like the checkers above it is an AST check, not a proof about arbitrary execution. Contract v1.6 Q12
 # accepts its limits: it admits only the forms it can follow (a library opened by its literal name and
 # called as <handle>.<Function>, errors read with ctypes.get_last_error()) and refuses the rest on purpose.
+# Contract v2.6 (AC-06, Invariants) adds the darwin reader's forms and only them: the call
+# ctypes.CDLL("/usr/lib/libSystem.B.dylib", use_errno=True), written exactly so (attribute form, that one
+# str literal, that one keyword with the literal True), resolves to the handle "dll:libsystem" and its
+# ctypes.CDLL gets no finding; the handle follows the library rules above (no escape, not at import time,
+# reported as "Windows-only access at import time" like every library) and admits only proc_listallpids,
+# proc_pidpath and getfsstat (_ENVCHECK_LIBSYSTEM_FUNCTIONS). Errors are read with ctypes.get_errno(),
+# which the checker already accepts. Any other ctypes.CDLL call keeps "forbidden ctypes use ctypes.CDLL".
 _ENVCHECK_DENIED_MODULES = frozenset({
     "subprocess", "socket", "http", "urllib", "ssl", "ftplib", "smtplib", "poplib", "imaplib", "nntplib", "telnetlib",
     "xmlrpc", "socketserver", "asyncio", "selectors", "select", "multiprocessing", "concurrent", "pty", "webbrowser",
@@ -2766,6 +2781,10 @@ _ENVCHECK_HELD = frozenset({"ctypes", "winreg", "os", "ctypes.windll", "ctypes.o
 _ENVCHECK_CALLED = frozenset({"ctypes.WinDLL", "ctypes.OleDLL"}) | _ENVCHECK_OPEN_MODE_SECOND | _ENVCHECK_DYNAMIC
 _ENVCHECK_TRACKED = ("ctypes", "winreg", "os", "io", "codecs", "builtins", "importlib", "pathlib", "dll:")
 _ENVCHECK_IMPORT_TIME = "Windows-only access at import time"
+# Contract v2.6 (AC-06): the one darwin library, its handle name and the only functions called on it.
+_ENVCHECK_LIBSYSTEM = "/usr/lib/libSystem.B.dylib"
+_ENVCHECK_LIBSYSTEM_HANDLE = "libsystem"
+_ENVCHECK_LIBSYSTEM_FUNCTIONS = frozenset({"proc_listallpids", "proc_pidpath", "getfsstat"})
 
 
 def _envcheck_library(name):
@@ -2777,6 +2796,17 @@ def _envcheck_library(name):
 
 def _envcheck_literal(node):
     return isinstance(node, ast.Constant) and type(node.value) is str
+
+
+def _envcheck_libsystem_open(node, called):
+    """Contract v2.6 (AC-06): whether a Call node, whose function resolves to called, is exactly
+    ctypes.CDLL("/usr/lib/libSystem.B.dylib", use_errno=True): the attribute form, that one str literal and
+    that one keyword with the literal True, nothing else."""
+    keywords = node.keywords
+    return (called == "ctypes.CDLL" and isinstance(node.func, ast.Attribute) and len(node.args) == 1
+            and _envcheck_literal(node.args[0]) and node.args[0].value == _ENVCHECK_LIBSYSTEM
+            and len(keywords) == 1 and keywords[0].arg == "use_errno"
+            and isinstance(keywords[0].value, ast.Constant) and keywords[0].value.value is True)
 
 
 def _envcheck_member(parent, attribute):
@@ -2799,6 +2829,8 @@ def _envcheck_resolve(node, bindings):
         called = _envcheck_resolve(node.func, bindings)
         if called in ("ctypes.WinDLL", "ctypes.OleDLL") and node.args and _envcheck_literal(node.args[0]):
             return _envcheck_library(node.args[0].value)
+        if _envcheck_libsystem_open(node, called):
+            return f"dll:{_ENVCHECK_LIBSYSTEM_HANDLE}"
         if called in ("builtins.getattr", "builtins.hasattr") and len(node.args) >= 2 and _envcheck_literal(node.args[1]):
             target = _envcheck_resolve(node.args[0], bindings)
             if called == "builtins.getattr" and target is not None:
@@ -2885,6 +2917,10 @@ def _envcheck_member_findings(resolved):
     if resolved.startswith("dll:"):
         library, _, rest = resolved[4:].partition(".")
         function = rest.split(".")[0]
+        if library == _ENVCHECK_LIBSYSTEM_HANDLE:
+            if function and function not in _ENVCHECK_LIBSYSTEM_FUNCTIONS:
+                return f"forbidden libSystem function {function}"
+            return None
         if function and function not in _ENVCHECK_WIN32[library]:
             return f"forbidden Win32 function {library}.{function}"
         return None
@@ -3014,7 +3050,11 @@ def _inspect_envcheck_source(source, current_package="sochron.app"):
         if not resolved:
             continue
         broken = _envcheck_member_findings(resolved)
-        if broken:
+        parent = parents.get(node)
+        # Contract v2.6 (AC-06): the ctypes.CDLL of the one admitted libSystem open is no finding.
+        opens_libsystem = isinstance(parent, ast.Call) and parent.func is node and _envcheck_libsystem_open(
+            parent, resolved)
+        if broken and not opens_libsystem:
             report(node, broken)
         if _envcheck_escapes(node, resolved, parents):
             report(node, f"{resolved} escapes the static check")
@@ -3438,3 +3478,104 @@ def test_ac06_env002_envcheck_uses_no_process_network_or_file_change_and_only_th
             continue
         findings.extend(f"{relative}: {violation}" for violation in violations)
     assert not findings, "AC-06: forbidden use in sochron.app.envcheck:\n" + "\n".join(findings)
+
+
+# ENV-002 v2.x (contract v2.6, AC-06): the darwin reader's ctypes forms. Line 1 is _HEADER, so the first
+# source line is 2. The rows above are unchanged; these tables only add cases.
+_ENVCHECK_LIBSYSTEM_OPEN = "ctypes.CDLL('/usr/lib/libSystem.B.dylib', use_errno=True)"
+_ENVCHECK_CDLL = "forbidden ctypes use ctypes.CDLL"
+# (label, source lines) that the envcheck checker must accept.
+_ENVCHECK_DARWIN_ALLOWED = (
+    ("the darwin raw readers as contract v2.6 describes them", (
+        "import ctypes",
+        "import os",
+        "class Statfs(ctypes.Structure):",
+        "    _fields_ = [('f_flags', ctypes.c_uint32), ('f_fstypename', ctypes.c_char * 16)]",
+        "def _darwin_list_pids(capacity):",
+        f"    libsystem = {_ENVCHECK_LIBSYSTEM_OPEN}",
+        "    libsystem.proc_listallpids.argtypes = (ctypes.c_void_p, ctypes.c_int)",
+        "    libsystem.proc_listallpids.restype = ctypes.c_int",
+        "    buffer = (ctypes.c_int * capacity)()",
+        "    count = libsystem.proc_listallpids(buffer, ctypes.sizeof(buffer))",
+        "    if count < 0:",
+        "        raise OSError(ctypes.get_errno(), 'proc_listallpids failed')",
+        "    return count, tuple(buffer[:count])",
+        "def _darwin_pid_path(pid):",
+        f"    libsystem = {_ENVCHECK_LIBSYSTEM_OPEN}",
+        "    buffer = ctypes.create_string_buffer(4096)",
+        "    ctypes.set_errno(0)",
+        "    size = libsystem.proc_pidpath(pid, buffer, ctypes.sizeof(buffer))",
+        "    return (os.fsdecode(buffer.value) if size > 0 else None), ctypes.get_errno()",
+        "def _darwin_mounts(capacity):",
+        f"    libsystem = {_ENVCHECK_LIBSYSTEM_OPEN}",
+        "    entries = (Statfs * capacity)()",
+        "    count = getattr(libsystem, 'getfsstat')(entries, ctypes.sizeof(entries), 2)",
+        "    if count < 0:",
+        "        raise OSError(ctypes.get_errno(), 'getfsstat failed')",
+        "    return count, tuple((entry.f_fstypename, entry.f_flags) for entry in entries[:count])",
+    )),
+    ("the libSystem handle used where it is opened", (
+        "import ctypes",
+        "def pid_path(pid, buffer, size):",
+        f"    return {_ENVCHECK_LIBSYSTEM_OPEN}.proc_pidpath(pid, buffer, size)",
+    )),
+)
+# (label, source lines, exact findings): every mutation contract v2.6 names, and the forms around them.
+_ENVCHECK_DARWIN_FORBIDDEN = (
+    *[(f"CDLL({name!r}, use_errno=True)", ("import ctypes", "def pids():", f"    lib = ctypes.CDLL({name!r}, use_errno=True)",
+                                           "    return lib.proc_listallpids(None, 0)"), (f"line 4: {_ENVCHECK_CDLL}",))
+      for name in ("libproc.dylib", "libSystem.B.dylib", "./libSystem.B.dylib", "/tmp/libSystem.B.dylib",
+                   "/usr/lib/LIBSYSTEM.B.DYLIB", "/usr/lib/libSystem.dylib", "libc.so.6")],
+    ("CDLL(None)", ("import ctypes", "def pids():", "    lib = ctypes.CDLL(None, use_errno=True)",
+                    "    return lib.proc_listallpids(None, 0)"), (f"line 4: {_ENVCHECK_CDLL}",)),
+    ("CDLL with a name that is no literal", ("import ctypes", "def pids(path):", "    lib = ctypes.CDLL(path, use_errno=True)",
+                                             "    return lib.proc_listallpids(None, 0)"), (f"line 4: {_ENVCHECK_CDLL}",)),
+    ("the libSystem literal without use_errno", ("import ctypes", "def pids():",
+                                                 "    lib = ctypes.CDLL('/usr/lib/libSystem.B.dylib')",
+                                                 "    return lib.proc_listallpids(None, 0)"), (f"line 4: {_ENVCHECK_CDLL}",)),
+    ("the libSystem literal with use_errno=False", ("import ctypes", "def pids():",
+                                                    "    lib = ctypes.CDLL('/usr/lib/libSystem.B.dylib', use_errno=False)",
+                                                    "    return lib.proc_listallpids(None, 0)"), (f"line 4: {_ENVCHECK_CDLL}",)),
+    ("the libSystem literal with use_errno=1", ("import ctypes", "def pids():",
+                                                "    lib = ctypes.CDLL('/usr/lib/libSystem.B.dylib', use_errno=1)",
+                                                "    return lib.proc_listallpids(None, 0)"), (f"line 4: {_ENVCHECK_CDLL}",)),
+    ("the libSystem literal with handle=h", ("import ctypes", "def pids(h):",
+                                             "    lib = ctypes.CDLL('/usr/lib/libSystem.B.dylib', handle=h, use_errno=True)",
+                                             "    return lib.proc_listallpids(None, 0)"), (f"line 4: {_ENVCHECK_CDLL}",)),
+    ("the libSystem literal with mode=m", ("import ctypes", "def pids(m):",
+                                           "    lib = ctypes.CDLL('/usr/lib/libSystem.B.dylib', mode=m, use_errno=True)",
+                                           "    return lib.proc_listallpids(None, 0)"), (f"line 4: {_ENVCHECK_CDLL}",)),
+    ("proc_pidinfo on the libSystem handle", ("import ctypes", "def info(pid):", f"    lib = {_ENVCHECK_LIBSYSTEM_OPEN}",
+                                              "    return lib.proc_pidinfo(pid, 11, None, 0)"),
+     ("line 5: forbidden libSystem function proc_pidinfo",)),
+    ("proc_pidinfo by getattr with a literal name", ("import ctypes", "def info(pid):",
+                                                     f"    lib = {_ENVCHECK_LIBSYSTEM_OPEN}",
+                                                     "    return getattr(lib, 'proc_pidinfo')(pid, 11, None, 0)"),
+     ("line 5: forbidden libSystem function proc_pidinfo",)),
+    ("the libSystem open at import time", ("import ctypes", f"LIBSYSTEM = {_ENVCHECK_LIBSYSTEM_OPEN}"),
+     (f"line 3: {_ENVCHECK_IMPORT_TIME}",)),
+    ("the libSystem handle returned", ("import ctypes", "def libsystem():", f"    return {_ENVCHECK_LIBSYSTEM_OPEN}"),
+     ("line 4: dll:libsystem escapes the static check",)),
+    ("the libSystem literal through from ctypes import CDLL", (
+        "from ctypes import CDLL", "def pids():",
+        "    return CDLL('/usr/lib/libSystem.B.dylib', use_errno=True).proc_listallpids(None, 0)"),
+     (f"line 2: {_ENVCHECK_CDLL}", f"line 4: {_ENVCHECK_CDLL}")),
+    ("the libSystem literal through getattr(ctypes, 'CDLL')", (
+        "import ctypes", "def pids():", "    return getattr(ctypes, 'CDLL')('/usr/lib/libSystem.B.dylib', use_errno=True)"),
+     (f"line 4: {_ENVCHECK_CDLL}",)),
+)
+
+
+def test_ac06_env002_envcheck_admits_only_the_darwin_libsystem_forms():
+    """Contract v2.6 AC-06: the one libSystem open, its three functions and ctypes.get_errno(); every other
+    form is refused with the message the rows give. The rows of the test above stay as they are."""
+    wrong = []
+    for label, lines, expected in _ENVCHECK_DARWIN_FORBIDDEN:
+        findings = _inspect_envcheck_source(_synthetic(lines))
+        if findings != list(expected):
+            wrong.append(f"{label}: expected {list(expected)}, got {findings}")
+    for label, lines in _ENVCHECK_DARWIN_ALLOWED:
+        findings = _inspect_envcheck_source(_synthetic(lines))
+        if findings:
+            wrong.append(f"{label}: legitimate source reported: {findings}")
+    assert not wrong, "AC-06: the envcheck checker, darwin forms:\n" + "\n".join(wrong)
