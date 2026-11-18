@@ -1051,18 +1051,21 @@ def classify_mounts(entries) -> tuple[tuple[str, ...], tuple[str, ...] | None, t
 
     Per mount the FAIL rules come first (a remote type, or no MNT_LOCAL on a type other than autofs), then
     the UNKNOWN rules (autofs other than map auto_home, a type outside the local list, a mount point outside
-    the allow list). / must be apfs: missing or another type is UNKNOWN (v2.2 r2 F26, v2.4 r4 F53)."""
+    the allow list). / must be apfs: no mount at / is UNKNOWN, and so is every mount at / that passes the FAIL
+    rules with another type, also one stacked over the apfs root (v2.2 r2 F26, v2.4 r4 F53, work review r3 F16)."""
     remote: list[str] = []
     outside: list[str] = []
     unknown = False
-    root_types: list[str] = []
+    root_seen = False
+    root: str | None = None
     for fstype, source, point, flags in entries:
         kind = str(fstype).lower()
-        if point == "/":
-            root_types.append(kind)
+        root_seen = root_seen or point == "/"
         if kind in REMOTE_TYPES or (not flags & MNT_LOCAL and kind != "autofs"):
             remote.append(f"{fstype} {source} on {point}")
             continue
+        if point == "/" and kind != "apfs" and root is None:
+            root = kind
         if kind == "autofs" and source != AUTO_HOME:
             unknown = True
         if kind not in LOCAL_TYPES:
@@ -1070,7 +1073,8 @@ def classify_mounts(entries) -> tuple[tuple[str, ...], tuple[str, ...] | None, t
         if not _mount_point_allowed(point):
             unknown = True
             outside.append(point)
-    root = "missing" if not root_types else None if root_types[0] == "apfs" else root_types[0]
+    if not root_seen:
+        root = "missing"
     if root is not None:
         unknown = True
     return tuple(remote), None if unknown else (), tuple(outside), root

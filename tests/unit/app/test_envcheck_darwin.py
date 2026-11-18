@@ -79,6 +79,23 @@ def test_mount_points_follow_the_allow_list(point, allowed):
     assert ec._mount_point_allowed(point) is allowed
 
 
+@pytest.mark.parametrize("kind", ("tmpfs", "hfs", "nullfs", "autofs"))
+def test_a_local_filesystem_stacked_over_the_apfs_root_is_unknown(kind):
+    """Work review r3 F16: every mount at / that passes the FAIL rules must be apfs, not only the first one."""
+    base = (("apfs", "/dev/disk3s1s1", "/", LOCAL | 0x1), ("devfs", "devfs", "/dev", LOCAL),
+            ("autofs", "map auto_home", "/System/Volumes/Data/home", 0x00100000))
+    stacked = base + ((kind, kind, "/", LOCAL if kind != "autofs" else 0),)
+    assert ec.classify_mounts(base) == ((), (), (), None)
+    assert ec.classify_mounts(stacked) == ((), None, (), kind)
+
+
+def test_a_remote_root_is_fail_without_a_root_problem():
+    """The FAIL rules come first: nfs at / is in remote_drives and is no root: problem (work review r3 F16)."""
+    remote, resources, outside, root = ec.classify_mounts((("nfs", "vps.example:/", "/", 0),
+                                                           ("devfs", "devfs", "/dev", LOCAL)))
+    assert (remote, resources, outside, root) == (("nfs vps.example:/ on /",), (), (), None)
+
+
 def test_the_mounts_line_names_points_outside_the_list_and_the_root_problem():
     entries = (("hfs", "/dev/disk2s1", "/", LOCAL), ("apfs", "/dev/disk4s1", "/Volumes/USB", LOCAL),
                ("apfs", "/dev/disk4s2", "/Volumes/USB2", LOCAL))
