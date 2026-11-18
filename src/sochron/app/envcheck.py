@@ -261,10 +261,16 @@ def _appdata_folder(path, appdata) -> str | None:
 
 def _terminal_data_entry(path, appdata) -> str | None:
     """_appdata_folder of path as written and of its real path, so a link with another name into appdata or into
-    a terminal data folder is caught too (work review r4 F22)."""
+    a terminal data folder is caught too (work review r4 F22). The real path is taken only for a path that can
+    be stat'ed: an over-long link chain or a NUL is left to the caller's own read, as before. A realpath that
+    fails (a link that cannot be read) raises OSError naming the error type, for the caller to report as not
+    resolved; no other exception leaves here (work review r5 F26)."""
     named = _appdata_folder(path, appdata)
-    if named is None:
-        real = os.path.realpath(path)
+    if named is None and _identity(path) is not None:
+        try:
+            real = os.path.realpath(path)
+        except (OSError, ValueError, RecursionError) as error:
+            raise OSError(type(error).__name__) from None
         if real != os.path.abspath(path):
             named = _appdata_folder(real, appdata)
     return named
@@ -422,7 +428,10 @@ class _Search:
             if _norm(dataless) == key:
                 return "is a dataless folder (its content is in the cloud), not listed"
             return f"is below the dataless folder {dataless}, not listed"
-        named = _terminal_data_entry(folder, self.appdata)
+        try:
+            named = _terminal_data_entry(folder, self.appdata)
+        except OSError as error:  # work review r5 F26: UNKNOWN through _unlisted, never an exception
+            return f"could not be resolved to its real path ({error}), not listed"
         if named is not None:
             return f"is under {named}, a terminal data folder that is never listed"
         return None
@@ -1615,8 +1624,14 @@ def load_sentinel(path, appdata=None) -> tuple[Sentinel | None, str | None]:
         return None, f"the sentinel file {path} is below a folder with terminal64.exe and is never opened"
     if appdata is not None and _within(_norm(path), _norm(Path(appdata) / "MetaQuotes")):
         return None, f"the sentinel file {path} is under %APPDATA%\\MetaQuotes and is never opened"
-    if appdata is not None and _terminal_data_entry(path, appdata) is not None:  # v2.2 r2 F28; r4 F22: links too
-        return None, f"the sentinel file {path} is under a terminal data folder of {appdata} and is never opened"
+    if appdata is not None:
+        try:
+            named = _terminal_data_entry(path, appdata)  # v2.2 r2 F28; r4 F22: links too
+        except OSError as error:  # work review r5 F26
+            why = f"could not be resolved to its real path ({error})"
+            return None, f"the sentinel file {path} {why} and is never opened"
+        if named is not None:
+            return None, f"the sentinel file {path} is under a terminal data folder of {appdata} and is never opened"
     try:
         if is_cloud_only(path):
             return None, f"the sentinel file {path} is cloud-only and was not opened"

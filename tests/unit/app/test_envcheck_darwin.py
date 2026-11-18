@@ -349,6 +349,75 @@ def test_appdata_below_a_dataless_folder_is_matched_by_text_and_nothing_below_is
     assert [path for path in seen if path.startswith(ec._norm(cloud) + os.sep)] == []
 
 
+@pytest.mark.parametrize("error", (RecursionError, PermissionError, ValueError))
+def test_a_real_path_that_cannot_be_resolved_is_unknown_or_refused_and_never_raises(tmp_path, monkeypatch, error):
+    """Work review r5 F26: when realpath fails on a root (a link that cannot be read, or a chain deep enough for
+    RecursionError), the three items are UNKNOWN with the reason and the token masked, and the sentinel file
+    through that link is refused; nothing leaves evaluate or load_sentinel as an exception."""
+    appdata = tmp_path / "AppData"
+    appdata.mkdir()
+    target = tmp_path / "target"
+    target.mkdir()
+    (target / "values.json").write_text("{}")
+    link = tmp_path / f"link-{TOKEN}"
+    os.symlink(target, link, target_is_directory=True)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    real_realpath = os.path.realpath
+
+    def realpath(path, *args, **kwargs):
+        if str(link) in os.fspath(path):
+            raise error("refused")
+        return real_realpath(path, *args, **kwargs)
+
+    monkeypatch.setattr(os.path, "realpath", realpath)
+    roots = _roots(tmp_path, repo, appdata=appdata, data_dirs=(repo / "data", link))
+    report = ec.evaluate(_facts(), roots, _sentinel(tmp_path))
+    items = {item.name: item for item in report.items}
+    assert [items[name].status for name in ("holdout_dir", "excluded_period", "sentinel")] == [ec.UNKNOWN] * 3
+    assert f"could not be resolved to its real path ({error.__name__})" in items["sentinel"].detail
+    assert TOKEN not in items["sentinel"].detail
+    sentinel, why = ec.load_sentinel(link / "values.json", appdata=appdata)
+    assert sentinel is None and f"could not be resolved to its real path ({error.__name__})" in why
+
+
+def test_an_over_long_link_chain_is_unknown_or_refused_and_never_raises(tmp_path):
+    """Work review r5 F26: a root or --sentinel-file at the head of 1,100 chained links (beyond what the kernel
+    follows, and deep enough for realpath's recursion) is UNKNOWN or refused, as before work review r4 F22."""
+    appdata = tmp_path / "AppData"
+    appdata.mkdir()
+    head = tmp_path / "target"
+    head.mkdir()
+    file_head = tmp_path / "values.json"
+    file_head.write_text("{}")
+    for index in range(1100):
+        os.symlink(head, tmp_path / f"chain{index}", target_is_directory=True)
+        os.symlink(file_head, tmp_path / f"file{index}.json")
+        head, file_head = tmp_path / f"chain{index}", tmp_path / f"file{index}.json"
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    roots = _roots(tmp_path, repo, appdata=appdata, data_dirs=(repo / "data", head))
+    report = ec.evaluate(_facts(), roots, _sentinel(tmp_path))
+    statuses = {item.name: item.status for item in report.items}
+    assert [statuses[name] for name in ("holdout_dir", "excluded_period", "sentinel")] == [ec.UNKNOWN] * 3
+    sentinel, why = ec.load_sentinel(file_head, appdata=appdata)
+    assert sentinel is None and "could not be read" in why
+
+
+def test_a_nul_in_a_root_or_the_sentinel_path_is_unknown_or_refused_and_never_raises(tmp_path):
+    """Work review r5 F26: a NUL in a hand-built root or sentinel path gives UNKNOWN or a refusal, not ValueError."""
+    appdata = tmp_path / "AppData"
+    appdata.mkdir()
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    roots = _roots(tmp_path, repo, appdata=appdata, data_dirs=(repo / "data", Path(f"{tmp_path}/bad\0name")))
+    report = ec.evaluate(_facts(), roots, _sentinel(tmp_path))
+    statuses = {item.name: item.status for item in report.items}
+    assert [statuses[name] for name in ("holdout_dir", "excluded_period", "sentinel")] == [ec.UNKNOWN] * 3
+    sentinel, why = ec.load_sentinel(Path(f"{tmp_path}/bad\0values.json"), appdata=appdata)
+    assert sentinel is None and "could not be read" in why
+
+
 @pytest.mark.parametrize("make", ("symlinked prefix", "home named with the token"))
 def test_the_token_never_reaches_the_cli_or_the_gate_when_a_wine_folder_fails(tmp_path, monkeypatch, capsys, make):
     """Work review r3 F18: a Wine folder that cannot be read raises OSError naming only the fixed folder from ~/,
