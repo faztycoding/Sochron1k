@@ -266,7 +266,8 @@ scope ของ Windows (3389 จึงสำเร็จได้ ส่วน�
 rule IPv6 ของผู้ให้บริการหรือหลักฐานว่าปิด IPv6
 (4) รายการ rule ของ firewall ผู้ให้บริการ (ปิดบัง IP) และผลตรวจ CGNAT (WAN IP ในหน้าตั้งค่า router เทียบกับผลของ `/usr/bin/curl -s https://api.ipify.org`;
 ปิดบังก่อนวาง) อยู่ในหลักฐาน · (v2.1, r1 F2) เกณฑ์ผ่านของรายการ rule: ผู้ให้บริการอนุญาตเฉพาะ TCP 3389 (และ UDP 3389 ถ้ามี) จากที่อยู่ใน allowlist และปฏิเสธที่เหลือ
-ทั้งหมด รวม IPv6 · ถ้าเป็น CGNAT ใช้ทางเลือก VPN แล้วทดสอบซ้ำ · ทุกข้อทำหลังทำ ENV-002 checklist ข้อ C9 ครบทุกข้อความ (v2.1, r1 F7)
+ทั้งหมด รวม IPv6 · (v2.2, r2 F10) และ rule ชุดนั้น**ผูกกับ VPS เครื่องนี้และเปิดใช้อยู่**: หลักฐานมีหน้าของผู้ให้บริการที่แสดงรายชื่อ server ที่ rule ชุดนั้นผูกอยู่ หรือหน้า firewall ของ
+VPS ที่แสดงว่าเปิดใช้ (ปิดบัง IP และชื่อบัญชี) · `nc` แยกชั้นไม่ได้ ชั้นนอกจึงพิสูจน์ด้วยหลักฐานข้อนี้ · ถ้าเป็น CGNAT ใช้ทางเลือก VPN แล้วทดสอบซ้ำ · ทุกข้อทำหลังทำ ENV-002 checklist ข้อ C9 ครบทุกข้อความ (v2.1, r1 F7)
 
 **AC-04 (v2.0, แทนฉบับ v1.9 เมื่อ v2.0 อนุมัติ)** Given RDP session จาก Windows App บน Mac ที่รายการ PC ของ VPS **ขอ** redirect โฟลเดอร์ทดสอบเปล่าหนึ่งโฟลเดอร์
 นอก repo (เช่น `~/rdp-redirect-test`) ในแท็บ Folders และขอ printer ในแท็บ Devices & Audio ไว้ (เพื่อทดสอบว่า VPS ปฏิเสธ) · (v2.1, r1 F3 (c)) ค่าของแท็บ Folders และ
@@ -298,7 +299,7 @@ folder redirection ของ Windows App (โฟลเดอร์ `<repo>/data/
 - ข้อ 1.2 (ไม่บันทึกรหัส RDP): ใน Windows App ตั้ง credential ของรายการ PC เป็น "Ask when required" (หรือชื่อเทียบเท่า) ไม่บันทึกรหัส · หลังเชื่อมครั้งแรก
   ตรวจ Windows App → Settings → Credentials ว่าไม่มีรายการของ VPS และ (v2.1, r1 F7) ทำ ENV-002 checklist C2 (แอป Passwords และ Keychain Access ไม่มีรายการของ VPS)
   ทันที ไม่รอถึงก่อน ENV-1 ผ่าน (C1–C10 ทั้งชุดยังเป็นการตรวจซ้ำก่อน ENV-1 ผ่าน)
-- ข้อ 7: คำสั่ง `nc` ตาม AC-03 (v2.0) แทน `Test-NetConnection`
+- ข้อ 7: คำสั่ง `nc` ตาม AC-03 (v2.0) แทน `Test-NetConnection` · (v2.2, r2 F10) ข้อ 7.4 เพิ่มหน้าของผู้ให้บริการที่แสดงว่า rule ชุดนั้นผูกกับ VPS นี้และเปิดใช้อยู่
 - ข้อ 8: ขั้นตอนตาม AC-04 (v2.0) แทน mstsc รวมการอ่านค่า policy บน VPS (a), ตัวควบคุมของ clipboard (b), `net view \\tsclient` (c) และสภาพ C3 หลังทดสอบ (d)
 - ข้อ 10: (v2.1, r1 F6) คัด D-023 ข้อ 5 มาครบทุกข้อความ แทน `subst` และไฟล์ `.rdp` อย่างน้อย: folder redirection ของ Windows App เฉพาะ `<repo>/data/transfer/`
   โดยไม่ติ๊ก Read-only · **ก่อนเปิดช่องทาง:** envcheck บน Mac เป็น PASS และ `data/transfer/` ว่าง · การทดสอบ T1–T4 ของ D-023 ข้อ 5 ทำตอนใช้จริงครั้งแรกภายใต้ contract ของ
