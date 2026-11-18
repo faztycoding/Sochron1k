@@ -189,7 +189,7 @@ PS> Select-String -Path C:\vault\SENTINEL-ENV002-*.json -SimpleMatch -Pattern '<
 ค่า SHA256 ต้องตรงกับ `sha256`, ความยาวต้องตรงกับ `size` ใน `docs/evidence/ENV-002-sentinel.json` (ตัวพิมพ์ของ hash ไม่สำคัญ) และ `Select-String` ต้องพิมพ์ `True` · ห้ามลบไฟล์นี้ (ถ้าลบ ค่าที่ commit ใช้ไม่ได้ ต้องสร้างใหม่ตั้งแต่ข้อ 1)
 
 ## 6. ส่ง snapshot ก่อน cutoff ในภายหลัง
-ใช้ขั้นตอนของ `docs/runbooks/ENV-001-vps.md` ข้อ 10 (D-021 ทาง (a); บน Mac แทน `subst` + mstsc ด้วยการ redirect โฟลเดอร์เดียวใน Windows App ตาม D-023 ข้อ 5) แล้วรันข้อ 3 ของ runbook นี้ซ้ำทุกครั้งหลังส่ง · **ยังใช้ไม่ได้:** contract ENV-001 v2.2 อนุมัติแล้ว 2026-11-18 แต่ runbook ฉบับ macOS ของ ENV-001 ยังไม่ได้เขียน (อยู่ใน branch `chore/ENV-001-vps-acquisition-host`)
+ใช้ขั้นตอนของ `docs/runbooks/ENV-001-vps.md` ข้อ 10 (D-021 ทาง (a); บน Mac แทน `subst` + mstsc ด้วยการ redirect โฟลเดอร์เดียวใน Windows App ตาม D-023 ข้อ 5) แล้วรันข้อ 3 ของ runbook นี้ซ้ำทุกครั้งหลังส่ง · **ยังใช้ไม่ได้:** runbook ฉบับ macOS ของ ENV-001 เขียนแล้ว (branch `chore/ENV-001-vps-acquisition-host`, push 2026-11-18) และข้อ 10 แก้ตาม review ของ runbook F17 แล้ว (ทางปิดช่องทางเมื่อ T1–T3 ไม่ผ่าน) แต่การแก้นั้นยังไม่มีผู้ตรวจปิด · ใช้ได้หลังตรวจปิดผ่านและหลัง ENV-1 ผ่าน
 
 ## 7. เครื่อง Windows เดิม (AC-03 ข้อ 7, D-023 ข้อ 2 ทาง 1; หลัง SPIKE-002 ผ่านบน VPS)
 ยืนยันทีละข้อพร้อมเวลา**ตามลำดับนี้**:
