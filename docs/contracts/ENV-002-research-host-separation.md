@@ -310,6 +310,9 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
     · API ล้ม = UNKNOWN
     · (v2.1, F15; v2.2, r2 F32, คำตัดสิน r2 ข้อ 4: รายการอนุญาตแทนกฎ `/Volumes/` ของ v2.1) mount ที่จุด mount ไม่ใช่ `/`, `/dev` หรือ path ใต้
       `/System/Volumes/` = UNKNOWN เมื่อไม่เข้ากฎ FAIL (external disk, disk image และ volume ที่ mount ด้วย `-mountpoint` ที่ใดก็ตาม: ถอดก่อนรัน)
+      · (v2.3, r3 F32, คำตัดสิน r3: แคบลง) ใต้ `/System/Volumes/Data/` อนุญาตเฉพาะ `/System/Volumes/Data` เองและ `/System/Volumes/Data/home`
+        (ส่วนนี้เขียนได้โดยผู้ใช้ผ่าน firmlink ของ `/Users`, `/Volumes`, `/private`) · path อื่นใต้ `/System/Volumes/` (VM, Preboot, Update, xarts,
+        iSCPreboot, Hardware และ path ใต้มัน) ยังอนุญาต: เป็น volume ของระบบที่ผู้ใช้ทั่วไป mount ทับไม่ได้
       · บรรทัด `mounts:` บอกจุด mount ที่เข้ากฎนี้หลังคำว่า `not allowed:` (r2 F15) · วัด 2026-11-18: เครื่องนี้มี 12 mount ที่ `/`, `/dev` และใต้
         `/System/Volumes/` เท่านั้น
     · (v2.1, F7) ตัวอ่าน mount ต้องพบ mount ที่ `/` ชนิด `apfs` ที่มี MNT_LOCAL ไม่เช่นนั้น UNKNOWN (ตัวอ่านที่อ่านไม่ได้อะไรเลยต้องไม่ผ่าน)
@@ -404,7 +407,7 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 
 (v2.1, F12) กรณีเพิ่มของ macOS ที่กฎมีแต่ยังไม่มีกรณี: mount ชนิด `apfs` ที่ไม่มี MNT_LOCAL (FAIL) · `afpfs`, `webdav`, `ftp` (FAIL) · `autofs` ตามกฎของ F19 · getfsstat ล้ม (UNKNOWN) · `.json` dataless ใน iCloud Drive ที่ขนาดไม่เท่า sentinel (PASS และไม่ถูกเปิด) · โฟลเดอร์ `MetaTrader 5` ระดับ 0 ของ `drive_c/Program Files` (FAIL) · `terminal64.exe` ใต้ home ระดับ 3 (FAIL) และระดับ 4 (PASS) · การค้น home ไม่ list `Library` และ `.ssh` (audit hook ไม่เห็น `os.scandir` ใต้สองโฟลเดอร์นั้น) · โฟลเดอร์ใต้ home ที่อยู่ในรายการข้ามและ list ไม่ได้ (ข้าม: PASS และอยู่ในบรรทัด `skipped:`), โฟลเดอร์อื่นใต้ home ที่ list ไม่ได้ (UNKNOWN) และ home เอง list ไม่ได้ (UNKNOWN) · `~/Library/CloudStorage` มีอยู่แต่ list ไม่ได้ (`default_roots` ยก OSError) · โฟลเดอร์ชื่อ `MetaTrader 5` ที่ไม่ลงท้าย `.app` ระดับ 0 ของ /Applications เป็น FAIL ตามกฎของ r2 F33 (v2.1 ปล่อยไว้ไม่กำหนดผล)
 
-(v2.1, F15) กรณีเพิ่มของ macOS: mount ชนิด `apfs` ที่มี MNT_LOCAL ที่ `/Volumes/USB` (UNKNOWN) · mount ชนิด `smbfs` ที่ `/Volumes/share` (FAIL: กฎ FAIL มาก่อน) · mount `apfs` ที่ `/System/Volumes/Data` (PASS) · (v2.2, r2 F15) หลัง `collect` ที่มี mount `/Volumes/USB`: บรรทัด `mounts:` ของ `host_lines()` ลงท้ายด้วย `; not allowed: /Volumes/USB` · (v2.2, r2 F32) mount `apfs` ที่มี MNT_LOCAL ที่ `/Users/x/mnt` (UNKNOWN) · `devfs` ที่ `/dev` (PASS)
+(v2.1, F15) กรณีเพิ่มของ macOS: mount ชนิด `apfs` ที่มี MNT_LOCAL ที่ `/Volumes/USB` (UNKNOWN) · mount ชนิด `smbfs` ที่ `/Volumes/share` (FAIL: กฎ FAIL มาก่อน) · mount `apfs` ที่ `/System/Volumes/Data` (PASS) · (v2.2, r2 F15) หลัง `collect` ที่มี mount `/Volumes/USB`: บรรทัด `mounts:` ของ `host_lines()` ลงท้ายด้วย `; not allowed: /Volumes/USB` · (v2.2, r2 F32) mount `apfs` ที่มี MNT_LOCAL ที่ `/Users/x/mnt` (UNKNOWN) · `devfs` ที่ `/dev` (PASS) · (v2.3, r3 F32) `apfs` ที่มี MNT_LOCAL ที่ `/System/Volumes/Data/Users/x/mnt` (UNKNOWN) · `apfs` ที่มี MNT_LOCAL ที่ `/System/Volumes/Preboot` (PASS)
 
 (v2.1, F19) กรณีเพิ่มของ macOS: `autofs` จาก `map auto_home` ที่ไม่มี MNT_LOCAL (PASS) · `autofs` จาก `map -fstab`, `map -static` หรือ `map -hosts` (UNKNOWN) · `os.uname().machine` เป็น `x86_64` (UNKNOWN ของ `terminal_install` และ `network_shares`) · mount ชนิด `ntfs` หรือ `lifs` ที่มี MNT_LOCAL (UNKNOWN; ไม่มี MNT_LOCAL = FAIL)
 
