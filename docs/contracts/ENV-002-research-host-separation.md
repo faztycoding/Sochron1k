@@ -294,6 +294,8 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
     · (v2.2, r2 F28) ผู้ใช้ชุด "ไม่ถูก list และไม่ถูกเปิด" แต่ละตัวได้ชุดนี้อย่างไร: การค้น terminal ใน `collect` รับ path ที่พบผ่าน `never_listed`
       · evaluate และ `load_sentinel` ไม่มี path ที่พบ (Facts มีแค่ bool) จึงเทียบเอง: รายการระดับ 0 ของ `roots.appdata` ที่ชื่อแบบ lower-case ตรงกฎข้างบน
       · โฟลเดอร์ที่ evaluate ข้ามด้วยกฎชื่อนี้ทำให้ทุก item ที่ค้น root นั้นเป็น UNKNOWN (ไม่ข้ามเงียบ) เว้นแต่ `terminal_data` เป็น FAIL อยู่แล้ว
+      · (v2.3, r3 F28) `<appdata>/MetaQuotes` คงการข้ามเงียบของ v1.9 (ไม่ใช้ประโยคก่อนหน้า): ตัวอ่านจริงทุกตัวให้ `terminal_data` FAIL เมื่อโฟลเดอร์นี้มีอยู่
+        (win32: `metaquotes_exists`; darwin: ชื่อเท่ากับ `metaquotes` ตรงกฎ) การข้ามจึงไม่ซ่อน PASS และไม่เปลี่ยนผลของ test ที่ล็อก
       · บน default roots ของ darwin รายการที่ตรงอยู่ใต้ `~/Library` ซึ่งการค้น home ไม่เข้าอยู่แล้ว `never_listed` จึงมีผลเมื่อ appdata อยู่นอก `<home>/Library`
   network_shares (darwin)    อ่านรายการ mount ด้วย `getfsstat` ของ libc:
     FAIL เมื่อมี mount ชนิด smbfs, nfs, afpfs, webdav, ftp หรือ mount ที่ไม่มี flag MNT_LOCAL และชนิดไม่ใช่ autofs
@@ -406,6 +408,8 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 (v2.1, F19) กรณีเพิ่มของ macOS: `autofs` จาก `map auto_home` ที่ไม่มี MNT_LOCAL (PASS) · `autofs` จาก `map -fstab`, `map -static` หรือ `map -hosts` (UNKNOWN) · `os.uname().machine` เป็น `x86_64` (UNKNOWN ของ `terminal_install` และ `network_shares`) · mount ชนิด `ntfs` หรือ `lifs` ที่มี MNT_LOCAL (UNKNOWN; ไม่มี MNT_LOCAL = FAIL)
 
 (v2.2, r2 F26) กรณีของ mount บน `classify_mounts` (แทนกรณี mount ของย่อหน้า F7 เดิม): รายการ mount ไม่มี `/` (UNKNOWN) · `/` ชนิด `hfs` ที่มี MNT_LOCAL (UNKNOWN) · `/` ชนิด `apfs` ที่ไม่มี MNT_LOCAL (FAIL) · `/` ชนิด `nfs` (FAIL) · รายการที่มีทั้ง mount ที่เข้ากฎ FAIL และ mount ที่เข้ากฎ UNKNOWN (FAIL)
+
+(v2.3, r3 F28) กรณีเพิ่ม (ทุกแพลตฟอร์ม, บน `evaluate`): Facts ที่ `metaquotes_exists=False`, appdata อยู่ใต้ data dir ที่ครอบ, โฟลเดอร์ `metatrader 5` ระดับ 0 ของ appdata มี `.txt` ที่มี token (`holdout_dir`, `excluded_period` และ `sentinel` เป็น UNKNOWN; audit hook ไม่เห็น `os.scandir` หรือ `open` ใต้โฟลเดอร์นั้น)
 
 (v2.2, r2 F10) กรณีเพิ่มของ macOS: โฟลเดอร์ที่ list ไม่ได้ระดับ 1 ของ `drive_c/Program Files` ของ prefix (UNKNOWN ของ `terminal_install`) · `drive_c` ของ prefix มีอยู่แต่ list ไม่ได้ (`default_roots` ยก OSError) · โฟลเดอร์ของ prefix เป็น symlink (`default_roots` ยก OSError) · prefix ที่ไม่มี `drive_c` (PASS, `wine: 1 prefixes`)
 
