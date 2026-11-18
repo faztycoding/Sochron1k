@@ -153,6 +153,9 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
     terminal_paths          = path ที่พบจากกฎแอป, โฟลเดอร์ `MetaTrader*`, `terminal64.exe` และ path ของ executable ที่รันอยู่ใต้แอปที่ตรงกฎ
     process_names           = ชื่อไฟล์ (basename) ของ executable ทุกโปรเซสที่อ่านได้ · รายการโปรเซสอ่านไม่ได้ตามกฎของ terminal_install
                               (รวมกรณี Wine loader และ `DYLD_*`) → None เท่านั้น (`terminal_paths` ยังเป็นผลของกฎ path)
+    (v2.2, r2 F30) สิ่งที่พบแล้วไม่ถูกกลบด้วย "อ่านไม่ได้": path ที่พบอยู่ใน `terminal_paths` เสมอ · `terminal_paths` เป็น None เฉพาะเมื่อการค้นไม่ครบ
+                              และไม่พบ path ใดเลย · โปรเซสชื่อ `terminal64.exe` ถูกใส่ใน `terminal_paths` ด้วย path เต็ม (จึงเป็น FAIL แม้
+                              `process_names` เป็น None จากกฎ Wine loader)
     uninstall_display_names = `()` เสมอ (ไม่ใช่ None: macOS ไม่มีกฎนี้)
     metaquotes_exists       = มีรายการที่ตรงกฎของ terminal_data · `~/Library/Application Support` list ไม่ได้ → None
     mt5_spec_found          = ผลของ `find_spec` เหมือนทุกแพลตฟอร์ม
@@ -161,7 +164,7 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
                               API ล้ม, มี `DYLD_*` หรือเครื่องไม่ใช่ arm64 (r2 F26)
   (v2.1, F4) ฟังก์ชันระดับโมดูลที่ tests เรียกหรือแทนได้ (ไม่เรียก API ของ OS เอง; ชื่อและ signature เป็นข้อผูกของ contract ผู้เขียน tests ที่ต้องการ
     เปลี่ยนให้ถามใน handoff ก่อน):
-    find_terminal_paths_darwin(applications, program_files, home, never_listed) -> tuple[str, ...]
+    find_terminal_paths_darwin(applications, program_files, home, never_listed) -> tuple[tuple[str, ...], bool]   # (path ที่พบ, ค้นครบหรือไม่; r2 F30)
     find_wine_program_files(home) -> tuple[Path, ...]
     classify_mounts(entries: tuple[tuple[str, str, str, int], ...]) -> tuple[tuple[str, ...], tuple[str, ...] | None]
         # entry = (ชนิด, ต้นทาง, จุด mount, flags) · คืน (remote_drives, connected_resources)
@@ -284,6 +287,7 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
     หรือ `getattr(st, "st_flags", 0)` มี `0x40000000` (SF_DATALESS) · test ที่ล็อกของ v1.9 ต้องผ่านบน Mac โดยไม่แก้
     · (v2.1, F2) `SF_DATALESS` เป็นค่าคงที่ int `0x40000000` ใน envcheck (แบบเดียวกับ `RECALL_ATTRIBUTES`) ไม่ import `stat`
     · (v2.1, F6) ไฟล์ชื่อ `.<ชื่อ>.icloud` (ไม่สนตัวพิมพ์, ทุกแพลตฟอร์ม, ไม่ถูกเปิด): ใต้ repo หรือ data dir = UNKNOWN ของ `excluded_period` และ `sentinel`
+      ยกเว้น `.<ชื่อ sentinel>.icloud` ซึ่งเป็น FAIL ของ `sentinel` ตามกฎ (2) ทุกพื้นที่ (r2 F30)
       · ใต้ search_dirs อย่างเดียว: `.<ชื่อ sentinel>.icloud` = FAIL ตามกฎ (2), `.<อะไรก็ได้>.json.icloud` = UNKNOWN ของ `sentinel` (ขนาดจริงอ่านไม่ได้โดย
         ไม่เปิด), อื่นๆ ข้าม (ครึ่งของ search_dirs เป็นกฎใหม่ของ v2.1; macOS 14 ขึ้นไปไม่สร้างไฟล์ตัวแทนแบบนี้แล้ว)
     · (v2.1, F6, คำตัดสินข้อ 4) โฟลเดอร์ dataless (`envcheck.is_cloud_only(folder)` เป็น True) ไม่ถูก list เพราะการ list ทำให้ macOS ดึงรายการจาก cloud
@@ -371,6 +375,8 @@ terminal ติดตั้งอยู่ (Program Files, portable ใต้ pr
 (v2.2, r2 F10) กรณีเพิ่มของ macOS: โฟลเดอร์ที่ list ไม่ได้ระดับ 1 ของ `drive_c/Program Files` ของ prefix (UNKNOWN ของ `terminal_install`) · `drive_c` ของ prefix มีอยู่แต่ list ไม่ได้ (`default_roots` ยก OSError) · โฟลเดอร์ของ prefix เป็น symlink (`default_roots` ยก OSError) · prefix ที่ไม่มี `drive_c` (PASS, `wine: 1 prefixes`)
 
 (v2.2, r2 F12) กรณีเพิ่มของ macOS สำหรับกฎของ v2.1 ที่ยังไม่มีกรณี: `collect` โดยมี `DYLD_INSERT_LIBRARIES` ใน `os.environ` (UNKNOWN ของ `terminal_install` และ `network_shares`; `read_process_paths`, `read_mounts` และตัวอ่านดิบไม่ถูกเรียก) · โฟลเดอร์ dataless ระดับ 1 ของ home (ไม่ถูก list, อยู่ในบรรทัด `skipped:`, PASS) · `~/Applications` ไม่มีอยู่ (PASS) และ `/Applications` มีอยู่แต่ list ไม่ได้ (UNKNOWN ของ `terminal_install`) · `terminal64.exe` ใต้ `<home>/x/.git/`, `<home>/x/.venv/` หรือ `<home>/x/node_modules/` (PASS) · โฟลเดอร์ `MetaQuotes` ใต้ Application Support (FAIL) · `metaquotes2` และ `my metatrader` ใต้ Application Support (PASS) · `--sentinel-file` ที่ชี้ไฟล์ใต้ `<appdata>/Metatrader 5/` (ไม่ถูกเปิด, `sentinel` UNKNOWN) · root ของ data dir หรือ search dir ที่มี ancestor เป็นโฟลเดอร์ dataless (UNKNOWN และ root ไม่ถูก stat หรือ list: ตรวจ ancestor จากบนลงล่างก่อน) · `host_lines()` หลัง `collect` บน darwin ด้วยตัวอ่านดิบปลอม: มีบรรทัด `reader: darwin`, `processes: 3 listed, 2 paths read, 1 skipped, 0 wine loaders`, `mounts: 3 (apfs, devfs, autofs)` และ `wine: 0 prefixes; looked at none` ตรงกับค่าปลอม · `host_lines()` เมื่อ `collect` ถูกแทน (`processes: not read`, `mounts: not read`)
+
+(v2.2, r2 F30, r2 F31, r2 F33) กรณีผสมและกรณีเพิ่มของ macOS: โปรเซส `terminal64.exe` พร้อม `wineserver` (FAIL ของ `terminal_install`: path ของ `terminal64.exe` อยู่ใน `terminal_paths`) · พบ `terminal64.exe` ใต้ home และมีโฟลเดอร์อื่นใต้ home ที่ list ไม่ได้ (FAIL ไม่ใช่ UNKNOWN) · `.<ชื่อ sentinel>.icloud` ใต้ `<repo>/data/` (FAIL ของ `sentinel`) · บน `read_mounts` โดยแทน `_darwin_mounts`: คืนจำนวนเท่า capacity (เรียกใหม่ด้วย capacity ที่ใหญ่ขึ้น) และ `_darwin_mounts` ยก OSError (ยก OSError → `network_shares` UNKNOWN) · โฟลเดอร์ `MetaTrader 5` ที่ไม่ลงท้าย `.app` ระดับ 0 ของ /Applications (FAIL) · `MetaTrader 5.app` ใต้ `/Applications/Trading/` (ระดับ 1: PASS จากกฎแอป เป็นข้อที่เหลือ)
 
 ## Acceptance (Given–When–Then, Thai; ≤ 7)
 - AC-01 (v2.0 แทนฉบับ Windows ของ v1.9) Given เครื่อง Mac หลังทำตาม runbook ฉบับ macOS (ไม่มีแอป MetaTrader, ไม่มีโฟลเดอร์ Wine ของ MT5, ไม่มี network volume ที่ mount อยู่ · (v2.1, F10) รันจากแอปเดียวกับที่ R1 จะรัน คือ Visual Studio Code (terminal ในแอปนั้น) และแอปนั้นได้สิทธิ์ Files and Folders ของ Desktop, Documents, Downloads และ iCloud Drive เท่านั้น ไม่มี Full Disk Access · หลักฐานบอกชื่อแอป · ล้าง Trash ก่อนรัน · ทำข้ออื่นของหัวข้อ "Runbook ฉบับ macOS: ข้อที่ต้องมี" ครบ) และ repo อยู่ที่ commit ที่ตรวจแล้ว (`git rev-parse --short HEAD` ตรงกับที่ Claude ให้ และ `git status --short` ไม่พิมพ์อะไร) When เจ้าของรันคำสั่ง CLI (zsh) ของ contract พร้อม `--sentinel-file docs/evidence/ENV-002-sentinel.json` Then ทุก item เป็น PASS, รายงานมีบรรทัด `reader: darwin` (v2.1, F1), home ในบรรทัด `roots:` คือ home ของเจ้าของเอง (v2.1, F11), บรรทัดสุดท้ายเป็น `RESEARCH HOST: PASS` และ exit status เป็น 0 · (v2.1, F7) บรรทัด `processes:` มี `paths read` มากกว่า 0 และชนิด mount ในบรรทัด `mounts:` ตรงกับผลของคำสั่ง `mount` ที่เจ้าของรันเวลาเดียวกัน · (v2.1, F7, คำตัดสินข้อ 5) รอบควบคุมก่อนรอบ PASS: เจ้าของสร้างโฟลเดอร์เปล่า `~/Applications/MetaTrader 5.app` และ `~/Library/Application Support/net.metaquotes.wine.metatrader5` (ไม่ใช่การติดตั้ง) แล้วรันคำสั่งเดียวกัน → `terminal_install` และ `terminal_data` ต้องเป็น FAIL และ exit status ไม่ใช่ 0 → ลบสองโฟลเดอร์ → รันใหม่ได้ PASS · หลักฐานมี commit, เวลา และรายงานทั้งหมดของทั้งสองรอบ
