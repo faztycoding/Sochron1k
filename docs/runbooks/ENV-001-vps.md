@@ -239,6 +239,6 @@ PS> net accounts /lockoutthreshold:5 /lockoutduration:30 /lockoutwindow:30
 | 1 | มีหรือไม่มี IPv6 สาธารณะ, ยืนยันว่าสร้างบัญชี admin ใหม่และปิดบัญชีเดิมแล้ว, คำยืนยัน C1 และ C2 หลังข้อ 1.2 และท้ายข้อ 1.3 พร้อมเวลา |
 | 5 | `uv --version`, SHA-256 ของ uv, ผล `Select-String` สองบรรทัด |
 | 6 | ชื่อ rule DHCP, รายงาน host_report รอบ PASS, ผล drift test, rule ที่ปิดหรือแก้ |
-| 7 | บรรทัดของ `nc` ทุกบรรทัด (ข้อความและ exit status ของทุกพอร์ต, ปิดบังแล้ว), ผลของ hotspot, ผล IPv6 (หรือ "IPv6 ไม่ได้ทดสอบ"), rule ของผู้ให้บริการและหน้าของ VPS ที่แสดง rule ทุกชุด (ปิดบัง IP) |
+| 7 | บรรทัดที่ขึ้นต้นด้วย `port` หรือ `exit` (ปิดบังแล้ว; ไม่ส่งบรรทัดของ `curl`; r2 F29), "ต่างจาก IP บ้าน: ใช่", ผล IPv6 (หรือ "IPv6 ไม่ได้ทดสอบ"), rule ของผู้ให้บริการและหน้าของ VPS ที่แสดง rule ทุกชุด (ปิดบัง IP) |
 | 8 | ผลทดสอบช่องทางไฟล์และ printer, ค่าของแท็บ Folders และ Devices & Audio ระหว่างทดสอบและหลังทดสอบ, `lpstat -p`, ค่า policy, `CurrentBuild` และ `UBR` |
 | 9 | คำยืนยันของ checklist terminal |
