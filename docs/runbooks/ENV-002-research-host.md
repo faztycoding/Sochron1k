@@ -48,7 +48,11 @@ Contract: `docs/contracts/ENV-002-research-host-separation.md` v2.6 (อนุ�
 % /usr/bin/git switch --detach <hash 40 ตัวที่ Claude ให้>
 % /usr/bin/git status --short
 ```
-`git status --short` ต้องไม่พิมพ์อะไร · แล้วปิดทุก session ของ Claude Code และ Codex ใน VS Code (ปิด panel ของ agent) แต่ไม่ต้อง Quit VS Code: รอบนี้รันใน terminal ของ VS Code ซึ่งเป็นแอปเดียวกับที่ R1 จะรัน
+`git status --short` ต้องไม่พิมพ์อะไร · แล้ว**ปิด session ของ agent ทั้งหมด** (r3 F20): Quit (⌘Q) Visual Studio Code, Claude, ChatGPT/Codex และ terminal ทุกหน้าต่างที่มี Claude Code หรือ Codex แบบ command line → เปิด Visual Studio Code ใหม่**โดยไม่เปิด panel ของ agent** (รอบนี้รันใน terminal ของ VS Code ซึ่งเป็นแอปเดียวกับที่ R1 จะรัน) → ใน terminal ของ VS Code:
+```zsh
+% /usr/bin/pgrep -ilf 'claude|codex|chatgpt'; echo "exit $?"
+```
+ต้องไม่พิมพ์บรรทัดของโปรเซส (`exit 1`) · วางผลนี้ในหลักฐาน · ถ้ามีบรรทัดขึ้น: ปิดโปรเซสนั้นแล้วรันใหม่ · ถ้าบรรทัดที่เหลือเป็นของ VS Code เองไม่ใช่ session ของ agent ให้ส่งบรรทัดนั้นให้ Claude ตัดสินก่อนเริ่มขั้น (0)
 
 **3.2 ขั้น (0)–(7)**: ทำต่อกันทันทีตามลำดับ ในโฟลเดอร์ของ repo · วางทุกคำสั่งและผลลงในหลักฐาน (ส่งให้ Claude เป็นข้อความ) · **ขอบเขต:** ขั้นเหล่านี้จับไฟล์ที่ค้างอยู่ สภาพที่ผิดโดยไม่ตั้งใจ และทุกเส้นทางที่เขียนชื่อไว้ แต่รันด้วยบัญชี macOS เดียวกับ agent จึงไม่กันโปรเซสของบัญชีนี้ที่ตั้งใจเตรียมรอบนี้ไว้ล่วงหน้า (contract (ญ) ข้อ 16 ที่คุณรับไว้)
 
@@ -145,6 +149,8 @@ Contract: `docs/contracts/ENV-002-research-host-separation.md` v2.6 (อนุ�
 - detail ของ item ใช้ถ้อยคำเดิมของ v1.9 (เช่น `no %APPDATA%\MetaQuotes`, `Uninstall entry`, `remote drive`): บน Mac หมายถึงชื่อใน `~/Library/Application Support`, (ไม่มีกฎ Uninstall) และ mount ตามลำดับ
 - ถ้าคุณรับไฟล์ snapshot ไว้นอก `data/` ให้เพิ่ม `--data-dir <โฟลเดอร์>` **เฉพาะโฟลเดอร์ข้อมูลนั้นเอง ห้ามใส่โฟลเดอร์ที่ครอบ repo ไว้**
 
+**ชื่อบัญชีในหลักฐาน (r3 F21):** ส่งผลของข้อ 3 ให้ Claude ตามที่เห็นได้ · ก่อน commit หลักฐาน Claude แทน `/Users/<ชื่อบัญชี>` ด้วย `/Users/<owner>` ทุกที่ (รอบควบคุม, ขั้น (1)–(6), detail ของ item) **ยกเว้นบรรทัด `roots:`** ซึ่ง contract ยอมให้มีชื่อบัญชี (คำตัดสินข้อ 8, r3 F41)
+
 ถ้าได้ FAIL หรือ UNKNOWN: แก้ตามข้อความของ item นั้นแล้วรันขั้น (7) ใหม่ (ถ้าแก้ไฟล์ใน repo หรือ uv ให้เริ่มใหม่จากขั้น (0)) · `could not be listed` หรือ `dataless` → ข้อ 2.1 หรือ 2.3 · `not allowed:` ในบรรทัด `mounts:` → ข้อ 2.4 · `processes: unreadable (DYLD_ variables set)` → shell ไม่ได้เริ่มตามขั้น (0) · ส่งชื่อให้ Claude ถ้าไม่แน่ใจ
 
 ## 4. Break-it test จาก Mac (AC-03 ข้อ 1–4 และ 6; ทำตามกติกา C9 ก่อน)
@@ -212,7 +218,7 @@ PS> Select-String -Path C:\vault\SENTINEL-ENV002-*.json -SimpleMatch -Pattern '<
 |---|---|
 | 1 | JSON 6 ค่าที่ `make_sentinel.py` พิมพ์ และผล `Get-FileHash` |
 | 2 | คำยืนยันข้อ 2.1–2.5 พร้อมเวลา และชื่อแอปที่รัน (Visual Studio Code) |
-| 3 | ผลของขั้น (0)–(6) ทั้งหมด · รายงาน envcheck และ `/sbin/mount` ของรอบควบคุมและรอบ PASS พร้อมเวลาและ `exit status` · ผลของ `rmdir` และ `ls -d` |
+| 3 | ผลของ `pgrep` ก่อนขั้น (0) · ผลของขั้น (0)–(6) ทั้งหมด · รายงาน envcheck และ `/sbin/mount` ของรอบควบคุมและรอบ PASS พร้อมเวลาและ `exit status` · ผลของ `rmdir` และ `ls -d` |
 | 4 | ผล `nc` ทุกบรรทัด (ปิดบัง IP), ผลของ `smbutil` และ `grep smbfs`, คำยืนยัน C1–C10 พร้อมเวลา และค่าที่ตั้งใน C3 |
 | 5 | ผล `Get-FileHash`, ความยาว และ `Select-String` ของ sentinel บน VPS พร้อมเวลา |
 | 7 | คำยืนยัน (a)–(g) ตามลำดับพร้อมเวลา, รายการ SHA-256 สองฝั่งของ (a) และรายงานของ (d2) |
