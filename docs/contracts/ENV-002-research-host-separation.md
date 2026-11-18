@@ -155,7 +155,8 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
                               (รวมกรณี Wine loader และ `DYLD_*`) → None เท่านั้น (`terminal_paths` ยังเป็นผลของกฎ path)
     (v2.2, r2 F30) สิ่งที่พบแล้วไม่ถูกกลบด้วย "อ่านไม่ได้": path ที่พบอยู่ใน `terminal_paths` เสมอ · `terminal_paths` เป็น None เฉพาะเมื่อการค้นไม่ครบ
                               และไม่พบ path ใดเลย · โปรเซสชื่อ `terminal64.exe` ถูกใส่ใน `terminal_paths` ด้วย path เต็ม (จึงเป็น FAIL แม้
-                              `process_names` เป็น None จากกฎ Wine loader)
+                              `process_names` เป็น None จากกฎ Wine loader) · (v2.3, r3 F30) "เสมอ" ใช้กับการค้น path และกฎ Wine loader
+                              · เมื่อ `read_process_paths` ยก OSError ไม่มี path ของโปรเซสให้ใส่ (ฟังก์ชันคืน path หรือยก exception อย่างใดอย่างหนึ่ง)
     uninstall_display_names = `()` เสมอ (ไม่ใช่ None: macOS ไม่มีกฎนี้)
     metaquotes_exists       = มีรายการที่ตรงกฎของ terminal_data · `~/Library/Application Support` list ไม่ได้ → None
     mt5_spec_found          = ผลของ `find_spec` เหมือนทุกแพลตฟอร์ม
@@ -339,8 +340,8 @@ v2.0 (ร่าง, D-023): ตัวอ่านตามแพลตฟอร�
   โฟลเดอร์ที่ macOS ไม่ให้ list เพราะ Privacy (TCC, "Operation not permitted") ใช้กฎเดิมของโฟลเดอร์ที่ list ไม่ได้:
     ใน repo, data dirs, search_dirs = UNKNOWN · root เอง list ไม่ได้ = UNKNOWN (v1.9)
     · (v2.1, F10) ใต้ root ของการค้น terminal บน darwin: ข้ามได้เฉพาะโฟลเดอร์ที่ list ไม่ได้ซึ่งอยู่ในรายการที่วัดบนเครื่องเจ้าของ (เทียบ path จาก home):
-      `~/.Trash` และ `~/Pictures/Photos Library.photoslibrary` · โฟลเดอร์อื่นใต้ home ที่ list ไม่ได้ = รายการ path อ่านไม่ครบ → `terminal_paths` = None
-      (UNKNOWN ของ terminal_install) · บรรทัด `skipped:` บอกจำนวนและ path ของโฟลเดอร์ที่ข้าม · เหตุที่กฎ v1.8 ("ข้ามทุกโฟลเดอร์ที่ list ไม่ได้") ไม่ถูกยกมา:
+      `~/.Trash` และ `~/Pictures/Photos Library.photoslibrary` · โฟลเดอร์อื่นใต้ home ที่ list ไม่ได้ = การค้นไม่ครบ
+      (`terminal_paths` None ตามกฎของ r2 F30 → UNKNOWN ของ terminal_install; v2.3, r3 F30) · บรรทัด `skipped:` บอกจำนวนและ path ของโฟลเดอร์ที่ข้าม · เหตุที่กฎ v1.8 ("ข้ามทุกโฟลเดอร์ที่ list ไม่ได้") ไม่ถูกยกมา:
       บน macOS ผู้ใช้คนเดียวกันเขียนลงโฟลเดอร์ที่แอปที่รันอยู่ list ไม่ได้ (เช่น Trash) จึงไม่มีเงื่อนไข "ต้องมีสิทธิ์ admin" ของ v1.8
     · (v2.1, F10) `~/Library/CloudStorage` ที่มีอยู่แต่ list ไม่ได้ทำให้ `default_roots` ยก OSError (ทางเดียวกับโฟลเดอร์ต้นทางของ Wine prefix)
   ctypes บน darwin (v2.1, F3): เปิด library เดียวด้วย `ctypes.CDLL("/usr/lib/libSystem.B.dylib", use_errno=True)`
