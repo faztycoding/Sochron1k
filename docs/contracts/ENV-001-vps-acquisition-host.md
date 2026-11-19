@@ -1,10 +1,10 @@
 # TASK ENV-001 — Windows VPS เป็น acquisition/execution host: เช่า, ทำให้ปลอดภัย และพิสูจน์ว่าปิดช่องทางรั่ว
 
-Version v1.5 (v1 ร่าง 2026-10-25 → v1.1 ตอบ `docs/reviews/ENV-contracts-r1.md`: ย้ายการวัดซ้ำไป SPIKE-002 (F2, F14, F19), firewall สองชั้น (F5), ช่องทางไฟล์ (F3, F4), API ของ host_report (F10), runbook (F15), แหล่งราคา (F16), ปิดบัง IP (F17), ความสอดคล้อง (F20) → v1.2 ตอบ `docs/reviews/ENV-contracts-r2.md`: schema ของ firewall rule (F21), `.env.example` (F22), ที่มาของแต่ละ fact (F23), AC-05 ไม่รอ SPIKE-002 (F24), uv ≥ 0.13.4 (F25), ค่าที่คาดของ uv/Python (F10), การโหลดสคริปต์ใน tests (F31), บันทึกผู้เขียน tests (F20) → v1.3 ตอบ `docs/reviews/ENV-contracts-r3.md`: ตัดสินทุก rule ขาเข้าและสถานะ profile จาก ActiveStore (F33), ชื่อ rule คือ `Name` ของ Windows (F34), ไม่ให้ `uv run` sync ก่อนตรวจ (F35), ขั้นตอนโหลดสคริปต์ (F37), รุ่น uv/Python (F38), ลำดับความสำคัญของ policy (F39), ค้น IPv6 (F40), clipboard แบบข้อความ (F43 c), แถว 1c (F44) → v1.4 ตอบ `docs/reviews/ENV-contracts-r4.md` (ทุกข้อ Low): พิสูจน์ `--no-sync` ด้วยการทดสอบ drift (F35), ป้ายเวอร์ชัน (F45), rule ของ 3389 ให้แก้ scope ไม่ใช่ปิด (F46), helper แบบ pure ของ JSON และลำดับ policy พร้อม unit test (F47), clipboard ตาม (ค) (F48), subnet แบบ mask → v1.5 ตอบ `docs/reviews/ENV-contracts-r5.md` (Low): ขอบเขตของ `policy_first` และการ map policy ของ clipboard (F52), ที่มาและขอบเขตของ fixture JSON (F53), ขั้นกู้คืนของ drift test) · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 6.1, 10 แถว 1c, 13a · Tier **High** · Branch `chore/ENV-001-vps-acquisition-host`
-Status: **approved by owner 2026-10-25 17:5x** (v1.5 · เจ้าของตอบ "อนุมัติทั้งหมด" ในแชท Claude: contract นี้, การตัดสิน (ก)–(จ) ตามที่แนะนำ, D-021 และงบ Q-10 ไม่เกิน 40 USD/เดือน · review r5 ว่าพร้อม · ข้อ Low F52/F53 ของ r5 แก้ใน v1.5 ให้ผู้ตรวจรอบถัดไปตรวจซ้ำ) · เดิม: draft (Claude ร่าง 2026-10-25: High และมีค่าใช้จ่าย จึงอนุมัติแทนไม่ได้)
+Version v2.2 draft (ประวัติ: v2.2 ร่าง 2026-11-18 ยังไม่อนุมัติ ตอบ `docs/reviews/ENV-001-contract-v2-r2.md` F10–F13 (ทุกจุดติดป้าย "(v2.2, r2 F<n>)") · v2.1 ร่าง 2026-11-18 ตอบ `docs/reviews/ENV-001-contract-v2-r1.md` F1–F9 (ทุกจุดติดป้าย "(v2.1, r1 F<n>)") · v2.0 ร่าง 2026-11-18: เครื่องเจ้าของย้ายจาก Windows 11 เป็น Mac ตาม D-023 (accepted 2026-11-18, อยู่ใน `DECISIONS.md` ของ branch `chore/ENV-002-macos-research-host`) · ขั้นฝั่งเครื่องเจ้าของเป็นฉบับ macOS ในหัวข้อ "v2.0: ขั้นฝั่งเครื่องเจ้าของบน macOS" ท้าย contract · AC-03 และ AC-04 ฉบับ macOS แทนฉบับ Windows เมื่อ v2.0 อนุมัติ · `host_report.py`, tests และทุกขั้นบน VPS ไม่เปลี่ยน · ทุกจุดที่เปลี่ยนติดป้าย "(v2.0)" · ก่อนหน้า: v1 ร่าง 2026-10-25 → v1.1 ตอบ `docs/reviews/ENV-contracts-r1.md`: ย้ายการวัดซ้ำไป SPIKE-002 (F2, F14, F19), firewall สองชั้น (F5), ช่องทางไฟล์ (F3, F4), API ของ host_report (F10), runbook (F15), แหล่งราคา (F16), ปิดบัง IP (F17), ความสอดคล้อง (F20) → v1.2 ตอบ `docs/reviews/ENV-contracts-r2.md`: schema ของ firewall rule (F21), `.env.example` (F22), ที่มาของแต่ละ fact (F23), AC-05 ไม่รอ SPIKE-002 (F24), uv ≥ 0.13.4 (F25), ค่าที่คาดของ uv/Python (F10), การโหลดสคริปต์ใน tests (F31), บันทึกผู้เขียน tests (F20) → v1.3 ตอบ `docs/reviews/ENV-contracts-r3.md`: ตัดสินทุก rule ขาเข้าและสถานะ profile จาก ActiveStore (F33), ชื่อ rule คือ `Name` ของ Windows (F34), ไม่ให้ `uv run` sync ก่อนตรวจ (F35), ขั้นตอนโหลดสคริปต์ (F37), รุ่น uv/Python (F38), ลำดับความสำคัญของ policy (F39), ค้น IPv6 (F40), clipboard แบบข้อความ (F43 c), แถว 1c (F44) → v1.4 ตอบ `docs/reviews/ENV-contracts-r4.md` (ทุกข้อ Low): พิสูจน์ `--no-sync` ด้วยการทดสอบ drift (F35), ป้ายเวอร์ชัน (F45), rule ของ 3389 ให้แก้ scope ไม่ใช่ปิด (F46), helper แบบ pure ของ JSON และลำดับ policy พร้อม unit test (F47), clipboard ตาม (ค) (F48), subnet แบบ mask → v1.5 ตอบ `docs/reviews/ENV-contracts-r5.md` (Low): ขอบเขตของ `policy_first` และการ map policy ของ clipboard (F52), ที่มาและขอบเขตของ fixture JSON (F53), ขั้นกู้คืนของ drift test → **v1.6 ตอบ `docs/reviews/ENV-001-r1.md` (review ของ implementation) เจ้าของอนุมัติ 2026-10-25 22:1x:** แหล่งของ git_credential และ remote_userinfo ให้ git ตอบเอง (F1), รูปแบบ scope ที่ปฏิเสธ (F10), AC-04 ขอ redirect drive ก่อนทดสอบและไม่มี printer ที่ redirect (F4, F12) → **v1.7 ตอบ `docs/reviews/ENV-001-r2.md` เจ้าของอนุมัติ 2026-11-05 11:1x:** อ่าน helper ด้วย `git config -z` ให้ค่าหลายบรรทัดแยกได้แน่นอน (ช่องที่เหลือของ F18) และนับ `http.<url>.extraheader` (F23 b) · remote_userinfo นับ URL ที่ไม่ใช่ `https://` (F23 a) → **v1.8 ตอบ `docs/reviews/ENV-001-r3.md` F27 เจ้าของอนุมัติ 2026-11-05 13:2x (เอกสารเท่านั้น):** แหล่ง credential ที่ host_report ไม่ตรวจ (netrc, askpass, sign in ใน editor) อยู่ในช่องที่เหลือของ threat row และ runbook §4 ห้าม → **v1.9 ตอบ `docs/reviews/ENV-001-r4.md` F31 และ N1 (เอกสารเท่านั้น) อนุมัติโดยการมอบอำนาจ 2026-11-05 14:0x:** remote แบบเก่าในไฟล์, URL ที่เป็นปลายทาง push และ `SSH_ASKPASS` อยู่ในช่องที่เหลือของ threat row และ runbook §4 ห้าม) · Owner เจ้าของ repository · Parent `docs/architecture.md` ข้อ 6.1, 10 แถว 1c, 13a · Tier **High** · Branch `chore/ENV-001-vps-acquisition-host`
+Status: **v2.2 approved by owner 2026-11-18 (หลัง 18:46) ด้วยการเลือก "อนุมัติ" ของ (ฎ) ในกล่องคำถามของแชท Claude ที่ถามโดยระบุชื่อ หลัง contract review r3 (`docs/reviews/ENV-001-contract-v2-r3.md`) ว่าพร้อม · ในกล่องเดียวกันเจ้าของยืนยันสามข้อของ v2.1 (Q1–Q3) โดยระบุชื่อ · Low F14–F16 ของ r3 แก้ใน runbook ฉบับ macOS และตรวจโดย review ของ runbook · `host_report.py`, tests และทุกขั้นบน VPS คงตาม v1.9 · runbook ฉบับ macOS ยังไม่ได้เขียน** · (ก่อนอนุมัติ: v2.2 draft ตอบ review r1 (Medium 4, Low 5) และ r2 (Medium 1, Low 3) ครบ) · ประวัติ v1.x: **approved by owner 2026-10-25 17:5x; v1.6 approved 22:1x; v1.7 approved 2026-11-05 11:1x; v1.8 approved 13:2x; v1.9 approved by delegation 14:0x** (v1.9: เจ้าของสั่ง 13:4x "อนุมัติตาม recommended ไปเลย" จึงใช้ทางที่แนะนำ (a) ของ r4 F31 แบบเดียวกับ F27; เจ้าของ veto ได้ก่อน merge) · (v1.8: เจ้าของเลือกทางที่แนะนำของ F27 "เขียนห้ามใน runbook" ในแชท Claude) · (v1.7: เจ้าของเลือกทางที่แนะนำของ F23 "เพิ่มใน v1.7" และของช่องที่เหลือของ F18 "ใช้ -z ใน v1.7" ในแชท Claude) · (v1.6: เจ้าของเลือกทางที่แนะนำของ F1, F10, F12, F13 ในแชท Claude) · (v1.5 · เจ้าของตอบ "อนุมัติทั้งหมด" ในแชท Claude: contract นี้, การตัดสิน (ก)–(จ) ตามที่แนะนำ, D-021 และงบ Q-10 ไม่เกิน 40 USD/เดือน · review r5 ว่าพร้อม · ข้อ Low F52/F53 ของ r5 แก้ใน v1.5 ให้ผู้ตรวจรอบถัดไปตรวจซ้ำ) · เดิม: draft (Claude ร่าง 2026-10-25: High และมีค่าใช้จ่าย จึงอนุมัติแทนไม่ได้)
 Hypothesis (research tasks): ไม่ใช่งานวิจัย
 
-**ด่าน ENV-1** = ENV-001 (contract นี้: VPS ปลอดภัย) → SPIKE-002 (`docs/contracts/SPIKE-002-vps-remeasure.md`: วัดซ้ำบน VPS แบบอ่านอย่างเดียว) → ENV-002 (`docs/contracts/ENV-002-research-host-separation.md`: แยก research host + sentinel) · SPIKE-002 เริ่มได้เมื่อ ENV-001 ผ่านครบทุก AC (AC-05 เป็น checklist ของเจ้าของ ไม่รอผลของ SPIKE-002) · terminal บนเครื่องเจ้าของอยู่จนกว่า VPS ผ่าน ENV-001 และ SPIKE-002 · ความหมายของ "ENV-1 ผ่าน" ลำดับการตัด holdout และช่องทางส่ง snapshot อยู่ใน D-021 (proposed)
+**ด่าน ENV-1** = ENV-001 (contract นี้: VPS ปลอดภัย) → SPIKE-002 (`docs/contracts/SPIKE-002-vps-remeasure.md`: วัดซ้ำบน VPS แบบอ่านอย่างเดียว) → ENV-002 (`docs/contracts/ENV-002-research-host-separation.md`: แยก research host + sentinel) · SPIKE-002 เริ่มได้เมื่อ ENV-001 ผ่านครบทุก AC (AC-05 เป็น checklist ของเจ้าของ ไม่รอผลของ SPIKE-002) · terminal บนเครื่องเจ้าของอยู่จนกว่า VPS ผ่าน ENV-001 และ SPIKE-002 ((v2.0) "เครื่องเจ้าของ" ในประโยคนี้คือเครื่อง Windows เดิม ซึ่งถูกล้างตาม D-023 ข้อ 2 ทาง 1 · เครื่องที่เจ้าของใช้ทดสอบจากภายนอกและเปิด RDP ตั้งแต่ v2.0 คือ Mac) · ความหมายของ "ENV-1 ผ่าน" ลำดับการตัด holdout และช่องทางส่ง snapshot อยู่ใน D-021 (accepted 2026-10-25; v2.1, r1 F8: ข้อ 3 (a) แก้ฝั่งเครื่องเจ้าของโดย D-023 ข้อ 5)
 
 ## Risk tier (Q1–Q6, one line each; unsure = yes)
 - Q1 auth/permissions/isolation: **yes** — เพิ่มทางเข้าระยะไกล (RDP) ไปเครื่องที่จะถือ terminal, holdout และ Demo runner และเป็นฝั่งหนึ่งของขอบเขต research/holdout
@@ -98,8 +98,19 @@ scripts/env/host_report.py  (stdlib เท่านั้น · Windows-only imp
                         เพื่อไม่ให้ sync · `.venv\pyvenv.cfg` มีแค่ "3.12" ไม่มีเลข patch จึงใช้แทนไม่ได้)
       project_synced    subprocess `uv sync --locked --check --offline` ใน repo: exit 0 = True · เป็นคำสั่ง uv เดียวที่ตัดสิน lock และ environment
                         (ตรวจแล้วบน uv 0.13.0 ว่ามี flag และไม่แก้ environment · ตรวจซ้ำบนรุ่นที่ติดตั้งจริงในขั้น (5))
-      git_credential    subprocess `git config --show-origin --get-all credential.helper` (ทุก scope) · ว่าง = ()
-      remote_userinfo   อ่าน `<repo>/.git/config` แล้วตรวจว่า URL ของ remote มี "@" ก่อน host หรือไม่ (ไม่พิมพ์ URL)
+      git_credential    (v1.7) subprocess สองคำสั่งใน repo (ทุก scope) รวมกันเป็น git_credential_helpers:
+                        (1) `git config --show-origin -z --get-regexp "^credential\..*helper$"` (รวม helper ที่ผูกกับ URL เช่น
+                            `credential.https://github.com.helper`) · แต่ละ entry คือ `<origin>NUL<key>LF<value>NUL` หรือ `<origin>NUL<key>NUL`
+                            (key ที่เขียนโดยไม่มี "=" นับเป็น helper) · ค่าที่ว่างพอดีเท่านั้นที่ล้าง helper ก่อนหน้าของ key เดียวกัน
+                            (ช่องว่าง, tab หรือค่าหลายบรรทัด คือ helper) · ใช้ key ตามที่ git พิมพ์ (ส่วน URL แยกตัวพิมพ์) · output ที่แยกเป็น
+                            คู่ไม่ได้ หรือ key ไม่ใช่ `credential.….helper` = None (review r2 F18)
+                        (2) `git config --show-origin -z --get-regexp "^http\..*extraheader$"` · ทุก entry (รวมค่าว่าง) นับเป็นแหล่ง
+                            credential หนึ่งรายการ ชนิด "extraheader" (review r2 F23 b)
+                        · แต่ละคำสั่ง: exit 1 ที่ไม่พิมพ์อะไร = ไม่มี · exit อื่น = None · รายงานแสดงจำนวนและชนิด ไม่แสดงค่า
+      remote_userinfo   (v1.6) subprocess `git remote` แล้วทุก remote: `git remote get-url --all <r>` และ `git remote get-url --push --all <r>`
+                        (git ใช้ insteadOf/pushInsteadOf และอ่านทุก scope ให้เอง) แล้วตรวจว่า URL ใดมี "@" ก่อน host (ไม่พิมพ์ URL)
+                        · (v1.7) URL ที่ไม่ขึ้นต้นด้วย `https://` (ไม่สนตัวพิมพ์: ssh, แบบ scp, git, file, http, path) ก็เป็น True เพราะ push ได้
+                          ด้วย key ที่ git หาเองนอก URL (review r2 F23 a)
       secret_like_files นับไฟล์ใต้ repo ที่ชื่อเป็น `.env` หรือ `.env.*` **ยกเว้น `.env.example`**, `*.key`, `*.pem`, `*.pfx`, `*.rdp` (ชื่อเท่านั้น ไม่เปิด)
       holdout_dir       มีโฟลเดอร์ชื่อ holdout (ไม่สนตัวพิมพ์) ใต้ repo
   evaluate(facts: Facts) -> Report         # pure · ใช้ทดสอบด้วย Facts ปลอมบน Linux
@@ -119,6 +130,8 @@ scripts/env/host_report.py  (stdlib เท่านั้น · Windows-only imp
                          · local_ports มี "Any", ช่วง หรือคำ (เช่น Teredo, IPHTTPSIn, RPC) = FAIL
                          · rule ของ 3389 (TCP และ UDP): remote_addresses 1–4 รายการ แต่ละรายการเป็น host เดียว หรือ prefix IPv4 ≥ /24 หรือ IPv6 ≥ /48
                            · "Any", คำ (Internet, LocalSubnet, …) และช่วง "a-b" = FAIL
+                           · (v1.6) mask แบบจุดต้องเป็น netmask (หนึ่งต่อด้วยศูนย์) · hostmask เช่น `/0.0.0.255` = FAIL
+                           · (v1.6) prefix IPv6 ที่ทับ `::ffff:0:0/96`, `::/96` หรือ `64:ff9b::/96` (IPv4 ในรูป IPv6) ต้อง ≥ /120 ไม่เช่นนั้น FAIL
                          · detail ของ FAIL แสดง `Name` ของ rule ที่ไม่ผ่าน (ไม่แสดงที่อยู่) พร้อมคำแนะนำ:
                            rule ของ 3389 ที่ scope ไม่ผ่าน → `Set-NetFirewallRule -Name <Name> -RemoteAddress <allowlist>` **ห้ามแนะนำให้ปิด**
                            (ปิดแล้ว RDP ชั้น Windows ปิด ต้องกู้ผ่าน console ของผู้ให้บริการ)
@@ -131,7 +144,8 @@ scripts/env/host_report.py  (stdlib เท่านั้น · Windows-only imp
       clipboard          clipboard_files_to_client_blocked is True
       sync_clients       sync_clients ว่าง
       python_env         uv_version == EXPECTED_UV, python_version == EXPECTED_PYTHON, project_synced is True
-      git                git_credential_helpers ว่าง และ remote_has_userinfo is False
+      git                git_credential_helpers ว่าง และ remote_has_userinfo is False (v1.7: helpers รวม http.extraheader และ userinfo
+                         รวม URL ที่ไม่ใช่ `https://`)
       secrets            secret_like_files_in_repo == 0
       holdout            holdout_dir_in_repo is False
   render(report) -> str                    # Markdown + บรรทัดสุดท้าย "HOST REPORT: PASS|FAIL|UNKNOWN" · ห้ามมี IPv4/IPv6 เต็ม
@@ -152,18 +166,18 @@ scripts/env/host_report.py  (stdlib เท่านั้น · Windows-only imp
 ## Invariants
 - ไม่มีรหัสผ่าน, เลขบัญชีเต็ม, IP ของบ้านหรือของ VPS ใน repo, log หรือหลักฐาน · เจ้าของ login terminal ด้วยมือ (รหัส investor)
 - `host_report.py` อ่านอย่างเดียว ไม่เปลี่ยนการตั้งค่า, ไม่เขียน `.venv` หรือ `uv.lock` (CLI ใช้ `--no-sync` และไม่เรียก `uv run` ข้างใน), ไม่เปิด socket, ไม่อ่านเนื้อหาไฟล์ credential, Credential Manager หรือโฟลเดอร์ของ terminal
-- VPS ไม่มี credential ของ GitHub · repo บน VPS เป็น clone แบบ HTTPS ไม่ใส่ credential
+- VPS ไม่มี credential ของ GitHub · repo บน VPS เป็น clone แบบ HTTPS ไม่ใส่ credential · (v1.7) ทุก URL ของ remote เป็น `https://` และไม่มี `http.<url>.extraheader`
 - Claude ไม่เข้าถึง VPS · ทุกคำสั่งบน VPS และการทดสอบจากภายนอกเจ้าของเป็นผู้รันตาม runbook แล้วส่งผลกลับเป็นข้อความ (ไม่ส่งไฟล์)
 - ไม่มีคำสั่งซื้อขาย และไม่มีโค้ดของงานนี้ที่ import `MetaTrader5`
 
 ## Negative cases
-Windows client หรือ Server รุ่นเก่า · RAM ที่เห็นต่ำกว่า 3.5 GiB · ดิสก์ว่างต่ำกว่า 30 GB · rule ขาเข้าเปิดพอร์ตอื่น (เช่น 445, 5985) · RDP rule เป็น "Any" (ค่าตั้งต้นของ Windows), `0.0.0.0/0`, "Internet" หรือช่วงกว้าง · `RemoteDesktop-Shadow-In-TCP` เปิดอยู่ (พอร์ต Any) · rule ที่ protocol เป็น "Any" (เช่นจาก `New-NetFirewallRule` ที่ไม่ระบุ protocol หรือ rule ของแอป UWP) · rule จาก Group Policy (เห็นเฉพาะใน ActiveStore) · profile ใดถูกปิด หรือ DefaultInboundAction เป็น Allow · rule UDP 68 ที่ชื่อไม่ใช่ `CoreNet-DHCP-In` · rule ของ Core Networking (`CoreNet-DHCP-In`, `CoreNet-DHCPV6-In`, ICMPv6) เปิดอยู่ตามค่าตั้งต้น (ผ่าน) · `.env.example` ใต้ repo (ผ่าน) · NLA ปิด หรือ policy `UserAuthentication` = 0 ทั้งที่ค่าใน RDP-Tcp เป็น 1 (policy ชนะ) · ไม่มี lockout หรือ threshold > 10 · drive redirection เปิด · clipboard ส่งไฟล์ได้ · OneDrive รันอยู่ · uv/Python ไม่ตรงรุ่น หรือยังไม่ sync (pyproject.toml หรือ uv.lock ไม่ตรงกับ environment: host_report ต้องไม่ sync ให้เอง) · credential.helper=manager (ค่าตั้งต้นของ Git for Windows) · remote URL มี userinfo · มีไฟล์ `.env` หรือ `.rdp` ใต้ repo · อ่านค่าใดไม่ได้ (UNKNOWN) · การทดสอบจากภายนอกเปิด 3389 ได้จากเครือข่ายที่ไม่อยู่ใน allowlist · IP บ้านอยู่หลัง CGNAT
+Windows client หรือ Server รุ่นเก่า · RAM ที่เห็นต่ำกว่า 3.5 GiB · ดิสก์ว่างต่ำกว่า 30 GB · rule ขาเข้าเปิดพอร์ตอื่น (เช่น 445, 5985) · RDP rule เป็น "Any" (ค่าตั้งต้นของ Windows), `0.0.0.0/0`, "Internet" หรือช่วงกว้าง · `RemoteDesktop-Shadow-In-TCP` เปิดอยู่ (พอร์ต Any) · rule ที่ protocol เป็น "Any" (เช่นจาก `New-NetFirewallRule` ที่ไม่ระบุ protocol หรือ rule ของแอป UWP) · rule จาก Group Policy (เห็นเฉพาะใน ActiveStore) · profile ใดถูกปิด หรือ DefaultInboundAction เป็น Allow · rule UDP 68 ที่ชื่อไม่ใช่ `CoreNet-DHCP-In` · rule ของ Core Networking (`CoreNet-DHCP-In`, `CoreNet-DHCPV6-In`, ICMPv6) เปิดอยู่ตามค่าตั้งต้น (ผ่าน) · `.env.example` ใต้ repo (ผ่าน) · NLA ปิด หรือ policy `UserAuthentication` = 0 ทั้งที่ค่าใน RDP-Tcp เป็น 1 (policy ชนะ) · ไม่มี lockout หรือ threshold > 10 · drive redirection เปิด · clipboard ส่งไฟล์ได้ · OneDrive รันอยู่ · uv/Python ไม่ตรงรุ่น หรือยังไม่ sync (pyproject.toml หรือ uv.lock ไม่ตรงกับ environment: host_report ต้องไม่ sync ให้เอง) · credential.helper=manager (ค่าตั้งต้นของ Git for Windows) · remote URL มี userinfo · (v1.7) ค่า helper ที่เป็นช่องว่าง, tab หรือหลายบรรทัด, remote แบบ SSH/scp/git/file และ `http.<url>.extraheader` · มีไฟล์ `.env` หรือ `.rdp` ใต้ repo · อ่านค่าใดไม่ได้ (UNKNOWN) · การทดสอบจากภายนอกเปิด 3389 ได้จากเครือข่ายที่ไม่อยู่ใน allowlist · IP บ้านอยู่หลัง CGNAT
 
 ## Acceptance (Given–When–Then, Thai; ≤ 7)
 - AC-01 Given VPS ที่เจ้าของตั้งตาม runbook When เจ้าของรัน `host_report.py --role acquisition` บน VPS Then ทุก item เป็น PASS ตามเกณฑ์ในหัวข้อ contract (รวม `firewall` และ `inbound` ขณะที่ rule DHCP ของ Core Networking ยังเปิดอยู่) และบรรทัดสุดท้าย `HOST REPORT: PASS` โดยรายงานไม่มี IPv4/IPv6 เต็ม · แล้วทดสอบ drift ตาม runbook: เปลี่ยนรุ่นที่ pin ของ dependency หนึ่งบรรทัดใน `pyproject.toml` ของ clone บน VPS แล้วรัน host_report → `python_env` เป็น FAIL และ SHA-256 ของ `uv.lock` เท่าเดิม (พิสูจน์ว่า `--no-sync` ไม่ sync และไม่ relock: ถ้า sync ผลจะเป็น PASS) → `git checkout -- pyproject.toml` และ `git status` สะอาด → รัน host_report อีกครั้งได้ PASS (ถ้า hash ของ `uv.lock` เปลี่ยน: `git checkout -- pyproject.toml uv.lock` แล้ว `uv sync --locked --python 3.12.15` ก่อนทำ AC-01 ซ้ำ)
 - AC-02 Given `Facts` ปลอมที่ผิดทีละ item (รวม: RDP scope "Any", `0.0.0.0/0`, "Internet", ช่วงกว้าง; rule Shadow พอร์ต Any; TCP 445; rule ที่ protocol "Any"; rule UDP 68 ที่ชื่ออื่น; profile Public ปิด; DefaultInboundAction "Allow"; NLA ปิด; lockout 0; clipboard ส่งไฟล์ได้; OneDrive รัน; credential.helper=manager; ไฟล์ `.env` 1 ไฟล์; ค่า None) และ `Facts` ที่ถูกต้องรวม rule ของ Core Networking (ชื่อจาก `ALLOWED_UDP`, ICMPv6, "2", "41"), profile ทั้งสามเปิดและ Block, scope ของ 3389 แบบ /24 ที่เขียนเป็น mask และ `.env.example` When `evaluate` และ `render` Then item ที่ผิดเป็น FAIL (หรือ UNKNOWN สำหรับ None) ตามลำดับผลรวม, Facts ที่ถูกต้องได้ PASS, ข้อความไม่มี IPv4/IPv6 เต็ม และ tests รันบน Linux ได้โดยไม่ import โมดูลของ Windows
-- AC-03 Given VPS หลัง AC-01 When เจ้าของทดสอบจากภายนอกตาม runbook Then จากเครือข่ายที่ไม่อยู่ใน allowlist (เช่น hotspot มือถือ) `Test-NetConnection <vps> -Port 3389` ล้ม · จาก IP ของเจ้าของ 3389 เปิด และ 22, 80, 443, 445, 5985, 5986 ล้มทั้งหมด · รายการ rule ของ firewall ผู้ให้บริการ (ปิดบัง IP) และผลเทียบ IP ของ router กับ IP สาธารณะ (ตรวจ CGNAT) อยู่ในหลักฐาน · ถ้าเป็น CGNAT ใช้ทางเลือก VPN แล้วทดสอบซ้ำ
-- AC-04 Given RDP session ปกติ When เจ้าของคัดลอกไฟล์ทดสอบใน Explorer ของ VPS แล้ววางบนเครื่องตัวเอง และเปิด `\\tsclient` บน VPS Then วางไฟล์ไม่ได้ (ข้อความยังคัดลอกได้เมื่อ (ค) เลือกแบบข้อความ) และ `\\tsclient` ใช้ไม่ได้ · runbook มีขั้นตอนส่ง snapshot ตาม D-021 พร้อมการรัน `host_report.py` และตัวตรวจของ ENV-002 ซ้ำหลังส่งทุกครั้ง
+- AC-03 (v2.0: ฉบับ macOS อยู่ในหัวข้อ "v2.0: ขั้นฝั่งเครื่องเจ้าของบน macOS" และแทนข้อนี้เมื่อ v2.0 อนุมัติ) Given VPS หลัง AC-01 When เจ้าของทดสอบจากภายนอกตาม runbook Then จากเครือข่ายที่ไม่อยู่ใน allowlist (เช่น hotspot มือถือ) `Test-NetConnection <vps> -Port 3389` ล้ม · จาก IP ของเจ้าของ 3389 เปิด และ 22, 80, 443, 445, 5985, 5986 ล้มทั้งหมด · รายการ rule ของ firewall ผู้ให้บริการ (ปิดบัง IP) และผลเทียบ IP ของ router กับ IP สาธารณะ (ตรวจ CGNAT) อยู่ในหลักฐาน · ถ้าเป็น CGNAT ใช้ทางเลือก VPN แล้วทดสอบซ้ำ
+- AC-04 (v2.0: ฉบับ macOS อยู่ในหัวข้อ "v2.0: ขั้นฝั่งเครื่องเจ้าของบน macOS" และแทนข้อนี้เมื่อ v2.0 อนุมัติ) Given RDP session ที่ (v1.6) ขอ redirect drive ใน mstsc ไว้ When เจ้าของคัดลอกไฟล์ทดสอบใน Explorer ของ VPS แล้ววางบนเครื่องตัวเอง และเปิด `\\tsclient` บน VPS Then วางไฟล์ไม่ได้ (ข้อความยังคัดลอกได้เมื่อ (ค) เลือกแบบข้อความ), `\\tsclient` ไม่มีไดรฟ์ และ (v1.6) ไม่มี printer ที่ redirect มาจากเครื่องเจ้าของ (runbook ปิด redirection ของ printer, COM, LPT และอุปกรณ์ PnP ด้วย) · runbook มีขั้นตอนส่ง snapshot ตาม D-021 พร้อมการรัน `host_report.py` และตัวตรวจของ ENV-002 ซ้ำหลังส่งทุกครั้ง
 - AC-05 Given terminal บน VPS When เจ้าของทำ checklist ของ runbook Then หลักฐานบันทึกคำยืนยันของเจ้าของทีละข้อ: ติดตั้งจากเว็บของ Exness, login ด้วยรหัส investor, Max bars ตั้งเป็น Unlimited, `w32tm /resync` สำเร็จ, uv (รุ่นตาม (ง)) และ Python ติดตั้งแบบออนไลน์ (`uv python install 3.12.15` แล้ว `uv sync --locked --python 3.12.15`) ก่อนคำสั่ง offline ใดๆ, flag `--check` และ `--no-sync` มีในรุ่นที่ติดตั้ง (ผลของ `--help` ในหลักฐาน) (การพิสูจน์ด้วยระบบว่า `trade_allowed` เป็น false อยู่ใน SPIKE-002 AC-02 ไม่ใช่เงื่อนไขของ AC นี้)
 - AC-06 Given หลักฐานทั้งหมดของงานและ fixture JSON ของ firewall ใน `tests/unit/env/` When ค้นด้วย `grep -n -E` สามรูปแบบ (และ `:\\` ใน fixture เพื่อหา path): `\b[0-9]{7,}\b`, `\b([0-9]{1,3}\.){3}[0-9]{1,3}\b` และ IPv6 `\b[0-9A-Fa-f]{1,4}(:[0-9A-Fa-f]{0,4}){2,7}` (เวลาแบบมีวินาทีก็ติดด้วย) Then ทุก hit ถูกตรวจว่าไม่ใช่เลขบัญชีหรือ IP เต็ม (รายการ hit และเหตุผลอยู่ในหลักฐาน) และไม่มีรหัสผ่าน
 - AC-07 Given ทั้งงาน When `bash scripts/controls/red-flags.sh main` และ `uv run --offline pytest tests -q -p no:cacheprovider` Then กลุ่ม "Order or account mutation surface" ว่าง, suite ผ่าน skipped 0 และ CI เขียว
@@ -185,7 +199,7 @@ Windows client หรือ Server รุ่นเก่า · RAM ที่เ�
 | คนนอกเข้า VPS | RDP จากอินเทอร์เน็ต | firewall ผู้ให้บริการ + rule ของ Windows จำกัด IP (สองชั้น), NLA, lockout, รหัสผ่านยาวไม่ซ้ำ, Windows Update, MFA ที่ console ของผู้ให้บริการถ้ามี · ทดสอบจากภายนอก (AC-03) | CGNAT ทำให้ "IP ของเจ้าของ" มีคนอื่นใช้ร่วม → ใช้ VPN · Demo ไม่มีเงินจริง แต่เครื่องนี้จะเป็น Demo runner ต่อ |
 | ไฟล์ข้อมูลจาก VPS ถูกคัดลอกมาเครื่องวิจัย | drive redirection, clipboard แบบไฟล์, โปรแกรม sync, share | ปิด drive redirection, clipboard ข้อความเท่านั้น, ไม่มี sync client, ไม่มี share (AC-01, AC-04) · ช่องทางเดียวคือขั้นตอนของ D-021 แล้วตรวจซ้ำ | ข้อความผ่าน clipboard ตรวจไม่ได้ · การพิมพ์ตัวเลขด้วยมือ |
 | credential รั่ว | log, หลักฐาน, config, ผู้ให้บริการเห็นเครื่อง | login ด้วยมือด้วยรหัส investor, ไม่มีรหัสใน repo, ปิดบังเลขบัญชีและ IP (AC-06) | ผู้ให้บริการ VPS เข้าถึงเครื่องได้ในทางเทคนิค (ยอมรับ: Demo, ข้อมูลราคาเป็นของโบรกเกอร์) |
-| VPS push โค้ด | git credential | ไม่มี credential.helper, clone ไม่มี userinfo (AC-01) | – |
+| VPS push โค้ด | git credential | ไม่มี credential helper หรือ http.extraheader, ทุก URL ของ remote เป็น `https://` ไม่มี userinfo (AC-01, v1.7) | push ด้วย URL ที่พิมพ์เองบน command line พร้อม SSH key ใน `~/.ssh` (host_report ไม่อ่าน `~/.ssh`; runbook §4 ห้ามตั้ง SSH และ extraheader) · (v1.8, review r3 F27) `_netrc`/`.netrc` ที่มี token, askpass (`core.askPass`, `GIT_ASKPASS`) และการ sign in GitHub ใน editor หรือ GitHub Desktop: host_report ไม่ตรวจ, runbook §4 ห้าม · (v1.9, review r4 F31 และ N1) remote แบบเก่าในไฟล์ใต้ `.git/remotes`/`.git/branches`, URL ที่ใส่ตรงใน `branch.*.remote`, `branch.*.pushRemote` หรือ `remote.pushDefault` และ `SSH_ASKPASS`: host_report ไม่ตรวจ, runbook §4 ห้าม |
 
 - ผลภายนอก: ค่าเช่ารายเดือน · โบรกเกอร์อาจแจ้งเตือนการ login จากที่ใหม่ · ไม่มีคำสั่งซื้อขาย · ผู้อนุญาต: เจ้าของ
 
@@ -210,7 +224,7 @@ Windows client หรือ Server รุ่นเก่า · RAM ที่เ�
 | valid until | TBD (เจ้าของกรอก) |
 
 ## Budget
-2–3 sessions ของ Claude · เวลาเจ้าของตั้ง VPS และทดสอบ ≈ 2 ชั่วโมง · headless session ไม่เกิน 4 (ผู้เขียน tests, ผู้ตรวจ tests, ผู้ตรวจงาน, สำรอง) · 3 attempts ต่อปัญหาที่ไม่มีหลักฐานใหม่ · ค่า VPS ตาม Q-10
+2–3 sessions ของ Claude · เวลาเจ้าของตั้ง VPS และทดสอบ ≈ 2 ชั่วโมง · headless session ไม่เกิน 4 (ผู้เขียน tests, ผู้ตรวจ tests, ผู้ตรวจงาน, สำรอง) → **6** (เจ้าของขยาย 2026-10-25 19:3x ให้ tests r2 ตาม `docs/reviews/ENV-001-tests-r1.md` F1–F4: ผู้เขียนและผู้ตรวจของ patch เพิ่มเติม) · 3 attempts ต่อปัญหาที่ไม่มีหลักฐานใหม่ · ค่า VPS ตาม Q-10
 
 ## Recovery, compensation and checkpoint
 ยกเลิกหรือ rebuild VPS ที่ผู้ให้บริการ · ถ้ารหัส RDP หรือบัญชีรั่ว: เปลี่ยนรหัสผ่านของบัญชี Demo ที่ Exness, rebuild VPS, บันทึกใน `docs/failures/` · terminal บนเครื่องเจ้าของยังอยู่จนกว่า ENV-002
@@ -220,3 +234,125 @@ Windows client หรือ Server รุ่นเก่า · RAM ที่เ�
 
 ## Done scope
 operation: VPS ปลอดภัยและพิสูจน์แล้ว (ยังไม่มีการวัดด้วย MetaTrader5, ข้อมูลวิจัย หรือ holdout บนเครื่อง)
+
+## v2.0: ขั้นฝั่งเครื่องเจ้าของบน macOS (ร่าง 2026-11-18, D-023)
+ที่มา: เจ้าของย้ายงานจากเครื่อง Windows 11 มา Mac เมื่อ 2026-11-17 และ D-023 (accepted 2026-11-18 ภายใต้คำอนุญาตของเจ้าของ 2026-11-18 11:2x
+พร้อม contract ENV-002 v2.6) ข้อ 6 ให้ขั้นฝั่งเครื่องเจ้าของของ runbook ทั้งสามมีฉบับ macOS และให้ส่วนของ ENV-001 เป็น contract revision แยกที่ต้องเสร็จก่อนเช่า VPS
+· ข้อนี้คือ revision นั้น · ขอบเขต: เฉพาะสิ่งที่เจ้าของทำบน**เครื่องของตัวเอง** (ทดสอบจากภายนอก, โปรแกรม RDP, การตรวจรหัสที่บันทึก, ช่องทางส่ง snapshot)
+· การตั้งค่าบน VPS, `host_report.py`, tests, AC-01, AC-02, AC-05, AC-06, AC-07 และ decision (ก)–(จ) ไม่เปลี่ยน (v2.1, r1 F6: AC-04 และข้อ 10 เพิ่มการอ่านและตรวจบน VPS
+แบบอ่านอย่างเดียว)
+· (v2.1, r1 F8) ทุกการอ้าง "ENV-002" ในหัวข้อนี้ (checklist C1–C10, ความเสี่ยงที่เหลือข้อ 16, decision (ค), (ซ)) หมายถึง contract ENV-002 **v2.6** บน branch
+`chore/ENV-002-macos-research-host` (อนุมัติ 2026-11-18 17:2x) ไม่ใช่ v1.5 ที่อยู่บน branch นี้ · D-023 อยู่ใน `DECISIONS.md` ของ branch นั้นเช่นกัน · **ลำดับ merge:** PR ของ
+ENV-001 v2.x merge หลัง PR ของ ENV-002 (ซึ่งพา D-023 และ ENV-002 v2.6 เข้า `main`) · ถ้าเจ้าของยกเลิก D-023 ก่อน merge v2.x ของ ENV-001 ตกไป
+
+**ข้อเท็จจริงที่วัดบน Mac (2026-11-17 ถึง 18):** macOS 26.6.2 arm64 · `nc` ของระบบ (`/usr/bin/nc`) มี `-v`, `-z`, `-G <วินาที>` และ `-6` (`man nc`) และ
+`nc -z -G 2 127.0.0.1 9` บนพอร์ตที่ปิด exit 1 โดยไม่พิมพ์อะไร (`-v` จึงจำเป็นเพื่อให้มีข้อความ) · `smbutil` มี `view`, `-N`, `-g` · ยังไม่ได้ติดตั้ง Windows App
+(โปรแกรม RDP ของ Microsoft สำหรับ macOS) · ชื่อเมนูของ Windows App ข้างล่างมาจากหน้า Microsoft Learn ที่อ่าน 2026-11-17 (เช่น
+https://learn.microsoft.com/windows-app/device-audio-folder-redirection-teams) ยังไม่ได้ตรวจในแอปจริง: เจ้าของแก้ให้ตรงเมื่อใช้ครั้งแรกและบันทึกในหลักฐาน
+
+**AC-03 (v2.0, แทนฉบับ v1.9 เมื่อ v2.0 อนุมัติ)** Given VPS หลัง AC-01 When เจ้าของทดสอบจากภายนอกด้วย Mac ตาม runbook ข้อ 7 ฉบับ macOS Then
+(1) จากเครือข่ายบ้าน `/usr/bin/nc -vz -G 5 <vps> 3389` สำเร็จ (exit 0) และ `/usr/bin/nc -vz -G 5 <vps> <port>` ที่พอร์ต 22, 80, 139, 443, 445, 5985, 5986 ล้มทั้งหมด
+(exit ไม่ใช่ 0) · หลักฐานมีข้อความและ exit status ของทุกพอร์ต · (v2.1, r1 F5) ข้อความของ `nc -v` มีที่อยู่ของ VPS ทุกบรรทัด: ปิดบังที่อยู่ในทุกบรรทัดก่อนวาง (runbook พิมพ์
+บรรทัดที่ปิดบังแล้วพร้อม exit status ของ `nc` เอง) · ข้อความ usage หรือ option ผิด (เช่น `invalid option`, `port range not valid`) ไม่ใช่ผล: ทำซ้ำให้ถูก · (v2.2, r2 F13) ข้อความอื่นนอกจาก timeout และ
+`Connection refused` (เช่น `No route to host`, `Network is unreachable`) ไม่ใช่ผล: ทำซ้ำ · ตัวควบคุมทำซ้ำหลังการทดสอบด้วย: 3389 จากบ้านสำเร็จอีกครั้งหลังพอร์ตสุดท้ายของ (1)
+และ `curl` บน hotspot ได้ IP อีกครั้งหลัง `nc` ของ (2) (ถ้าตัวควบคุมรอบหลังล้ม ผลของรอบนั้นไม่มีผล)
+· (v2.1, r1 F2: แทนประโยคเดิมเรื่อง `Connection refused`) `nc` แยกไม่ได้ว่าชั้นไหนทิ้ง packet: ผลที่คาดของพอร์ตที่ปิดคือ timeout (`Operation timed out`) · พอร์ตที่ได้
+`Connection refused` ผ่านได้เฉพาะเมื่อแสดงที่มาได้ อย่างใดอย่างหนึ่ง: พอร์ตเดียวกันได้ timeout เมื่อทดสอบจาก hotspot ของ (2) (reset มาจากเส้นทางฝั่งบ้าน) หรือรายการ rule ของ (4)
+ปฏิเสธพอร์ตนั้นและผู้ให้บริการตอบแบบ reject ไม่ใช่ drop · นอกจากนั้น AC-03 ยังไม่ PASS จนกว่าแก้ที่มา · contract ENV-002 v2.6 AC-03 (2) อ้างกฎข้อนี้
+(2) (v2.1, r1 F1) จากเครือข่ายที่ไม่อยู่ใน allowlist (เช่น Mac ต่อ hotspot ของมือถือ): ก่อนอื่น `/usr/bin/curl -s https://api.ipify.org` ต้องได้ IP (พิสูจน์ว่าออกเน็ตได้) และ
+บันทึกเฉพาะ "ต่างจาก IP บ้าน: ใช่" (ไม่วาง IP) · ได้ IP เดียวกับบ้านหรือไม่มีเน็ต = ทดสอบนี้ไม่มีผล · แล้ว `/usr/bin/nc -vz -G 5 <vps> 3389` ล้ม (exit ไม่ใช่ 0) พร้อมข้อความ
+(ปิดบังที่อยู่) ตามกฎของ (1)
+(3) IPv6 เมื่อ runbook ข้อ 1.5 พบ IPv6 สาธารณะบน VPS: ตรวจก่อนว่า Mac ออก IPv6 ได้ด้วย `/usr/bin/nc -6 -vz -G 5 ipv6.google.com 443` · ถ้าได้ ทดสอบชุดของ (1)
+กับที่อยู่ IPv6 ของ VPS ด้วย `-6` · (v2.1, r1 F5: เกณฑ์เขียนในข้อนี้เอง) ผลที่ถูก: ทุกพอร์ตของ (1) รวม 3389 ล้ม เว้นแต่ใส่ IPv6 ของบ้านไว้ทั้งใน firewall ของผู้ให้บริการและใน
+scope ของ Windows (3389 จึงสำเร็จได้ ส่วนพอร์ตอื่นล้ม) · ถ้า hotspot ออก IPv6 ได้ 3389 จาก hotspot ผ่าน IPv6 ต้องล้ม · ถ้า Mac ออก IPv6 ไม่ได้ บันทึก "IPv6 ไม่ได้ทดสอบ" แล้วส่ง
+rule IPv6 ของผู้ให้บริการหรือหลักฐานว่าปิด IPv6 · (หลังอนุมัติ v2.2: r3 F16) ตัวควบคุม `/usr/bin/nc -6 -vz -G 5 ipv6.google.com 443` ทำซ้ำหลังพอร์ตสุดท้ายของ (3) (และบน hotspot เมื่อทดสอบ IPv6 ที่นั่น): ถ้าตัวควบคุมรอบหลังล้ม ผลของรอบนั้นไม่มีผล · 3389 ของ (3) ไม่ใช่ตัวควบคุม
+(4) รายการ rule ของ firewall ผู้ให้บริการ (ปิดบัง IP) และผลตรวจ CGNAT (WAN IP ในหน้าตั้งค่า router เทียบกับผลของ `/usr/bin/curl -s https://api.ipify.org`;
+ปิดบังก่อนวาง) อยู่ในหลักฐาน · (v2.1, r1 F2) เกณฑ์ผ่านของรายการ rule: ผู้ให้บริการอนุญาตเฉพาะ TCP 3389 (และ UDP 3389 ถ้ามี) จากที่อยู่ใน allowlist และปฏิเสธที่เหลือ
+ทั้งหมด รวม IPv6 · (v2.2, r2 F10) และ rule ชุดนั้น**ผูกกับ VPS เครื่องนี้และเปิดใช้อยู่**: หลักฐานมีหน้าของผู้ให้บริการที่แสดงรายชื่อ server ที่ rule ชุดนั้นผูกอยู่ หรือหน้า firewall ของ
+VPS ที่แสดงว่าเปิดใช้ (ปิดบัง IP และชื่อบัญชี) · (หลังอนุมัติ v2.2: r3 F14) หลักฐานมาจากฝั่ง VPS: หน้าของ VPS ที่แสดง rule ทุกชุดที่ใช้กับ VPS นี้ (firewall, rule set หรือ security group ทุกตัวที่ผูกอยู่ หรือสถานะเปิดของ firewall ราย IP) และเกณฑ์ผ่านใช้กับทุกชุดรวมกัน · `nc` แยกชั้นไม่ได้ ชั้นนอกจึงพิสูจน์ด้วยหลักฐานข้อนี้ · ถ้าเป็น CGNAT ใช้ทางเลือก VPN แล้วทดสอบซ้ำ · ทุกข้อทำหลังทำ ENV-002 checklist ข้อ C9 ครบทุกข้อความ (v2.1, r1 F7)
+
+**AC-04 (v2.0, แทนฉบับ v1.9 เมื่อ v2.0 อนุมัติ)** Given RDP session จาก Windows App บน Mac ที่รายการ PC ของ VPS **ขอ** redirect โฟลเดอร์ทดสอบเปล่าหนึ่งโฟลเดอร์
+นอก repo (เช่น `~/rdp-redirect-test`) ในแท็บ Folders และขอ printer ในแท็บ Devices & Audio ไว้ (เพื่อทดสอบว่า VPS ปฏิเสธ) · (v2.1, r1 F3 (c)) ค่าของแท็บ Folders และ
+Devices & Audio **ระหว่างทดสอบ** อยู่ในหลักฐาน When เจ้าของคัดลอกไฟล์ทดสอบใน File Explorer
+ของ VPS แล้ววางใน Finder บน Mac, เปิด `\\tsclient` ใน File Explorer ของ VPS และรัน `Get-Printer | Select-Object Name, Type` บน VPS Then วางไฟล์ไม่ได้ (ข้อความยังคัดลอกได้
+เมื่อ (ค) เลือกแบบข้อความ) · `\\tsclient` ไม่มี share · ไม่มี printer ที่ redirect มาจาก Mac (หรือ "spooler off") ·
+(v2.1, r1 F3: ให้ผลพิสูจน์ VPS ไม่ใช่ Mac; คำตัดสินภายใต้คำอนุญาต 11:2x ของเจ้าของ: ทำทั้งการอ่านค่าบน VPS และการทดสอบ printer เมื่อ Mac มี printer)
+(a) บน VPS อ่านค่า policy แบบอ่านอย่างเดียว: `Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' | Select-Object fDisableCdm, fDisableCpm,
+fDisableCcm, fDisableLPT, fDisablePNPRedir, SCClipLevel, fDisableClip` (v2.2, r2 F11: พิมพ์ `fDisableClip` ด้วย) → ห้าค่า `fDisable*` เป็น 1 และ `SCClipLevel` เป็น 1
+(หรือ `fDisableClip` เป็น 1 ถ้า (ค) เลือกปิด clipboard ทั้งหมด) ·
+ก่อนเชื่อม บน Mac `lpstat -p` บอกว่ามี printer queue หรือไม่: มี = ผลของ `Get-Printer` นับเป็นการทดสอบ · ไม่มี = บันทึก "Mac ไม่มี printer: ช่องทาง printer พิสูจน์ด้วยค่า
+policy ของ (a) เท่านั้น"
+(b) ตัวควบคุมของ clipboard แบบไฟล์: ก่อนทดสอบทิศ VPS → Mac ให้วางไฟล์ทดสอบจาก Finder เข้า session ของ VPS (ทิศ Mac → VPS ซึ่ง `SCClipLevel` ไม่จำกัด) · วางได้ = Windows App
+ส่งไฟล์ผ่าน clipboard ได้ ผล "วางไฟล์ไม่ได้" ทิศ VPS → Mac จึงพิสูจน์ VPS · วางไม่ได้ = บันทึกว่าการทดสอบไฟล์ไม่พิสูจน์อะไรเกี่ยวกับ VPS และการป้องกันทิศนี้อยู่ที่ค่า
+`SCClipLevel` ของ (a) และ AC-01 · (v2.2, r2 F11) และบน Server 2022 build ต้องมี cumulative update 2024-07 (KB5040437) ขึ้นไป (ค่า `UBR` ใน
+`HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion` ในหลักฐาน) เพราะรุ่นก่อนนั้นไม่รู้จัก `SCClipLevel` · ไฟล์ทดสอบบน Mac และบน VPS ใช้ชื่อต่างกัน (ไฟล์ที่วางใน Finder
+ต้องเป็นชื่อของไฟล์บน VPS จึงนับว่าข้ามมา)
+(c) ระหว่างทดสอบ บน VPS รัน `net view \\tsclient` ด้วย (ผลเป็นข้อความ) คู่กับ File Explorer
+(d) หลังทดสอบ เจ้าของตั้งรายการ PC เป็นสภาพของ ENV-002 checklist C3 (แท็บ Folders ไม่ติ๊ก Redirect folders, แท็บ Devices & Audio ไม่ติ๊กอุปกรณ์ใด, clipboard ตาม (ค))
+แล้วบันทึกค่าในหลักฐาน · runbook มีขั้นตอนส่ง snapshot ตาม D-021 ข้อ 3 (a) ที่ D-023 ข้อ 5 แก้ฝั่งเครื่องเจ้าของเป็น
+folder redirection ของ Windows App (โฟลเดอร์ `<repo>/data/transfer/` เท่านั้น) พร้อมการทดสอบ T1–T4 ของ D-023 ข้อ 5 ก่อนใช้จริง และการรัน `host_report.py`
+และตัวตรวจของ ENV-002 ซ้ำหลังส่งทุกครั้ง
+
+**runbook ฉบับ macOS (Claude เขียนหลังอนุมัติ; v2.1, r1 F6: การตั้งค่าบน VPS คงเดิม · ข้อ 8 และ 10 เพิ่มการอ่านและตรวจฝั่ง VPS แบบอ่านอย่างเดียว):**
+- กติกาท้ายหัว runbook: "ปิดหน้าต่าง Claude Code และ Codex ก่อนเปิด RDP" → (v2.1, r1 F7) ทำ ENV-002 checklist C9 ครบทุกข้อความ: Quit (⌘Q) Visual Studio Code, Claude,
+  ChatGPT/Codex และทุกแอปที่ agent รันอยู่ แล้ว `pgrep -ilf 'claude|codex|chatgpt'` ใน Terminal.app ต้องไม่พิมพ์อะไร · เปิด console ของผู้ให้บริการใน browser หรือ profile
+  ที่ไม่มี extension ของ Claude หรือ ChatGPT; ถ้ามี ให้รัน pgrep ซ้ำหลังเปิด browser · ใช้ทุกครั้งที่เปิด RDP หรือ console รวมข้อ 0, 1.1 และ 1.5
+- (v2.1, r1 F9) กฎกันล็อกตัวเอง (ส่วนฝั่ง Mac): session ที่สองต้องเปิดได้ก่อนเปลี่ยน firewall, ปิด rule หรือ restart · ใน Windows App ใช้รายการ PC ที่สองของ VPS ตัวเดียวกัน
+  (Duplicate รายการเดิม) เพื่อเปิด session ที่สอง เพราะการคลิกรายการเดิมซ้ำอาจนำหน้าต่างเดิมขึ้นมาแทน (ยังไม่ได้ตรวจในแอปจริง: เจ้าของตรวจตอนใช้ครั้งแรกและบันทึก)
+  · ถ้าเปิด session ที่สองไม่ได้ ห้ามเปลี่ยน firewall และใช้ console ของผู้ให้บริการแทน
+- ข้อ 0 (CGNAT): ใช้ browser หรือ `/usr/bin/curl -s https://api.ipify.org` บน Mac
+- ข้อ 1.2 (ไม่บันทึกรหัส RDP): ใน Windows App ตั้ง credential ของรายการ PC เป็น "Ask when required" (หรือชื่อเทียบเท่า) ไม่บันทึกรหัส · หลังเชื่อมครั้งแรก
+  ตรวจ Windows App → Settings → Credentials ว่าไม่มีรายการของ VPS และ (v2.1, r1 F7) ทำ ENV-002 checklist C2 (แอป Passwords และ Keychain Access ไม่มีรายการของ VPS)
+  ทันที ไม่รอถึงก่อน ENV-1 ผ่าน (C1–C10 ทั้งชุดยังเป็นการตรวจซ้ำก่อน ENV-1 ผ่าน) · (v2.2, r2 F12) ทำการตรวจ C1 และ C2 นี้**อีกครั้งท้ายข้อ 1.3** หลังเชื่อมครั้งแรกด้วยบัญชี admin
+  ของเจ้าของเอง (รหัสที่ใช้ยาวนานถูกพิมพ์ครั้งแรกที่ข้อ 1.3) · การตั้งค่าของข้อ 1.2, AC-04 (d), C1 และ C3 ใช้กับ**ทุก**รายการ PC ของ VPS รวมรายการที่ Duplicate ไว้เปิด session
+  ที่สอง · ลบรายการที่ Duplicate หลังขั้นที่ต้องใช้มันเสร็จ หรือตั้งค่าให้เหมือนรายการหลัก
+- ข้อ 7: คำสั่ง `nc` ตาม AC-03 (v2.0) แทน `Test-NetConnection` · (v2.2, r2 F10) ข้อ 7.4 เพิ่มหน้าของผู้ให้บริการที่แสดงว่า rule ชุดนั้นผูกกับ VPS นี้และเปิดใช้อยู่
+- ข้อ 8: ขั้นตอนตาม AC-04 (v2.0) แทน mstsc รวมการอ่านค่า policy บน VPS (a), ตัวควบคุมของ clipboard (b), `net view \\tsclient` (c) และสภาพ C3 หลังทดสอบ (d)
+- ข้อ 10: (v2.1, r1 F6) คัด D-023 ข้อ 5 มาครบทุกข้อความ แทน `subst` และไฟล์ `.rdp` อย่างน้อย: folder redirection ของ Windows App เฉพาะ `<repo>/data/transfer/`
+  โดยไม่ติ๊ก Read-only · **ก่อนเปิดช่องทาง:** envcheck บน Mac เป็น PASS และ `data/transfer/` ว่าง · การทดสอบ T1–T4 ของ D-023 ข้อ 5 ทำตอนใช้จริงครั้งแรกภายใต้ contract ของ
+  acquisition host และบันทึกผลที่นั่น (ข้อ 10 ยังเป็น "ใช้หลัง ENV-1 ผ่านเท่านั้น") · ข้อใดของ T1–T4 ไม่ผ่าน = ช่องทางนี้ยังไม่อนุมัติ และต้องตัดสินใหม่ (ไม่มีทางสำรองแบบ VHD
+  ของ v1.9) · **ลำดับการปิด:** เอาโฟลเดอร์ออกจากรายการ PC ก่อนเชื่อมใหม่เพื่อปิด policy บน VPS (เพราะตอนนั้น VPS ยังยอมรับ redirection อยู่) → ปิด policy → เชื่อมใหม่แล้ว
+  `net view \\tsclient` ไม่มี share → รายการไฟล์ใต้ `data/transfer/` เท่ากับ manifest (ชื่อและ SHA-256) → `host_report.py` บน VPS และ envcheck บน Mac เป็น PASS
+- ตารางสรุปสิ่งที่ส่งกลับ: แถว 7 เป็นผลของ `nc` (ข้อความและ exit status ทุกพอร์ต) และแถว 8 รวมค่าที่เหลือของแท็บ Folders และ Devices & Audio
+
+**Negative cases (v2.0):** `nc` ถึง 3389 จาก hotspot ได้ (FAIL ของ AC-03) · พอร์ตอื่นตอบ `Connection refused` (ต้องอธิบาย) · ไม่ใส่ `-v` จนไม่มีข้อความ (ทำซ้ำด้วย `-v`) ·
+Mac ไม่มี IPv6 (บันทึก "IPv6 ไม่ได้ทดสอบ") · `\\tsclient` มี share ของโฟลเดอร์ทดสอบ (FAIL ของ AC-04: VPS ไม่ได้ปิด drive redirection) · มี printer ที่ redirect
+มาจาก Mac (FAIL) · Windows App บันทึกรหัสของ VPS ไว้ (FAIL ของข้อ 1.2; แก้แล้วทำซ้ำ) · (v2.1, r1 F1, F3) hotspot ไม่มีเน็ตหรือได้ IP เดียวกับบ้าน (ทดสอบ (2) ไม่มีผล)
+· ค่า `fDisable*` ตัวใดไม่เป็น 1 ใน AC-04 (a) (FAIL; หลังอนุมัติ v2.2: r3 F15 นับเฉพาะห้าค่าของ redirection `fDisableCdm`, `fDisableCpm`, `fDisableCcm`, `fDisableLPT`, `fDisablePNPRedir` · `fDisableClip` นับเฉพาะเมื่อ (ค) เลือกปิด clipboard ทั้งหมด) · Mac ไม่มี printer (บันทึก ไม่ใช่ PASS ของ printer จากการทดสอบ) · วางไฟล์ทิศ Mac → VPS ไม่ได้ (การทดสอบไฟล์ไม่พิสูจน์ VPS)
+
+**ที่เหลือ (v2.0):** ชื่อเมนูของ Windows App ยังไม่ได้ตรวจในแอปจริง (เจ้าของแก้ตอนใช้ครั้งแรก) · โปรเซสของบัญชี macOS เดียวกับ agent ที่ตั้งใจหลบการตรวจ:
+อยู่ในความเสี่ยงที่เหลือข้อ 16 ของ contract ENV-002 ซึ่งเจ้าของรับแล้ว 2026-11-18 · การป้องกันขณะ RDP เปิดคือ Quit แอปของ agent ก่อน (ENV-002 decision (ค))
+
+**Verification (v2.0):** AC-03 และ AC-04 ทำบน Mac (เจ้าของ) และบน VPS · ผู้ตรวจของ v2.0: Claude session ใหม่คนละ session (แบบเดียวกับ ENV-002 (ซ) ที่เจ้าของยืนยัน
+2026-11-18) · runbook ฉบับ macOS ตรวจโดย review ของ runbook ก่อนเจ้าของใช้
+
+**Authorization (v2.0):** actor: เจ้าของ (ทดสอบจากภายนอกด้วย Mac, ตั้ง Windows App, ตรวจ credential เอง) · Claude (เขียน runbook ฉบับ macOS) · target: VPS ที่เจ้าของเช่า
+และ Mac ของเจ้าของ · valid until: TBD
+
+**Budget (v2.0):** Claude 1 session · session ใหม่ไม่เกิน 4 (ผู้ตรวจ contract ×2, ผู้ตรวจ runbook, สำรอง ×1) · ไม่มีโค้ดหรือ tests ใหม่
+
+**Recovery (v2.0; v2.1, r1 F4: แทนข้อความเดิมที่ให้ใช้ v1.9 จากเครื่อง Windows เดิม):** ถ้าเจ้าของไม่รับ v2.0: ยังไม่เช่า VPS (D-023 ข้อ 6) · แก้เป็น v2.x หรือเจ้าของเปลี่ยน
+D-023 ข้อ 2 · เครื่อง Windows เดิมใช้ฉบับ v1.9 ไม่ได้ (D-023 ข้อ 2 ทาง 1: ห้ามเชื่อมต่อ VPS หรือ console ของผู้ให้บริการตั้งแต่เช่าจนถึงวันล้าง) · runbook ฉบับ Windows อยู่ใน history ของ git
+
+**Plan (v2.0):** (1) contract review ของ v2.0 โดย session ใหม่ → แก้ → เจ้าของอนุมัติ (High) (2) Claude เขียน runbook ข้อ 0, 1.2, 7, 8, 10 และกติกาท้ายหัวเป็นฉบับ
+macOS · check: review ของ runbook ว่าพร้อม (3) เจ้าของใช้ runbook ตอนเช่า VPS · check: AC-03 และ AC-04 ฉบับ v2.0 ครบพร้อมหลักฐาน · Decisions needed from the owner:
+(ฎ) อนุมัติ v2.0 (High) · **แนะนำ:** อนุมัติหลัง contract review ว่าพร้อม · **เจ้าของอนุมัติ v2.2 แล้ว 2026-11-18 (หลัง 18:46)** ในกล่องคำถามของแชท Claude ที่ถามโดยระบุชื่อ (ย่อหน้า "การอนุมัติ (2026-11-18)" ข้างล่าง)
+
+**DoR (v2.0):** ครบ: D-023 accepted, ข้อเท็จจริงของ `nc` และ `smbutil` บน Mac วัดแล้ว · ขาด: contract review, การอนุมัติ (ฎ), Windows App ยังไม่ติดตั้ง (ไม่จำเป็นก่อนอนุมัติ) ·
+next: contract review ของ v2.0
+
+**v2.1 (2026-11-18):** review r1 (`docs/reviews/ENV-001-contract-v2-r1.md`, session ใหม่ 1 จาก 4) ตอบครบทุกข้อ · คำถามของเจ้าของใน r1 ตอบภายใต้คำอนุญาตของเจ้าของ 2026-11-18 11:2x
+("มึงจัดการทั้งหมดให้เลยกูอนุญาติทั้งหมด") ด้วยทางที่เข้มกว่า และเจ้าของกลับได้ก่อนอนุมัติ: Q1 (F4) ไม่มีทางสำรองที่ใช้เครื่อง Windows เดิม (ตาม D-023 ที่รับแล้ว) · Q2 (F3)
+ทำทั้งการอ่านค่า policy บน VPS และการทดสอบ printer เมื่อ Mac มี printer · Q3 (F8) PR ของ ENV-001 v2.x merge หลัง PR ของ ENV-002 · ไม่มีข้อใดเป็นการรับความเสี่ยงเพิ่ม ·
+next: contract review รอบ 2 → ถ้าว่าพร้อม เจ้าของอนุมัติ (ฎ) · (v2.2, r2) คำตอบ 11:2x ตอบคำถามของ ENV-002 ก่อน revision นี้มีอยู่ (v2.0 commit 17:28): การใช้คำตอบนั้นกับสามข้อนี้
+เป็น**การตีความของ Claude จากคำตอบรวม** · การอนุมัติ (ฎ) ของเจ้าของจะยืนยันทั้งสามข้อ และเจ้าของถามได้โดยระบุชื่อตอนอนุมัติ
+
+**v2.2 (2026-11-18):** review r2 (`docs/reviews/ENV-001-contract-v2-r2.md`, session ใหม่ 2 จาก 4): 9 ข้อของ r1 ปิดครบ · ใหม่ F10 (Medium) และ F11–F13 (Low) ตอบครบ: F10 ตามทางที่ผู้ตรวจแนะนำ
+(หลักฐานว่า rule ของผู้ให้บริการผูกกับ VPS นี้และเปิดใช้อยู่) · next: contract review รอบ 3 (ตรวจปิด F10–F13, session 3 จาก 4) → ถ้าว่าพร้อม ถามเจ้าของเพื่ออนุมัติ (ฎ) โดยระบุชื่อ
+พร้อมยืนยันสามข้อของ v2.1
+
+**การอนุมัติ (2026-11-18):** review r3 (`docs/reviews/ENV-001-contract-v2-r3.md`, session ใหม่ 3 จาก 4) ว่า "Ready for the owner's approval (ENV-001 v2.2): yes": F10–F13 ปิด
+ไม่มี High หรือ Medium · Low ใหม่ F14 (หลักฐานต้องครอบ rule ทุกชุดที่ใช้กับ VPS), F15 (negative case ของ `fDisableClip`), F16 (ตัวควบคุมของ IPv6 หลังทดสอบพอร์ต) แก้ใน runbook
+ฉบับ macOS · เจ้าของตอบในกล่องคำถามของแชท Claude ที่ถามโดยระบุชื่อ: (ฎ) "อนุมัติ" และสามข้อของ v2.1 "ยืนยันทั้งสามข้อ" (ไม่มีทางสำรองที่ใช้เครื่อง Windows เดิม · อ่านค่า policy
+บน VPS ทุกครั้งและทดสอบ printer เฉพาะเมื่อ Mac มี printer · PR ของ ENV-001 merge หลัง PR ของ ENV-002) · next: Claude เขียน runbook ข้อ 0, 1.2, 1.3, 7, 8, 10 และกติกาท้ายหัว
+เป็นฉบับ macOS พร้อม F14–F16 → review ของ runbook (session ใหม่ 4 จาก 4)
